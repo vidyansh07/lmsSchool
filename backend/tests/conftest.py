@@ -32,9 +32,18 @@ def _reset_rate_limit_counters():
     """
     from django.core.cache import cache
 
+    from apps.common.throttling import AuthEndpointThrottle, BurstThrottle
+
+    # The rate *table* is cached on the throttle classes, and the tests that
+    # exercise a limit have to lower it there. Snapshot and restore, or the
+    # tightened rate leaks into every test that runs afterwards.
+    rates = [(cls, cls.THROTTLE_RATES) for cls in (AuthEndpointThrottle, BurstThrottle)]
+
     cache.clear()
     yield
     cache.clear()
+    for cls, original in rates:
+        cls.THROTTLE_RATES = original
 
 
 @pytest.fixture

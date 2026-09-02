@@ -13,6 +13,7 @@ and must not become a reconnaissance surface.
 from __future__ import annotations
 
 import logging
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
@@ -23,7 +24,8 @@ from django.db import connections
 
 logger = logging.getLogger("grras.health")
 
-_CACHE_PROBE_KEY = "health:probe"
+#: Prefix only. Each probe appends a unique suffix — see `check_cache`.
+_CACHE_PROBE_PREFIX = "health:probe"
 
 
 @dataclass(frozen=True)
@@ -72,13 +74,23 @@ def check_cache() -> CheckResult:
     With the local-memory backend this only proves the process is sane; once
     CACHE_URL points at Redis it becomes a real dependency check, and rate
     limiting depends on it.
+
+    The key is unique per probe. A shared key looks tidier and is wrong: two
+    readiness checks overlapping — several load-balancer targets, or a probe
+    arriving while another is between its write and its read — would delete each
+    other's value and report a healthy cache as broken. The cost of that is a
+    live instance being pulled out of rotation for no reason, which is exactly
+    the failure a readiness probe is supposed to prevent.
     """
 
     def probe() -> str:
-        cache.set(_CACHE_PROBE_KEY, "1", timeout=10)
-        if cache.get(_CACHE_PROBE_KEY) != "1":
-            raise RuntimeError("cache round-trip failed")
-        cache.delete(_CACHE_PROBE_KEY)
+        key = f"{_CACHE_PROBE_PREFIX}:{uuid.uuid4().hex}"
+        cache.set(key, "1", timeout=10)
+        try:
+            if cache.get(key) != "1":
+                raise RuntimeError("cache round-trip failed")
+        finally:
+            cache.delete(key)
         return "reachable" if settings.CACHE_URL else "local"
 
     return _timed("cache", probe)

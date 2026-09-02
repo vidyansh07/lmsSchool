@@ -1,4 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+
+import { signIn } from './helpers';
 
 /**
  * Batches, enrolment, dashboards and the calendar, against the real stack.
@@ -15,13 +17,6 @@ const TRAINER = 'trainer1@demo.grras.invalid';
 
 test.skip(!DEMO_PASSWORD, 'E2E_DEMO_PASSWORD is not set; seeded-data tests are skipped.');
 
-async function signIn(page: Page, email: string) {
-  await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(DEMO_PASSWORD);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page.getByRole('heading', { name: /welcome back/i })).toBeVisible();
-}
 
 test.describe('Batch management', () => {
   test('an administrator sees every batch with its seats', async ({ page }) => {

@@ -31,6 +31,7 @@ from .emails import (
     send_password_reset_email,
 )
 from .models import AccountToken, TokenPurpose, User, UserRole
+from .roles import can_grant_role
 
 logger = logging.getLogger("grras.security")
 
@@ -71,6 +72,11 @@ def create_user(
     the user is emailed a single-use link to set their own. An administrator
     therefore never learns or transmits someone else's password.
     """
+    if actor is not None and not can_grant_role(actor, role):
+        raise ApplicationError(
+            {"role": ["You cannot create a user with a role that holds more than your own."]}
+        )
+
     try:
         user = User.objects.create_user(
             email=email,
@@ -109,6 +115,20 @@ def update_user(*, user: User, actor: User, **fields: Any) -> User:
     """
     previous_role = user.role
     changed: list[str] = []
+
+    new_role = fields.get("role")
+    if new_role is not None and new_role != user.role and not can_grant_role(actor, new_role):
+        # Enforced in the service, not only in the view, so the admin site and
+        # any future management command obey the same rule.
+        record(
+            action=AuditAction.USER_ROLE_CHANGED,
+            actor=actor,
+            resource_type="user",
+            resource_id=user.pk,
+            result=AuditResult.FAILURE,
+            context={"from": previous_role, "attempted": new_role, "refused": "not_held_by_actor"},
+        )
+        raise ApplicationError({"role": ["You cannot grant a role that holds more than your own."]})
 
     for field, value in fields.items():
         if getattr(user, field) != value:

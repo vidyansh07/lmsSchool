@@ -48,3 +48,10 @@ MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="grras-lms-test-media-"))
 
 # Local/test environments may create fake demo data.
 ALLOW_DEMO_SEED = True
+
+# No broker in the test run. Tasks execute inline so a test can assert on what a
+# task did, and `tests/test_background_work.py` covers the queued path
+# explicitly rather than leaving it to eager mode to imply.
+CELERY_BROKER_URL = ""
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True

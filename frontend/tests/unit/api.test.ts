@@ -94,3 +94,67 @@ describe('ensureCsrfToken', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('CSRF token rotation', () => {
+  /**
+   * Django rotates the CSRF token when a session begins or ends, so the cookie
+   * held from before a sign-out is no longer the one the server expects — and
+   * because *a* cookie is present, nothing prompts a refresh. The symptom is
+   * specific: sign out, sign back in, and the first action fails once.
+   */
+  function respond(status: number, body: unknown) {
+    return {
+      ok: status < 400,
+      status,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      text: async () => JSON.stringify(body),
+    } as Response;
+  }
+
+  it('refreshes the token and retries once when the server rejects a stale one', async () => {
+    document.cookie = 'grras_csrftoken=stale-token';
+    const calls: string[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        calls.push(url);
+        if (url.includes('/auth/csrf/')) {
+          document.cookie = 'grras_csrftoken=fresh-token';
+          return respond(200, { detail: 'ok' });
+        }
+        const writes = calls.filter((entry) => entry.includes('/things/')).length;
+        if (writes > 1) return respond(200, { ok: true });
+        return respond(403, {
+          error: { code: 'csrf_failed', message: 'CSRF verification failed.', request_id: 'r1' },
+        });
+      }),
+    );
+
+    const { apiMutate } = await import('@/lib/api');
+    await expect(apiMutate('/api/v1/things/', { method: 'POST' })).resolves.toEqual({ ok: true });
+
+    expect(calls.filter((entry) => entry.includes('/auth/csrf/'))).toHaveLength(1);
+    expect(calls.filter((entry) => entry.includes('/things/'))).toHaveLength(2);
+  });
+
+  it('does not retry a refusal that is not a CSRF failure', async () => {
+    document.cookie = 'grras_csrftoken=good-token';
+    const calls: string[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        calls.push(String(input));
+        return respond(403, {
+          error: { code: 'permission_denied', message: 'Not allowed.', request_id: 'r2' },
+        });
+      }),
+    );
+
+    const { apiMutate } = await import('@/lib/api');
+    await expect(apiMutate('/api/v1/things/', { method: 'POST' })).rejects.toBeInstanceOf(ApiError);
+    expect(calls.filter((entry) => entry.includes('/things/'))).toHaveLength(1);
+  });
+});

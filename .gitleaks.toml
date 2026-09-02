@@ -24,6 +24,18 @@ paths = [
   '''(^|/)staticfiles/''',
   '''(^|/)htmlcov/''',
   '''(^|/)playwright-report/''',
+  # Real per-environment secret files. They are git-ignored (see .gitignore), so
+  # CI — which scans git history — never sees them; this line only stops a local
+  # filesystem scan reporting a file that cannot be committed. The claim that
+  # they are ignored is not taken on trust: `make scan` checks it separately,
+  # so removing the .gitignore entry fails the gate rather than silently
+  # widening it.
+  # Matches `.env` and `.env.staging`, but not `.env.staging.example`: the
+  # character class excludes a dot, so a name with a further suffix cannot
+  # reach the end anchor. (Go's regexp has no lookahead to say it directly.)
+  '''(^|/)\.env(\.[A-Za-z0-9_-]+)?$''',
+  # Backups taken by scripts/backup.sh. Ignored, and full of real data by design.
+  '''(^|/)backups/''',
 ]
 regexes = [
   # Development placeholder; any deployed environment refuses to start with it.

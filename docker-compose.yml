@@ -3,9 +3,9 @@
 #
 #   docker compose up --build
 #
-# Services: PostgreSQL, Django, Next.js. Redis is defined behind the `redis`
-# profile so it can be switched on (and Celery added alongside it) without
-# restructuring this file:
+# Services: PostgreSQL, Django, Next.js. Redis, the Celery worker and beat sit
+# behind the `redis` profile, because a laptop does not need a broker to run the
+# app — without one, tasks run inline:
 #
 #   docker compose --profile redis up
 #
@@ -54,6 +54,9 @@ services:
       # Emailed links point at the frontend, which the browser reaches on the
       # host, not at the backend service name.
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
+      # Same expression as the worker's, so the two cannot end up on different
+      # Redis databases and silently drop every task.
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
       RUN_MIGRATIONS: "true"
     volumes:
       # Bind mount for hot reload; the virtualenv lives outside /app so it is
@@ -103,7 +106,6 @@ services:
 
   # Not started by default. Enable with: docker compose --profile redis up
   # Set CACHE_URL=redis://redis:6379/0 in .env to make the backend use it.
-  # A Celery worker/beat service belongs here too, sharing this broker.
   redis:
     image: redis:7-alpine
     profiles: ["redis"]
@@ -116,6 +118,85 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  # The worker. Same image and code as the backend, different entry point: a
+  # task must behave identically whether it ran inline in a test or on a worker,
+  # and two images would eventually drift.
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+      target: development
+    profiles: ["redis"]
+    restart: unless-stopped
+    command:
+      - celery
+      - -A
+      - config
+      - worker
+      - --loglevel=info
+      - --concurrency=${CELERY_CONCURRENCY:-2}
+      - --queues=grras
+      # No task should outlive its soft limit; this is the belt to that brace.
+      - --max-tasks-per-child=200
+    env_file:
+      - .env
+    environment:
+      DJANGO_ENV: local
+      DJANGO_SETTINGS_MODULE: config.settings.local
+      DATABASE_URL: postgres://${POSTGRES_USER:-grras}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-grras_lms}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      # The worker must never run migrations: two processes racing to migrate
+      # the same database is how a deployment corrupts its own schema.
+      RUN_MIGRATIONS: "false"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # No --destination: the shell that runs a healthcheck does not always
+      # have HOSTNAME set, and naming a worker that does not answer reports a
+      # perfectly healthy process as unhealthy — which in a deployment means
+      # restarting it on a loop. Pinging the queue answers the real question.
+      test: ["CMD", "celery", "-A", "config", "inspect", "ping", "--timeout", "10"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # The scheduler. Exactly one replica, ever: two beats mean every periodic task
+  # fires twice, which for the outbox sweep means every retry sent twice.
+  beat:
+    build:
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+      target: development
+    profiles: ["redis"]
+    restart: unless-stopped
+    command:
+      - celery
+      - -A
+      - config
+      - beat
+      - --loglevel=info
+      - --schedule=/tmp/celerybeat-schedule
+    env_file:
+      - .env
+    environment:
+      DJANGO_ENV: local
+      DJANGO_SETTINGS_MODULE: config.settings.local
+      DATABASE_URL: postgres://${POSTGRES_USER:-grras}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-grras_lms}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      RUN_MIGRATIONS: "false"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:

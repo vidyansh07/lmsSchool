@@ -107,6 +107,59 @@ class Capability(models.TextChoices):
     ATTENDANCE_CORRECT_ANY = "attendance.correct_any", _("Correct attendance on any class")
     ATTENDANCE_VIEW_ANY = "attendance.view_any", _("View any attendance record")
 
+    # --- Assignments
+    #
+    # A trainer holds none of these globally. Their authority over an assignment
+    # comes from teaching its batch or authoring its course, resolved per record
+    # in ``apps.assignments.access`` — so an assignment id from somebody else's
+    # course buys nothing.
+    ASSIGNMENT_VIEW_ANY = "assignment.view_any", _("View any assignment")
+    ASSIGNMENT_MANAGE_ANY = "assignment.manage_any", _("Create or edit any assignment")
+    ASSIGNMENT_GRADE_ANY = "assignment.grade_any", _("Grade any submission")
+
+    # --- Assessments and results
+    ASSESSMENT_VIEW_ANY = "assessment.view_any", _("View any assessment")
+    ASSESSMENT_MANAGE_ANY = "assessment.manage_any", _("Create or edit any assessment")
+    RESULT_MANAGE_ANY = "result.manage_any", _("Record or import any result")
+
+    # --- Projects
+    PROJECT_VIEW_ANY = "project.view_any", _("View any project")
+    PROJECT_MANAGE_ANY = "project.manage_any", _("Create or edit any project")
+    PROJECT_REVIEW_ANY = "project.review_any", _("Review and grade any project")
+
+    # --- Question bank and examinations
+    QUESTION_VIEW_ANY = "question.view_any", _("View the question bank")
+    QUESTION_MANAGE_ANY = "question.manage_any", _("Create or edit questions")
+    EXAM_VIEW_ANY = "exam.view_any", _("View any examination")
+    EXAM_MANAGE_ANY = "exam.manage_any", _("Create or edit any examination")
+    EXAM_GRADE_ANY = "exam.grade_any", _("Grade any examination attempt")
+
+    # --- Completion and certificates
+    #
+    # Approving a completion and issuing a certificate are institutional acts,
+    # not teaching ones: a certificate leaves the building and carries the
+    # institution's name. Both sit above the manager rung by default.
+    COMPLETION_VIEW_ANY = "completion.view_any", _("View any student's completion status")
+    COMPLETION_APPROVE = "completion.approve", _("Approve or reject a course completion")
+    CERTIFICATE_MANAGE = "certificate.manage", _("Issue, reissue and revoke certificates")
+
+    # --- Communication
+    #
+    # A trainer holds neither: their announcements reach the batches they teach,
+    # resolved per record in `apps.announcements.access`. Addressing everybody is
+    # a different act and needs the capability.
+    ANNOUNCEMENT_MANAGE_ANY = "announcement.manage_any", _("Announce to any audience")
+    DISCUSSION_MODERATE_ANY = "discussion.moderate_any", _("Moderate any discussion")
+
+    # --- Reporting and data tools
+    #
+    # A trainer holds neither. They can read reports about the batches they
+    # teach — resolved per record — and cannot export or bulk-import anything,
+    # because both operate across the institution.
+    REPORT_VIEW_ANY = "report.view_any", _("Read reports across the institution")
+    DATA_EXPORT = "data.export", _("Export data")
+    DATA_IMPORT = "data.import", _("Bulk import data")
+
 
 #: Capabilities every authenticated, active user has regardless of role.
 BASE_CAPABILITIES: frozenset[str] = frozenset(
@@ -148,6 +201,26 @@ _MANAGER_CAPABILITIES = frozenset(
         Capability.SESSION_MANAGE_ANY,
         Capability.ATTENDANCE_CORRECT_ANY,
         Capability.ATTENDANCE_VIEW_ANY,
+        Capability.ASSIGNMENT_VIEW_ANY,
+        Capability.ASSIGNMENT_MANAGE_ANY,
+        Capability.ASSIGNMENT_GRADE_ANY,
+        Capability.ASSESSMENT_VIEW_ANY,
+        Capability.ASSESSMENT_MANAGE_ANY,
+        Capability.RESULT_MANAGE_ANY,
+        Capability.PROJECT_VIEW_ANY,
+        Capability.PROJECT_MANAGE_ANY,
+        Capability.PROJECT_REVIEW_ANY,
+        Capability.QUESTION_VIEW_ANY,
+        Capability.QUESTION_MANAGE_ANY,
+        Capability.EXAM_VIEW_ANY,
+        Capability.EXAM_MANAGE_ANY,
+        Capability.EXAM_GRADE_ANY,
+        Capability.COMPLETION_VIEW_ANY,
+        Capability.ANNOUNCEMENT_MANAGE_ANY,
+        Capability.DISCUSSION_MODERATE_ANY,
+        Capability.REPORT_VIEW_ANY,
+        Capability.DATA_EXPORT,
+        Capability.DATA_IMPORT,
     }
 )
 
@@ -162,6 +235,8 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.TRAINER_UPDATE_ANY,
         Capability.ACADEMIC_CONFIGURE,
         Capability.AUDIT_VIEW,
+        Capability.COMPLETION_APPROVE,
+        Capability.CERTIFICATE_MANAGE,
     }
 )
 
@@ -193,6 +268,28 @@ def capabilities_for(role: str, *, is_superuser: bool = False) -> frozenset[str]
     if is_superuser:
         return frozenset(Capability.values)
     return ROLE_CAPABILITIES.get(role, BASE_CAPABILITIES)
+
+
+def can_grant_role(actor, role: str) -> bool:
+    """Whether ``actor`` may hand somebody else this role.
+
+    The rule is containment: you may grant a role only when everything it can do
+    is something *you* can already do. Nothing else needs configuring, and the
+    ladder cannot be climbed sideways.
+
+    Without this, adding SUPERADMIN in Phase 4 would have opened a privilege
+    escalation: an administrator holds ``user.change_role``, so they could set
+    somebody's role — including their own account's — to ``superadmin`` and
+    thereby acquire ``platform.configure``, a capability the ladder deliberately
+    withholds from them.
+    """
+    if actor is None or not getattr(actor, "is_authenticated", False) or not actor.is_active:
+        return False
+    granted = ROLE_CAPABILITIES.get(role)
+    if granted is None:
+        return False
+    held = capabilities_for(actor.role, is_superuser=actor.is_superuser)
+    return granted <= held
 
 
 def has_capability(user, capability: str) -> bool:

@@ -31,10 +31,16 @@ class AuthEndpointThrottle(ScopedRateThrottle):
 
 
 class BurstThrottle(SimpleRateThrottle):
-    """Reserved for future expensive endpoints (reports, exports, uploads).
+    """The expensive endpoints: exports, bulk imports, import confirmation.
 
-    Views opt in by setting ``throttle_classes``; the rate is read from
-    ``DEFAULT_THROTTLE_RATES['burst']`` when configured.
+    Keyed on the caller rather than the source address, because these all
+    require authentication and the cost is attributable to an account.
+
+    The limit exists because these are the endpoints where one request is worth
+    hundreds: an export walks every visible row, and an import parses and then
+    writes a spreadsheet. The ordinary user limit — hundreds a minute — is far
+    too generous for work like that, and a signed-in account with a script is
+    all it takes to find out.
     """
 
     scope = "burst"

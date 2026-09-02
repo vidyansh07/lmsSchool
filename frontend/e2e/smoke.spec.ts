@@ -23,7 +23,11 @@ test.describe('Foundation smoke', () => {
 
   test('the frontend reads live status from the backend', async ({ page }) => {
     await page.goto('/status');
-    await expect(page.getByText('Operational')).toBeVisible();
+    // The panel fetches readiness from the browser, and readiness touches the
+    // database and the cache. On a dev server compiling the route under a full
+    // suite that can outlast the default expect window; the assertion is the
+    // same, it is just allowed to take longer.
+    await expect(page.getByText('Operational')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('database', { exact: false })).toBeVisible();
   });
 

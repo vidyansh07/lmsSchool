@@ -168,8 +168,46 @@ def api_exception_handler(exc: Exception, context: dict[str, Any]) -> Response |
             }
         },
     )
+    if response.status_code == status.HTTP_403_FORBIDDEN and code != "csrf_failed":
+        _audit_refusal(context, code)
     response.data = error_payload(code, message, details)
     return response
+
+
+def _audit_refusal(context: dict[str, Any], code: str) -> None:
+    """Record an authorization refusal that no view recorded for itself.
+
+    §14.6 asks for auditable authorization events, and before this the only
+    refusals on record were the ones views wrote by hand. A refusal produced by
+    the permission class — the most common kind, and the one that fires when
+    somebody probes an endpoint they have no business calling — left no trace at
+    all. Someone reading the audit log to answer "did anyone try?" would have
+    seen nothing and concluded nobody did.
+
+    CSRF failures are excluded: they are a browser-integration fault, not an
+    attempt to exceed authority, and they would drown the signal.
+
+    Never raises. An audit failure must not turn a 403 into a 500.
+    """
+    from apps.common.request_context import denial_already_recorded
+
+    if denial_already_recorded():
+        return
+    try:
+        from apps.audit.models import AuditAction, AuditResult
+        from apps.audit.services import record
+
+        request = context.get("request")
+        view = context.get("view")
+        record(
+            action=AuditAction.PERMISSION_DENIED,
+            actor=getattr(request, "user", None),
+            result=AuditResult.DENIED,
+            resource_type=type(view).__name__ if view is not None else "",
+            context={"code": code, "method": getattr(request, "method", "")},
+        )
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("Could not record an authorization refusal")
 
 
 def _first_detail(data: Any) -> Any:

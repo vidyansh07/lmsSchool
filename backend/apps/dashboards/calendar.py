@@ -33,11 +33,10 @@ class EventKind:
     BATCH_END = "batch_end"
     COURSE_START = "course_start"
     COURSE_END = "course_end"
-    # Reserved for later phases. Listed here so the vocabulary is agreed before
-    # four features each invent their own.
     ASSIGNMENT_DUE = "assignment_due"
     QUIZ = "quiz"
     EXAM = "exam"
+    PROJECT_DUE = "project_due"
     ANNOUNCEMENT = "announcement"
 
 
@@ -182,9 +181,163 @@ def batch_milestone_events(user, start: date, end: date) -> list[CalendarEvent]:
 
 #: The registry. Append a source here to put a new kind of thing on everyone's
 #: calendar; nothing else changes.
+def _deadline_event(*, kind, title, when, enrollment, metadata=None) -> CalendarEvent:
+    """A deadline, as an all-day marker on the day it falls.
+
+    Deliberately all-day rather than at the exact minute: a deadline at 23:59
+    rendered as a one-minute slot at the bottom of a day is a deadline nobody
+    sees.
+    """
+    return CalendarEvent(
+        kind=kind,
+        title=title,
+        start=when,
+        end=when,
+        all_day=True,
+        batch_id=str(enrollment.batch_id),
+        batch_code=enrollment.batch.code,
+        course_id=str(enrollment.course_id),
+        course_title=enrollment.course.title,
+        metadata=metadata or {},
+    )
+
+
+def _live_enrollments(user):
+    """The caller's enrolments that currently open a course.
+
+    Every deadline source needs the same answer, so it is asked once.
+    """
+    from apps.batches import access as batch_access
+    from apps.enrollments.models import Enrollment
+
+    student = batch_access.student_profile(user)
+    if student is None:
+        return []
+    rows = (
+        Enrollment.objects.granting_access()
+        .filter(student=student)
+        .select_related("batch", "course")
+    )
+    return [row for row in rows if row.grants_access()]
+
+
+def assignment_events(user, start: date, end: date) -> list[CalendarEvent]:
+    """Assignment deadlines — §7.4."""
+    from apps.assignments.models import Assignment
+
+    events: list[CalendarEvent] = []
+    for enrollment in _live_enrollments(user):
+        rows = Assignment.objects.student_visible().filter(
+            course_id=enrollment.course_id, due_at__date__gte=start, due_at__date__lte=end
+        )
+        for assignment in rows:
+            if not assignment.applies_to_batch(enrollment.batch_id):
+                continue
+            events.append(
+                _deadline_event(
+                    kind=EventKind.ASSIGNMENT_DUE,
+                    title=f"Due: {assignment.title}",
+                    when=assignment.due_at,
+                    enrollment=enrollment,
+                    metadata={"assignment_id": str(assignment.pk), "code": assignment.code},
+                )
+            )
+    return events
+
+
+def assessment_events(user, start: date, end: date) -> list[CalendarEvent]:
+    """Weekly tests — §7.4."""
+    from apps.assessments.models import Assessment
+
+    events: list[CalendarEvent] = []
+    for enrollment in _live_enrollments(user):
+        rows = Assessment.objects.student_visible().filter(
+            batch_id=enrollment.batch_id,
+            scheduled_for__date__gte=start,
+            scheduled_for__date__lte=end,
+        )
+        for assessment in rows:
+            events.append(
+                CalendarEvent(
+                    kind=EventKind.QUIZ,
+                    title=assessment.title,
+                    start=assessment.scheduled_for,
+                    end=assessment.scheduled_for,
+                    batch_id=str(enrollment.batch_id),
+                    batch_code=enrollment.batch.code,
+                    course_id=str(enrollment.course_id),
+                    course_title=enrollment.course.title,
+                    metadata={"assessment_id": str(assessment.pk), "code": assessment.code},
+                )
+            )
+    return events
+
+
+def exam_events(user, start: date, end: date) -> list[CalendarEvent]:
+    """Examination windows — §7.4."""
+    from apps.exams.models import Exam
+
+    events: list[CalendarEvent] = []
+    for enrollment in _live_enrollments(user):
+        rows = Exam.objects.student_visible().filter(
+            batch_id=enrollment.batch_id, opens_at__date__gte=start, opens_at__date__lte=end
+        )
+        for exam in rows:
+            events.append(
+                CalendarEvent(
+                    kind=EventKind.EXAM,
+                    title=exam.title,
+                    start=exam.opens_at,
+                    end=exam.closes_at or exam.opens_at,
+                    batch_id=str(enrollment.batch_id),
+                    batch_code=enrollment.batch.code,
+                    course_id=str(enrollment.course_id),
+                    course_title=enrollment.course.title,
+                    metadata={"exam_id": str(exam.pk), "code": exam.code},
+                )
+            )
+    return events
+
+
+def project_events(user, start: date, end: date) -> list[CalendarEvent]:
+    """Project deadlines — §7.4."""
+    from datetime import datetime as _datetime
+
+    from django.utils import timezone as _timezone
+
+    from apps.projects.models import Project
+
+    events: list[CalendarEvent] = []
+    for enrollment in _live_enrollments(user):
+        rows = Project.objects.student_visible().filter(
+            course_id=enrollment.course_id, end_date__gte=start, end_date__lte=end
+        )
+        for project in rows:
+            if not project.applies_to_batch(enrollment.batch_id):
+                continue
+            when = _timezone.make_aware(
+                _datetime.combine(project.end_date, time(23, 59)),
+                _timezone.get_current_timezone(),
+            )
+            events.append(
+                _deadline_event(
+                    kind=EventKind.PROJECT_DUE,
+                    title=f"Project due: {project.title}",
+                    when=when,
+                    enrollment=enrollment,
+                    metadata={"project_id": str(project.pk), "code": project.code},
+                )
+            )
+    return events
+
+
 EVENT_SOURCES: list[Callable[[Any, date, date], list[CalendarEvent]]] = [
     class_events,
     batch_milestone_events,
+    assignment_events,
+    assessment_events,
+    exam_events,
+    project_events,
 ]
 
 

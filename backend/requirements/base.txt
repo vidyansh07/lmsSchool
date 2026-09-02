@@ -11,3 +11,36 @@ psycopg[binary]==3.3.4
 # Required by ImageField, and used to verify that an uploaded file really
 # is an image before it is stored.
 Pillow==12.3.0
+
+# Reads trainer-uploaded .xlsx result files. Chosen over pandas because the
+# importer needs cell-by-cell validation of untrusted values, not a dataframe —
+# and openpyxl is a fraction of the dependency weight. Opened in read-only,
+# data-only mode so formulas are never evaluated.
+openpyxl==3.1.5
+
+# Cache and, later, the broker for background work. Declared in base rather than
+# prod because `CACHE_URL` is now set locally too: a missing client turns into a
+# readiness 503 the first time the cache is touched, which is how this bit us in
+# Phase 0.
+redis==8.1.0
+
+# Certificate rendering. reportlab draws the PDF directly rather than going
+# through HTML: a certificate is a fixed layout, and a browser engine
+# (weasyprint, wkhtmltopdf) would add a large native dependency and an HTML
+# parser to the attack surface for no gain.
+reportlab==4.4.10
+# QR payloads for certificate verification. Renders through Pillow, already a
+# dependency.
+qrcode==8.2
+
+# Private object storage for student files. django-storages gives Django's
+# storage API an S3 backend; boto3 is its client. Both are in base rather than
+# prod because the backend is selected by configuration and a developer must be
+# able to run against MinIO or a mock without a second requirements file.
+django-storages==1.14.6
+boto3==1.43.85
+
+# Background work. Redis is already the cache; Celery turns it into a broker so
+# that sending mail and other slow work happens outside the request that
+# triggered it. See `config/celery.py` for what does and does not belong here.
+celery==5.6.3

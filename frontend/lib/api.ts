@@ -133,8 +133,8 @@ function safeParse(text: string): unknown {
 }
 
 /** Fetch a CSRF cookie before the first unsafe request of a session. */
-export async function ensureCsrfToken(): Promise<void> {
-  if (readCsrfCookie()) return;
+export async function ensureCsrfToken({ force = false } = {}): Promise<void> {
+  if (!force && readCsrfCookie()) return;
   await apiFetch<{ detail: string }>('/api/v1/auth/csrf/');
 }
 
@@ -143,13 +143,30 @@ export async function ensureCsrfToken(): Promise<void> {
  *
  * Every mutation in the app goes through here, so no call site can forget the
  * token handshake.
+ *
+ * A stale token is retried once. Django rotates the CSRF token when a session
+ * begins or ends, so the cookie held from before a sign-out is no longer the
+ * one the server expects — and because a cookie *is* present, the check above
+ * has no reason to fetch a new one. The symptom is specific and maddening:
+ * sign out, sign back in, and the first action fails once for no visible
+ * reason, then works. One forced refresh and one retry removes it. Only a
+ * `csrf_failed` is retried, and only once, so a genuine refusal is still a
+ * refusal.
  */
 export async function apiMutate<T>(
   path: string,
   options: RequestOptions & { method: string },
 ): Promise<T> {
   await ensureCsrfToken();
-  return apiFetch<T>(path, options);
+  try {
+    return await apiFetch<T>(path, options);
+  } catch (cause) {
+    if (cause instanceof ApiError && cause.code === 'csrf_failed') {
+      await ensureCsrfToken({ force: true });
+      return apiFetch<T>(path, options);
+    }
+    throw cause;
+  }
 }
 
 /**
@@ -172,6 +189,20 @@ export function fieldErrors(error: unknown): Record<string, string> {
   }
   if (Object.keys(mapped).length === 0) mapped.__all__ = error.message;
   return mapped;
+}
+
+/**
+ * The most specific sentence an error carries.
+ *
+ * The envelope's `message` is deliberately generic for a validation failure
+ * ("The submitted data is invalid."), which is useless on its own. The field
+ * details hold what actually went wrong, so prefer the first of those.
+ */
+export function errorMessage(error: unknown, fallback = 'Something went wrong.'): string {
+  const mapped = fieldErrors(error);
+  const specific = Object.entries(mapped).find(([field]) => field !== '__all__');
+  if (specific) return specific[1];
+  return mapped.__all__ ?? fallback;
 }
 
 /** Build a query string, omitting empty values. */

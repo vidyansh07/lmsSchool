@@ -11,8 +11,22 @@ must be injected by the runtime secret manager. A missing value raises
 
 from __future__ import annotations
 
+import sys
+import warnings
+
+from django.core.exceptions import ImproperlyConfigured
+
+from apps.common.storage import check_storage_configuration
+
 from .base import *
-from .base import DEV_SECRET_KEY_MARKER, MIDDLEWARE, REST_FRAMEWORK, STORAGES, env
+from .base import (
+    CELERY_BROKER_URL,
+    DEV_SECRET_KEY_MARKER,
+    MIDDLEWARE,
+    REST_FRAMEWORK,
+    STORAGES,
+    env,
+)
 from .guards import forbid_insecure_secret, forbid_sqlite, require_setting
 
 DEBUG = False  # never configurable in a deployed environment
@@ -75,6 +89,32 @@ STORAGES = {
     **STORAGES,
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
+
+# Student work must not sit on a container volume that dies with the container,
+# and must not sit in a bucket anyone can read. Both failures are silent, so
+# both are checked at boot rather than discovered later.
+if env.str("FILE_STORAGE_BACKEND", default="local") != "s3":
+    warnings.warn(
+        "FILE_STORAGE_BACKEND is not 's3': uploaded student files are on local disk "
+        "and will not survive a container replacement.",
+        stacklevel=2,
+    )
+check_storage_configuration(sys.modules[__name__])
+
+# --- Background work -------------------------------------------------------
+# Eager mode runs "background" tasks inside the request that queued them. On a
+# laptop that is a convenience; in a deployment it means the slow work the
+# queue exists to move out of the request is still in it, and nobody notices
+# until a mail provider hangs and takes the web workers with it.
+# Resolved in `base` — it falls back to CACHE_URL, so a single Redis serves
+# both unless the deployment splits them. Required either way.
+CELERY_BROKER_URL = require_setting("CELERY_BROKER_URL", CELERY_BROKER_URL)
+if env.bool("CELERY_TASK_ALWAYS_EAGER", default=False):
+    raise ImproperlyConfigured(
+        "CELERY_TASK_ALWAYS_EAGER must be off in a deployed environment: it runs "
+        "queued work inside the HTTP request."
+    )
+CELERY_TASK_ALWAYS_EAGER = False
 
 # --- API surface -----------------------------------------------------------
 REST_FRAMEWORK = {**REST_FRAMEWORK}

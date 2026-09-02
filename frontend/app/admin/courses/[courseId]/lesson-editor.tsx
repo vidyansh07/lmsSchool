@@ -292,7 +292,11 @@ export function LessonEditor({
 
       <div className="flex flex-wrap gap-2">
         <Button type="submit" size="sm" disabled={isSaving}>
-          {isSaving ? 'Saving…' : lesson ? 'Save lesson' : 'Add lesson'}
+          {/* "Create lesson", not "Add lesson": the button that opens this
+              editor is already called "Add lesson", and two controls with one
+              name is ambiguous for anyone navigating by label — a screen reader
+              included. */}
+          {isSaving ? 'Saving…' : lesson ? 'Save lesson' : 'Create lesson'}
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
           Cancel

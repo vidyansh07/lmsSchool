@@ -102,6 +102,9 @@ class GenerateSessionsSerializer(StrictSerializer):
 class GenerationResultSerializer(serializers.Serializer):
     created = serializers.IntegerField(read_only=True)
     skipped = serializers.IntegerField(read_only=True)
+    #: Days that fell inside a holiday on the academic calendar. Reported rather
+    #: than silently absent, so an operator can see why a week is empty.
+    on_holiday = serializers.IntegerField(read_only=True, default=0)
     start = serializers.DateField(read_only=True)
     end = serializers.DateField(read_only=True)
 

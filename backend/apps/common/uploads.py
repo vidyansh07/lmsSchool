@@ -21,6 +21,7 @@ they are delivered by an authenticated Django view (see
 
 from __future__ import annotations
 
+import re
 import uuid
 from io import BytesIO
 from pathlib import PurePosixPath
@@ -29,6 +30,8 @@ from typing import Any
 from django.core.exceptions import ValidationError
 from django.core.files.base import ContentFile
 from django.utils.translation import gettext_lazy as _
+
+from apps.common.scanning import scan_upload
 
 #: Formats accepted for profile images. JPEG and PNG cover every real client;
 #: WEBP is included because modern browsers produce it. SVG is deliberately
@@ -287,6 +290,7 @@ def validate_resource_upload(uploaded_file) -> tuple[str, str]:
             code="content_extension_mismatch",
         )
 
+    scan_upload(uploaded_file, kind="resource")
     return suffix, content_type
 
 
@@ -321,3 +325,290 @@ def normalise_course_thumbnail(uploaded_file) -> ContentFile:
         image.save(buffer, format="JPEG", quality=85, optimize=True)
 
     return ContentFile(buffer.getvalue(), name=f"{uuid.uuid4().hex}.jpg")
+
+
+# ---------------------------------------------------------------------------
+# Assignment attachments and student submissions
+# ---------------------------------------------------------------------------
+#
+# Student submissions are the most hostile upload path in the product: the
+# uploader is a member of the public whose account we handed out, the file is
+# often *source code*, and the same bytes are later downloaded by a trainer.
+# §4.4 sets the rules; here is how each one is met.
+#
+#   allowlist                 `ALLOWED_SUBMISSION_TYPES` — anything not listed is
+#                             refused, and the dangerous-extension list is
+#                             checked first so the message names the real reason.
+#   maximum file size         `MAX_SUBMISSION_BYTES` per file, plus a ceiling on
+#                             the number of files and their combined size, so one
+#                             submission cannot fill the volume.
+#   safe generated filenames  `submission_upload_to` discards the client name
+#                             entirely and writes `<uuid>.bin`. Traversal,
+#                             double extensions and control characters cannot
+#                             reach the filesystem because none of the client's
+#                             bytes are used to build the path.
+#   type validation           extension allowlist paired with a magic-byte family
+#                             for binary formats, and a real UTF-8 decode for
+#                             text and code.
+#   private storage           `MEDIA_ROOT` is never web-served, and on S3 the
+#                             bucket is private (see `docs/DEPLOYMENT.md`).
+#   authorization on download served by an authenticated view that re-checks
+#                             access per request; nothing is reachable by path.
+#   safe processing           archives are stored, never unpacked; code is never
+#                             read, parsed or executed; nothing is re-encoded.
+#   no executable upload path every submission is stored with a `.bin` suffix and
+#                             served as `application/octet-stream; attachment`
+#                             with `nosniff`. Even if the storage directory were
+#                             mis-exposed one day, there is no `.php`, `.jsp` or
+#                             `.py` on disk for a handler to pick up.
+#
+# Code files are deliberately *not* re-encoded or linted. Reading them is the
+# trainer's job; the server's job is to keep the bytes intact and inert.
+
+MAX_SUBMISSION_BYTES = 15 * 1024 * 1024  # 15 MB per file
+MAX_SUBMISSION_FILES = 10
+MAX_SUBMISSION_TOTAL_BYTES = 40 * 1024 * 1024
+
+#: Source and plain-text formats a student may hand in. Every one is validated
+#: as UTF-8 text, and every one is stored inert — the extension is a label on a
+#: record, never a suffix on a file the server could be tricked into running.
+SUBMISSION_TEXT_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        ".txt",
+        ".md",
+        ".csv",
+        ".json",
+        ".yml",
+        ".yaml",
+        ".xml",
+        ".sql",
+        ".log",
+        # Source code
+        ".py",
+        ".ipynb",
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".ts",
+        ".tsx",
+        ".java",
+        ".kt",
+        ".c",
+        ".h",
+        ".cpp",
+        ".hpp",
+        ".cs",
+        ".go",
+        ".rs",
+        ".rb",
+        ".php",
+        ".swift",
+        ".r",
+        ".m",
+        ".sh",
+        ".ps1",
+        ".html",
+        ".htm",
+        ".css",
+        ".scss",
+        ".vue",
+        ".svelte",
+        ".dart",
+        ".pl",
+        ".scala",
+        ".lua",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".dockerfile",
+        ".gitignore",
+    }
+)
+
+#: Binary formats a submission may contain, reusing the resource signature
+#: families so there is one definition of "is this really a PDF?".
+SUBMISSION_BINARY_EXTENSIONS: dict[str, str] = {
+    ".pdf": "pdf",
+    ".docx": "zip",
+    ".pptx": "zip",
+    ".xlsx": "zip",
+    ".doc": "ole",
+    ".ppt": "ole",
+    ".xls": "ole",
+    ".zip": "zip",
+    ".png": "png",
+    ".jpg": "jpeg",
+    ".jpeg": "jpeg",
+    ".webp": "webp",
+}
+
+ALLOWED_SUBMISSION_EXTENSIONS: frozenset[str] = SUBMISSION_TEXT_EXTENSIONS | frozenset(
+    SUBMISSION_BINARY_EXTENSIONS
+)
+
+#: Extensions refused on every path, including submissions. These are compiled
+#: or packaged executables — a student has no academic reason to hand one in,
+#: and a trainer has every reason not to be handed one.
+FORBIDDEN_SUBMISSION_EXTENSIONS = frozenset(
+    {
+        ".exe",
+        ".dll",
+        ".so",
+        ".dylib",
+        ".msi",
+        ".bat",
+        ".cmd",
+        ".com",
+        ".scr",
+        ".jar",
+        ".phar",
+        ".apk",
+        ".app",
+        ".deb",
+        ".rpm",
+        ".bin",
+        ".iso",
+        ".img",
+        ".vbs",
+        ".lnk",
+    }
+)
+
+#: Everything stored for a submission gets this suffix, whatever was uploaded.
+INERT_SUFFIX = ".bin"
+
+#: Submitted files are handed back as an opaque download, never as a type a
+#: browser might render or execute.
+SUBMISSION_CONTENT_TYPE = "application/octet-stream"
+
+_CHECKSUM_CHUNK = 64 * 1024
+
+
+def submission_upload_to(instance: Any, filename: str) -> str:
+    """Stored path for a submitted file.
+
+    The client filename is not consulted at all — not even for its extension.
+    Every submission is written as ``<uuid>.bin`` under a sharded directory, so
+    the path is a function of server-side randomness alone.
+    """
+    name = uuid.uuid4().hex
+    return f"assignment-submissions/{name[:2]}/{name[2:4]}/{name}{INERT_SUFFIX}"
+
+
+def assignment_attachment_upload_to(instance: Any, filename: str) -> str:
+    """Stored path for a trainer's brief or starter files."""
+    suffix = PurePosixPath(filename or "").suffix.lower()
+    extension = suffix if suffix in ALLOWED_RESOURCE_TYPES else ".bin"
+    name = uuid.uuid4().hex
+    return f"assignment-attachments/{name[:2]}/{name[2:4]}/{name}{extension}"
+
+
+def checksum_of(uploaded_file) -> str:
+    """SHA-256 of the uploaded bytes, read in bounded chunks.
+
+    Stored with the record so an integrity question months later ("is this the
+    file I submitted?") has an answer, and so identical re-uploads are visible.
+    """
+    import hashlib
+
+    digest = hashlib.sha256()
+    uploaded_file.seek(0)
+    for chunk in iter(lambda: uploaded_file.read(_CHECKSUM_CHUNK), b""):
+        digest.update(chunk)
+    uploaded_file.seek(0)
+    return digest.hexdigest()
+
+
+def _compound_suffix(name: str) -> str:
+    """The extension used for validation, lower-cased.
+
+    ``Dockerfile`` and ``.gitignore`` have no suffix in the usual sense, so the
+    whole lower-cased name is tried as one. Everything else uses the last
+    suffix — and the *last* one is what matters: ``report.pdf.php`` is a PHP
+    file, and treating it as a PDF is the classic upload bypass.
+    """
+    lowered = (name or "").strip().lower()
+    stem = PurePosixPath(lowered).name
+    if stem in {"dockerfile", ".gitignore", "makefile"}:
+        return f".{stem.lstrip('.')}"
+    return PurePosixPath(stem).suffix
+
+
+def validate_submission_upload(uploaded_file) -> tuple[str, str]:
+    """Validate one submitted file.
+
+    Returns ``(extension, checksum)``. The extension is recorded for display
+    and to build a safe download name; it never becomes part of a stored path.
+    Raises ``ValidationError`` describing the first failure.
+    """
+    original_name = getattr(uploaded_file, "name", "") or ""
+    suffix = _compound_suffix(original_name)
+
+    size = getattr(uploaded_file, "size", None)
+    if not size:
+        raise ValidationError(_("The uploaded file is empty."), code="empty_file")
+    if size > MAX_SUBMISSION_BYTES:
+        raise ValidationError(
+            _("Each file must be %(limit)d MB or smaller.")
+            % {"limit": MAX_SUBMISSION_BYTES // (1024 * 1024)},
+            code="file_too_large",
+        )
+
+    if suffix in FORBIDDEN_SUBMISSION_EXTENSIONS:
+        raise ValidationError(
+            _("Executable and packaged files cannot be submitted."),
+            code="forbidden_file_type",
+        )
+    if suffix not in ALLOWED_SUBMISSION_EXTENSIONS:
+        raise ValidationError(
+            _("Unsupported file type '%(suffix)s'. Submit source code, documents or a zip.")
+            % {"suffix": suffix or original_name[:40]},
+            code="unsupported_file_type",
+        )
+
+    uploaded_file.seek(0)
+    head = uploaded_file.read(_TEXT_SAMPLE_BYTES)
+    uploaded_file.seek(0)
+
+    if suffix in SUBMISSION_BINARY_EXTENSIONS:
+        family = SUBMISSION_BINARY_EXTENSIONS[suffix]
+        if not _matches_family(head, family):
+            raise ValidationError(
+                _("The file contents do not match its %(suffix)s extension.") % {"suffix": suffix},
+                code="content_extension_mismatch",
+            )
+    else:
+        # Text and code. A NUL byte in the first block means this is not the
+        # text file it claims to be — the usual disguise for a binary payload.
+        if b"\x00" in head:
+            raise ValidationError(
+                _("This file does not appear to be text."), code="invalid_file_content"
+            )
+        try:
+            head.decode("utf-8")
+        except UnicodeDecodeError:
+            # A multi-byte character may straddle the sample boundary; retry
+            # without the last few bytes before rejecting.
+            try:
+                head[:-4].decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValidationError(
+                    _("This file does not appear to be UTF-8 text."),
+                    code="invalid_file_content",
+                ) from exc
+
+    scan_upload(uploaded_file, kind="submission")
+    return suffix, checksum_of(uploaded_file)
+
+
+def safe_download_name(base: str, extension: str, *, fallback: str = "file") -> str:
+    """Build a ``Content-Disposition`` filename from server-side values only.
+
+    The base is reduced to ``[A-Za-z0-9_-]`` — which removes quotes, newlines,
+    path separators *and* dots, so no double extension can be constructed — and
+    the extension comes from the validated allowlist, never from the client
+    string that was uploaded.
+    """
+    cleaned = re.sub(r"[^A-Za-z0-9_-]+", "-", base or "").strip("-") or fallback
+    suffix = extension if extension in ALLOWED_SUBMISSION_EXTENSIONS else ""
+    return f"{cleaned[:80]}{suffix}"

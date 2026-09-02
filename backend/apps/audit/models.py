@@ -105,6 +105,91 @@ class AuditAction(models.TextChoices):
     ATTENDANCE_MARKED = "attendance.marked", _("Attendance marked")
     ATTENDANCE_CORRECTED = "attendance.corrected", _("Attendance corrected")
 
+    # --- Assignments
+    ASSIGNMENT_CREATED = "assignment.created", _("Assignment created")
+    ASSIGNMENT_UPDATED = "assignment.updated", _("Assignment updated")
+    ASSIGNMENT_STATUS_CHANGED = "assignment.status.changed", _("Assignment status changed")
+    ASSIGNMENT_DELETED = "assignment.deleted", _("Assignment deleted")
+    ASSIGNMENT_ATTACHMENT_ADDED = "assignment.attachment.added", _("Assignment attachment added")
+    ASSIGNMENT_ATTACHMENT_REMOVED = (
+        "assignment.attachment.removed",
+        _("Assignment attachment removed"),
+    )
+    SUBMISSION_CREATED = "submission.created", _("Assignment submitted")
+    SUBMISSION_GRADED = "submission.graded", _("Assignment graded")
+    SUBMISSION_RETURNED = "submission.returned", _("Assignment returned for rework")
+    SUBMISSION_FILE_DOWNLOADED = "submission.file.downloaded", _("Submission file downloaded")
+
+    # --- Assessments and results
+    ASSESSMENT_CREATED = "assessment.created", _("Assessment created")
+    ASSESSMENT_UPDATED = "assessment.updated", _("Assessment updated")
+    ASSESSMENT_STATUS_CHANGED = "assessment.status.changed", _("Assessment status changed")
+    ASSESSMENT_DELETED = "assessment.deleted", _("Assessment deleted")
+    RESULT_RECORDED = "result.recorded", _("Result recorded")
+    RESULT_UPDATED = "result.updated", _("Result updated")
+    RESULT_IMPORT_PREVIEWED = "result.import.previewed", _("Result import previewed")
+    RESULT_IMPORT_CONFIRMED = "result.import.confirmed", _("Result import confirmed")
+    RESULT_IMPORT_REJECTED = "result.import.rejected", _("Result import rejected")
+
+    # --- Academic configuration
+    ACADEMIC_POLICY_UPDATED = "academic.policy.updated", _("Academic rules changed")
+
+    # --- Projects
+    PROJECT_CREATED = "project.created", _("Project created")
+    PROJECT_UPDATED = "project.updated", _("Project updated")
+    PROJECT_STATUS_CHANGED = "project.status.changed", _("Project status changed")
+    PROJECT_DELETED = "project.deleted", _("Project deleted")
+    PROJECT_ASSIGNED = "project.assigned", _("Project assigned to students")
+    PROJECT_SUBMITTED = "project.submitted", _("Project deliverable submitted")
+    PROJECT_REVIEWED = "project.reviewed", _("Project reviewed")
+    PROJECT_FILE_DOWNLOADED = "project.file.downloaded", _("Project file downloaded")
+
+    # --- Question bank
+    QUESTION_CREATED = "question.created", _("Question created")
+    QUESTION_UPDATED = "question.updated", _("Question updated")
+    QUESTION_DELETED = "question.deleted", _("Question deleted")
+
+    # --- Examinations
+    EXAM_CREATED = "exam.created", _("Examination created")
+    EXAM_UPDATED = "exam.updated", _("Examination updated")
+    EXAM_STATUS_CHANGED = "exam.status.changed", _("Examination status changed")
+    EXAM_ATTEMPT_STARTED = "exam.attempt.started", _("Examination attempt started")
+    EXAM_ATTEMPT_SUBMITTED = "exam.attempt.submitted", _("Examination attempt submitted")
+    EXAM_ATTEMPT_EXPIRED = "exam.attempt.expired", _("Examination attempt expired")
+    EXAM_ATTEMPT_GRADED = "exam.attempt.graded", _("Examination attempt graded")
+    EXAM_RESULTS_PUBLISHED = "exam.results.published", _("Examination results published")
+
+    # --- Completion and certificates
+    COMPLETION_ELIGIBLE = "completion.eligible", _("Student became completion-eligible")
+    COMPLETION_APPROVED = "completion.approved", _("Course completion approved")
+    COMPLETION_REJECTED = "completion.rejected", _("Course completion not approved")
+    COMPLETION_REOPENED = "completion.reopened", _("Course completion reopened")
+    CERTIFICATE_TEMPLATE_SAVED = "certificate.template.saved", _("Certificate template saved")
+    CERTIFICATE_ISSUED = "certificate.issued", _("Certificate issued")
+    CERTIFICATE_REISSUED = "certificate.reissued", _("Certificate reissued")
+    CERTIFICATE_REVOKED = "certificate.revoked", _("Certificate revoked")
+    CERTIFICATE_DOWNLOADED = "certificate.downloaded", _("Certificate downloaded")
+    CERTIFICATE_VERIFIED = "certificate.verified", _("Certificate verified publicly")
+
+    # --- Communication
+    ANNOUNCEMENT_CREATED = "announcement.created", _("Announcement created")
+    ANNOUNCEMENT_UPDATED = "announcement.updated", _("Announcement updated")
+    ANNOUNCEMENT_PUBLISHED = "announcement.published", _("Announcement published")
+    ANNOUNCEMENT_ARCHIVED = "announcement.archived", _("Announcement archived")
+    THREAD_CREATED = "discussion.thread.created", _("Discussion thread started")
+    THREAD_MODERATED = "discussion.thread.moderated", _("Discussion thread moderated")
+    REPLY_CREATED = "discussion.reply.created", _("Discussion reply posted")
+    REPLY_HIDDEN = "discussion.reply.hidden", _("Discussion reply hidden")
+
+    # --- Reporting and data tools
+    REPORT_EXPORTED = "report.exported", _("Report exported")
+    BULK_IMPORT_PREVIEWED = "data.import.previewed", _("Bulk import previewed")
+    BULK_IMPORT_CONFIRMED = "data.import.confirmed", _("Bulk import confirmed")
+    BULK_IMPORT_REJECTED = "data.import.rejected", _("Bulk import discarded")
+
+    # --- File security
+    UPLOAD_REJECTED = "file.upload.rejected", _("Upload rejected by a security check")
+
     # --- Authorization
     PERMISSION_DENIED = "authz.denied", _("Permission denied")
 

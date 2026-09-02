@@ -83,8 +83,15 @@ def generate_sessions(
     if not schedules:
         raise ApplicationError({"batch": ["This batch has no active classes in its timetable."]})
 
+    # §8.1's academic calendar, applied: a term break must not silently produce
+    # thirty classes nobody attends and thirty empty registers to explain later.
+    from apps.academics.models import holiday_dates
+
+    holidays = holiday_dates(window_start, window_end)
+
     created = 0
     skipped = 0
+    on_holiday = 0
 
     for schedule in schedules:
         # The trainer is frozen per session at generation time, so reassigning
@@ -92,6 +99,9 @@ def generate_sessions(
         trainer = schedule.trainer or batch.trainer
 
         for day in _dates_between(window_start, window_end, schedule.weekday):
+            if day in holidays:
+                on_holiday += 1
+                continue
             session = ClassSession(
                 batch=batch,
                 schedule=schedule,
@@ -124,7 +134,13 @@ def generate_sessions(
             "skipped": skipped,
         },
     )
-    return {"created": created, "skipped": skipped, "from": window_start, "to": window_end}
+    return {
+        "created": created,
+        "skipped": skipped,
+        "on_holiday": on_holiday,
+        "from": window_start,
+        "to": window_end,
+    }
 
 
 @transaction.atomic

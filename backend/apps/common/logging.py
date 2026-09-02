@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from .request_context import get_request_id
@@ -50,6 +51,32 @@ SENSITIVE_KEYS = frozenset(
 REDACTED = "[redacted]"
 _MAX_DEPTH = 6
 
+#: Credentials embedded in free text, e.g. an SMTP driver reporting
+#: ``auth failed for password=hunter2``. Scrubbing by key only catches a secret
+#: that arrived as a key; this catches one that arrived as a sentence, which is
+#: how a third-party error message usually carries it.
+_INLINE_SECRET = re.compile(
+    r"\b(" + "|".join(sorted(SENSITIVE_KEYS)) + r")\b\s*[=:]\s*(\"[^\"]*\"|'[^']*'|\S+)",
+    re.IGNORECASE,
+)
+
+#: Anything shaped like a bearer credential, whatever it is called.
+_BEARER = re.compile(r"\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}", re.IGNORECASE)
+
+
+def scrub_text(text: str) -> str:
+    """Redact credentials embedded in a free-text string.
+
+    Used on anything that came from outside — a provider's exception message, a
+    driver's diagnostic — before it is logged or stored.
+    """
+    if not text:
+        return text
+    # Bearer first: `Authorization: Bearer <token>` otherwise matches the
+    # key rule on "Authorization" and leaves the token itself in the string.
+    redacted = _BEARER.sub(lambda m: f"{m.group(1)} {REDACTED}", text)
+    return _INLINE_SECRET.sub(lambda m: f"{m.group(1)}={REDACTED}", redacted)
+
 
 def scrub(value: Any, _depth: int = 0) -> Any:
     """Recursively replace sensitive values in a structure.
@@ -69,6 +96,10 @@ def scrub(value: Any, _depth: int = 0) -> Any:
         }
     if isinstance(value, (list, tuple, set)):
         return [scrub(item, _depth + 1) for item in value]
+    if isinstance(value, str):
+        # A value that is not under a sensitive key can still *contain* a
+        # secret. This is the case that a key-based scrubber misses.
+        return scrub_text(value)
     return value
 
 

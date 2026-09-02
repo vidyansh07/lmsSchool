@@ -100,6 +100,10 @@ ADMIN_COUNT = 2
 TRAINER_COUNT = 5
 STUDENT_COUNT = 20
 
+#: Roles that may open the Django admin. A manager runs academic operations
+#: through the LMS, not through the database editor, so they are not here.
+STAFF_ROLES = frozenset({UserRole.SUPERADMIN, UserRole.ADMIN})
+
 
 @dataclass
 class DemoAccount:
@@ -121,8 +125,14 @@ def _person(index: int) -> tuple[str, str]:
 def build_demo_accounts() -> list[DemoAccount]:
     """Deterministic fake roster, so a re-run produces the same people."""
     accounts: list[DemoAccount] = [
+        # Every role in the model gets a demo account. §15.5 asks for this by
+        # name, and the reason is the one that keeps biting: a role nobody can
+        # sign in as is a role nobody checks, and "the manager cannot do X" gets
+        # discovered by a manager rather than by a reviewer.
+        DemoAccount("superadmin", "Sonia", "Superson", UserRole.SUPERADMIN),
         DemoAccount("admin", "Ada", "Adminson", UserRole.ADMIN),
         DemoAccount("admin2", "Owen", "Operator", UserRole.ADMIN),
+        DemoAccount("manager", "Maya", "Managerial", UserRole.MANAGER),
     ]
 
     for index, (title, skills, expertise, years) in enumerate(TRAINER_SPECIALITIES, start=1):
@@ -209,16 +219,18 @@ class Command(BaseCommand):
             ) from exc
 
         created = updated = 0
+        by_role: dict[str, int] = {}
         for account in build_demo_accounts():
             was_created = self._upsert(account, password, force=options["force"])
             created += int(was_created)
             updated += int(not was_created)
+            by_role[account.role] = by_role.get(account.role, 0) + 1
 
+        roster = ", ".join(f"{count} {role}" for role, count in sorted(by_role.items()))
         self.stdout.write(
             self.style.SUCCESS(
                 f"Demo data ready: {created} created, {updated} updated "
-                f"({ADMIN_COUNT} admins, {TRAINER_COUNT} trainers, {STUDENT_COUNT} students) "
-                f"on @{DEMO_EMAIL_DOMAIN}."
+                f"({roster}) on @{DEMO_EMAIL_DOMAIN}."
             )
         )
         self.stdout.write(
@@ -237,7 +249,7 @@ class Command(BaseCommand):
                 first_name=account.first_name,
                 last_name=account.last_name,
                 role=account.role,
-                is_staff=(account.role == UserRole.ADMIN),
+                is_staff=account.role in STAFF_ROLES,
                 is_active=True,
             )
         else:
@@ -245,7 +257,7 @@ class Command(BaseCommand):
             user.last_name = account.last_name
             user.role = account.role
             user.is_active = True
-            user.is_staff = account.role == UserRole.ADMIN
+            user.is_staff = account.role in STAFF_ROLES
             if force:
                 user.set_password(password)
             user.save()

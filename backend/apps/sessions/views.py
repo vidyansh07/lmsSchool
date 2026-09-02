@@ -20,7 +20,7 @@ from apps.batches import access as batch_access
 from apps.common.permissions import IsActiveUser
 
 from . import access, services
-from .models import ClassSession, TrainerAssignmentHistory
+from .models import ClassSession, SessionStatus, TrainerAssignmentHistory
 from .serializers import (
     ClassSessionSerializer,
     ClassSessionWriteSerializer,
@@ -106,8 +106,22 @@ class MySessionsTodayView(APIView):
     def get(self, request):
         from django.utils import timezone
 
+        from apps.batches.models import BatchStatus
+
         today = timezone.localdate()
-        sessions = access.visible_sessions(request.user).filter(session_date=today)
+        sessions = (
+            access.visible_sessions(request.user)
+            .filter(session_date=today)
+            # A cancelled batch is not teaching today. Its students have lost
+            # access, so a register for it would record attendance nobody can
+            # act on — and it pushes the real class down the page, which is how
+            # a trainer comes to open the wrong one.
+            .exclude(batch__status=BatchStatus.CANCELLED)
+            # Neither is a class that was itself called off or moved. Both leave
+            # a row behind on purpose, so that history survives; neither is work
+            # for today.
+            .exclude(status__in=(SessionStatus.CANCELLED, SessionStatus.RESCHEDULED))
+        )
         return Response(ClassSessionSerializer(sessions, many=True).data)
 
 
@@ -261,6 +275,10 @@ class BatchSessionGenerateView(APIView):
             {
                 "created": result["created"],
                 "skipped": result["skipped"],
+                # Days the academic calendar marks as holidays. Without this the
+                # operator sees "12 created" for a fortnight that should have
+                # produced twenty and has nothing to explain the gap.
+                "on_holiday": result["on_holiday"],
                 "start": result["from"],
                 "end": result["to"],
             }

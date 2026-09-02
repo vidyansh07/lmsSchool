@@ -94,7 +94,7 @@ export function PublishPanel({
   const transitions = transitionsFor(course);
 
   return (
-    <Card>
+    <Card data-testid="course-publishing">
       <CardHeader>
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="flex-1">Publishing</CardTitle>

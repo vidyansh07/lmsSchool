@@ -1,0 +1,41 @@
+# TLS termination for the local staging stack.
+#
+# Staging exists to behave like production, and production speaks https. That is
+# not decoration: `config.settings.hardened` sets SESSION_COOKIE_SECURE and
+# CSRF_COOKIE_SECURE unconditionally, so a browser on plain http silently
+# refuses to store the session — sign-in appears to succeed and the next request
+# is anonymous. The choice is a real certificate or a weakened setting, and
+# weakening the setting would mean staging no longer tests what production runs.
+#
+# Caddy issues its own certificate for localhost (`tls internal`). Browsers do
+# not trust that authority, so a human clicks through the warning once and
+# Playwright is told to ignore it — the certificate is not what is under test.
+
+{
+	# No public ACME: this certificate never leaves the laptop.
+	auto_https disable_redirects
+	admin off
+}
+
+https://localhost:8443 {
+	tls internal
+	encode gzip
+
+	# The API and the app share an origin here, which is also how a real
+	# deployment is usually arranged: one hostname, one cookie, no CORS.
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+	handle /health/* {
+		reverse_proxy backend:8000
+	}
+	handle /static/* {
+		reverse_proxy backend:8000
+	}
+	handle /admin/django/* {
+		reverse_proxy backend:8000
+	}
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

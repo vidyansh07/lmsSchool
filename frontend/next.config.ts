@@ -3,7 +3,7 @@ import type { NextConfig } from 'next';
 /**
  * Security headers are set here as well as on the API.
  *
- * The two are independent origins in production, so neither can rely on the
+ * The two may be independent origins in production, so neither can rely on the
  * other's headers. `standalone` output keeps the production image small.
  */
 const securityHeaders = [
@@ -16,27 +16,14 @@ const securityHeaders = [
   },
 ];
 
-const apiOrigin = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
-
 /**
- * `connect-src` must include the API origin: the browser talks to the backend
- * directly, so a self-only policy would block every request.
- * `'unsafe-inline'` for styles is required by Next's inlined critical CSS.
+ * The Content-Security-Policy is NOT here. It needs a per-request nonce, which a
+ * static header cannot carry, so `middleware.ts` owns it — see the reasoning
+ * there. Setting a second policy in this file would not relax the first one:
+ * browsers apply every policy they are given and take the intersection, so a
+ * leftover `script-src 'self'` here would keep blocking the nonced scripts and
+ * the page would stay dead for a reason nothing points at.
  */
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "style-src 'self' 'unsafe-inline'",
-  process.env.NODE_ENV === 'development'
-    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-    : "script-src 'self'",
-  `connect-src 'self' ${apiOrigin}`,
-].join('; ');
 
 const nextConfig: NextConfig = {
   output: 'standalone',
@@ -48,7 +35,6 @@ const nextConfig: NextConfig = {
         source: '/:path*',
         headers: [
           ...securityHeaders,
-          { key: 'Content-Security-Policy', value: contentSecurityPolicy },
         ],
       },
     ];

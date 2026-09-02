@@ -31,15 +31,34 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', roles: ['student', 'trainer'] },
   { href: '/courses', label: 'Courses' },
   { href: '/my-batches', label: 'My batches', roles: ['student'] },
+  { href: '/my-assignments', label: 'My assignments', roles: ['student'] },
+  { href: '/my-attendance', label: 'My attendance', roles: ['student'] },
+  { href: '/my-projects', label: 'My projects', roles: ['student'] },
+  { href: '/my-learning', label: 'My learning', roles: ['student'] },
+  { href: '/my-progress', label: 'My progress', roles: ['student'] },
+  { href: '/my-results', label: 'My results', roles: ['student'] },
+  { href: '/exams', label: 'Examinations', roles: ['student'] },
   { href: '/calendar', label: 'Calendar', roles: ['student', 'trainer'] },
+  { href: '/announcements', label: 'Announcements' },
+  { href: '/discussions', label: 'Discussions', roles: ['student', 'trainer'] },
+  { href: '/notifications', label: 'Notifications' },
+  // A trainer's daily driver. Staff who hold the session capability reach it
+  // too; a trainer has no such capability, their authority is per batch.
+  { href: '/teaching', label: 'Teaching', capability: Capability.sessionManageAny, roles: ['trainer'] },
   // Batches and authoring: administrators hold the capability; trainers reach
   // them because their rights come from per-record assignment, which no
   // capability reflects.
+  { href: '/admin/overview', label: 'Overview', capability: Capability.reportViewAny },
+  { href: '/admin/reports', label: 'Reports', capability: Capability.reportViewAny, roles: ['trainer'] },
+  { href: '/admin/imports', label: 'Bulk import', capability: Capability.dataImport },
   { href: '/admin/batches', label: 'Batches', capability: Capability.batchViewAny, roles: ['trainer'] },
   { href: '/admin/courses', label: 'Authoring', capability: Capability.courseViewAny, roles: ['trainer'] },
   { href: '/admin/users', label: 'Users', capability: Capability.userViewAny },
   { href: '/admin/students', label: 'Students', capability: Capability.studentViewAny },
   { href: '/admin/trainers', label: 'Trainers', capability: Capability.trainerViewAny },
+  { href: '/admin/academics', label: 'Academic rules', capability: Capability.academicConfigure },
+  { href: '/admin/completions', label: 'Completions', capability: Capability.completionApprove },
+  { href: '/admin/certificates', label: 'Certificates', capability: Capability.certificateManage },
   { href: '/profile', label: 'My profile' },
 ];
 

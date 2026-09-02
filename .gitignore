@@ -60,3 +60,4 @@ Thumbs.db
 
 # Local scan output
 .gitleaks-report.json
+backups/

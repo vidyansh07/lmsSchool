@@ -34,6 +34,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from apps.batches.models import DeliveryMode
 from apps.common.models import BaseModel
 
 
@@ -81,8 +82,17 @@ ACCESS_GRANTING_STATUSES = frozenset({EnrollmentStatus.ACTIVE, EnrollmentStatus.
 
 class EnrollmentQuerySet(models.QuerySet):
     def with_related(self):
+        # `batch__trainer__user` is here because every serializer renders the
+        # trainer's name: without it a page of twenty-five enrolments made
+        # twenty-five extra queries for twenty-five names.
         return self.select_related(
-            "student", "student__user", "batch", "batch__trainer", "course", "course__category"
+            "student",
+            "student__user",
+            "batch",
+            "batch__trainer",
+            "batch__trainer__user",
+            "course",
+            "course__category",
         )
 
     def live(self):
@@ -121,6 +131,18 @@ class Enrollment(BaseModel):
         default=EnrollmentStatus.PENDING,
         db_index=True,
     )
+    #: Null means "however the batch is taught" — the usual case. Set only for a
+    #: student who attends differently from their cohort, which a hybrid batch
+    #: has by definition (§6.5).
+    delivery_mode = models.CharField(
+        _("delivery mode"),
+        max_length=10,
+        choices=DeliveryMode.choices,
+        blank=True,
+        default="",
+        help_text=_("Leave empty to follow the batch."),
+    )
+
     enrolled_at = models.DateTimeField(_("enrolled at"), default=timezone.now)
     start_date = models.DateField(
         _("access start date"),
@@ -199,6 +221,15 @@ class Enrollment(BaseModel):
     @property
     def holds_seat(self) -> bool:
         return self.status in SEAT_HOLDING_STATUSES
+
+    @property
+    def effective_delivery_mode(self) -> str:
+        """How this student is actually taught.
+
+        Their own setting when they have one, the batch's otherwise. Written
+        once here so no caller has to remember the inheritance rule.
+        """
+        return self.delivery_mode or self.batch.delivery_mode
 
     def grants_access(self, *, on_date=None) -> bool:
         """Whether this enrolment opens the course right now.

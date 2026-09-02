@@ -413,3 +413,135 @@ def test_todays_classes_endpoint_returns_only_today(
     today = timezone.localdate()
     body = api_client_no_csrf.get(f"{SESSIONS_URL}today/").json()
     assert all(row["session_date"] == today.isoformat() for row in body)
+
+
+# ---------------------------------------------------------------------------
+# Holidays are reported, not merely obeyed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_generation_reports_how_many_days_it_skipped_as_holidays(
+    api_client_no_csrf, admin_user, batch, schedule
+):
+    """§8.1 skips holidays; §15.2 needs to be told that it did.
+
+    The count is the difference between "the timetable produced twelve classes"
+    and "the timetable produced twelve because eight fell in the term break".
+    Without it an operator sees a fortnight that should have twenty classes,
+    finds twelve, and has nothing to explain the gap — which is exactly when
+    somebody starts creating the missing ones by hand.
+    """
+    from datetime import timedelta
+
+    from apps.academics.models import AcademicEvent, AcademicEventKind
+
+    AcademicEvent.objects.create(
+        name="Term break",
+        kind=AcademicEventKind.HOLIDAY,
+        start_date=batch.start_date,
+        end_date=batch.start_date + timedelta(days=30),
+        created_by=admin_user,
+    )
+
+    api_client_no_csrf.force_login(admin_user)
+    response = _generate(
+        api_client_no_csrf,
+        batch,
+        start=batch.start_date.isoformat(),
+        end=(batch.start_date + timedelta(days=30)).isoformat(),
+    )
+
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert "on_holiday" in body, "the API documents this field; it must be returned"
+    assert body["on_holiday"] > 0
+    assert body["created"] == 0, "every class in the window fell inside the holiday"
+
+
+@pytest.mark.django_db
+def test_generation_reports_no_holidays_when_there_are_none(
+    api_client_no_csrf, admin_user, batch, schedule
+):
+    api_client_no_csrf.force_login(admin_user)
+    body = _generate(api_client_no_csrf, batch).json()
+
+    assert body["on_holiday"] == 0
+    assert body["created"] > 0
+
+
+# ---------------------------------------------------------------------------
+# "Today" means work that is actually happening
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_todays_classes_exclude_a_cancelled_batch(
+    api_client_no_csrf, admin_user, trainer_profile, batch, enrollment
+):
+    """A cancelled batch is not teaching today.
+
+    Its students have lost access, so a register for it would record attendance
+    nobody can act on — and it pushes the real class down the page, which is how
+    a trainer comes to open the wrong one. Found exactly that way: leftover
+    cancelled batches from an end-to-end run sat above the live class all
+    morning.
+    """
+    from datetime import date
+
+    from apps.batches.models import BatchStatus
+
+    live = ClassSession.objects.create(
+        batch=batch,
+        session_date=date.today(),
+        start_time="09:00",
+        end_time="11:00",
+        topic="The real class",
+        status=SessionStatus.IN_PROGRESS,
+        created_by=admin_user,
+    )
+
+    api_client_no_csrf.force_login(trainer_profile.user)
+    topics = [row["topic"] for row in api_client_no_csrf.get("/api/v1/sessions/today/").json()]
+    assert "The real class" in topics
+
+    batch.status = BatchStatus.CANCELLED
+    batch.save(update_fields=["status"])
+
+    after = api_client_no_csrf.get("/api/v1/sessions/today/").json()
+    assert after == [], f"a cancelled batch still lists classes: {after}"
+    # The class itself is untouched — history survives, it is just not today's work.
+    live.refresh_from_db()
+    assert live.status == SessionStatus.IN_PROGRESS
+
+
+@pytest.mark.django_db
+def test_todays_classes_exclude_a_cancelled_class(
+    api_client_no_csrf, admin_user, trainer_profile, batch
+):
+    from datetime import date
+
+    ClassSession.objects.create(
+        batch=batch,
+        session_date=date.today(),
+        start_time="09:00",
+        end_time="11:00",
+        topic="Called off",
+        status=SessionStatus.CANCELLED,
+        cancellation_reason="Trainer unwell",
+        created_by=admin_user,
+    )
+    ClassSession.objects.create(
+        batch=batch,
+        session_date=date.today(),
+        start_time="14:00",
+        end_time="16:00",
+        topic="Still on",
+        status=SessionStatus.SCHEDULED,
+        created_by=admin_user,
+    )
+
+    api_client_no_csrf.force_login(trainer_profile.user)
+    topics = [row["topic"] for row in api_client_no_csrf.get("/api/v1/sessions/today/").json()]
+
+    assert topics == ["Still on"]

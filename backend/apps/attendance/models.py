@@ -22,6 +22,8 @@ be a second source of truth that drifts the first time a correction is made.
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -125,24 +127,54 @@ class AttendanceRecord(BaseModel):
         return self.status in COUNTS_AS_PRESENT
 
 
-def attendance_summary(enrollment) -> dict[str, object]:
-    """One student's attendance on one enrolment.
+def _summary_from_counts(counts: dict[str, int]) -> dict[str, object]:
+    """Turn a status histogram into the summary. The arithmetic lives here once.
 
     Excused absences leave the denominator, so a student excused for half a
     term is not punished by a percentage that treats those classes as misses.
     """
-    rows = AttendanceRecord.objects.filter(enrollment=enrollment)
-    counted = rows.exclude(status__in=EXCLUDED_FROM_PERCENTAGE)
-
-    total = counted.count()
-    present = counted.filter(status__in=COUNTS_AS_PRESENT).count()
+    total = sum(value for status, value in counts.items() if status not in EXCLUDED_FROM_PERCENTAGE)
+    present = sum(value for status, value in counts.items() if status in COUNTS_AS_PRESENT)
 
     return {
         "total_sessions": total,
-        "present": rows.filter(status=AttendanceStatus.PRESENT).count(),
-        "late": rows.filter(status=AttendanceStatus.LATE).count(),
-        "absent": rows.filter(status=AttendanceStatus.ABSENT).count(),
-        "excused": rows.filter(status=AttendanceStatus.EXCUSED).count(),
+        "present": counts.get(AttendanceStatus.PRESENT, 0),
+        "late": counts.get(AttendanceStatus.LATE, 0),
+        "absent": counts.get(AttendanceStatus.ABSENT, 0),
+        "excused": counts.get(AttendanceStatus.EXCUSED, 0),
         "attended": present,
         "percentage": round(present * 100 / total) if total else None,
     }
+
+
+def attendance_summaries(enrollment_ids) -> dict[Any, dict[str, object]]:
+    """The same summary for many enrolments, in one query.
+
+    Exists because a cohort report asked for it per student: four hundred
+    students meant two thousand round trips, and the fix cannot be a second copy
+    of the percentage rule. One grouped query, one shared
+    :func:`_summary_from_counts`.
+
+    Every requested id appears in the result, including students with no
+    records at all — an absent key would make every caller write the same
+    "missing means zero" branch.
+    """
+    ids = list(enrollment_ids)
+    counts: dict[Any, dict[str, int]] = {key: {} for key in ids}
+    if not ids:
+        return {}
+
+    rows = (
+        AttendanceRecord.objects.filter(enrollment_id__in=ids)
+        .values("enrollment_id", "status")
+        .annotate(total=models.Count("id"))
+    )
+    for row in rows:
+        counts.setdefault(row["enrollment_id"], {})[row["status"]] = row["total"]
+
+    return {key: _summary_from_counts(value) for key, value in counts.items()}
+
+
+def attendance_summary(enrollment) -> dict[str, object]:
+    """One student's attendance on one enrolment."""
+    return attendance_summaries([enrollment.pk])[enrollment.pk]

@@ -58,6 +58,33 @@ frontend (Next.js)            backend (Django + DRF)          PostgreSQL
 | `courses` | Category, Course, Module, Lesson, Resource, VideoAsset, authoring assignment, content access |
 | `batches` | Batch, BatchSchedule, conflict detection, batch/enrolment access |
 | `enrollments` | Enrollment, LessonProgress |
+| `sessions` | ClassSession (app label `class_sessions`), trainer assignment history |
+| `attendance` | AttendanceRecord, the register, corrections, attendance percentages |
+| `assignments` | Assignment, AssignmentSubmission, SubmissionFile, grading |
+| `assessments` | Assessment (weekly tests), AssessmentResult, ResultImport |
+| `academics` | AcademicPolicy — the configurable rules, and how they resolve |
+| `projects` | Project, StudentProject (the review loop), ProjectFile |
+| `questions` | The question bank: Question, QuestionOption. Holds the answers |
+| `exams` | Exam, ExamSection, ExamAttempt, AttemptQuestion, AttemptAnswer |
+| `progress` | The one progress calculation, the completion rules, CourseCompletion |
+| `certificates` | CertificateTemplate, Certificate, PDF and QR, public verification |
+| `notifications` | Notification, preferences, the email outbox and channel registry |
+| `announcements` | Announcement, audience rules, fan-out on publish |
+| `discussions` | Thread, Reply, moderation |
+| `learning` | Bookmarks, lesson notes, continue-learning, the batch directory |
+| `reporting` | The ten reports, nine metrics with definitions, dashboards, CSV export, bulk import |
+
+Phase 9 added no app. It added three modules that cut across them:
+`apps/common/storage.py` (private object storage), `apps/common/scanning.py`
+(the malware-scan seam), and `apps/progress/bulk.py` (the cohort-sized gathering
+behind the one progress calculation). Plus `config/celery.py`, the worker.
+
+Phase 10 added no application code beyond closing gaps the release journey
+found. What it added is around the edges: a production-shaped staging stack
+(`docker-compose.staging.yml`, `infra/proxy/`), the operational scripts
+(`scripts/verify_demo.sh`, `scripts/backup.sh`, `scripts/check_migrations.sh`),
+and `frontend/middleware.ts`, which owns the Content-Security-Policy because it
+needs a per-request nonce. Start at `docs/RELEASE_READINESS.md`.
 | `dashboards` | No models — the calendar registry and role dashboards |
 | `audit` | Append-only audit trail |
 | `health` | Liveness and readiness probes |

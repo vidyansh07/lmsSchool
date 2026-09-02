@@ -15,10 +15,20 @@ SEED_PASSWORD = "Staging-Demo-Passw0rd!"
 
 
 @pytest.mark.django_db
-def test_seed_creates_two_admins_five_trainers_and_twenty_students():
+def test_seed_creates_an_account_for_every_role():
+    """§15.5: every role in the model must be signable-in on a demo environment.
+
+    A role nobody can sign in as is a role nobody exercises, and "the manager
+    cannot do X" then gets discovered by a manager instead of by a reviewer.
+    """
     with mock.patch.dict(os.environ, {"DEMO_USER_PASSWORD": SEED_PASSWORD}):
         call_command("seed_demo_data")
 
+    for role in UserRole.values:
+        assert User.objects.filter(role=role).exists(), f"no demo account for {role}"
+
+    assert User.objects.filter(role=UserRole.SUPERADMIN).count() == 1
+    assert User.objects.filter(role=UserRole.MANAGER).count() == 1
     assert User.objects.filter(role=UserRole.ADMIN).count() == 2
     assert User.objects.filter(role=UserRole.TRAINER).count() == 5
     assert User.objects.filter(role=UserRole.STUDENT).count() == 20
@@ -61,7 +71,7 @@ def test_seed_is_idempotent():
     with mock.patch.dict(os.environ, {"DEMO_USER_PASSWORD": SEED_PASSWORD}):
         call_command("seed_demo_data")
         call_command("seed_demo_data")
-    assert User.objects.count() == 27
+    assert User.objects.count() == 29
 
 
 @pytest.mark.django_db

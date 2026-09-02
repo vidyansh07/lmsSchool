@@ -36,7 +36,9 @@ export const QUALIFICATION_OPTIONS: { value: Qualification; label: string }[] = 
 ).map((value) => ({ value, label: QUALIFICATION_LABEL[value] }));
 
 export const ROLE_LABEL: Record<UserRole, string> = {
+  superadmin: 'Superadmin',
   admin: 'Administrator',
+  manager: 'Manager',
   trainer: 'Trainer',
   student: 'Student',
 };

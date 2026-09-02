@@ -18,6 +18,7 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.academics.policies import attendance_requirement
 from apps.accounts.roles import Capability, has_capability
 from apps.batches import access as batch_access
 from apps.common.permissions import IsActiveUser
@@ -25,7 +26,7 @@ from apps.enrollments.models import Enrollment
 from apps.sessions import access as session_access
 
 from . import services
-from .models import AttendanceRecord, attendance_summary
+from .models import AttendanceRecord
 from .serializers import (
     AdminAttendanceRecordSerializer,
     AttendanceRecordSerializer,
@@ -211,7 +212,7 @@ class MyAttendanceView(APIView):
                     "enrollment_id": str(enrollment.pk),
                     "course_title": enrollment.course.title,
                     "batch_code": enrollment.batch.code,
-                    "summary": attendance_summary(enrollment),
+                    "summary": AttendanceSummarySerializer(attendance_requirement(enrollment)).data,
                     "records": AttendanceRecordSerializer(rows, many=True).data,
                 }
             )
@@ -243,7 +244,7 @@ class EnrollmentAttendanceView(APIView):
         serializer = AdminAttendanceRecordSerializer if is_staff else AttendanceRecordSerializer
         return Response(
             {
-                "summary": attendance_summary(enrollment),
+                "summary": AttendanceSummarySerializer(attendance_requirement(enrollment)).data,
                 "records": serializer(rows, many=True).data,
             }
         )

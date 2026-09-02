@@ -173,3 +173,80 @@ def test_csrf_failures_use_one_code_regardless_of_session_state(api_client, stud
         assert "CSRF Failed" not in body["message"]
         assert "token missing" not in body["message"].lower()
         assert body.get("details") is None
+
+
+# ---------------------------------------------------------------------------
+# §14.1 — session lifetime and revocation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_signing_out_everywhere_ends_other_sessions(client, django_user_model, student):
+    """One person, two browsers, one compromise.
+
+    "Sign out everywhere" is only worth having if it reaches the *other*
+    session. A test that logs in once and signs out once would pass on an
+    implementation that only ends the session making the request — which is
+    exactly the implementation somebody writes by accident.
+    """
+    from django.test import Client
+
+    first, second = Client(), Client()
+    for browser in (first, second):
+        assert (
+            browser.post(
+                "/api/v1/auth/login/",
+                {"email": student.email, "password": TEST_PASSWORD},
+                content_type="application/json",
+            ).status_code
+            == 200
+        )
+        assert browser.get("/api/v1/auth/me/").status_code == 200
+
+    assert first.post("/api/v1/auth/logout-all/").status_code in (200, 204)
+
+    assert first.get("/api/v1/auth/me/").status_code == 403
+    assert second.get("/api/v1/auth/me/").status_code == 403, "the other browser is still signed in"
+
+
+@pytest.mark.django_db
+def test_a_session_does_not_outlive_its_cookie(client, student, settings):
+    """§14.1 session expiry. Twelve hours by default, and enforced by Django's
+    session backend rather than by anything this project wrote — which is worth
+    asserting precisely because it is easy to assume."""
+    from django.contrib.sessions.models import Session
+    from django.utils import timezone
+
+    assert settings.SESSION_COOKIE_AGE <= 24 * 60 * 60
+
+    assert (
+        client.post(
+            "/api/v1/auth/login/",
+            {"email": student.email, "password": TEST_PASSWORD},
+            content_type="application/json",
+        ).status_code
+        == 200
+    )
+
+    session = Session.objects.get(session_key=client.session.session_key)
+    assert session.expire_date <= timezone.now() + timezone.timedelta(
+        seconds=settings.SESSION_COOKIE_AGE + 5
+    )
+
+    # Expire it the way time would, and the session stops working.
+    session.expire_date = timezone.now() - timezone.timedelta(seconds=1)
+    session.save(update_fields=["expire_date"])
+    assert client.get("/api/v1/auth/me/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_a_reset_token_expires(student, settings):
+    from django.utils import timezone
+
+    from apps.accounts.models import AccountToken, TokenPurpose
+
+    token, _raw = AccountToken.issue(user=student, purpose=TokenPurpose.PASSWORD_RESET)
+    assert token.expires_at <= timezone.now() + timezone.timedelta(
+        hours=settings.AUTH_TOKEN_RESET_TTL_HOURS, minutes=1
+    )
+    assert settings.AUTH_TOKEN_RESET_TTL_HOURS <= 24

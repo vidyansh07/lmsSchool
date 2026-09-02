@@ -7,6 +7,10 @@
 #   * production image targets (gunicorn, Next.js standalone build)
 #   * DEBUG=False and the full hardened security configuration
 #   * its own database volume, its own secrets file, its own Redis
+#   * https, terminated by Caddy — hardened settings mark the session cookie
+#     Secure, so a browser on plain http never stores it
+#   * a Celery worker and scheduler, as a deployment has
+#   * object storage over the S3 protocol (MinIO here, AWS in a real staging)
 #   * seeded exclusively with fake demo data (`docker compose run backend seed`)
 #
 # It must never be pointed at a production database or given production
@@ -44,6 +48,66 @@ services:
       timeout: 3s
       retries: 5
 
+  # TLS in front of everything, on one origin. See infra/proxy/Caddyfile.
+  proxy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    volumes:
+      - ./infra/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - staging_caddy_data:/data
+      - staging_caddy_config:/config
+    ports:
+      - "127.0.0.1:${PROXY_PORT:-8443}:8443"
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+
+  # S3-compatible object storage. §15.4 asks for external S3; no bucket is
+  # provisioned for this project, and MinIO speaks the same protocol to the same
+  # boto3 client — private objects, signed URLs, the lot. Moving to AWS is a
+  # change of AWS_S3_ENDPOINT_URL and nothing else, which is the point of having
+  # the storage backend behind a seam.
+  storage:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID:?set in .env.staging}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY:?set in .env.staging}
+    volumes:
+      - staging_object_storage:/data
+    ports:
+      - "127.0.0.1:${STORAGE_PORT:-9000}:9000"
+      - "127.0.0.1:${STORAGE_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  # Creates the bucket once and exits. The bucket is left private: no anonymous
+  # policy is set, which is the whole point of §14.3.
+  storage-init:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on:
+      storage:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?set in .env.staging}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?set in .env.staging}
+      AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:?set in .env.staging}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mc alias set staging http://storage:9000 "$$AWS_ACCESS_KEY_ID" "$$AWS_SECRET_ACCESS_KEY"
+        mc mb --ignore-existing "staging/$$AWS_STORAGE_BUCKET_NAME"
+        mc anonymous set none "staging/$$AWS_STORAGE_BUCKET_NAME"
+        echo "bucket $$AWS_STORAGE_BUCKET_NAME ready and private"
+
   backend:
     build:
       context: .
@@ -68,6 +132,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8000/health/ready/"]
       interval: 15s
@@ -98,7 +164,77 @@ services:
       retries: 5
       start_period: 30s
 
+  # The worker and the scheduler, as a deployment has them. Same image as the
+  # backend, different entry point: a task must behave identically whether it
+  # ran inline in a test or on a worker.
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+      target: production
+    restart: unless-stopped
+    command:
+      - celery
+      - -A
+      - config
+      - worker
+      - --loglevel=info
+      - --concurrency=${CELERY_CONCURRENCY:-2}
+      - --queues=grras
+      - --max-tasks-per-child=200
+    env_file:
+      - .env.staging
+    environment:
+      DJANGO_ENV: staging
+      DJANGO_SETTINGS_MODULE: config.settings.staging
+      # Never from a worker: two processes racing to migrate one database is
+      # how a deployment corrupts its own schema.
+      RUN_MIGRATIONS: "false"
+      COLLECT_STATIC: "false"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # No --destination: the shell that runs a healthcheck does not always
+      # have HOSTNAME set, and naming a worker that does not answer reports a
+      # perfectly healthy process as unhealthy — which in a deployment means
+      # restarting it on a loop. Pinging the queue answers the real question.
+      test: ["CMD", "celery", "-A", "config", "inspect", "ping", "--timeout", "10"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Exactly one replica, ever. Two schedulers mean every periodic task fires
+  # twice, which for the outbox sweep means every retry sent twice.
+  beat:
+    build:
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+      target: production
+    restart: unless-stopped
+    command:
+      - celery
+      - -A
+      - config
+      - beat
+      - --loglevel=info
+      - --schedule=/tmp/celerybeat-schedule
+    env_file:
+      - .env.staging
+    environment:
+      DJANGO_ENV: staging
+      DJANGO_SETTINGS_MODULE: config.settings.staging
+      RUN_MIGRATIONS: "false"
+      COLLECT_STATIC: "false"
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
+  staging_caddy_data:
+  staging_caddy_config:
   staging_postgres_data:
   staging_redis_data:
+  staging_object_storage:
   staging_media:

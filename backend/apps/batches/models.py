@@ -40,6 +40,20 @@ from apps.common.validators import validate_no_control_characters
 MAX_CAPACITY = 1000
 
 
+class DeliveryMode(models.TextChoices):
+    """How teaching reaches a student — §6.5.
+
+    A field, not a second product. Online and offline students share the same
+    courses, batches, sessions, attendance, assignments and certificates; what
+    changes is which completion rules an institution turns on for them, which is
+    configuration (`apps.academics`) rather than architecture.
+    """
+
+    OFFLINE = "offline", _("In the classroom")
+    ONLINE = "online", _("Online")
+    HYBRID = "hybrid", _("Both")
+
+
 class BatchStatus(models.TextChoices):
     """Where a batch is in its life.
 
@@ -121,6 +135,13 @@ class Batch(BaseModel):
         help_text=_("Protected: deleting a course with batches would orphan its students."),
     )
     description = models.TextField(_("description"), max_length=2000, blank=True)
+    delivery_mode = models.CharField(
+        _("delivery mode"),
+        max_length=10,
+        choices=DeliveryMode.choices,
+        default=DeliveryMode.OFFLINE,
+        help_text=_("How this cohort is taught. A student may differ; see Enrollment."),
+    )
 
     trainer = models.ForeignKey(
         "trainers.TrainerProfile",

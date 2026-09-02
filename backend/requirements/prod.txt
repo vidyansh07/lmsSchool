@@ -1,9 +1,6 @@
-# Production / staging runtime (server, static files, shared cache, error reporting).
+# Production / staging runtime (server, static files, error reporting).
+# The Redis client lives in base.txt: every environment now sets CACHE_URL.
 -r base.txt
 gunicorn==26.2.0
-# Client for Django's built-in RedisCache backend. Required, not optional:
-# deployed environments must set CACHE_URL because rate limiting needs a
-# shared counter store across workers.
-redis==8.1.0
 whitenoise==6.12.0
 sentry-sdk==2.68.1

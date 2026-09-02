@@ -1,4 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+
+import { signIn } from './helpers';
 
 /**
  * End-to-end tests against the real stack, using the seeded demo accounts.
@@ -18,13 +20,6 @@ const TRAINER = 'trainer1@demo.grras.invalid';
 
 test.skip(!DEMO_PASSWORD, 'E2E_DEMO_PASSWORD is not set; seeded-account tests are skipped.');
 
-async function signIn(page: Page, email: string) {
-  await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(DEMO_PASSWORD);
-  await page.getByRole('button', { name: /^sign in$/i }).click();
-  await expect(page.getByRole('heading', { name: /welcome back/i })).toBeVisible();
-}
 
 test.describe('Authentication', () => {
   test('a wrong password is refused without revealing whether the account exists', async ({

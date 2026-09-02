@@ -79,7 +79,7 @@ function ModulePanel({
   }
 
   return (
-    <Card>
+    <Card data-testid="module-card">
       <CardHeader className="gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="flex-1">{module.title}</CardTitle>

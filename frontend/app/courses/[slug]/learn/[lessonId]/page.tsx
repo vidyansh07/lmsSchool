@@ -7,9 +7,11 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { LessonBody } from '@/components/lesson-content';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
+import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
+import { setLessonCompletion } from '@/lib/batches';
 import { getCourse, getLesson } from '@/lib/courses';
 import { CONTENT_TYPE_LABEL, formatDuration } from '@/lib/course-labels';
 import { cn } from '@/lib/utils';
@@ -22,10 +24,70 @@ interface FlatLesson extends LessonSummary {
 /**
  * The course player.
  *
- * Deliberately without completion tracking: progress belongs to a later phase,
- * and a half-built version of it here would have to be unpicked. What exists is
- * the frame — outline, current lesson, and previous/next navigation.
+ * Marking a lesson complete lives here because this is where a student is when
+ * they finish one. The API and its client have existed since progress was
+ * built; the player was written before that and never caught up, which left the
+ * odd situation of a system that counts completed lessons and no way for a
+ * student to complete one.
+ *
+ * The control is a toggle rather than a one-way action: a student who marks the
+ * wrong lesson should be able to say so, and reopening is a supported operation
+ * on the same endpoint.
  */
+/** Mark this lesson done, or reopen it. */
+function LessonCompletion({ lessonId }: { lessonId: string }) {
+  const [completed, setCompleted] = useState<boolean | null>(null);
+  const [message, setMessage] = useState('');
+  const [isBusy, setIsBusy] = useState(false);
+
+  // Reset when the student moves to another lesson: the component is reused
+  // across lessons, and carrying the previous one's state over would show the
+  // wrong answer for a moment.
+  const [seen, setSeen] = useState(lessonId);
+  if (seen !== lessonId) {
+    setSeen(lessonId);
+    setCompleted(null);
+    setMessage('');
+  }
+
+  async function onToggle(next: boolean) {
+    setIsBusy(true);
+    setMessage('');
+    try {
+      const progress = await setLessonCompletion(lessonId, next);
+      setCompleted(progress.status === 'completed');
+    } catch (cause) {
+      setMessage(
+        cause instanceof ApiError
+          ? cause.message
+          : 'Could not record that. Your progress is unchanged.',
+      );
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border border-border p-4">
+      {message ? <Alert variant="error">{message}</Alert> : null}
+      {completed === true ? (
+        <Alert variant="success" role="status">
+          Marked complete.
+        </Alert>
+      ) : null}
+      <Button
+        type="button"
+        variant={completed ? 'outline' : 'primary'}
+        disabled={isBusy}
+        onClick={() => void onToggle(!completed)}
+        data-testid="lesson-completion"
+      >
+        {isBusy ? 'Saving…' : completed ? 'Mark as not complete' : 'Mark as complete'}
+      </Button>
+    </div>
+  );
+}
+
 function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
   const key = `${slug}#${lessonId}`;
   const [state, setState] = useState<{
@@ -156,6 +218,8 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
           </header>
 
           <LessonBody lesson={lesson} />
+
+          <LessonCompletion lessonId={lesson.id} />
 
           <nav
             aria-label="Lesson navigation"

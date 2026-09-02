@@ -17,7 +17,12 @@ from typing import Any
 from django.db import DatabaseError
 
 from apps.common.logging import scrub
-from apps.common.request_context import defer_audit, get_request_id, get_request_meta
+from apps.common.request_context import (
+    defer_audit,
+    get_request_id,
+    get_request_meta,
+    mark_denial_recorded,
+)
 
 from .models import AuditAction, AuditLog, AuditResult
 
@@ -57,6 +62,11 @@ def record(
     The default resolves to ``True`` for any non-success result, which is the
     rule you almost always want.
     """
+    if action == AuditAction.PERMISSION_DENIED:
+        # So the central handler does not write a second, vaguer entry for the
+        # same refusal. A view that records its own denial knows more about it.
+        mark_denial_recorded()
+
     if durable is None:
         durable = result != AuditResult.SUCCESS
     meta = get_request_meta()

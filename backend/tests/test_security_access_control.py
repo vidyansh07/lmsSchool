@@ -468,3 +468,112 @@ def test_a_superadmin_reaches_everything_an_admin_can(api_client_no_csrf, studen
 
     for url in (USERS_URL, STUDENTS_URL, TRAINERS_URL, "/api/v1/courses/", "/api/v1/batches/"):
         assert api_client_no_csrf.get(url).status_code == 200, url
+
+
+# ---------------------------------------------------------------------------
+# Role granting — nobody hands out authority they do not hold
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_an_administrator_cannot_promote_anybody_to_superadmin(
+    api_client_no_csrf, admin_user, student
+):
+    """The escalation that adding SUPERADMIN in Phase 4 would otherwise open.
+
+    An administrator holds `user.change_role`. Without a containment rule they
+    could set a role that grants `platform.configure` — a capability the ladder
+    deliberately withholds from them — and then use the promoted account.
+    """
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.patch(
+        f"/api/v1/users/{student.id}/", {"role": "superadmin"}, format="json"
+    )
+
+    assert response.status_code == 400
+    student.refresh_from_db()
+    assert student.role == UserRole.STUDENT
+
+
+@pytest.mark.django_db
+def test_an_administrator_cannot_promote_their_own_account(api_client_no_csrf, admin_user):
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.patch(
+        f"/api/v1/users/{admin_user.id}/", {"role": "superadmin"}, format="json"
+    )
+
+    assert response.status_code == 400
+    admin_user.refresh_from_db()
+    assert admin_user.role == UserRole.ADMIN
+
+
+@pytest.mark.django_db
+def test_an_administrator_may_still_appoint_a_manager(api_client_no_csrf, admin_user, student):
+    """A manager holds strictly less than an administrator, so this is allowed."""
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.patch(
+        f"/api/v1/users/{student.id}/", {"role": "manager"}, format="json"
+    )
+
+    assert response.status_code == 200
+    student.refresh_from_db()
+    assert student.role == UserRole.MANAGER
+
+
+@pytest.mark.django_db
+def test_a_superadmin_may_appoint_a_superadmin(api_client_no_csrf, db, student):
+    from apps.accounts.models import User
+
+    boss = User.objects.create_user(
+        email="boss@example.test",
+        password="Sup3r-Str0ng-Pass!42",
+        first_name="Root",
+        role=UserRole.SUPERADMIN,
+    )
+    api_client_no_csrf.force_login(boss)
+    response = api_client_no_csrf.patch(
+        f"/api/v1/users/{student.id}/", {"role": "superadmin"}, format="json"
+    )
+
+    assert response.status_code == 200
+    student.refresh_from_db()
+    assert student.role == UserRole.SUPERADMIN
+
+
+@pytest.mark.django_db
+def test_creating_a_user_obeys_the_same_rule(admin_user):
+    from apps.accounts.services import create_user
+    from apps.common.exceptions import ApplicationError
+
+    with pytest.raises(ApplicationError):
+        create_user(
+            email="escalate@example.test",
+            password=None,
+            first_name="Nope",
+            role=UserRole.SUPERADMIN,
+            actor=admin_user,
+            send_invitation=False,
+        )
+
+
+@pytest.mark.django_db
+def test_a_refused_promotion_is_recorded(admin_user, student):
+    from apps.accounts.services import update_user
+    from apps.audit.models import AuditAction, AuditLog
+    from apps.common.exceptions import ApplicationError
+
+    with pytest.raises(ApplicationError):
+        update_user(user=student, actor=admin_user, role=UserRole.SUPERADMIN)
+
+    # A failure entry is queued rather than written inline, so it survives the
+    # rollback of the request it describes. Calling the service directly, the
+    # queue has to be drained by hand — the middleware does it in a real request.
+    from apps.audit.services import flush_deferred
+    from apps.common.request_context import take_deferred_audits
+
+    flush_deferred(take_deferred_audits())
+
+    entry = AuditLog.objects.filter(action=AuditAction.USER_ROLE_CHANGED).first()
+    assert entry is not None
+    assert entry.context["attempted"] == UserRole.SUPERADMIN
+    assert entry.context["refused"] == "not_held_by_actor"

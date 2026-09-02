@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { use, useCallback, useEffect, useState } from 'react';
-import { Trash2, UserPlus } from 'lucide-react';
+import { CalendarPlus, Trash2, UserPlus } from 'lucide-react';
 
+import { generateSessions } from '@/lib/academics';
 import { useAuth } from '@/components/auth-provider';
 import { RequireAuth } from '@/components/require-auth';
 import { ScheduleList } from '@/components/schedule-list';
@@ -69,6 +70,7 @@ function TrainerPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () 
   const [trainers, setTrainers] = useState<TrainerListRow[]>([]);
   const [selected, setSelected] = useState(batch.trainer_id ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -88,8 +90,13 @@ function TrainerPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () 
   async function onAssign() {
     setIsSaving(true);
     setErrors({});
+    setMessage('');
     try {
       await assignBatchTrainer(batch.id, selected || null);
+      // Said out loud. Reassigning a trainer is a change somebody else feels —
+      // a different person turns up to teach — and a control that answers
+      // silently leaves the administrator wondering whether it took.
+      setMessage(selected ? 'Trainer assigned.' : 'Trainer removed from this batch.');
       onChanged();
     } catch (cause) {
       setErrors(fieldErrors(cause));
@@ -111,6 +118,11 @@ function TrainerPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () 
             refusal actionable rather than merely a rejection. */}
         {errors.trainer || errors.__all__ ? (
           <Alert variant="error">{errors.trainer ?? errors.__all__}</Alert>
+        ) : null}
+        {message ? (
+          <Alert variant="success" role="status">
+            {message}
+          </Alert>
         ) : null}
 
         <div className="flex flex-wrap items-end gap-3">
@@ -140,6 +152,26 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
   const [location, setLocation] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [generated, setGenerated] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  async function onGenerate() {
+    setIsGenerating(true);
+    setErrors({});
+    setGenerated('');
+    try {
+      const result = await generateSessions(batch.id);
+      const parts = [`${result.created} class${result.created === 1 ? '' : 'es'} created`];
+      if (result.skipped) parts.push(`${result.skipped} already existed`);
+      if (result.on_holiday) parts.push(`${result.on_holiday} skipped as holidays`);
+      setGenerated(`${parts.join(', ')}, ${result.start} to ${result.end}.`);
+      onChanged();
+    } catch (cause) {
+      setErrors(fieldErrors(cause));
+    } finally {
+      setIsGenerating(false);
+    }
+  }
 
   async function onAdd(event: React.FormEvent) {
     event.preventDefault();
@@ -235,6 +267,32 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
             {isSaving ? 'Adding…' : 'Add class'}
           </Button>
         </form>
+
+        <div className="space-y-2 rounded-md border border-border p-3">
+          <p className="text-sm font-medium">Classes from this timetable</p>
+          <p className="text-sm text-muted-foreground">
+            Turns the weekly pattern above into dated classes across the batch, skipping any day
+            marked as a holiday. Safe to run again — classes that already exist are left alone.
+          </p>
+          {generated ? (
+            <Alert variant="success" role="status">
+              {generated}
+            </Alert>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isGenerating || batch.schedules.length === 0}
+            onClick={() => void onGenerate()}
+          >
+            <CalendarPlus className="size-4" aria-hidden="true" />
+            {isGenerating ? 'Generating…' : 'Generate classes'}
+          </Button>
+          {batch.schedules.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Add a weekly class first.</p>
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   );
@@ -246,6 +304,7 @@ function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () =
   const [students, setStudents] = useState<StudentListRow[]>([]);
   const [selected, setSelected] = useState('');
   const [message, setMessage] = useState('');
+  const [notice, setNotice] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isBusy, setIsBusy] = useState(false);
 
@@ -284,11 +343,16 @@ function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () =
     setMessage('');
     try {
       await enrolStudent({ student_id: student.id, batch_id: batch.id });
+      // Enrolment opens a course to somebody. Confirming it is not decoration:
+      // the roster below is long, and "did that work?" should not be answered
+      // by scrolling to look for a name.
+      setNotice(`${student.full_name || student.email} is enrolled.`);
       loadRoster();
       onChanged();
     } catch (cause) {
       const mapped = fieldErrors(cause);
       setErrors(mapped);
+      setNotice('');
       if (cause instanceof ApiError) setMessage(cause.message);
     } finally {
       setIsBusy(false);
@@ -317,6 +381,11 @@ function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () =
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {notice ? (
+          <Alert variant="success" role="status">
+            {notice}
+          </Alert>
+        ) : null}
         {message || errors.__all__ ? (
           <Alert variant="error">{message || errors.__all__}</Alert>
         ) : null}

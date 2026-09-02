@@ -69,3 +69,37 @@ def test_cache_backend_client_is_installed(settings):
         "The `redis` package is required by django.core.cache.backends.redis.RedisCache, "
         "which every deployed environment uses via CACHE_URL."
     )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_readiness_probes_do_not_fail_each_other():
+    """A shared probe key made overlapping checks delete each other's value.
+
+    In production that reads as an unhealthy instance and pulls a live node out
+    of rotation — the opposite of what a readiness probe is for. Found by a full
+    end-to-end run, where several checks overlap naturally.
+    """
+    import threading
+
+    from apps.health.checks import check_cache
+
+    results: list = []
+    errors: list = []
+    barrier = threading.Barrier(8)
+
+    def probe():
+        try:
+            barrier.wait(timeout=5)
+            results.append(check_cache())
+        except Exception as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=probe) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10)
+
+    assert not errors, errors
+    assert len(results) == 8
+    assert all(result.healthy for result in results), [row.detail for row in results]

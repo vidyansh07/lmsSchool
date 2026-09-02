@@ -133,6 +133,9 @@ def test_production_settings_load_and_are_hardened():
         ({"FRONTEND_BASE_URL": ""}, "FRONTEND_BASE_URL"),
         ({"DATABASE_URL": ""}, "DATABASE_URL"),
         ({"DJANGO_ENV": "local"}, "Environment mismatch"),
+        # §14.10: no broker means "background" work would run in the request.
+        ({"CELERY_BROKER_URL": ""}, "CELERY_BROKER_URL"),
+        ({"CELERY_TASK_ALWAYS_EAGER": "true"}, "CELERY_TASK_ALWAYS_EAGER"),
     ],
 )
 def test_production_refuses_to_start_with_missing_or_wrong_configuration(overrides, expected):

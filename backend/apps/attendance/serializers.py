@@ -109,6 +109,13 @@ class AdminAttendanceRecordSerializer(AttendanceRecordSerializer):
 
 
 class AttendanceSummarySerializer(serializers.Serializer):
+    """Counts, plus the requirement they are judged against.
+
+    The threshold comes from the academic configuration (§4.7), so a student
+    reading this sees both where they stand and what is being asked of them —
+    and a change of policy is visible here on the next request.
+    """
+
     total_sessions = serializers.IntegerField(read_only=True)
     present = serializers.IntegerField(read_only=True)
     late = serializers.IntegerField(read_only=True)
@@ -116,3 +123,6 @@ class AttendanceSummarySerializer(serializers.Serializer):
     excused = serializers.IntegerField(read_only=True)
     attended = serializers.IntegerField(read_only=True)
     percentage = serializers.IntegerField(read_only=True, allow_null=True)
+    required = serializers.BooleanField(read_only=True)
+    minimum_percent = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
+    met = serializers.BooleanField(read_only=True, allow_null=True)

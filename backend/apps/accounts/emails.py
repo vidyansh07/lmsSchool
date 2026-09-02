@@ -10,6 +10,20 @@ Two rules govern everything here:
 * Sending failures never propagate. A user must not learn that an address is
   undeliverable from a different HTTP status, and a mail outage must not turn
   a password-reset request into a 500.
+
+Why these are the one kind of email that is *not* queued
+--------------------------------------------------------
+Phase 9 moved notification email onto a Celery worker, and deliberately left
+these behind. Both halves of the queue would store the message: the outbox row
+keeps the body in a database table, and the task payload keeps it in Redis. The
+body of a reset email *is* the credential — anyone who reads either one can take
+the account. §14.5 forbids exactly that, and an operations engineer with
+read access to the outbox table is precisely the reader it forbids.
+
+So credential mail is sent inline, and the cost is accepted rather than hidden:
+one SMTP round trip on an endpoint that is rate-limited to a handful of requests
+a minute, whose failure is already swallowed. A slow request on a rare endpoint
+is a smaller problem than a reset link with a shelf life.
 """
 
 from __future__ import annotations

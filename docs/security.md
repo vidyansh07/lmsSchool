@@ -336,11 +336,11 @@ Named so nobody assumes a control exists that does not:
 | Account lockout after repeated failures | Rate limiting only, today |
 | Token authentication for non-browser clients | Foundation is ready; unused auth is unreviewed attack surface |
 | Changing your own email address | Needs its own verified, re-authenticated flow |
-| Antivirus scanning of uploads | Content is validated and re-encoded, but not scanned |
+| Antivirus scanning of uploads | The hook exists and is tested (`apps/common/scanning.py`); no scanner is configured, and an unreachable one refuses the upload |
 | Document uploads (ID proof, certificates) | The upload pipeline exists; no endpoint uses it yet |
 | Signed video URLs for S3 / managed providers | Modelled and routed, but only the external-URL provider is playable today |
-| Virus scanning of course resources | Type and content are validated; files are not scanned |
-| Per-file download rate limiting | The `burst` throttle scope exists but is not attached |
+| Virus scanning of course resources | Same hook, same state: wired, unconfigured |
+| Per-file download rate limiting | `burst` is attached to exports and bulk imports (§14.4); individual file downloads are still on the ordinary user limit |
 | Field-level encryption at rest | Database-level encryption is a deployment concern |
 | Automated audit retention | `purge_before` exists; no scheduler yet |
 | WAF / DDoS protection | Edge concern, handled by the hosting platform |
@@ -395,7 +395,123 @@ Named so nobody assumes a control exists that does not:
 
 ---
 
-## 12. Reporting a vulnerability
+## 13. Object storage (Phase 9, §14.3)
+
+Student files are private wherever they are stored, and the storage backend is
+configuration: `FILE_STORAGE_BACKEND=local` on a laptop, `s3` in a deployment.
+No application code knows which is in use.
+
+Three properties, and none of them relies on the deployment being set up
+correctly by hand:
+
+- **No public URL.** `PrivateMediaStorage` sets `default_acl = None`, so an
+  upload never stamps an ACL of its own and the bucket policy is the single
+  place access is decided. `querystring_auth` stays on, so `storage.url()`
+  returns a URL that carries a signature and expires (300 seconds by default).
+- **No direct hand-off.** Downloads are still served by the application after an
+  authorization check, exactly as they were on local disk. A signed URL is a
+  bearer token in an address bar — it lands in history, in referrers, and in
+  whatever a student pastes into a chat — so it stays the storage API's
+  fallback, not the delivery path.
+- **No public bucket.** `check_storage_configuration` refuses to boot a deployed
+  environment configured with a public ACL or with unsigned URLs. The failure it
+  prevents is silent: uploads work, and the files are readable by anyone who can
+  guess a key.
+
+Credentials are read by boto3 from the environment or the instance role, and are
+never named in a settings file. Prefer the instance role.
+
+Verified by `backend/tests/test_file_storage_security.py`, which runs the real
+backend against a mocked bucket: a file goes in, comes back byte-for-byte, its
+URL is signed and expiring, and its object ACL grants nothing to `AllUsers`.
+
+### Malware scanning
+
+`apps/common/scanning.py` is the seam a scanner attaches to. It answers the two
+questions that matter before a scanner exists:
+
+- **Infected** — the upload is refused with a message that says only that a
+  security scan rejected it. The signature name goes to the audit log, never to
+  the uploader: telling somebody *which* detection fired turns the endpoint into
+  an oracle for tuning a payload until it passes.
+- **Scanner unavailable** — refused, by default. `UPLOAD_SCAN_FAIL_OPEN` can
+  reverse that, and should not be. Failing open means an attacker bypasses
+  scanning entirely by taking the scanner down.
+
+Rejections are audited as `file.upload.rejected`.
+
+---
+
+## 14. Background work (Phase 9, §14.10)
+
+Celery over Redis, with one producer: email. The queue is deliberately small —
+every queued job is something that can be lost, retried twice or silently
+backlogged.
+
+- **The outbox is written inside the request; only the send is queued.** If the
+  broker is unreachable, the row still exists and still says PENDING, so the
+  message is late rather than lost. A broker error never reaches the caller: a
+  Redis blip must not fail a grading request.
+- **`task_acks_late` with a prefetch of one.** A worker killed mid-send has its
+  task redelivered rather than dropped. `send_queued_email` re-reads the row and
+  checks its status first, so a redelivery is a no-op instead of a second email.
+- **A scheduled sweep is the net.** `notifications.retry_pending_email` runs on
+  beat every five minutes and is the only path by which a message queued during
+  a provider outage ever arrives. Exactly one beat process, ever — two means
+  every retry is sent twice.
+- **No result backend.** Task results would keep recipient addresses in Redis
+  for no reader.
+- **Eager mode is refused in a deployed environment.** It runs "background" work
+  inside the request that queued it, which is the failure the queue exists to
+  prevent.
+
+**Credential email is deliberately not queued.** The body of a password-reset
+message *is* the credential, and both halves of the queue would store it: the
+outbox row in a database table, the task payload in Redis. Reset and
+verification mail is sent inline, on endpoints already rate-limited to a handful
+of requests a minute. See `apps/accounts/emails.py`.
+
+Exports and bulk imports were considered and left synchronous: exports already
+stream in constant memory, and imports are bounded to 2,000 rows and must be
+all-or-nothing inside one transaction. Both decisions are recorded in
+`docs/DECISIONS.md` with the trigger for revisiting them.
+
+---
+
+## 15. Database privileges (Phase 9, §14.8)
+
+`infra/db/least-privilege.sql` creates two roles:
+
+| Role | Used by | May |
+| --- | --- | --- |
+| `grras_migrate` | `manage.py migrate` | Own and change the schema |
+| `grras_app` | Web workers, Celery worker | Read and write rows. No DDL. |
+
+`grras_app` cannot CREATE in `public`, is not a superuser, and cannot UPDATE or
+DELETE `audit_auditlog` — history is append-only from the application's point of
+view, and editing it is the first thing an intruder would want to do. Future
+tables inherit the row grants through `ALTER DEFAULT PRIVILEGES`, so a new model
+does not arrive unreadable.
+
+The script was applied to a scratch database and its grants verified with
+`has_table_privilege` before being committed; the transcript of what was checked
+is in the file's header comment.
+
+---
+
+## 16. Dependency policy (Phase 9, §14.7)
+
+CI fails on `pip-audit --strict`, `npm audit --audit-level=high`, `bandit` and
+`gitleaks`. A high-severity advisory is not waived silently: if one cannot be
+fixed by upgrading, the exception goes in `docs/DECISIONS.md` naming the
+advisory, why the code is not reachable by it, and what mitigates it in the
+meantime. There are no such exceptions today.
+
+---
+
+---
+
+## 17. Reporting a vulnerability
 
 Report privately to the maintainers. Do not open a public issue. Include the
 request id from the error response where relevant — it identifies the incident

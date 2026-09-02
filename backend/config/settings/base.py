@@ -13,6 +13,8 @@ from pathlib import Path
 
 import environ
 
+from apps.common.storage import LOCAL_BACKEND, storage_settings
+
 from .guards import forbid_sqlite
 
 # --- Paths -----------------------------------------------------------------
@@ -73,6 +75,19 @@ LOCAL_APPS = [
     "apps.batches",
     "apps.sessions",
     "apps.attendance",
+    "apps.assignments",
+    "apps.assessments",
+    "apps.academics",
+    "apps.projects",
+    "apps.progress",
+    "apps.certificates",
+    "apps.notifications",
+    "apps.announcements",
+    "apps.discussions",
+    "apps.learning",
+    "apps.reporting",
+    "apps.questions",
+    "apps.exams",
     "apps.enrollments",
     "apps.dashboards",
     "apps.audit",
@@ -221,8 +236,73 @@ FILE_UPLOAD_PERMISSIONS = 0o640
 # --- Static & media --------------------------------------------------------
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Where uploaded files live. Local disk in development, S3 in a deployed
+# environment — chosen by configuration so no application code knows which.
+# `apps.common.storage` documents why student files are private in both, and
+# `config.settings.hardened` refuses to boot a configuration that would expose
+# them.
+# --- Background work -------------------------------------------------------
+# Redis is already the cache; it is also the broker. Defaulting the broker to
+# CACHE_URL means one running Redis serves both in development, while a
+# deployment can point them at separate instances (a full cache eviction must
+# not take the queue with it).
+CELERY_BROKER_URL = env.str("CELERY_BROKER_URL", default=CACHE_URL)
+# No result backend: every task here is fire-and-forget, and storing results
+# would keep a copy of task arguments — recipient addresses among them — in
+# Redis for no reader.
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_RESULT_BACKEND = None
+# Acknowledge after the work is done, one task at a time: a worker that dies
+# mid-task has it redelivered rather than dropped. See `config/celery.py`.
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TASK_TIME_LIMIT = env.int("CELERY_TASK_TIME_LIMIT", default=300)
+CELERY_TASK_SOFT_TIME_LIMIT = env.int("CELERY_TASK_SOFT_TIME_LIMIT", default=240)
+CELERY_TASK_DEFAULT_QUEUE = "grras"
+CELERY_TIMEZONE = env.str("DJANGO_TIME_ZONE", default="Asia/Kolkata")
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+# Without a broker there is nowhere to queue, so tasks run inline. Correct for
+# a laptop, refused in a deployed environment by `config.settings.hardened`.
+CELERY_TASK_ALWAYS_EAGER = env.bool("CELERY_TASK_ALWAYS_EAGER", default=not CELERY_BROKER_URL)
+CELERY_TASK_EAGER_PROPAGATES = False
+CELERY_BEAT_SCHEDULE = {
+    # The outbox sweep. Individual sends are queued as they happen; this catches
+    # the ones that failed and are due for another attempt, which is the only
+    # path by which a message sent during a provider outage ever arrives.
+    "retry-pending-email": {
+        "task": "notifications.retry_pending_email",
+        "schedule": env.int("EMAIL_RETRY_INTERVAL_SECONDS", default=300),
+        "options": {"expires": 240},
+    },
+}
+
+# Malware scanning for uploads. `disabled` until a scanner is provisioned;
+# `apps.common.scanning` documents why the unavailable case fails closed.
+UPLOAD_SCANNER = env.str("UPLOAD_SCANNER", default="disabled")
+UPLOAD_SCAN_FAIL_OPEN = env.bool("UPLOAD_SCAN_FAIL_OPEN", default=False)
+
+FILE_STORAGE_BACKEND = env.str("FILE_STORAGE_BACKEND", default=LOCAL_BACKEND)
+AWS_STORAGE_BUCKET_NAME = env.str("AWS_STORAGE_BUCKET_NAME", default="")
+AWS_S3_REGION_NAME = env.str("AWS_S3_REGION_NAME", default="")
+AWS_S3_ENDPOINT_URL = env.str("AWS_S3_ENDPOINT_URL", default="") or None
+#: Signature lifetime for object URLs. Short: a signed URL is a bearer token.
+AWS_QUERYSTRING_EXPIRE = env.int("AWS_QUERYSTRING_EXPIRE", default=300)
+#: Credentials are read by boto3 from the environment or the instance role.
+#: They are deliberately not named here so they cannot be written into a
+#: settings file by accident.
+S3_OPTIONS = {
+    "bucket_name": AWS_STORAGE_BUCKET_NAME,
+    "querystring_expire": AWS_QUERYSTRING_EXPIRE,
+    "location": env.str("AWS_LOCATION", default="media"),
+}
+if AWS_S3_REGION_NAME:
+    S3_OPTIONS["region_name"] = AWS_S3_REGION_NAME
+if AWS_S3_ENDPOINT_URL:
+    S3_OPTIONS["endpoint_url"] = AWS_S3_ENDPOINT_URL
+
 STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "default": storage_settings(FILE_STORAGE_BACKEND, S3_OPTIONS),
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
 MEDIA_URL = "/media/"
@@ -260,6 +340,10 @@ REST_FRAMEWORK = {
         "user": env.str("THROTTLE_RATE_USER", default="600/min"),
         "auth": env.str("THROTTLE_RATE_AUTH", default="10/min"),
         "burst": env.str("THROTTLE_RATE_BURST", default="20/min"),
+        # Public certificate verification. A 160-bit code is not
+        # brute-forceable, so this bounds bulk checking of a leaked list
+        # rather than guessing.
+        "certificate_verification": env.str("THROTTLE_RATE_VERIFY", default="30/min"),
     },
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
@@ -307,6 +391,31 @@ SPECTACULAR_SETTINGS = {
         "EnrollmentStatusEnum": "apps.enrollments.models.EnrollmentStatus.choices",
         "SessionStatusEnum": "apps.sessions.models.SessionStatus.choices",
         "AttendanceStatusEnum": "apps.attendance.models.AttendanceStatus.choices",
+        # Assignments and assessments share one lifecycle vocabulary, so they
+        # share one schema enum. Two names for an identical choice set is a
+        # drf-spectacular error, and would also be a lie about the API.
+        "AcademicLifecycleEnum": "apps.assignments.models.AssignmentStatus.choices",
+        "SubmissionKindEnum": "apps.assignments.models.SubmissionKind.choices",
+        "SubmissionStatusEnum": "apps.assignments.models.SubmissionStatus.choices",
+        "AssessmentCategoryEnum": "apps.assessments.models.AssessmentCategory.choices",
+        "AssessmentDeliveryEnum": "apps.assessments.models.AssessmentDelivery.choices",
+        "ResultSourceEnum": "apps.assessments.models.ResultSource.choices",
+        "ImportStatusEnum": "apps.assessments.models.ImportStatus.choices",
+        "ProjectKindEnum": "apps.projects.models.ProjectKind.choices",
+        "ProjectWorkStatusEnum": "apps.projects.models.WorkStatus.choices",
+        "QuestionTypeEnum": "apps.questions.models.QuestionType.choices",
+        "DifficultyEnum": "apps.questions.models.Difficulty.choices",
+        "AttemptStatusEnum": "apps.exams.models.AttemptStatus.choices",
+        "DeliveryModeEnum": "apps.batches.models.DeliveryMode.choices",
+        "CompletionStatusEnum": "apps.progress.models.CompletionStatus.choices",
+        "CertificateStatusEnum": "apps.certificates.models.CertificateStatus.choices",
+        "NotificationKindEnum": "apps.notifications.models.NotificationKind.choices",
+        "NotificationCategoryEnum": "apps.notifications.models.NotificationCategory.choices",
+        "AudienceEnum": "apps.announcements.models.Audience.choices",
+        "AnnouncementStatusEnum": "apps.announcements.models.AnnouncementStatus.choices",
+        "AcademicEventKindEnum": "apps.academics.models.AcademicEventKind.choices",
+        "ImportKindEnum": "apps.reporting.models.ImportKind.choices",
+        "BulkImportStatusEnum": "apps.reporting.models.BulkImportStatus.choices",
         "LessonProgressStatusEnum": "apps.enrollments.models.LessonProgressStatus.choices",
     },
     "SWAGGER_UI_SETTINGS": {"persistAuthorization": False},
