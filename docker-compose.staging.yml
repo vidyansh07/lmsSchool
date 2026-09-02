@@ -199,9 +199,9 @@ services:
       # have HOSTNAME set, and naming a worker that does not answer reports a
       # perfectly healthy process as unhealthy — which in a deployment means
       # restarting it on a loop. Pinging the queue answers the real question.
-      test: ["CMD", "celery", "-A", "config", "inspect", "ping", "--timeout", "10"]
+      test: ["CMD", "celery", "-A", "config", "inspect", "ping", "--timeout", "15"]
       interval: 30s
-      timeout: 10s
+      timeout: 20s
       retries: 3
       start_period: 30s
 
