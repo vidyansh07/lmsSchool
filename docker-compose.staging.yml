@@ -1,0 +1,104 @@
+# ===========================================================================
+# Staging stack — production-shaped.
+#
+#   docker compose -f docker-compose.staging.yml --env-file .env.staging up -d
+#
+# Differences from local development, all deliberate:
+#   * production image targets (gunicorn, Next.js standalone build)
+#   * DEBUG=False and the full hardened security configuration
+#   * its own database volume, its own secrets file, its own Redis
+#   * seeded exclusively with fake demo data (`docker compose run backend seed`)
+#
+# It must never be pointed at a production database or given production
+# secrets. See docs/environments.md.
+# ===========================================================================
+
+name: grras-lms-staging
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set in .env.staging}
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env.staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env.staging}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    volumes:
+      - staging_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - staging_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+      target: production
+    restart: unless-stopped
+    command: ["gunicorn"]
+    env_file:
+      - .env.staging
+    environment:
+      DJANGO_ENV: staging
+      DJANGO_SETTINGS_MODULE: config.settings.staging
+      RUN_MIGRATIONS: "true"
+      COLLECT_STATIC: "true"
+    volumes:
+      # Separate storage from every other environment.
+      - staging_media:/app/mediafiles
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8001}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8000/health/ready/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/frontend.Dockerfile
+      target: production
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?set in .env.staging}
+        NEXT_PUBLIC_APP_ENV: staging
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3001}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # 127.0.0.1, not localhost: the Node server binds IPv4 only, while
+      # `localhost` resolves to ::1 first inside the container.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  staging_postgres_data:
+  staging_redis_data:
+  staging_media:

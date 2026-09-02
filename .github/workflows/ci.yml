@@ -1,0 +1,305 @@
+name: CI
+
+# Every pull request must pass all of these before it can be merged. Nothing
+# here is advisory: a failing check fails the pipeline. If a check is wrong,
+# fix the check — do not skip it.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: '3.13'
+  NODE_VERSION: '22'
+  # Password for the fake demo accounts in the ephemeral end-to-end stack. It
+  # protects nothing: the environment is destroyed when the job ends and the
+  # accounts live on a reserved, undeliverable domain.
+  CI_DEMO_PASSWORD: ci-ephemeral-demo-Passw0rd!
+
+jobs:
+  # -------------------------------------------------------------------------
+  backend:
+    name: Backend (format, lint, tests)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: grras_lms_test
+          POSTGRES_USER: grras
+          POSTGRES_PASSWORD: ci-postgres-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U grras"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DJANGO_ENV: test
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      DATABASE_URL: postgres://grras:ci-postgres-password@localhost:5432/grras_lms_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements/*.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/dev.txt
+
+      - name: Format check (ruff)
+        run: ruff format --check .
+
+      - name: Lint (ruff)
+        run: ruff check --output-format=github .
+
+      - name: Migration drift check
+        # A model change without a migration would fail on deploy instead of here.
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Tests (pytest + coverage)
+        run: pytest --cov --cov-report=term-missing --cov-report=xml
+
+      - name: Django deployment checks (production settings)
+        env:
+          DJANGO_ENV: production
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_SECRET_KEY: ci-only-Kd83nfL2pQx7ZmVt5RwYbHcE9sJaU4gT6iOzXqNyBvMlPr
+          DJANGO_ALLOWED_HOSTS: api.example.com
+          CSRF_TRUSTED_ORIGINS: https://app.example.com
+          CORS_ALLOWED_ORIGINS: https://app.example.com
+          DATABASE_URL: postgres://user:pass@db.example.com:5432/lms
+          CACHE_URL: redis://cache.example.com:6379/0
+          EMAIL_HOST: smtp.example.com
+          DEFAULT_FROM_EMAIL: no-reply@example.com
+          FRONTEND_BASE_URL: https://app.example.com
+        run: python manage.py check --deploy --fail-level WARNING
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          retention-days: 7
+
+  # -------------------------------------------------------------------------
+  backend-security:
+    name: Backend security (SAST + dependencies)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements/*.txt
+
+      - name: Install security tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/dev.txt
+
+      - name: Static analysis (bandit)
+        run: bandit -c pyproject.toml -r apps config manage.py
+
+      - name: Known vulnerabilities in dependencies (pip-audit)
+        run: pip-audit -r requirements/dev.txt --strict
+
+  # -------------------------------------------------------------------------
+  frontend:
+    name: Frontend (lint, types, tests, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      - name: Type check (tsc)
+        run: npm run typecheck
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+          NEXT_PUBLIC_APP_ENV: ci
+
+      - name: Known vulnerabilities in dependencies (npm audit)
+        run: npm audit --audit-level=high
+
+  # -------------------------------------------------------------------------
+  secret-scan:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so a secret committed earlier is caught too.
+          fetch-depth: 0
+
+      - name: Scan working tree and history (gitleaks)
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/repo" -w /repo \
+            zricethezav/gitleaks:latest detect \
+            --source /repo --config /repo/.gitleaks.toml \
+            --redact --verbose --exit-code 1
+
+  # -------------------------------------------------------------------------
+  docker-build:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build backend (production target)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/backend.Dockerfile
+          target: production
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend (production target)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/frontend.Dockerfile
+          target: production
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # -------------------------------------------------------------------------
+  e2e:
+    name: End-to-end (compose stack)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Create CI environment file
+        # Throwaway values for an ephemeral runner; no real secret is used.
+        run: |
+          cp .env.example .env
+          {
+            echo "POSTGRES_PASSWORD=ci-postgres-password"
+            echo "DATABASE_URL=postgres://grras:ci-postgres-password@db:5432/grras_lms"
+            echo "CORS_ALLOWED_ORIGINS=http://localhost:3000"
+            echo "CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://localhost:8000"
+            echo "FRONTEND_BASE_URL=http://localhost:3000"
+            echo "DEMO_USER_PASSWORD=${{ env.CI_DEMO_PASSWORD }}"
+            # The suite signs in repeatedly from one address, which the
+            # production rate limit exists to block. Raised for this throwaway
+            # environment only; the limit itself is covered by the backend tests.
+            echo "THROTTLE_RATE_AUTH=500/min"
+          } >> .env
+
+      - name: Start the stack
+        run: docker compose up -d --build
+
+      - name: Wait for readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8000/health/ready/ >/dev/null \
+               && curl -fsS http://localhost:3000/ >/dev/null; then
+              echo "stack is ready"; exit 0
+            fi
+            sleep 5
+          done
+          echo "stack did not become ready" >&2
+          docker compose logs --no-color
+          exit 1
+
+      - name: Seed fake demo accounts
+        run: docker compose exec -T backend python manage.py seed_demo_data
+
+      - name: Seed fake course catalogue
+        run: docker compose exec -T backend python manage.py seed_courses --with-files
+
+      - name: Seed fake batches and enrolments
+        run: docker compose exec -T backend python manage.py seed_batches
+
+      - name: Install Playwright
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run end-to-end tests
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:3000
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+          E2E_DEMO_PASSWORD: ${{ env.CI_DEMO_PASSWORD }}
+        run: npx playwright test
+
+      - name: Collect stack logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+  # -------------------------------------------------------------------------
+  ci-passed:
+    name: CI passed
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [backend, backend-security, frontend, secret-scan, docker-build, e2e]
+    steps:
+      - name: Fail if any required job failed
+        # Single required status check for branch protection.
+        run: |
+          if echo '${{ join(needs.*.result, ",") }}' | grep -qE 'failure|cancelled'; then
+            echo "One or more required checks failed." >&2
+            exit 1
+          fi
+          echo "All required checks passed."

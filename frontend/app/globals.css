@@ -1,0 +1,61 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens.
+ *
+ * Colours are declared once as CSS custom properties and consumed through
+ * Tailwind theme variables, so a future brand change is a single edit here
+ * rather than a sweep through every component. Dark mode redefines the same
+ * tokens; no component needs a dark: variant for colour.
+ */
+@theme {
+  --color-background: oklch(99% 0.004 250);
+  --color-foreground: oklch(21% 0.02 258);
+  --color-muted: oklch(96.5% 0.006 250);
+  --color-muted-foreground: oklch(52% 0.02 256);
+  --color-border: oklch(91% 0.008 250);
+  --color-primary: oklch(48% 0.16 152);
+  --color-primary-foreground: oklch(99% 0.005 152);
+  --color-accent: oklch(95% 0.03 152);
+  --color-destructive: oklch(55% 0.19 25);
+  --color-destructive-foreground: oklch(99% 0.005 25);
+  --color-warning: oklch(72% 0.15 75);
+  --color-success: oklch(58% 0.14 152);
+  --radius-card: 0.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-background: oklch(17% 0.015 258);
+    --color-foreground: oklch(96% 0.006 250);
+    --color-muted: oklch(23% 0.018 258);
+    --color-muted-foreground: oklch(70% 0.02 256);
+    --color-border: oklch(30% 0.02 258);
+    --color-primary: oklch(66% 0.15 152);
+    --color-primary-foreground: oklch(17% 0.02 152);
+    --color-accent: oklch(27% 0.04 152);
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    color-scheme: light dark;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Visible focus for keyboard users is an accessibility requirement, not a
+     style preference: never remove it without an equivalent replacement. */
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+}

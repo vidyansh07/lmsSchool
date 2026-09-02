@@ -1,0 +1,13 @@
+# Runtime dependencies shared by every environment.
+# Pinned exactly; upgrades go through a PR so CI security checks re-run.
+Django==5.2.17
+djangorestframework==3.18.0
+django-environ==0.14.0
+django-cors-headers==4.9.0
+# Declarative query-parameter filtering for the admin list endpoints.
+django-filter==26.1
+drf-spectacular==0.30.0
+psycopg[binary]==3.3.4
+# Required by ImageField, and used to verify that an uploaded file really
+# is an image before it is stored.
+Pillow==12.3.0

@@ -1,0 +1,62 @@
+# ---------------------------------------------------------------------------
+# Secrets — never commit real credentials. Only *.example files are tracked.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+.secrets/
+*credentials*.json
+!package.json
+!package-lock.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+junit*.xml
+
+# Django
+staticfiles/
+mediafiles/
+media/
+*.sqlite3
+*.log
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.turbo/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+*.tsbuildinfo
+next-env.d.ts
+
+# Tooling / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# Local scan output
+.gitleaks-report.json

@@ -1,0 +1,9 @@
+# Local development and CI. Includes the production stack so the dev image
+# behaves like the deployed one (gunicorn, whitenoise) plus test/lint tooling.
+-r prod.txt
+pytest==9.1.1
+pytest-django==4.14.0
+pytest-cov==7.1.0
+ruff==0.16.5
+bandit[toml]==1.9.4
+pip-audit==2.10.1

@@ -1,0 +1,36 @@
+# Gitleaks configuration.
+#
+# Starts from the maintained default rule set and adds allowlists only for
+# values that are provably not secrets: template files, obviously fake demo
+# data, and the development placeholder key that deployed environments refuse
+# to boot with.
+
+title = "Grras LMS secret scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented non-secrets"
+paths = [
+  '''\.env\.example$''',
+  '''\.env\..*\.example$''',
+  '''package-lock\.json$''',
+  # Build output and installed dependencies. Never committed (see .gitignore);
+  # excluded so a local filesystem scan matches what CI scans in git history.
+  '''(^|/)\.next/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)\.venv/''',
+  '''(^|/)staticfiles/''',
+  '''(^|/)htmlcov/''',
+  '''(^|/)playwright-report/''',
+]
+regexes = [
+  # Development placeholder; any deployed environment refuses to start with it.
+  '''insecure-development-key[a-z0-9-]*''',
+  # Reserved, undeliverable domain used by the demo seed (RFC 2606).
+  '''[a-z0-9._-]+@demo\.grras\.invalid''',
+  # Fake DSNs used in tests and documentation.
+  '''postgres://user:pass@db\.example\.com''',
+  '''postgres://grras:CHANGE_ME@''',
+]

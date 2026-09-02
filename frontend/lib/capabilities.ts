@@ -1,0 +1,45 @@
+/**
+ * Capability names, mirroring `apps/accounts/roles.py`.
+ *
+ * These drive what the interface *offers*. They are never a security control:
+ * the backend re-checks every capability on every request, so hiding a button
+ * is a courtesy to the user, not a defence against an attacker.
+ */
+export const Capability = {
+  userViewAny: 'user.view_any',
+  userCreate: 'user.create',
+  userUpdateAny: 'user.update_any',
+  userSetActive: 'user.set_active',
+  userChangeRole: 'user.change_role',
+  profileViewOwn: 'profile.view_own',
+  profileUpdateOwn: 'profile.update_own',
+  studentViewAny: 'student.view_any',
+  studentCreate: 'student.create',
+  studentUpdateAny: 'student.update_any',
+  studentSetFeeStatus: 'student.set_fee_status',
+  trainerViewAny: 'trainer.view_any',
+  trainerCreate: 'trainer.create',
+  trainerUpdateAny: 'trainer.update_any',
+  categoryManage: 'category.manage',
+  courseViewAny: 'course.view_any',
+  courseCreate: 'course.create',
+  courseUpdateAny: 'course.update_any',
+  coursePublishAny: 'course.publish_any',
+  courseAssignAuthors: 'course.assign_authors',
+  batchViewAny: 'batch.view_any',
+  batchCreate: 'batch.create',
+  batchUpdateAny: 'batch.update_any',
+  batchManageSchedule: 'batch.manage_schedule',
+  enrolmentViewAny: 'enrolment.view_any',
+  enrolmentCreate: 'enrolment.create',
+  enrolmentUpdateAny: 'enrolment.update_any',
+} as const;
+
+export type CapabilityName = (typeof Capability)[keyof typeof Capability];
+
+export function can(
+  capabilities: string[] | undefined,
+  capability: CapabilityName,
+): boolean {
+  return Boolean(capabilities?.includes(capability));
+}

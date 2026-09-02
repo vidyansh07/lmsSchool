@@ -1,0 +1,66 @@
+[project]
+name = "grras-lms-backend"
+version = "0.1.0"
+description = "Grras LMS backend API (Django + DRF)"
+requires-python = ">=3.13"
+
+# ---------------------------------------------------------------------------
+# Ruff — formatter + linter (replaces black, isort and flake8)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = [
+  "E", "W",   # pycodestyle
+  "F",        # pyflakes
+  "I",        # isort
+  "UP",       # pyupgrade
+  "B",        # bugbear
+  "C4",       # comprehensions
+  "DJ",       # flake8-django
+  "S",        # bandit-style security rules
+  "T20",      # no print()
+  "RUF",
+]
+ignore = [
+  "S101",  # assert: used intentionally in tests and boot-time config guards
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106"]          # hard-coded test passwords are fine
+"apps/*/tests/*" = ["S105", "S106"]
+"config/settings/*" = ["F403", "F405"]  # settings modules use star-imports by design
+"*/models.py" = ["RUF012"]              # Django Meta.constraints/indexes are lists by design
+"*/views.py" = ["RUF012"]               # declarative view attributes (capability_map, etc.)
+"*/admin.py" = ["RUF012"]               # declarative ModelAdmin attributes
+"*/user_views.py" = ["RUF012"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py"]
+testpaths = ["tests", "apps"]
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = ["error::DeprecationWarning:apps.*", "error::DeprecationWarning:config.*"]
+
+[tool.coverage.run]
+source = ["apps", "config"]
+omit = ["*/migrations/*", "*/tests/*", "*/wsgi.py", "*/asgi.py", "manage.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+# ---------------------------------------------------------------------------
+# Bandit — SAST. Tests excluded (assert/known test passwords).
+# ---------------------------------------------------------------------------
+[tool.bandit]
+exclude_dirs = ["tests", "*/tests", ".venv", "*/migrations"]
