@@ -90,7 +90,7 @@ jobs:
           FRONTEND_BASE_URL: https://app.example.com
         run: python manage.py check --deploy --fail-level WARNING
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-coverage
@@ -277,7 +277,7 @@ jobs:
         if: failure()
         run: docker compose logs --no-color
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
