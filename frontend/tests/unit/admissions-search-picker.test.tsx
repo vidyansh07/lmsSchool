@@ -10,7 +10,15 @@ const OPTIONS: PickerOption[] = [
   { value: '2', label: 'Linux Advanced', hint: 'GRS-C-002' },
 ];
 
-function Harness({ options = OPTIONS, onSelect }: { options?: PickerOption[]; onSelect: (o: PickerOption) => void }) {
+function Harness({
+  options = OPTIONS,
+  onSelect,
+  emptyMessage,
+}: {
+  options?: PickerOption[];
+  onSelect: (o: PickerOption) => void;
+  emptyMessage?: string;
+}) {
   const [query, setQuery] = useState('');
   return (
     <SearchPicker
@@ -20,6 +28,7 @@ function Harness({ options = OPTIONS, onSelect }: { options?: PickerOption[]; on
       options={options}
       selected=""
       onSelect={onSelect}
+      emptyMessage={emptyMessage}
     />
   );
 }
@@ -71,7 +80,7 @@ describe('SearchPicker', () => {
   });
 
   it('shows a message instead of a list when there are no options', () => {
-    render(<Harness options={[]} onSelect={vi.fn()} emptyMessage={undefined as unknown as string} />);
+    render(<Harness options={[]} onSelect={vi.fn()} />);
     expect(screen.getByText('No matches.')).toBeInTheDocument();
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });

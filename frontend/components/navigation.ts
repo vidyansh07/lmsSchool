@@ -60,12 +60,76 @@ export const STAFF_NAV: NavGroup[] = [
   {
     items: [
       { href: '/dashboard', label: 'Dashboard', roles: ['trainer'] },
+      // A counsellor's landing page is their pipeline, not an institution
+      // overview they hold no capability to read.
+      {
+        href: '/admissions/dashboard',
+        label: 'Dashboard',
+        capability: Capability.enrolmentCreate,
+        roles: ['counsellor'],
+      },
       { href: '/admin/overview', label: 'Overview', capability: Capability.reportViewAny },
+    ],
+  },
+  {
+    // The client asked for two manager pages that drill all the way down,
+    // rather than a dashboard of widgets. They are grouped as "Review" because
+    // that is the job: looking at how a batch or a trainer is doing.
+    title: 'Review',
+    items: [
+      {
+        href: '/manage/batches',
+        label: 'Batch review',
+        capability: Capability.performanceViewAny,
+      },
+      {
+        href: '/manage/trainers',
+        label: 'Trainer review',
+        capability: Capability.performanceViewAny,
+      },
+      {
+        href: '/dsr',
+        label: 'Daily reports',
+        capability: Capability.dsrViewAny,
+      },
+    ],
+  },
+  {
+    // Admissions is one job done many times a day, so its screens sit together
+    // and in the order somebody works through them.
+    title: 'Admissions',
+    items: [
+      {
+        href: '/admissions',
+        label: 'Registrations',
+        capability: Capability.studentCreate,
+      },
+      {
+        href: '/admissions/new',
+        label: 'Register a student',
+        capability: Capability.studentCreate,
+      },
+      {
+        href: '/admissions/batches',
+        label: 'Batch planning',
+        capability: Capability.batchCreate,
+      },
+      {
+        href: '/admissions/transfer',
+        label: 'Transfers',
+        capability: Capability.enrolmentUpdateAny,
+      },
     ],
   },
   {
     title: 'Teaching',
     items: [
+      {
+        href: '/teaching/today',
+        label: 'Today',
+        capability: Capability.sessionManageAny,
+        roles: ['trainer'],
+      },
       {
         href: '/teaching',
         // No apostrophe: a typographic one reads better and makes every locator
@@ -162,6 +226,11 @@ export const STAFF_NAV: NavGroup[] = [
         href: '/admin/academics',
         label: 'Academic rules',
         capability: Capability.academicConfigure,
+      },
+      {
+        href: '/admin/recovery',
+        label: 'Deleted records',
+        capability: Capability.recordViewDeleted,
       },
       { href: '/calendar', label: 'Calendar', roles: ['trainer'] },
     ],

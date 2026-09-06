@@ -139,9 +139,18 @@ export function RegistrationWizard() {
     email.trim().length >= 3 ? email.trim() : phone.trim().length >= 4 ? phone.trim() : '';
   const visibleDuplicates = duplicateQuery ? duplicates : [];
 
+  // Every step the counsellor has landed on, which is not the same as the ones
+  // they finished. Going back has to be reversible — see `StepIndicator`.
+  const [visited, setVisited] = useState<Set<StepKey>>(new Set(['student']));
+
+  function goToStep(next: StepKey) {
+    setVisited((current) => new Set(current).add(next));
+    setStep(next);
+  }
+
   function advanceTo(next: StepKey, from: StepKey = step) {
     setCompleted((current) => new Set(current).add(from));
-    setStep(next);
+    goToStep(next);
   }
 
   // Duplicate detection: search as the identifying fields are typed, before
@@ -225,7 +234,7 @@ export function RegistrationWizard() {
         next.add('student').add('course').add('batch').add('trainer');
         return next;
       });
-      setStep('confirm');
+      goToStep('confirm');
     } else {
       advanceTo('course', 'student');
     }
@@ -365,7 +374,7 @@ export function RegistrationWizard() {
       student = await ensureStudent();
     } catch (cause) {
       setStudentErrors(fieldErrors(cause));
-      setStep('student');
+      goToStep('student');
       setIsSubmitting(false);
       return;
     }
@@ -375,7 +384,7 @@ export function RegistrationWizard() {
       batchInfo = await ensureBatch();
     } catch (cause) {
       setBatchErrors(fieldErrors(cause));
-      setStep('batch');
+      goToStep('batch');
       setIsSubmitting(false);
       return;
     }
@@ -389,7 +398,7 @@ export function RegistrationWizard() {
         // with — that sentence is the useful part, so it is shown exactly as
         // received rather than replaced with a generic "could not assign".
         setTrainerErrors(fieldErrors(cause));
-        setStep('trainer');
+        goToStep('trainer');
         setIsSubmitting(false);
         return;
       }
@@ -455,7 +464,7 @@ export function RegistrationWizard() {
     setTrainerQuery('');
     setResult(null);
     setConfirmError('');
-    setStep('student');
+    goToStep('student');
     setCompleted(new Set());
   }
 
@@ -486,7 +495,8 @@ export function RegistrationWizard() {
         steps={STEPS}
         current={step}
         completed={completed}
-        onJump={(key) => setStep(key as StepKey)}
+        reachable={visited}
+        onJump={(key) => goToStep(key as StepKey)}
       />
 
       {step === 'student' ? (

@@ -175,7 +175,7 @@ async function goToConfirmWithExistingBatch(user: ReturnType<typeof userEvent.se
   await fillStudentStep(user);
   await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
 
-  await waitFor(() => expect(screen.getByText('Linux Essentials')).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
   await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
 
   await waitFor(() => expect(screen.getByLabelText('Search batches')).toBeInTheDocument());
@@ -265,7 +265,9 @@ describe('RegistrationWizard — duplicate detection', () => {
     await fillStudentStep(user);
     await waitFor(() => expect(screen.getByTestId('duplicate-warning')).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: /continue registering/i }));
-    await waitFor(() => expect(screen.getByText('Course')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Course' })).toBeInTheDocument(),
+    );
   });
 
   it('does not warn once the email is too short to search on', async () => {
@@ -291,7 +293,7 @@ describe('RegistrationWizard — moving through the steps', () => {
     render(<RegistrationWizard />);
     await fillStudentStep(user);
     await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
-    await waitFor(() => expect(screen.getByText('Linux Essentials')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Batch' })).toBeInTheDocument());
   });
@@ -304,7 +306,7 @@ describe('RegistrationWizard — moving through the steps', () => {
     const user = userEvent.setup();
     await goToConfirmWithExistingBatch(user);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
-    expect(screen.getByText('Tina Trainer')).toBeInTheDocument();
+    expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument();
   });
 
   it('goes to the trainer step when the chosen batch has none', async () => {
@@ -318,7 +320,7 @@ describe('RegistrationWizard — moving through the steps', () => {
     render(<RegistrationWizard />);
     await fillStudentStep(user);
     await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
-    await waitFor(() => expect(screen.getByText('Linux Essentials')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
 
     await waitFor(() => expect(screen.getByRole('button', { name: /create a new batch/i })).toBeInTheDocument());
@@ -326,9 +328,9 @@ describe('RegistrationWizard — moving through the steps', () => {
     await user.type(screen.getByLabelText('Batch name', { exact: false }), 'Evening cohort');
 
     // Jump back to the first step and return.
-    await user.click(screen.getByRole('button', { name: /^1 Student$/ }));
+    await user.click(screen.getByRole('button', { name: /^Student$/ }));
     await waitFor(() => expect(screen.getByText('Student details')).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: /^3 Batch$/ }));
+    await user.click(screen.getByRole('button', { name: /^Batch$/ }));
 
     await waitFor(() => expect(screen.getByLabelText('Batch name', { exact: false })).toHaveValue('Evening cohort'));
   });
@@ -344,7 +346,7 @@ describe('RegistrationWizard — confirming', () => {
     await goToConfirmWithExistingBatch(user);
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Trainer' })).toBeInTheDocument());
-    await waitFor(() => expect(screen.getByText('Tina Trainer')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search trainers results'), 'trainer-1');
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
@@ -405,7 +407,7 @@ describe('RegistrationWizard — confirming', () => {
     render(<RegistrationWizard />);
     await fillStudentStep(user);
     await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
-    await waitFor(() => expect(screen.getByText('Linux Essentials')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
 
     await user.click(screen.getByRole('button', { name: /create a new batch/i }));
@@ -478,8 +480,19 @@ describe('RegistrationWizard — confirming', () => {
     await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
     await waitFor(() => expect(screen.getByTestId('trainer-clash')).toBeInTheDocument());
 
+    // A trainer clash is a trainer problem, so the wizard puts the counsellor
+    // back on the trainer step with the message attached. Getting to the
+    // confirm step again is therefore a real navigation, not a second click on
+    // a button that is no longer on screen.
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Trainer' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /assign a trainer later/i }));
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
     await waitFor(() => expect(enrolStudent).toHaveBeenCalledOnce());
+
+    // The point of the test: the student was created on the first attempt and
+    // must not be created a second time by the retry.
     expect(createStudent).toHaveBeenCalledOnce();
   });
 

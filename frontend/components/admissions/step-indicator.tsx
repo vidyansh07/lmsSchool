@@ -20,19 +20,35 @@ export function StepIndicator({
   steps,
   current,
   completed,
+  reachable,
   onJump,
 }: {
   steps: WizardStep[];
   current: string;
   completed: Set<string>;
+  /**
+   * Steps the counsellor has already been on, which may be more than the ones
+   * they finished.
+   *
+   * Without this, "completed or current" was the only way back, and stepping
+   * back became a trap: you could return to the student details from the batch
+   * step and then had no way forward again, because the batch step was neither
+   * finished nor current. Losing a half-typed batch that way, mid-registration,
+   * is worse than not offering the jump at all.
+   *
+   * Defaults to `completed`, so a caller that does not track visits keeps the
+   * old behaviour rather than silently opening every step.
+   */
+  reachable?: Set<string>;
   onJump: (key: string) => void;
 }) {
+  const openSteps = reachable ?? completed;
   return (
     <ol className="flex flex-wrap items-center gap-x-2 gap-y-3" aria-label="Registration steps">
       {steps.map((step, index) => {
         const isCurrent = step.key === current;
         const isDone = completed.has(step.key);
-        const canJump = isDone || isCurrent;
+        const canJump = isDone || isCurrent || openSteps.has(step.key);
         return (
           <li key={step.key} className="flex items-center gap-2">
             <button
