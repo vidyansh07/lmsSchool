@@ -26,6 +26,23 @@ from apps.batches import access as batch_access
 from .models import DSR, EDITABLE_STATUSES
 
 
+def can_read_dsrs(user) -> bool:
+    """Whether this caller has any business on the DSR endpoints at all.
+
+    `visible_dsrs` already returns nothing to a student, so the list would be an
+    empty 200 — safe, but the wrong shape. A daily status report is internal
+    reporting *about* a class, written by staff for staff; a student is not
+    someone whose view of it happens to be empty, they are someone with no view.
+    Saying so with a 403 keeps the surface honest and the authorization sweep
+    meaningful.
+    """
+    if not getattr(user, "is_authenticated", False) or not user.is_active:
+        return False
+    if has_capability(user, Capability.DSR_VIEW_ANY):
+        return True
+    return batch_access.trainer_profile(user) is not None
+
+
 def visible_dsrs(user) -> QuerySet[DSR]:
     """Every report the caller may see, as a queryset."""
     base = DSR.objects.with_related()

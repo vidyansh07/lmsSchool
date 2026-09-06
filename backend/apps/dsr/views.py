@@ -115,6 +115,14 @@ class DSRListView(ListAPIView):
 
     @extend_schema(summary="List daily status reports", tags=DSR_TAG)
     def get(self, request, *args, **kwargs):
+        # `visible_dsrs` already returns nothing to a student, so without this
+        # the endpoint would answer them with an empty 200. That is safe and the
+        # wrong shape: a daily status report is internal reporting about a
+        # class, written by staff for staff, and a student is not somebody whose
+        # view of it happens to be empty — they have no view of it. Saying so
+        # keeps the surface honest and the authorization sweep meaningful.
+        if not access.can_read_dsrs(request.user):
+            return _forbidden(request, "Daily status reports are staff-facing.")
         return super().get(request, *args, **kwargs)
 
 

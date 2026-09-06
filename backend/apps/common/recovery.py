@@ -154,6 +154,7 @@ class RecycleBinView(APIView):
     required_capability = Capability.RECORD_VIEW_DELETED
 
     @extend_schema(
+        operation_id="recovery_bin_summary",
         summary="Deleted records, by kind",
         responses={200: BinSummarySerializer(many=True)},
         tags=RECOVERY_TAG,
@@ -183,6 +184,7 @@ class DeletedRecordListView(APIView):
     required_capability = Capability.RECORD_VIEW_DELETED
 
     @extend_schema(
+        operation_id="recovery_records_of_kind",
         summary="Deleted records of one kind",
         responses={200: DeletedRecordSerializer(many=True)},
         tags=RECOVERY_TAG,

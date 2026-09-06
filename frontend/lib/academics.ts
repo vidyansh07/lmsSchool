@@ -67,6 +67,27 @@ export async function setSessionStatus(
   });
 }
 
+/** Where a class's *topic* is, distinct from where the class itself is
+ *  (`SessionStatus`) — mirrors `apps.sessions.models.TopicStatus`. */
+export type SessionTopicStatus = 'planned' | 'in_progress' | 'completed' | 'skipped' | 'rescheduled';
+
+/**
+ * Record what a class actually covered against the curriculum — or, with no
+ * `lesson_id`, that nothing was (`status: 'skipped'`). Distinct from
+ * `setSessionStatus`: that asks "did the class happen?"; this asks "what did
+ * it cover?", and a class can be `completed` while its topic is `skipped`
+ * (revision, a test, nothing new taught).
+ */
+export async function recordSessionTopic(
+  id: string,
+  payload: { lesson_id?: string | null; status?: SessionTopicStatus },
+): Promise<ClassSession> {
+  return apiMutate<ClassSession>(`/api/v1/sessions/${id}/topic/`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
 // --- Attendance ------------------------------------------------------------
 
 export async function getRegister(sessionId: string): Promise<Register> {

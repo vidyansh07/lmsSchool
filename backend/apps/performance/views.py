@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from django.core.exceptions import ValidationError
+from django.http import Http404
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status as http_status
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
@@ -11,6 +13,7 @@ from rest_framework.views import APIView
 from apps.accounts.roles import Capability
 from apps.batches import access as batch_access
 from apps.common.deletion import soft_delete
+from apps.common.exceptions import ApplicationError
 from apps.common.permissions import HasCapability, IsActiveUser
 
 from . import access, engine, services
@@ -78,19 +81,28 @@ class MyPerformanceView(APIView):
 
 
 class MyTrainerPerformanceView(APIView):
-    """A trainer's own performance figures. Empty for anyone without a trainer profile."""
+    """A trainer's own performance figures.
+
+    A caller with no trainer profile gets 404, not an empty object. That matches
+    `/api/v1/trainers/me/`, which is the same question asked of the same person,
+    and the distinction matters: `{}` says "you are a trainer with nothing
+    recorded", which is a different and misleading answer to give a student.
+    """
 
     permission_classes = (IsActiveUser,)
 
     @extend_schema(
         summary="My trainer performance",
-        responses={200: OpenApiResponse(description="This trainer's own figures.")},
+        responses={
+            200: OpenApiResponse(description="This trainer's own figures."),
+            404: OpenApiResponse(description="The caller is not a trainer."),
+        },
         tags=PERFORMANCE_TAG,
     )
     def get(self, request):
         trainer = batch_access.trainer_profile(request.user)
         if trainer is None:
-            return Response({})
+            raise Http404
         return Response(engine.trainer_performance(trainer))
 
 
@@ -206,17 +218,44 @@ class ReviewDetailView(APIView):
 
 
 class FeedbackListView(APIView):
-    """Feedback: everyone's, one's own, or whatever was marked visible to them."""
+    """Feedback: everyone's, one's own, or whatever was marked visible to them.
+
+    `student` and `trainer` narrow the list to one subject. They are a
+    convenience over an already-scoped queryset, never a way to widen it: the
+    filter is applied *after* `visible_feedback`, so naming somebody else's id
+    returns nothing rather than their feedback.
+
+    Added because the screens were fetching the whole visible set and matching
+    client-side, which works until somebody has a thousand rows and is the sort
+    of thing that quietly becomes a performance bug on a page nobody profiled.
+    """
 
     permission_classes = (IsActiveUser,)
 
     @extend_schema(
         summary="Feedback",
+        parameters=[
+            OpenApiParameter("student", str, description="Only feedback about this student."),
+            OpenApiParameter("trainer", str, description="Only feedback about this trainer."),
+        ],
         responses={200: FeedbackSerializer(many=True)},
         tags=PERFORMANCE_TAG,
     )
     def get(self, request):
         rows = access.visible_feedback(request.user).order_by("-created_at")
+
+        student_id = request.query_params.get("student")
+        trainer_id = request.query_params.get("trainer")
+        try:
+            if student_id:
+                rows = rows.filter(student_id=student_id)
+            if trainer_id:
+                rows = rows.filter(trainer_id=trainer_id)
+        except (ValueError, ValidationError):
+            # A malformed uuid is a bad request, not a 500 and not silently the
+            # unfiltered list — which would hand back more than was asked for.
+            raise ApplicationError({"detail": ["Not a valid identifier."]}) from None
+
         return Response(FeedbackSerializer(rows, many=True).data)
 
     @extend_schema(

@@ -848,3 +848,43 @@ builds, so the next role to arrive changes one place instead of two.
 Adding the counsellor to the seed itself was not optional: `verify_demo.sh` and
 `test_seed_creates_an_account_for_every_role` both walk `UserRole.values`, on
 the principle that a role nobody can sign in as is a role nobody exercises.
+
+### D-121 · An endpoint that is permanently empty for a role should refuse it
+**ERP §Security, found by the authorization sweep.** Six new endpoints answered
+a student with `200` and an empty body. Every one was correctly scoped — the
+querysets returned nothing — so nothing leaked. The sweep failed them anyway,
+and it was right to.
+
+The distinction that settles each case is whether the endpoint answers *about
+the caller*:
+
+* `/performance/me/`, `/performance/reviews/`, `/performance/feedback/` answer
+  about the student — `visible_reviews` scopes to the subject, so a student sees
+  what was written about them and nothing else. A review nobody can read is not
+  a review. These are legitimately student-reachable and are now on the
+  allowlist, with the emptiness of everything else asserted.
+* `/dsr/` and `/reports/exports/` are staff tools. A student is not somebody
+  whose view of a daily status report happens to be empty; they have no view of
+  it, and the status code should say which. Both now refuse.
+
+The reason not to simply widen the allowlist: a list that absorbs every route
+that "returns nothing anyway" stops testing anything, and the next such route
+will be one that does return something.
+
+### D-122 · `{}` and `404` are different answers to "am I a trainer?"
+**ERP §Security.** `/performance/trainer/me/` returned an empty object to a
+caller with no trainer profile. That reads as "you are a trainer with nothing
+recorded", which is false for a student and misleading for an administrator. It
+now returns 404, matching `/trainers/me/` — the same question, asked of the same
+person, should not have two answers.
+
+### D-123 · Losing a right does not erase your own history
+**ERP §Exports.** Listing export jobs deliberately carries neither of the two
+gates that queueing does, so a counsellor or trainer whose export rights changed
+after the fact can still see what they asked for.
+
+That argument covers somebody who once held the right. It does not make the
+endpoint a student surface — a student never could have owned a job — so the
+list now requires the caller to be somebody who could have one at all.
+`could_own_an_export` is deliberately wider than "may queue one right now",
+which is the whole point of it being a separate question.

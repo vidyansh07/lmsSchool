@@ -89,6 +89,11 @@ class BatchListSerializer(serializers.ModelSerializer):
             "course_title",
             "course_slug",
             "trainer_name",
+            # On the row rather than only on the detail: the manager's batch
+            # table shows both, and fetching a batch per row to find out how it
+            # is taught would be a request per row for two short strings.
+            "kind",
+            "delivery_mode",
             "start_date",
             "end_date",
             "capacity",

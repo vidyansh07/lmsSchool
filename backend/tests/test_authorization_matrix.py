@@ -181,6 +181,14 @@ STUDENT_REACHABLE = frozenset(
         "/api/v1/certificates/",
         "/api/v1/certificates/mine/",
         "/api/v1/progress/mine/",
+        # Their own performance picture, and the feedback written about them.
+        # `visible_reviews` and `visible_feedback` scope to the subject, so a
+        # student sees what was written about *them* and nothing else — which is
+        # the point, since a review nobody can read is not a review. Asserted
+        # below rather than assumed.
+        "/api/v1/performance/me/",
+        "/api/v1/performance/reviews/",
+        "/api/v1/performance/feedback/",
         # Attendance and the timetable.
         "/api/v1/attendance/mine/",
         "/api/v1/sessions/",

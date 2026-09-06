@@ -1,18 +1,47 @@
 'use client';
 
+/**
+ * The signed-in landing page — routed by role, per `Dashboard` below.
+ *
+ * The trainer branch (`TrainerView`) and the routing/loading/error shell
+ * around both branches are untouched from the original build; only
+ * `StudentView` was rebuilt. A student opens this to answer two questions —
+ * "what do I owe" and "am I OK" — so it leads with pending work and the next
+ * week's classes and deadlines, then standing (progress, attendance,
+ * assessment average, risk flags shown as information rather than a
+ * verdict), then everything else the brief asks for: courses, batches,
+ * certificates, feedback and notifications.
+ *
+ * The primary payload (`StudentDashboard`, from `/api/v1/dashboard/student/`)
+ * still drives courses/batches/continue-learning/upcoming-classes exactly as
+ * before. Everything the rebuild adds — pending work, standing, certificates,
+ * feedback, notifications — is a *secondary* fetch, each independent of the
+ * others via `useDashboardSection` below: a slow or failing endpoint for one
+ * of those must never blank out the primary content or the other secondary
+ * sections, which is why there are five small loading/error units on this
+ * page instead of one that gates everything.
+ */
+
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { BookOpen, CalendarClock, GraduationCap, PlayCircle, Users } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { BookOpen, CalendarClock, ClipboardList, GraduationCap, PlayCircle, TrendingUp, Users } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
 import { ProgressBar } from '@/components/progress-bar';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
+import { CertificatesPanel } from '@/components/student/certificates-panel';
+import { FeedbackPanel } from '@/components/student/feedback-panel';
+import { NotificationsPanel } from '@/components/student/notifications-panel';
+import { PendingWorkPanel, tallyAssignments, tallyProjects } from '@/components/student/pending-work-panel';
+import { StandingPanel, collectRiskItems } from '@/components/student/standing-panel';
+import { UpcomingTimeline } from '@/components/student/upcoming-timeline';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiError } from '@/lib/api';
+import { listMyAssignments } from '@/lib/assignments';
 import { getStudentDashboard, getTrainerDashboard } from '@/lib/batches';
 import {
   BATCH_STATUS_LABEL,
@@ -23,7 +52,19 @@ import {
   formatEventDay,
   formatEventTime,
 } from '@/lib/batch-labels';
-import type { CalendarEvent, StudentDashboard, TrainerDashboard } from '@/types/api';
+import { listNotifications } from '@/lib/communication';
+import { getMyPerformance, listMyFeedback, type PerformanceFeedback, type StudentPerformanceEntry } from '@/lib/performance';
+import { listMyCertificates } from '@/lib/progress';
+import { listMyProjects } from '@/lib/projects';
+import type {
+  AppNotification,
+  CalendarEvent,
+  Certificate,
+  StudentAssignment,
+  StudentDashboard,
+  StudentProject,
+  TrainerDashboard,
+} from '@/types/api';
 
 function ClassList({ events, empty }: { events: CalendarEvent[]; empty: string }) {
   if (events.length === 0) return <p className="text-sm text-muted-foreground">{empty}</p>;
@@ -49,9 +90,130 @@ function ClassList({ events, empty }: { events: CalendarEvent[]; empty: string }
   );
 }
 
-function StudentView({ data }: { data: StudentDashboard }) {
+/**
+ * One dashboard section's load state, kept independent of every other
+ * section's. A student dashboard composes half a dozen endpoints (pending
+ * work, standing, certificates, feedback, notifications) on top of the
+ * primary payload above; if one of those is slow or down, the rest of the
+ * page — and in particular "what do I owe", the section that matters most —
+ * must still render.
+ */
+interface SectionState<T> {
+  data: T;
+  error: ApiError | null;
+  isLoading: boolean;
+  reload: () => void;
+}
+
+/**
+ * Loads one dashboard section. Not `hooks/use-api.ts`: that hook fetches a
+ * single GET path directly, and every section here composes two endpoints (or
+ * post-processes one), which a bare path string cannot express. Modelled on
+ * the same shape regardless — data/error/isLoading/reload — so every panel
+ * below is driven exactly the way `PendingActions`, `AlertList` and
+ * `DataTable` already expect to be.
+ */
+function useDashboardSection<T>(loader: () => Promise<T>, empty: T): SectionState<T> {
+  const [attempt, setAttempt] = useState(0);
+  const [state, setState] = useState<{ data: T; error: ApiError | null; isLoading: boolean; attempt: number }>(
+    { data: empty, error: null, isLoading: true, attempt },
+  );
+
+  // The reset-on-refetch this used to do at the top of the effect below is
+  // exactly the pattern `hooks/use-list.ts` and `hooks/use-api.ts` both avoid,
+  // for the same reason theirs do: a `setState` that runs unconditionally the
+  // instant an effect fires is a synchronous write inside that effect, and
+  // React (and this repo's lint config) flags it as the cascading-render
+  // anti-pattern it is. Comparing `attempt` here, during render, is the
+  // sanctioned alternative both of those hooks already use.
+  if (state.attempt !== attempt) {
+    setState({ data: empty, error: null, isLoading: true, attempt });
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    loader()
+      .then((result) => {
+        if (!cancelled) setState({ data: result, error: null, isLoading: false, attempt });
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setState({ data: empty, error: cause instanceof ApiError ? cause : null, isLoading: false, attempt });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // `loader` closes over no per-render props for every call site below — it
+    // always fetches the same caller-scoped "mine" endpoints — so `attempt` is
+    // the only thing that should re-trigger this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt]);
+
+  const reload = useCallback(() => setAttempt((value) => value + 1), []);
+  return { data: state.data, error: state.error, isLoading: state.isLoading, reload };
+}
+
+function pluralize(count: number, singular: string, plural: string): string {
+  return count === 1 ? singular : plural;
+}
+
+/** "What do I owe, and am I OK?" as one line, once there is enough loaded to answer it. */
+function buildStatusLine(pendingTotal: number, riskCount: number): string {
+  if (pendingTotal === 0 && riskCount === 0) {
+    return "You're all caught up, and everything looks on track.";
+  }
+  const pendingPhrase = `${pendingTotal} ${pluralize(pendingTotal, 'thing', 'things')} waiting on you`;
+  if (riskCount === 0) {
+    return `${pendingPhrase} — otherwise, you're on track.`;
+  }
+  const riskPhrase = `${riskCount} ${pluralize(riskCount, 'thing', 'things')} below worth a look`;
+  if (pendingTotal === 0) {
+    return `Nothing is waiting on you right now, but ${riskPhrase}.`;
+  }
+  return `${pendingPhrase}, and ${riskPhrase}.`;
+}
+
+export function StudentView({ data }: { data: StudentDashboard }) {
+  const assignments = useDashboardSection(
+    () => listMyAssignments({ page_size: 100, ordering: 'due_at' }).then((page) => page.results),
+    [] as StudentAssignment[],
+  );
+  const projects = useDashboardSection(
+    () => listMyProjects({ page_size: 100, ordering: 'end_date' }).then((page) => page.results),
+    [] as StudentProject[],
+  );
+  const performance = useDashboardSection(() => getMyPerformance(), [] as StudentPerformanceEntry[]);
+  const certificates = useDashboardSection(() => listMyCertificates(), [] as Certificate[]);
+  const feedback = useDashboardSection(() => listMyFeedback(), [] as PerformanceFeedback[]);
+  const notifications = useDashboardSection(
+    () =>
+      // The dashboard only ever shows a short preview, so the default page
+      // size is sliced down further client-side rather than asking the
+      // endpoint for a size it does not expose a parameter for; `count` still
+      // carries the true total regardless of how many rows came back.
+      listNotifications({ unread: 'true' }).then((page) => ({
+        items: page.results.slice(0, 5),
+        unread: page.count,
+      })),
+    { items: [] as AppNotification[], unread: 0 },
+  );
+
+  const pendingLoaded = !assignments.isLoading && !projects.isLoading;
+  const pendingFailed = Boolean(assignments.error || projects.error);
+  const pendingTotal =
+    tallyAssignments(assignments.data).count + tallyProjects(projects.data).count;
+  const riskCount = collectRiskItems(performance.data).length;
+  const showStatusLine = pendingLoaded && !pendingFailed && !performance.isLoading && !performance.error;
+
   return (
     <div className="space-y-6">
+      {showStatusLine ? (
+        <p aria-live="polite" className="text-sm text-muted-foreground">
+          {buildStatusLine(pendingTotal, riskCount)}
+        </p>
+      ) : null}
+
       {data.continue_learning?.last_lesson_id ? (
         <Card>
           <CardHeader>
@@ -78,77 +240,119 @@ function StudentView({ data }: { data: StudentDashboard }) {
         </Card>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold tracking-tight">My courses</h2>
-          {data.courses.length === 0 ? (
-            <EmptyState
-              title="No active courses"
-              description="You are not currently enrolled on a course. Browse the catalogue to see what is available."
-              action={
-                <Button asChild variant="outline">
-                  <Link href="/courses">Browse courses</Link>
-                </Button>
-              }
-            />
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {data.courses.map((course) => (
-                <Card key={course.enrollment_id}>
-                  <CardHeader className="gap-1">
-                    <CardTitle>
-                      <Link
-                        href={`/courses/${course.course_slug}`}
-                        className="hover:text-primary"
-                      >
-                        {course.course_title}
-                      </Link>
-                    </CardTitle>
-                    <CardDescription className="font-mono text-xs">
-                      {course.batch_code} · {course.batch_name}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <ProgressBar
-                      percent={course.progress_percent}
-                      label={`${course.completed_lessons} of ${course.total_lessons} lessons`}
-                    />
-                    {course.last_lesson_id ? (
-                      <Button asChild variant="outline" size="sm">
-                        <Link
-                          href={`/courses/${course.course_slug}/learn/${course.last_lesson_id}`}
-                        >
-                          Continue
-                        </Link>
-                      </Button>
-                    ) : (
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/courses/${course.course_slug}`}>Open course</Link>
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </section>
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold tracking-tight">Next up</h2>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardList className="size-5 text-primary" aria-hidden="true" />
+                Pending work
+              </CardTitle>
+              <CardDescription>Assignments and projects still needing you.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PendingWorkPanel
+                assignments={assignments.data}
+                projects={projects.data}
+                isLoading={assignments.isLoading || projects.isLoading}
+                error={assignments.error ?? projects.error}
+                onRetry={() => {
+                  assignments.reload();
+                  projects.reload();
+                }}
+              />
+            </CardContent>
+          </Card>
 
-        <aside className="space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CalendarClock className="size-5 text-primary" aria-hidden="true" />
-                Upcoming classes
+                Coming up
               </CardTitle>
+              <CardDescription>Classes and deadlines over the next week.</CardDescription>
             </CardHeader>
             <CardContent>
-              <ClassList events={data.upcoming_classes} empty="Nothing in the next week." />
+              <UpcomingTimeline events={data.upcoming_classes} />
               <Button asChild variant="ghost" size="sm" className="mt-2">
                 <Link href="/calendar">Open the calendar</Link>
               </Button>
             </CardContent>
           </Card>
+        </div>
+      </section>
 
+      <section className="space-y-3">
+        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <TrendingUp className="size-5 text-primary" aria-hidden="true" />
+          How you&apos;re doing
+        </h2>
+        <StandingPanel
+          performance={performance.data}
+          isLoading={performance.isLoading}
+          error={performance.error}
+          onRetry={performance.reload}
+        />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold tracking-tight">My courses</h2>
+        {data.courses.length === 0 ? (
+          <EmptyState
+            title="No active courses"
+            description="You are not currently enrolled on a course. Browse the catalogue to see what is available."
+            action={
+              <Button asChild variant="outline">
+                <Link href="/courses">Browse courses</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {data.courses.map((course) => (
+              <Card key={course.enrollment_id}>
+                <CardHeader className="gap-1">
+                  <CardTitle>
+                    <Link
+                      href={`/courses/${course.course_slug}`}
+                      className="hover:text-primary"
+                    >
+                      {course.course_title}
+                    </Link>
+                  </CardTitle>
+                  <CardDescription className="font-mono text-xs">
+                    {course.batch_code} · {course.batch_name}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <ProgressBar
+                    percent={course.progress_percent}
+                    label={`${course.completed_lessons} of ${course.total_lessons} lessons`}
+                  />
+                  {course.last_lesson_id ? (
+                    <Button asChild variant="outline" size="sm">
+                      <Link
+                        href={`/courses/${course.course_slug}/learn/${course.last_lesson_id}`}
+                      >
+                        Continue
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/courses/${course.course_slug}`}>Open course</Link>
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold tracking-tight">More for you</h2>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -179,20 +383,51 @@ function StudentView({ data }: { data: StudentDashboard }) {
             </CardContent>
           </Card>
 
-          {/* Placeholder, as the brief asks. The shape is fixed now so the
-              notifications feature fills it rather than redesigning the page. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Certificates</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CertificatesPanel
+                certificates={certificates.data}
+                isLoading={certificates.isLoading}
+                error={certificates.error}
+                onRetry={certificates.reload}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Feedback</CardTitle>
+              <CardDescription>From your trainers and managers.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FeedbackPanel
+                feedback={feedback.data}
+                isLoading={feedback.isLoading}
+                error={feedback.error}
+                onRetry={feedback.reload}
+              />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Notifications</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Nothing to show. Notifications arrive in a later phase.
-              </p>
+              <NotificationsPanel
+                notifications={notifications.data.items}
+                unreadCount={notifications.data.unread}
+                isLoading={notifications.isLoading}
+                error={notifications.error}
+                onRetry={notifications.reload}
+              />
             </CardContent>
           </Card>
-        </aside>
-      </div>
+        </div>
+      </section>
     </div>
   );
 }
@@ -289,14 +524,29 @@ function TrainerView({ data }: { data: TrainerDashboard }) {
   );
 }
 
-function Dashboard() {
+export function Dashboard() {
   const { user } = useAuth();
   const isTrainer = user?.role === 'trainer';
+  const [attempt, setAttempt] = useState(0);
+  // Identifies one fetch: which dashboard, and which retry. Comparing it
+  // during render (below) rather than resetting state from inside the effect
+  // is the same pattern `hooks/use-list.ts` and `hooks/use-api.ts` use, and
+  // for the same reason — an unconditional `setState` at the top of an effect
+  // body reads as a synchronous write inside that effect, which this repo's
+  // lint config (correctly) refuses.
+  const requestKey = `${isTrainer}#${attempt}`;
 
-  const [student, setStudent] = useState<StudentDashboard | null>(null);
-  const [trainer, setTrainer] = useState<TrainerDashboard | null>(null);
-  const [error, setError] = useState<ApiError | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [state, setState] = useState<{
+    student: StudentDashboard | null;
+    trainer: TrainerDashboard | null;
+    error: ApiError | null;
+    isLoading: boolean;
+    requestKey: string;
+  }>({ student: null, trainer: null, error: null, isLoading: true, requestKey });
+
+  if (state.requestKey !== requestKey) {
+    setState({ student: null, trainer: null, error: null, isLoading: true, requestKey });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -305,20 +555,31 @@ function Dashboard() {
     load
       .then((result) => {
         if (cancelled) return;
-        if (isTrainer) setTrainer(result as TrainerDashboard);
-        else setStudent(result as StudentDashboard);
+        setState((current) =>
+          isTrainer
+            ? { ...current, trainer: result as TrainerDashboard, error: null, isLoading: false }
+            : { ...current, student: result as StudentDashboard, error: null, isLoading: false },
+        );
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setError(cause instanceof ApiError ? cause : null);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setState((current) => ({
+            ...current,
+            error: cause instanceof ApiError ? cause : null,
+            isLoading: false,
+          }));
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isTrainer]);
+    // `requestKey` already encodes `isTrainer`; including it too would be
+    // redundant, not a missing dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestKey]);
+
+  const { student, trainer, error, isLoading } = state;
 
   if (isLoading) return <LoadingState label="Loading your dashboard…" rows={6} />;
   if (error) {
@@ -327,6 +588,7 @@ function Dashboard() {
         title="Could not load your dashboard"
         message={error.message}
         requestId={error.requestId || undefined}
+        onRetry={() => setAttempt((value) => value + 1)}
       />
     );
   }

@@ -348,21 +348,29 @@ def test_a_trainer_from_another_batch_cannot_open_the_batch_list_at_all(
 
 
 @pytest.mark.django_db
-def test_a_student_gets_nothing_from_the_list_endpoint(
+def test_a_student_is_refused_the_list_endpoint(
     api_client_no_csrf, student_profile, enrollment, draft_dsr
 ):
+    """Refused, not answered with an empty page.
+
+    `visible_dsrs` scopes a student to nothing, so the endpoint could safely
+    return `{"count": 0}`. It should not. A daily status report is internal
+    reporting about a class, written by staff for staff — a student is not
+    somebody whose view of it happens to be empty, they have no view of it, and
+    the status code should say which.
+
+    It also keeps the authorization sweep meaningful: an allowlist that grows
+    every route that "returns nothing anyway" stops testing anything.
+    """
     api_client_no_csrf.force_login(student_profile.user)
-    body = api_client_no_csrf.get(_list_url()).json()
-    assert body["count"] == 0
+    assert api_client_no_csrf.get(_list_url()).status_code == 403
 
 
 @pytest.mark.django_db
-def test_a_counsellor_gets_nothing_from_the_list_endpoint(
-    api_client_no_csrf, counsellor_user, draft_dsr
-):
+def test_a_counsellor_is_refused_the_list_endpoint(api_client_no_csrf, counsellor_user, draft_dsr):
+    """Admissions ends where teaching begins, and this is on the far side."""
     api_client_no_csrf.force_login(counsellor_user)
-    body = api_client_no_csrf.get(_list_url()).json()
-    assert body["count"] == 0
+    assert api_client_no_csrf.get(_list_url()).status_code == 403
 
 
 @pytest.mark.django_db

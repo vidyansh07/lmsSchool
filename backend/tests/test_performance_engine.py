@@ -818,13 +818,15 @@ class TestPerformanceAccess:
         response = api_client_no_csrf.get(f"/api/v1/batches/{batch.id}/performance/")
         assert response.status_code == 200
 
-    def test_a_trainer_with_no_trainer_profile_gets_an_empty_own_view(
-        self, api_client_no_csrf, admin_user
-    ):
+    def test_a_caller_who_is_not_a_trainer_gets_a_404(self, api_client_no_csrf, admin_user):
+        """`{}` would be a different and misleading answer.
+
+        An empty object says "you are a trainer with nothing recorded". A 404
+        says "you are not a trainer", which is the true one — and it matches
+        `/api/v1/trainers/me/`, the same question asked of the same person.
+        """
         api_client_no_csrf.force_login(admin_user)
-        response = api_client_no_csrf.get("/api/v1/performance/trainer/me/")
-        assert response.status_code == 200
-        assert response.data == {}
+        assert api_client_no_csrf.get("/api/v1/performance/trainer/me/").status_code == 404
 
 
 # ---------------------------------------------------------------------------
