@@ -5,8 +5,8 @@ tested and verified running — not when the code exists.
 
 **Statuses:** `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE`
 
-Totals at last full run: **~1,860 backend** · **581 frontend unit** ·
-**82 end-to-end** = ~2,520 tests, all passing.
+Totals at last full run: **1,818 backend** (3 skipped) · **581 frontend unit** ·
+**82 end-to-end** = 2,481 tests, all passing.
 
 ---
 

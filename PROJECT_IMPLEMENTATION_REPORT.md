@@ -681,8 +681,8 @@ UI component system, or any working feature.
 | Baseline (6 Sep 2026) | — | 1,339 | 75 |
 | 12.1 RBAC / counsellor foundation | Counsellor role, DSR/performance/export capabilities, report-export hardening, capability mirror | 1,415 | 80 |
 | 12.2 Reversible deletion | `SoftDeleteModel`, three verbs, recycle bin over every adopting model | 1,444 | 80 |
-| 12.3–12.9 Domain features | DSR, course timeline, risk engine, export jobs, transfers and batch kinds | ~1,860 | 80 |
-| 12.10 Role screens | Manager hubs, counsellor pipeline, trainer end-of-class capture, student dashboard, UX primitives | ~1,860 | 581 |
+| 12.3–12.9 Domain features | DSR, course timeline, risk engine, export jobs, transfers and batch kinds | 1,818 | 80 |
+| 12.10 Role screens | Manager hubs, counsellor pipeline, trainer end-of-class capture, student dashboard, UX primitives | 1,818 | 581 |
 
 ### What is left of the eight gaps
 
