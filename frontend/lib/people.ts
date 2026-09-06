@@ -9,6 +9,7 @@ import type {
   StudentProfile,
   TrainerListRow,
   TrainerProfile,
+  UserAuditEntry,
 } from '@/types/api';
 
 export interface ListQuery {
@@ -41,9 +42,31 @@ export async function createUser(payload: {
 
 export async function updateUser(
   id: string,
-  changes: Partial<Pick<AdminUser, 'first_name' | 'last_name' | 'phone' | 'role'>>,
+  changes: Partial<Pick<AdminUser, 'email' | 'first_name' | 'last_name' | 'phone' | 'role'>>,
 ): Promise<AdminUser> {
   return apiMutate<AdminUser>(`/api/v1/users/${id}/`, { method: 'PATCH', body: changes });
+}
+
+/**
+ * Send this person a password-reset or email-verification link.
+ *
+ * There is deliberately no "set their password" here. An administrator who sets
+ * a password has to transmit it, which means two people know it and the record
+ * says an administrator changed it rather than the owner setting one.
+ */
+export async function sendCredentialLink(
+  id: string,
+  action: 'password_reset' | 'email_verification',
+): Promise<{ detail: string }> {
+  return apiMutate(`/api/v1/users/${id}/credential-link/`, {
+    method: 'POST',
+    body: { action },
+  });
+}
+
+/** What has been done to this account, most recent first. */
+export async function getUserAudit(id: string): Promise<UserAuditEntry[]> {
+  return apiFetch<UserAuditEntry[]>(`/api/v1/users/${id}/audit/`);
 }
 
 export async function setUserActive(

@@ -36,6 +36,11 @@ paths = [
   '''(^|/)\.env(\.[A-Za-z0-9_-]+)?$''',
   # Backups taken by scripts/backup.sh. Ignored, and full of real data by design.
   '''(^|/)backups/''',
+  # Keys and certificates. Genuinely secret, genuinely git-ignored (*.pem in
+  # .gitignore), and therefore never in the history CI scans. Listed for the
+  # same reason as the env files: so a local filesystem scan does not report a
+  # file that cannot be committed. `make secrets` proves the ignore holds.
+  '''\.(pem|key|p12|pfx)$''',
 ]
 regexes = [
   # Development placeholder; any deployed environment refuses to start with it.

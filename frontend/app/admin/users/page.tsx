@@ -1,41 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
 
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
-import { useAuth } from '@/components/auth-provider';
-import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { useList } from '@/hooks/use-list';
-import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
 import { ROLE_LABEL, ROLE_OPTIONS } from '@/lib/labels';
-import { listUsers, setUserActive } from '@/lib/people';
+import { listUsers } from '@/lib/people';
 import type { AdminUser } from '@/types/api';
 
 function UsersTable() {
-  const { user: currentUser, can } = useAuth();
   const list = useList<AdminUser>(listUsers);
-  const [actionError, setActionError] = useState('');
-
-  async function toggleActive(target: AdminUser) {
-    setActionError('');
-    try {
-      await setUserActive(target.id, !target.is_active);
-      list.reload();
-    } catch (cause) {
-      setActionError(
-        cause instanceof ApiError ? cause.message : 'Could not update the account status.',
-      );
-    }
-  }
 
   const sortDirection = list.query.ordering?.startsWith('-') ? 'desc' : 'asc';
   const sortField = list.query.ordering?.replace(/^-/, '');
@@ -88,8 +69,6 @@ function UsersTable() {
           </Select>
         </div>
       </ListToolbar>
-
-      {actionError ? <Alert variant="error">{actionError}</Alert> : null}
 
       {list.isLoading ? (
         <LoadingState label="Loading users…" rows={6} />
@@ -163,17 +142,16 @@ function UsersTable() {
                       {new Date(row.date_joined).toLocaleDateString()}
                     </Td>
                     <Td>
-                      {can(Capability.userSetActive) && row.id !== currentUser?.id ? (
-                        <Button
-                          size="sm"
-                          variant={row.is_active ? 'outline' : 'primary'}
-                          onClick={() => void toggleActive(row)}
-                        >
-                          {row.is_active ? 'Deactivate' : 'Activate'}
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      {/* One way in, rather than a row of controls per row:
+                          everything an administrator can do to an account lives
+                          on that account's own screen, where the audit history
+                          sits beside it. */}
+                      <Link
+                        href={`/admin/users/${row.id}`}
+                        className="text-sm font-medium underline hover:text-foreground"
+                      >
+                        Manage
+                      </Link>
                     </Td>
                   </tr>
                 ))}

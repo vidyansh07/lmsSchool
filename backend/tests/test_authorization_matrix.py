@@ -572,3 +572,78 @@ def test_a_trainers_report_contains_only_their_own_batches(
     codes = {row["batch_code"] for row in body["rows"]}
     assert rival["batch"].code not in codes
     assert codes <= {enrollment.batch.code}
+
+
+# ---------------------------------------------------------------------------
+# §11.3 — a superadmin is refused by nothing
+# ---------------------------------------------------------------------------
+
+
+#: Endpoints that answer "about me" rather than "about the institution". A
+#: superadmin holds every capability and still has no student profile, because
+#: they are not a student — that is a missing record, not a withheld permission,
+#: and it is the one honest exception to "nothing refuses a superadmin".
+SELF_SERVICE_ROUTES = frozenset({"/api/v1/students/me/", "/api/v1/trainers/me/"})
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("path", "view"), ROUTES, ids=[path for path, _ in ROUTES])
+def test_no_route_refuses_a_superadmin(api_client_no_csrf, db, path, view):
+    """ "Superadmin holds every power" has to be true of the running system.
+
+    A capability table can say so while a screen still refuses them, because
+    authorization is expressed in several ways here — a declared capability, an
+    `access` module, a queryset. This walks the resolver and checks the claim
+    against all three at once.
+
+    A 404 is allowed: it means the route wanted a record and this caller has no
+    such record, which is not a refusal. A 403 is not.
+    """
+    if path in SELF_SERVICE_ROUTES:
+        pytest.skip("answers about the caller, and a superadmin is neither a student nor a trainer")
+
+    from apps.accounts.models import User
+
+    superadmin = User.objects.create_user(
+        email="sweep-superadmin@demo.grras.invalid",
+        password="Str0ng-Passphrase!42",
+        first_name="Sweep",
+        last_name="Superadmin",
+        role=UserRole.SUPERADMIN,
+    )
+    api_client_no_csrf.force_login(superadmin)
+
+    response = api_client_no_csrf.get(path)
+    assert response.status_code != 403, f"a superadmin was refused {path}"
+
+
+def test_the_superadmin_set_contains_every_other_role():
+    """Strictly: every other role's capabilities are a subset, and superadmin
+    holds at least one thing no other role does."""
+    superadmin = ROLE_CAPABILITIES[UserRole.SUPERADMIN]
+
+    for role, held in ROLE_CAPABILITIES.items():
+        assert held <= superadmin, (
+            f"{role} holds something a superadmin does not: {held - superadmin}"
+        )
+
+    others = set().union(
+        *(held for role, held in ROLE_CAPABILITIES.items() if role != UserRole.SUPERADMIN)
+    )
+    assert superadmin - others, "superadmin holds nothing that sets it apart"
+
+
+def test_the_capability_ladder_has_no_ties():
+    """Each step down the ladder holds strictly less than the one above.
+
+    This is what `can_administer` reads: if two roles ever held the same set,
+    neither could administer the other and the hierarchy would quietly have a
+    flat spot in it.
+    """
+    from itertools import pairwise
+
+    ladder = [UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER]
+    for higher, lower in pairwise(ladder):
+        assert ROLE_CAPABILITIES[lower] < ROLE_CAPABILITIES[higher], (
+            f"{lower} does not hold strictly less than {higher}"
+        )

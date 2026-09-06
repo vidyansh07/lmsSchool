@@ -4,37 +4,47 @@
  * Design tokens.
  *
  * Colours are declared once as CSS custom properties and consumed through
- * Tailwind theme variables, so a future brand change is a single edit here
- * rather than a sweep through every component. Dark mode redefines the same
- * tokens; no component needs a dark: variant for colour.
+ * Tailwind theme variables, so a brand change is a single edit here rather than
+ * a sweep through every component.
+ *
+ * Light only, deliberately
+ * ------------------------
+ * This used to follow `prefers-color-scheme`, which meant the same install
+ * looked different on two people's machines and nobody could say what the
+ * product looked like. It is now light everywhere, regardless of the operating
+ * system, so a demonstration is the same demonstration for everyone.
+ *
+ * Built as a light palette rather than an inverted dark one. The difference
+ * shows in two places: `background` is a faint grey and `surface` is pure
+ * white, so cards and tables lift off the page without needing a heavy border;
+ * and the accent colours are darkened to carry text, because a colour that
+ * reads well as a large dark block is usually illegible as small text on white.
+ *
+ * Every foreground/background pair used by the interface is measured against
+ * WCAG AA in `tests/unit/theme-contrast.test.ts`. That test parses this file,
+ * so a token changed here without checking it fails there.
  */
 @theme {
-  --color-background: oklch(99% 0.004 250);
-  --color-foreground: oklch(21% 0.02 258);
-  --color-muted: oklch(96.5% 0.006 250);
-  --color-muted-foreground: oklch(52% 0.02 256);
-  --color-border: oklch(91% 0.008 250);
-  --color-primary: oklch(48% 0.16 152);
-  --color-primary-foreground: oklch(99% 0.005 152);
-  --color-accent: oklch(95% 0.03 152);
-  --color-destructive: oklch(55% 0.19 25);
-  --color-destructive-foreground: oklch(99% 0.005 25);
-  --color-warning: oklch(72% 0.15 75);
-  --color-success: oklch(58% 0.14 152);
-  --radius-card: 0.75rem;
-}
+  /* The page, and the surfaces that sit on it. */
+  --color-background: oklch(98.5% 0.003 250);
+  --color-surface: oklch(100% 0 0);
+  --color-foreground: oklch(24% 0.02 258);
+  --color-muted: oklch(96% 0.005 250);
+  --color-muted-foreground: oklch(45% 0.02 256);
+  --color-border: oklch(88.5% 0.008 250);
 
-@media (prefers-color-scheme: dark) {
-  @theme {
-    --color-background: oklch(17% 0.015 258);
-    --color-foreground: oklch(96% 0.006 250);
-    --color-muted: oklch(23% 0.018 258);
-    --color-muted-foreground: oklch(70% 0.02 256);
-    --color-border: oklch(30% 0.02 258);
-    --color-primary: oklch(66% 0.15 152);
-    --color-primary-foreground: oklch(17% 0.02 152);
-    --color-accent: oklch(27% 0.04 152);
-  }
+  /* One accent, used for the primary action on a screen and for focus. */
+  --color-primary: oklch(47% 0.15 152);
+  --color-primary-foreground: oklch(99.5% 0.005 152);
+  --color-accent: oklch(96% 0.025 152);
+
+  /* Semantic colours, darkened enough to carry small text on white. */
+  --color-destructive: oklch(50.5% 0.19 25);
+  --color-destructive-foreground: oklch(99% 0.005 25);
+  --color-warning: oklch(47% 0.12 70);
+  --color-success: oklch(47% 0.14 152);
+
+  --radius-card: 0.75rem;
 }
 
 @layer base {
@@ -43,7 +53,10 @@
   }
 
   html {
-    color-scheme: light dark;
+    /* Light regardless of the operating system, so form controls, scrollbars
+       and the browser's own chrome match the palette above instead of the
+       viewer's preference. */
+    color-scheme: light;
   }
 
   body {

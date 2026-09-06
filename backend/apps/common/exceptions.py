@@ -70,6 +70,23 @@ class ConflictError(ApplicationError):
     default_code = "conflict"
 
 
+class AuthorityError(ApplicationError):
+    """The caller may perform this kind of act, but not on this person.
+
+    A 403 rather than a 400: the request was well formed and the caller is who
+    they say they are — they simply have no authority over that account. Sending
+    a validation error instead would tell an interface to highlight a field,
+    when there is no field to fix.
+
+    Deliberately says nothing about *why*, beyond authority. "You cannot edit a
+    superadmin" tells an attacker which accounts are worth pursuing.
+    """
+
+    status_code = status.HTTP_403_FORBIDDEN
+    default_detail = "You do not have authority over this account."
+    default_code = "outside_authority"
+
+
 def error_payload(
     code: str, message: str, details: Any = None, *, request_id: str | None = None
 ) -> dict[str, Any]:

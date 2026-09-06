@@ -5,8 +5,8 @@ tested and verified running — not when the code exists.
 
 **Statuses:** `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE`
 
-Totals at last full run: **1,221 backend** (91% coverage) · **61 frontend unit** ·
-**69 end-to-end** = 1,351 tests, all passing.
+Totals at last full run: **1,339 backend** (91% coverage) · **75 frontend unit** ·
+**82 end-to-end** = 1,496 tests, all passing.
 
 ---
 
@@ -118,6 +118,13 @@ Totals at last full run: **1,221 backend** (91% coverage) · **61 frontend unit*
 | 10.x Stale CSRF after sign-out (bug fix) | 10 | DONE | `frontend/lib/api.ts` | `tests/unit/api.test.ts` (2) | Only `csrf_failed` retried, once | Sign out, sign in, act — no longer fails first | — | 2026-09-02 |
 | 10.x Generate classes (UI gap) | 10 | DONE | `app/admin/batches/[batchId]/page.tsx` | release journey | Same capability as the API | A timetable becomes classes from the screen | — | 2026-09-02 |
 | 10.x Mark a lesson complete (UI gap) | 10 | DONE | `app/courses/[slug]/learn/[lessonId]/page.tsx` | release journey | Students only, via their enrolment | A student can finish a lesson | — | 2026-09-02 |
+| 11.1 Role hierarchy | 11 | DONE | `apps/accounts/roles.py`, `services.py` | `test_role_hierarchy` (50) | Authority downward only; refusals audited with both roles | Every ordered pair of roles checked | Superadmins may administer each other, by design (D-096) | 2026-09-02 |
+| 11.2 User administration | 11 | DONE | `app/admin/users/[userId]/`, `user_views.py` | `test_role_hierarchy`, `e2e/role-administration.spec.ts` (6) | Email change unverifies and ends sessions; links not passwords | Superadmin configures an admin end to end in a browser | Verification cannot be granted by hand (D-100) | 2026-09-02 |
+| 11.3 Superadmin holds every power | 11 | DONE | `roles.py`, route sweep | `test_authorization_matrix` | No route refuses a superadmin | Whole resolver swept | Two self-service `/me/` routes excepted, named | 2026-09-02 |
+| 11.4 Light theme | 11 | DONE | `app/globals.css` | `tests/unit/theme-contrast.test.ts` (14) | Every pair meets WCAG AA, measured not estimated | Dark-OS viewer still sees light | No dark mode, by request | 2026-09-02 |
+| 11.5 Sidebar navigation | 11 | DONE | `components/app-shell.tsx`, `navigation.ts` | `e2e/interface.spec.ts` (7) | Links filtered by capability; server still enforces | Keyboard reachable, focus visible, closes on navigation | Students keep the top bar, by design | 2026-09-02 |
+| 11.6 Interface quality | 11 | DONE | shell, cards, fields | `interface.spec.ts` | — | One current-page marker; grouped navigation; stale footer removed | — | 2026-09-02 |
+| 11.x Deferred audits leaked between tests (bug fix) | 11 | DONE | `tests/conftest.py` | whole suite | — | A queued entry no longer surfaces in a later test | — | 2026-09-02 |
 | 10.x Cancelled batch on today's list (bug fix) | 10 | DONE | `apps/sessions/views.py` | `test_class_sessions` (2) | A cancelled batch is not teaching today | Its class disappears; history kept | — | 2026-09-02 |
 | 10.x Seeder died on a batch with no timetable (bug fix) | 10 | DONE | `seed_academics.py` | `test_seed_academics` | Skipped and reported, not fatal | Seed completes with timetables stripped | — | 2026-09-02 |
 | 10.x One shared E2E sign-in helper | 10 | DONE | `frontend/e2e/helpers.ts` | whole suite | Waits out the credential throttle rather than raising it | 45→61 staging passes | Seven specs still dev-specific | 2026-09-02 |

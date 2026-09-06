@@ -22,6 +22,24 @@ NEW_PASSWORD = "an-entirely-different-passphrase"
 
 
 @pytest.fixture(autouse=True)
+def _reset_request_scope():
+    """Clear the per-request context between tests.
+
+    Failure audits are queued in a `contextvars` queue and written by middleware
+    after the request transaction ends. A test that triggers one without a real
+    request leaves it in the queue — and the next test to flush the queue writes
+    it, pointing at a user whose transaction has since been rolled back. The
+    symptom is a foreign-key error in a test that did nothing wrong, which is a
+    miserable thing to debug.
+    """
+    from apps.common.request_context import reset
+
+    reset()
+    yield
+    reset()
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limit_counters():
     """Clear throttle state between tests.
 

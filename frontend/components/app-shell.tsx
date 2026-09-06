@@ -1,152 +1,248 @@
 'use client';
 
 /**
- * Application shell: skip link, header, role-aware navigation and content.
+ * Application shell: skip link, navigation and content.
  *
- * The navigation is presentational. Which links a user sees comes from the
- * capability list the server returned; which requests actually succeed is
+ * Two layouts, because two jobs. Staff — administrators, managers and trainers —
+ * work across thirty-odd screens all day, and a vertical sidebar holds that many
+ * links in groups a person can scan without reading every word. A student has a
+ * dozen pages and visits a few of them, so they keep a top bar: giving them a
+ * sidebar would spend a fifth of a laptop screen on links they do not use.
+ *
+ * The navigation is presentational throughout. Which links a person sees comes
+ * from the capability list the server returned; which requests succeed is
  * decided by the server on every call. Hiding a link is a courtesy, never a
  * permission.
  */
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Menu, X } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
+import { STAFF_NAV, STAFF_ROLES, STUDENT_NAV, isVisible, type NavItem } from '@/components/navigation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Capability } from '@/lib/capabilities';
 import { env } from '@/lib/env';
 import { cn } from '@/lib/utils';
 
-interface NavItem {
-  href: string;
-  label: string;
-  capability?: string;
-  /** Show to trainers too, whose course rights come from per-course assignment. */
-  roles?: string[];
+/** Longest match wins, so `/teaching/projects` does not also light up `/teaching`. */
+function useActiveHref(hrefs: string[]): string | null {
+  const pathname = usePathname();
+  let best: string | null = null;
+  for (const href of hrefs) {
+    const matches = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+    if (matches && (best === null || href.length > best.length)) best = href;
+  }
+  return best;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', roles: ['student', 'trainer'] },
-  { href: '/courses', label: 'Courses' },
-  { href: '/my-batches', label: 'My batches', roles: ['student'] },
-  { href: '/my-assignments', label: 'My assignments', roles: ['student'] },
-  { href: '/my-attendance', label: 'My attendance', roles: ['student'] },
-  { href: '/my-projects', label: 'My projects', roles: ['student'] },
-  { href: '/my-learning', label: 'My learning', roles: ['student'] },
-  { href: '/my-progress', label: 'My progress', roles: ['student'] },
-  { href: '/my-results', label: 'My results', roles: ['student'] },
-  { href: '/exams', label: 'Examinations', roles: ['student'] },
-  { href: '/calendar', label: 'Calendar', roles: ['student', 'trainer'] },
-  { href: '/announcements', label: 'Announcements' },
-  { href: '/discussions', label: 'Discussions', roles: ['student', 'trainer'] },
-  { href: '/notifications', label: 'Notifications' },
-  // A trainer's daily driver. Staff who hold the session capability reach it
-  // too; a trainer has no such capability, their authority is per batch.
-  { href: '/teaching', label: 'Teaching', capability: Capability.sessionManageAny, roles: ['trainer'] },
-  // Batches and authoring: administrators hold the capability; trainers reach
-  // them because their rights come from per-record assignment, which no
-  // capability reflects.
-  { href: '/admin/overview', label: 'Overview', capability: Capability.reportViewAny },
-  { href: '/admin/reports', label: 'Reports', capability: Capability.reportViewAny, roles: ['trainer'] },
-  { href: '/admin/imports', label: 'Bulk import', capability: Capability.dataImport },
-  { href: '/admin/batches', label: 'Batches', capability: Capability.batchViewAny, roles: ['trainer'] },
-  { href: '/admin/courses', label: 'Authoring', capability: Capability.courseViewAny, roles: ['trainer'] },
-  { href: '/admin/users', label: 'Users', capability: Capability.userViewAny },
-  { href: '/admin/students', label: 'Students', capability: Capability.studentViewAny },
-  { href: '/admin/trainers', label: 'Trainers', capability: Capability.trainerViewAny },
-  { href: '/admin/academics', label: 'Academic rules', capability: Capability.academicConfigure },
-  { href: '/admin/completions', label: 'Completions', capability: Capability.completionApprove },
-  { href: '/admin/certificates', label: 'Certificates', capability: Capability.certificateManage },
-  { href: '/profile', label: 'My profile' },
-];
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        'block rounded-md px-3 py-2 text-sm transition-colors',
+        'hover:bg-muted hover:text-foreground',
+        // Marked two ways on purpose: colour alone is not a signal for everyone,
+        // and the weight change survives a screenshot in greyscale.
+        active
+          ? 'bg-accent font-medium text-foreground'
+          : 'text-muted-foreground',
+      )}
+    >
+      {item.label}
+    </Link>
+  );
+}
 
-export function AppShell({ children }: { children: ReactNode }) {
+function Brand() {
+  return (
+    <div className="flex items-center gap-2">
+      <Link href="/" className="text-sm font-semibold tracking-tight">
+        Grras <span className="text-primary">LMS</span>
+      </Link>
+      {env.appEnv !== 'production' ? (
+        <Badge variant="warning" aria-label={`Environment: ${env.appEnv}`}>
+          {env.appEnv}
+        </Badge>
+      ) : null}
+    </div>
+  );
+}
+
+function Account() {
   const { user, isLoading, signOut } = useAuth();
-  const pathname = usePathname();
+  if (isLoading) return null;
+  if (!user) {
+    return (
+      <Button asChild size="sm">
+        <Link href="/login">Sign in</Link>
+      </Button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className="hidden text-sm text-muted-foreground sm:inline">
+        {user.full_name || user.email}
+      </span>
+      <Badge>{user.role}</Badge>
+      <Button variant="outline" size="sm" onClick={() => void signOut()}>
+        Sign out
+      </Button>
+    </div>
+  );
+}
 
-  const visible = NAV_ITEMS.filter((item) => {
-    // Role-only entries (no capability) are for the people that role serves.
-    if (!item.capability) {
-      return !item.roles || Boolean(user && item.roles.includes(user.role));
-    }
-    if (user?.capabilities.includes(item.capability)) return true;
-    return Boolean(user && item.roles?.includes(user.role));
-  });
+function StaffLayout({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const [openedAt, setOpenedAt] = useState(pathname);
+
+  // Close the drawer on navigation: leaving it open over the page somebody just
+  // asked for is the most irritating thing a mobile menu can do. Reset during
+  // render rather than in an effect — the documented alternative to a
+  // synchronous setState inside one, and the pattern used elsewhere here.
+  if (openedAt !== pathname) {
+    setOpenedAt(pathname);
+    setOpen(false);
+  }
+
+  const groups = STAFF_NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => isVisible(item, user)),
+  })).filter((group) => group.items.length > 0);
+
+  const active = useActiveHref(groups.flatMap((group) => group.items.map((item) => item.href)));
+
+  const sidebar = (
+    <nav aria-label="Main" className="flex h-full flex-col gap-6 overflow-y-auto p-4">
+      {groups.map((group, index) => (
+        <div key={group.title ?? `group-${index}`} className="space-y-1">
+          {/* Plain text, with no ARIA association to the list.
+              As an <h2> it entered the document outline and competed with the
+              page's own <h1>. Bound to the list with `aria-labelledby` it gave
+              the <ul> an accessible name, and a list called "Courses and
+              batches" then answered to a search for a form field named "Batch".
+              The grouping here is visual; the links carry their own names, and
+              the label is read in order like any other text. */}
+          {group.title ? (
+            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {group.title}
+            </p>
+          ) : null}
+          <ul className="space-y-0.5">
+            {group.items.map((item) => (
+              <li key={item.href}>
+                <NavLink item={item} active={item.href === active} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  );
+
+  return (
+    <div className="min-h-dvh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
+      {/* Wide screens: the sidebar is simply there. */}
+      <aside className="hidden border-r border-border bg-surface lg:block">
+        <div className="sticky top-0 flex h-dvh flex-col">
+          <div className="border-b border-border px-4 py-3">
+            <Brand />
+          </div>
+          {sidebar}
+        </div>
+      </aside>
+
+      <div className="flex min-h-dvh min-w-0 flex-col">
+        <header className="border-b border-border bg-surface">
+          <div className="flex items-center gap-3 px-4 py-3 sm:px-6">
+            <Button
+              variant="outline"
+              size="sm"
+              className="lg:hidden"
+              aria-expanded={open}
+              aria-controls="staff-navigation"
+              onClick={() => setOpen((current) => !current)}
+            >
+              {open ? (
+                <X className="size-4" aria-hidden="true" />
+              ) : (
+                <Menu className="size-4" aria-hidden="true" />
+              )}
+              <span className="sr-only">{open ? 'Close the menu' : 'Open the menu'}</span>
+            </Button>
+            <div className="lg:hidden">
+              <Brand />
+            </div>
+            <div className="ml-auto">
+              <Account />
+            </div>
+          </div>
+        </header>
+
+        {/* Narrow screens: the same links, as a panel under the header. It is
+            rendered rather than duplicated, so there is one list to maintain. */}
+        {open ? (
+          <div id="staff-navigation" className="border-b border-border bg-surface lg:hidden">
+            {sidebar}
+          </div>
+        ) : null}
+
+        <main id="main-content" className="w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function StudentLayout({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const items = STUDENT_NAV.filter((item) => isVisible(item, user));
+  const active = useActiveHref(items.map((item) => item.href));
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
-      >
-        Skip to content
-      </a>
-
-      <header className="border-b border-border">
+      <header className="border-b border-border bg-surface">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6">
-          <Link href="/" className="text-sm font-semibold tracking-tight">
-            Grras <span className="text-primary">LMS</span>
-          </Link>
-          {env.appEnv !== 'production' ? (
-            <Badge variant="warning" aria-label={`Environment: ${env.appEnv}`}>
-              {env.appEnv}
-            </Badge>
-          ) : null}
-
+          <Brand />
           <nav aria-label="Main" className="ml-auto">
             <ul className="flex flex-wrap items-center gap-1">
-              {visible.map((item) => {
-                const isActive =
-                  item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      aria-current={isActive ? 'page' : undefined}
-                      className={cn(
-                        'rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-muted hover:text-foreground',
-                        isActive ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground',
-                      )}
-                    >
-                      {item.label}
-                    </Link>
-                  </li>
-                );
-              })}
+              {items.map((item) => (
+                <li key={item.href}>
+                  <NavLink item={item} active={item.href === active} />
+                </li>
+              ))}
             </ul>
           </nav>
-
-          <div className="flex items-center gap-2">
-            {isLoading ? null : user ? (
-              <>
-                <span className="hidden text-sm text-muted-foreground sm:inline">
-                  {user.full_name || user.email}
-                </span>
-                <Badge>{user.role}</Badge>
-                <Button variant="outline" size="sm" onClick={() => void signOut()}>
-                  Sign out
-                </Button>
-              </>
-            ) : (
-              <Button asChild size="sm">
-                <Link href="/login">Sign in</Link>
-              </Button>
-            )}
-          </div>
+          <Account />
         </div>
       </header>
 
       <main id="main-content" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
         {children}
       </main>
-
-      <footer className="border-t border-border">
-        <div className="mx-auto w-full max-w-6xl px-4 py-4 text-xs text-muted-foreground sm:px-6">
-          Grras LMS — identity and people management (Phase 1).
-        </div>
-      </footer>
     </div>
+  );
+}
+
+export function AppShell({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const isStaff = Boolean(user && STAFF_ROLES.includes(user.role));
+
+  return (
+    <>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
+      >
+        Skip to content
+      </a>
+      {isStaff ? <StaffLayout>{children}</StaffLayout> : <StudentLayout>{children}</StudentLayout>}
+    </>
   );
 }

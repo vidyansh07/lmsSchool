@@ -24,7 +24,9 @@ from .serializers import (
     AdminUserCreateSerializer,
     AdminUserDetailSerializer,
     AdminUserUpdateSerializer,
+    CredentialActionSerializer,
     SetActiveSerializer,
+    UserAuditEntrySerializer,
 )
 
 USERS_TAG = ["users"]
@@ -102,7 +104,10 @@ class UserListCreateView(ListCreateAPIView):
         serializer = AdminUserCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = services.create_user(actor=request.user, **serializer.validated_data)
-        return Response(AdminUserDetailSerializer(user).data, status=status.HTTP_201_CREATED)
+        return Response(
+            AdminUserDetailSerializer(user, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class UserDetailView(RetrieveUpdateAPIView):
@@ -157,7 +162,7 @@ class UserDetailView(RetrieveUpdateAPIView):
                 )
 
         updated = services.update_user(user=user, actor=request.user, **serializer.validated_data)
-        return Response(AdminUserDetailSerializer(updated).data)
+        return Response(AdminUserDetailSerializer(updated, context={"request": request}).data)
 
 
 class UserSetActiveView(APIView):
@@ -204,4 +209,81 @@ class UserSetActiveView(APIView):
             actor=request.user,
             reason=serializer.validated_data.get("reason", ""),
         )
-        return Response(AdminUserDetailSerializer(updated).data)
+        return Response(AdminUserDetailSerializer(updated, context={"request": request}).data)
+
+
+class UserCredentialActionView(APIView):
+    """Send somebody a password-reset or email-verification link.
+
+    An administrator who has just corrected a typo in an address, or unlocked an
+    account that had been dormant, needs a way to get that person back in. The
+    alternative people reach for otherwise is worse: setting a password on
+    somebody's behalf and telling it to them, which means two people know it and
+    the audit trail says "administrator changed a password" rather than "the
+    owner set one".
+
+    So this sends a link and nothing else. No administrator ever learns the
+    resulting credential.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.USER_UPDATE_ANY
+
+    ACTIONS = ("password_reset", "email_verification")
+
+    @extend_schema(
+        summary="Send a credential link to a user",
+        request=CredentialActionSerializer,
+        responses={
+            202: OpenApiResponse(description="Accepted; a link has been sent if it could be."),
+            403: OpenApiResponse(description="Outside your authority."),
+        },
+        tags=USERS_TAG,
+    )
+    def post(self, request, user_id):
+        user = get_object_or_404(User.objects.all(), pk=user_id)
+        serializer = CredentialActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        action = serializer.validated_data["action"]
+
+        services.send_credential_link(user=user, actor=request.user, action=action)
+        # 202, and the same answer whichever branch ran: whether an address is
+        # deliverable is not something this endpoint should report.
+        return Response(
+            {"detail": "If the account can receive it, a link has been sent."},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class UserAuditView(APIView):
+    """What has been done to this account, most recent first.
+
+    On the same screen as the fields themselves, because "who changed this?" is
+    asked at the moment somebody notices the change — not later, in a different
+    tool, by a different person.
+
+    Reading it needs `audit.view`: an audit trail that everyone can read is a
+    convenient map of who administers whom.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.AUDIT_VIEW
+
+    #: Enough to answer the question, few enough that the screen stays a screen.
+    LIMIT = 25
+
+    @extend_schema(
+        summary="Recent audit history for a user",
+        responses={200: UserAuditEntrySerializer(many=True)},
+        tags=USERS_TAG,
+    )
+    def get(self, request, user_id):
+        from apps.audit.models import AuditLog
+
+        user = get_object_or_404(User.objects.all(), pk=user_id)
+        entries = (
+            AuditLog.objects.filter(resource_type="user", resource_id=str(user.pk))
+            .select_related("actor")
+            .order_by("-created_at")[: self.LIMIT]
+        )
+        return Response(UserAuditEntrySerializer(entries, many=True).data)

@@ -104,6 +104,8 @@ class CurrentUserSerializer(UserSerializer):
 class AdminUserDetailSerializer(UserSerializer):
     """Administrator view of a user. Still never exposes credential material."""
 
+    can_administer = serializers.SerializerMethodField()
+
     class Meta(UserSerializer.Meta):
         fields = (
             *UserSerializer.Meta.fields,
@@ -112,8 +114,26 @@ class AdminUserDetailSerializer(UserSerializer):
             "email_verified_at",
             "created_at",
             "updated_at",
+            "can_administer",
         )
         read_only_fields = fields
+
+    def get_can_administer(self, obj: User) -> bool:
+        """Whether the *caller* may change this account.
+
+        Sent so the interface can show a read-only record instead of a form
+        whose Save button is going to fail. Viewing is a wider permission than
+        administering — an administrator may legitimately see that a superadmin
+        exists — and without this the screen had no way to tell the difference,
+        so it offered controls that could not work.
+
+        It informs the interface; it does not enforce anything. The service
+        layer answers the same question again on every write.
+        """
+        from apps.accounts.roles import can_administer
+
+        request = self.context.get("request")
+        return can_administer(getattr(request, "user", None), obj)
 
 
 class AdminUserCreateSerializer(StrictModelSerializer):
@@ -144,11 +164,21 @@ class AdminUserCreateSerializer(StrictModelSerializer):
 class AdminUserUpdateSerializer(StrictModelSerializer):
     """Administrator editing an account.
 
-    Email is absent: changing a login identifier needs its own verified flow,
-    which is not part of this phase. ``is_active`` is absent too — activation
-    goes through its own audited endpoint rather than a generic patch.
+    ``email`` is here, and it is not an ordinary field: it is the login
+    identifier. The service marks the new address unverified, ends existing
+    sessions and sends a verification link — see `_handle_email_change`.
+
+    ``is_active`` is still absent. Activation is a security control with its own
+    audited endpoint, and it should not be possible to flip it as a side effect
+    of correcting a phone number.
+
+    ``is_email_verified`` is absent too, deliberately. An administrator may
+    *revoke* verification (by changing the address) and may resend the link, but
+    cannot mark an address verified by hand — that would be an administrator
+    asserting a fact only the inbox owner can establish.
     """
 
+    email = serializers.EmailField(required=False)
     first_name = SafeCharField(max_length=100, required=False)
     last_name = SafeCharField(max_length=100, required=False, allow_blank=True)
     phone = SafeCharField(max_length=20, required=False, allow_blank=True)
@@ -156,7 +186,7 @@ class AdminUserUpdateSerializer(StrictModelSerializer):
 
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "phone", "role")
+        fields = ("email", "first_name", "last_name", "phone", "role")
 
 
 class SelfUserUpdateSerializer(StrictModelSerializer):
@@ -247,3 +277,31 @@ class DetailSerializer(serializers.Serializer):
     """Simple message envelope for actions with no resource body."""
 
     detail = serializers.CharField(read_only=True)
+
+
+class CredentialActionSerializer(StrictSerializer):
+    """Which link to send. Two named actions rather than a free-form string."""
+
+    action = serializers.ChoiceField(choices=("password_reset", "email_verification"))
+
+
+class UserAuditEntrySerializer(serializers.Serializer):
+    """One line of an account's history, shaped for reading.
+
+    ``actor_label`` rather than a nested user: the person who made a change may
+    since have been deleted, and the history should still say who it was. The
+    audit log stores the label for exactly that reason.
+    """
+
+    id = serializers.UUIDField(read_only=True)
+    action = serializers.CharField(read_only=True)
+    action_label = serializers.SerializerMethodField()
+    result = serializers.CharField(read_only=True)
+    actor_label = serializers.CharField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    context = serializers.JSONField(read_only=True)
+
+    def get_action_label(self, obj) -> str:
+        from apps.audit.models import AuditAction
+
+        return AuditAction(obj.action).label if obj.action in AuditAction.values else obj.action

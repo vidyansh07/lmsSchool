@@ -28,10 +28,13 @@ const SESSION_TIMEOUT = 15_000;
 export async function signIn(page: Page, email: string, password = DEMO_PASSWORD) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
     let throttledFor = 0;
+    let asked = false;
     const failures: string[] = [];
 
     const listener = async (response: Response) => {
-      if (!response.url().includes('/api/') || response.status() < 400) return;
+      if (!response.url().includes('/api/')) return;
+      if (response.url().includes('/auth/login/')) asked = true;
+      if (response.status() < 400) return;
       failures.push(`${response.status()} ${response.url()}`);
       if (response.status() === 429) {
         const body = await response.json().catch(() => null);
@@ -54,9 +57,21 @@ export async function signIn(page: Page, email: string, password = DEMO_PASSWORD
     page.off('response', listener);
 
     if (signedIn) return;
+
+    // Nothing was even asked of the server. The click landed on markup that had
+    // not finished hydrating — the development server compiles a route on first
+    // request, so the very first sign-in of a run can arrive before the form
+    // has behaviour attached. That is not a refusal, and retrying is right;
+    // treating it as a failure sent people hunting for a permissions bug that
+    // was never there.
+    if (!asked && !throttledFor) {
+      await page.waitForTimeout(2000);
+      continue;
+    }
+
     if (!throttledFor) {
       throw new Error(
-        `Signing in as ${email} did not establish a session. API failures: ${JSON.stringify(failures)}`,
+        `Signing in as ${email} was refused. API failures: ${JSON.stringify(failures)}`,
       );
     }
     await page.waitForTimeout(Math.min(throttledFor, 90) * 1000);

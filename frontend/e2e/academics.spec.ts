@@ -52,7 +52,7 @@ test.describe('Journey: taking a register', () => {
     // Trainer's daily driver.
     await page
       .getByRole('navigation', { name: 'Main' })
-      .getByRole('link', { name: 'Teaching', exact: true })
+      .getByRole('link', { name: 'Classes today', exact: true })
       .click();
     await expect(page.getByRole('heading', { name: 'Teaching today' })).toBeVisible();
 

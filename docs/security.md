@@ -511,6 +511,51 @@ meantime. There are no such exceptions today.
 
 ---
 
+## 16a. Authority over accounts (Phase 11, §11.1)
+
+Two questions, and only one of them used to be answered.
+
+**"Which role may I hand out?"** — `can_grant_role`. Containment: you may grant
+a role only when everything it can do is something you can already do.
+
+**"Whose account may I touch at all?"** — `can_administer`, added in Phase 11
+because nothing answered it. An administrator could not promote anybody above
+themselves and *could* edit a superadmin's email address, then send that address
+a password-reset link, or simply deactivate them. Authority flowed upward
+through a door nobody had closed.
+
+The rule now:
+
+| Actor | May administer |
+| --- | --- |
+| Superadmin | Anyone, including another superadmin |
+| Administrator | Managers, trainers, students |
+| Manager | Trainers, students |
+| Trainer, student | Nobody |
+
+Nobody administers their own account through the staff path; editing your own
+name is self-service, on an endpoint whose serializer does not accept a role.
+Superadmins may administer each other deliberately: if one is compromised,
+somebody has to be able to stop it.
+
+Enforced in the service layer, so the admin site, a management command and any
+endpoint added later obey it. Refused attempts are audited with both roles.
+`tests/test_role_hierarchy.py` checks all twenty-five ordered pairs.
+
+### What an administrator still cannot do
+
+* **Learn somebody's password.** There is no "set their password" control. Links
+  go to the account holder, so only one person ever knows it and the record says
+  they set it.
+* **Mark an address verified.** They may revoke verification by changing the
+  address, and resend the link. Asserting the address works is a fact only the
+  inbox owner can establish.
+* **Change an email quietly.** Doing so unverifies the address, ends every
+  session the account has open, and is audited as its own action with both
+  addresses.
+
+---
+
 ## 17. Reporting a vulnerability
 
 Report privately to the maintainers. Do not open a public issue. Include the

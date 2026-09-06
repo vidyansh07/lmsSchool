@@ -118,12 +118,13 @@ security: secrets ## SAST + dependency vulnerability scans + secret scan
 	$(FRONTEND) npm audit --audit-level=high
 
 secrets: ## Secret scan, and prove the env files it skips are really ignored
-	@# .gitleaks.toml skips `.env`, `.env.staging` and the like so that a local
-	@# filesystem scan does not report files that cannot be committed. That skip
+	@# .gitleaks.toml skips `.env`, `.env.staging`, keys and certificates so that
+	@# a local filesystem scan does not report files that cannot be committed.
+	@# That skip
 	@# is only safe while they are genuinely ignored, so it is checked here: if
 	@# somebody removes the .gitignore entry, this fails instead of quietly
 	@# turning the allowlist into a hole.
-	@for file in $$(ls -A .env .env.* 2>/dev/null | grep -v '\.example$$' || true); do \
+	@for file in $$(ls -A .env .env.* *.pem *.key 2>/dev/null | grep -v '\.example$$' || true); do \
 		git check-ignore -q "$$file" \
 			|| { echo "FAIL: $$file holds real values and is NOT git-ignored"; exit 1; }; \
 		echo "ok: $$file is git-ignored"; \

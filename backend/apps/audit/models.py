@@ -51,6 +51,7 @@ class AuditAction(models.TextChoices):
     USER_ACTIVATED = "user.activated", _("User activated")
     USER_DEACTIVATED = "user.deactivated", _("User deactivated")
     USER_ROLE_CHANGED = "user.role_changed", _("User role changed")
+    USER_EMAIL_CHANGED = "user.email_changed", _("User email address changed")
     USER_LISTED = "user.listed", _("User list viewed")
     PROFILE_IMAGE_UPDATED = "user.profile_image.updated", _("Profile image updated")
     PROFILE_IMAGE_REMOVED = "user.profile_image.removed", _("Profile image removed")

@@ -49,10 +49,27 @@ export interface CurrentUser extends User {
 
 export interface AdminUser extends User {
   is_staff: boolean;
+  /** Whether the *caller* may change this account. Sent by the server so the
+   *  screen can show a read-only record rather than a form that cannot save.
+   *  It informs the interface; the server enforces the rule again on write. */
+  can_administer: boolean;
   last_login: string | null;
   email_verified_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** One line of an account's history. */
+export interface UserAuditEntry {
+  id: string;
+  action: string;
+  action_label: string;
+  result: 'success' | 'failure' | 'denied';
+  /** The label rather than a nested user: whoever made the change may since
+   *  have been deleted, and the history should still say who it was. */
+  actor_label: string;
+  created_at: string;
+  context: Record<string, unknown>;
 }
 
 export interface StudentProfile {

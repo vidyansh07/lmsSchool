@@ -677,3 +677,99 @@ history.
 so a single batch with no weekly pattern stopped the whole command at batch
 three and left an environment neither empty nor complete — and a re-run failed
 in the same place. It now skips those batches and says how many.
+
+---
+
+## Phase 11
+
+### D-095 · Authority is a rule about the target, not only about the role granted
+**§11.1.** `can_grant_role` answered "which role may I hand out?" and was
+enforced everywhere. Nothing answered "whose account may I touch at all?", and
+the two are not the same question. An administrator could not promote anybody
+above themselves, and *could* edit a superadmin's email address — then send that
+address a password-reset link — or simply deactivate them. Authority flowed
+upward through a door nobody had thought to close.
+
+`can_administer` closes it, in the service layer so the admin site, a management
+command and any endpoint added later obey the same rule. The shape: a superadmin
+may administer anyone; everybody else may administer only roles holding strictly
+fewer capabilities than their own; nobody administers themselves through the
+staff path.
+
+### D-096 · A superadmin may administer another superadmin
+**§11.1, §11.3.** The one lateral move on the ladder, and it is deliberate. If a
+superadmin account is compromised, somebody has to be able to deactivate it. An
+institution with one unremovable account is worse off than one whose top can
+police itself. Every such act is audited with both roles.
+
+### D-097 · An authority refusal is a 403, not a validation error
+**§11.1.** The request was well formed and the caller is who they say they are;
+they simply have no authority over that account. A 400 tells an interface to
+highlight a field, and there is no field to fix. The message says only
+"authority" — "you cannot edit a superadmin" tells an attacker which accounts
+are worth pursuing.
+
+### D-098 · The server says whether the caller may administer; the screen obeys
+**§11.2.** Viewing is a wider permission than administering — an administrator
+may legitimately see that a superadmin exists — so a screen that inferred edit
+rights from "can I read this?" offered a form whose Save button was going to
+fail. `AdminUserDetailSerializer` now returns `can_administer`, computed for the
+requesting user, and the page renders a read-only record when it is false. It
+informs the interface; the service answers the same question again on write.
+
+### D-099 · Changing somebody's email is not a field edit
+**§11.2.** It is the login identifier. So an administrator changing it marks the
+address unverified, ends every session the account has open, and sends a
+verification link to the new address — and it is audited as its own action with
+both addresses, because "who changed this person's email and when" is the first
+question asked after a takeover. Leaving the verified flag set would let an
+administrator hand an account an address they control and have it trusted.
+
+### D-100 · Administrators send links, never passwords
+**§11.2.** There is no "set their password" control, deliberately. An
+administrator who sets a password has to transmit it: two people then know it,
+and the record says an administrator changed it rather than the owner setting
+one. The screen sends a reset or verification link and says so.
+
+Verification cannot be granted by hand either. An administrator may revoke it
+(by changing the address) and may resend the link, but marking an address
+verified is asserting a fact only the inbox owner can establish.
+
+### D-101 · Light only, and measured
+**§11.4.** The app followed `prefers-color-scheme`, so the same install looked
+different on two machines and nobody could say what the product looked like. It
+is now light everywhere.
+
+Built as a light palette rather than an inverted dark one, which shows in two
+places: `background` is a faint grey and `surface` is pure white, so cards lift
+off the page without a heavy border; and the semantic colours are darkened to
+carry small text, because a colour that reads well as a large block is usually
+illegible as text on white. Every pair the interface uses is checked against
+WCAG AA by `tests/unit/theme-contrast.test.ts`, which parses the stylesheet — so
+a token changed without checking it fails there rather than in front of somebody.
+
+### D-102 · Two layouts, because two jobs
+**§11.5.** Staff work across thirty-odd screens all day, and a vertical sidebar
+holds that many links in groups a person can scan. A student has a dozen pages
+and visits a few, so they keep the top bar — a sidebar would spend a fifth of
+their screen on links they do not use.
+
+The sidebar groups by the job being done rather than by the system's structure:
+"Users", "Students" and "Trainers" are three tables and one task, so somebody
+hunting for a student need not know which screen owns them.
+
+### D-103 · A navigation group label is not a heading
+**§11.5, found by a test.** Marking the group titles as `<h2>` put "Courses and
+batches" into the document outline, where it competed with the page's own `<h1>`
+and met a screen-reader user again on every page. Binding them to the list with
+`aria-labelledby` was worse: it gave the `<ul>` an accessible name, and a list
+called "Courses and batches" then answered to a search for a form field named
+"Batch". They are plain text. The grouping is visual; the links carry their own
+names.
+
+### D-104 · The test helper distinguishes "refused" from "never asked"
+**§11.7.** A sign-in that produced no request at all was reported as a failed
+sign-in, and sent people hunting for a permissions bug that was never there —
+the click had landed on markup the development server had not finished
+hydrating. The helper now retries when nothing reached the server, and only
+reports a refusal when the server actually refused.

@@ -5,7 +5,13 @@ import { cn } from '@/lib/utils';
 export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('rounded-[var(--radius-card)] border border-border bg-background', className)}
+      className={cn(
+        // `surface`, not `background`: a white card on a faintly grey page
+        // separates itself by its own lightness, so the border can stay quiet
+        // instead of doing the work of a box.
+        'rounded-[var(--radius-card)] border border-border bg-surface',
+        className,
+      )}
       {...props}
     />
   );

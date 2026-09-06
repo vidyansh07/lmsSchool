@@ -292,6 +292,51 @@ def can_grant_role(actor, role: str) -> bool:
     return granted <= held
 
 
+def can_administer(actor, target) -> bool:
+    """Whether ``actor`` may administer ``target``'s account.
+
+    ``can_grant_role`` above answers "which role may I hand out?". This answers
+    the question nobody had asked: "whose account may I touch at all?" Without
+    it the two are not the same rule, and the gap was real — an administrator
+    could not promote anyone above themselves, but *could* edit a superadmin's
+    email address and then send that address a password-reset link, or simply
+    deactivate them. Authority flowed upward through a door nobody had thought
+    to close.
+
+    The rule, in order:
+
+    1. **Not yourself.** Administering your own account through the staff
+       endpoints would let somebody deactivate themselves, or hand themselves a
+       role. Editing your own name and phone number is self-service and lives on
+       a different endpoint with a different serializer, which does not accept a
+       role at all.
+    2. **A superadmin may administer anyone, including another superadmin.**
+       That is deliberate and it is the one lateral move allowed: if a superadmin
+       account is compromised, somebody has to be able to deactivate it, and an
+       institution with one unremovable account is worse off than one where the
+       top of the ladder can police itself. Every such act is audited.
+    3. **Everybody else may administer strictly less than themselves.** The
+       target's role must hold a proper subset of the actor's capabilities. So an
+       administrator may administer a manager, a trainer or a student, and may
+       not touch another administrator or a superadmin. A manager may administer
+       trainers and students. Peers cannot edit each other, which is what stops
+       two colleagues quietly trading privileges.
+    """
+    if actor is None or not getattr(actor, "is_authenticated", False) or not actor.is_active:
+        return False
+    if target is None:
+        return False
+    if getattr(target, "pk", None) is not None and target.pk == actor.pk:
+        return False
+
+    held = capabilities_for(actor.role, is_superuser=actor.is_superuser)
+    if actor.is_superuser or actor.role == UserRole.SUPERADMIN:
+        return True
+
+    theirs = capabilities_for(target.role, is_superuser=target.is_superuser)
+    return theirs < held
+
+
 def has_capability(user, capability: str) -> bool:
     """Authoritative check. Never consults anything the client supplied."""
     if user is None or not getattr(user, "is_authenticated", False):

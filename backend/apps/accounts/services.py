@@ -22,7 +22,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.audit.services import AuditAction, AuditResult, record
-from apps.common.exceptions import ApplicationError, ConflictError
+from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
 from apps.common.uploads import normalise_profile_image
 
 from .emails import (
@@ -31,7 +31,7 @@ from .emails import (
     send_password_reset_email,
 )
 from .models import AccountToken, TokenPurpose, User, UserRole
-from .roles import can_grant_role
+from .roles import can_administer, can_grant_role
 
 logger = logging.getLogger("grras.security")
 
@@ -106,6 +106,37 @@ def create_user(
     return user
 
 
+def _guard_administration(*, actor: User, target: User, action: str) -> None:
+    """Refuse an act on somebody else's account that the ladder does not allow.
+
+    Enforced here rather than in the view so that the admin site, a management
+    command and any endpoint added later obey the same rule — the view is one
+    door of several, and this is the room.
+
+    Self-service is exempt: editing your own name goes through the same service
+    with ``actor is target``, and is constrained by a serializer that does not
+    accept a role.
+    """
+    if actor is not None and target is not None and actor.pk == target.pk:
+        return
+    if can_administer(actor, target):
+        return
+
+    record(
+        action=action,
+        actor=actor,
+        resource_type="user",
+        resource_id=getattr(target, "pk", ""),
+        result=AuditResult.DENIED,
+        context={
+            "refused": "outside_authority",
+            "actor_role": getattr(actor, "role", ""),
+            "target_role": getattr(target, "role", ""),
+        },
+    )
+    raise AuthorityError({"user": ["You do not have authority over this account."]})
+
+
 @transaction.atomic
 def update_user(*, user: User, actor: User, **fields: Any) -> User:
     """Update administrator-editable user fields.
@@ -114,7 +145,19 @@ def update_user(*, user: User, actor: User, **fields: Any) -> User:
     a reviewer should be able to find every one of them with a single query.
     """
     previous_role = user.role
+    previous_email = user.email
     changed: list[str] = []
+
+    _guard_administration(actor=actor, target=user, action=AuditAction.USER_UPDATED)
+
+    new_email = fields.get("email")
+    if new_email is not None:
+        # Normalised before comparison, or changing the capitalisation of an
+        # address would count as a change and reset somebody's verification.
+        new_email = User.objects.normalize_email(new_email).strip().lower()
+        fields["email"] = new_email
+        if new_email != previous_email and User.objects.filter(email=new_email).exists():
+            raise ApplicationError({"email": ["Another account already uses that address."]})
 
     new_role = fields.get("role")
     if new_role is not None and new_role != user.role and not can_grant_role(actor, new_role):
@@ -161,7 +204,43 @@ def update_user(*, user: User, actor: User, **fields: Any) -> User:
         # the old role.
         revoke_sessions(user=user, actor=actor, reason="role_changed")
 
+    if "email" in changed and user.pk != actor.pk:
+        _handle_email_change(user=user, actor=actor, previous_email=previous_email)
+
     return user
+
+
+def _handle_email_change(*, user: User, actor: User, previous_email: str) -> None:
+    """An administrator moved somebody's login identifier. Treat it as one.
+
+    Three things follow, and none of them is optional:
+
+    * **The address is no longer verified.** Nobody has proved they can receive
+      mail there. Leaving the flag set would mean an administrator could hand an
+      account a verified address they control.
+    * **Existing sessions end.** The identity the session was established under
+      has changed, and password reset now goes somewhere else. A session that
+      outlived that is a session the previous owner may still be holding.
+    * **A verification link is sent to the new address**, so the account is
+      usable again by whoever actually reads that inbox.
+
+    Audited as its own action, with both addresses, because "who changed this
+    person's email and when" is the first question asked after an account
+    takeover.
+    """
+    user.is_email_verified = False
+    user.email_verified_at = None
+    user.save(update_fields=["is_email_verified", "email_verified_at", "updated_at"])
+
+    record(
+        action=AuditAction.USER_EMAIL_CHANGED,
+        actor=actor,
+        resource_type="user",
+        resource_id=user.pk,
+        context={"from": previous_email, "to": user.email},
+    )
+    revoke_sessions(user=user, actor=actor, reason="email_changed")
+    request_email_verification(user=user)
 
 
 @transaction.atomic
@@ -172,6 +251,8 @@ def set_user_active(*, user: User, is_active: bool, actor: User, reason: str = "
     request from an existing session, and the session rows are deleted as well
     so nothing lingers.
     """
+    _guard_administration(actor=actor, target=user, action=AuditAction.USER_DEACTIVATED)
+
     if user.is_active == is_active:
         return user
 
@@ -487,4 +568,35 @@ def record_permission_denied(*, actor: Any, resource_type: str, resource_id: Any
         resource_type=resource_type,
         resource_id=resource_id,
         result=AuditResult.DENIED,
+    )
+
+
+@transaction.atomic
+def send_credential_link(*, user: User, actor: User, action: str) -> None:
+    """Send this person a password-reset or email-verification link.
+
+    Guarded by the same authority rule as editing them: being able to trigger a
+    password reset on an account is, in practice, being able to take it — the
+    link goes to whatever address the account currently holds, and an
+    administrator who could also change that address would have the whole chain.
+
+    Never reports whether the address exists or is deliverable. The caller
+    already knows the account exists; what they must not learn is anything more
+    about the mailbox.
+    """
+    _guard_administration(actor=actor, target=user, action=AuditAction.USER_UPDATED)
+
+    if action == "password_reset":
+        request_password_reset(email=user.email)
+        recorded = AuditAction.PASSWORD_RESET_REQUESTED
+    else:
+        request_email_verification(user=user)
+        recorded = AuditAction.EMAIL_VERIFICATION_REQUESTED
+
+    record(
+        action=recorded,
+        actor=actor,
+        resource_type="user",
+        resource_id=user.pk,
+        context={"on_behalf_of": str(user.pk), "by": "administrator"},
     )
