@@ -455,6 +455,11 @@ export type CalendarEventKind =
   | 'course_start'
   | 'course_end'
   | 'assignment_due'
+  // Emitted by `apps.dashboards.calendar` and missing here until now, which is
+  // the failure mode of a hand-written union: the backend adds a source, the
+  // type says it cannot happen, and the screen silently renders a project
+  // deadline as whatever its fallback branch does.
+  | 'project_due'
   | 'quiz'
   | 'exam'
   | 'announcement';
@@ -554,13 +559,35 @@ export interface ClassSession {
   ends_at: string;
   duration_minutes: number;
   trainer_name: string;
+  /** What the trainer wrote, in their own words. */
   topic: string;
   location: string;
   status: SessionStatus;
   cancellation_reason: string;
   attendance_taken_at: string | null;
   can_take_attendance: boolean;
+  /**
+   * The curriculum this class was meant to cover, and what it actually did.
+   *
+   * Both nullable: a class can be held without a plan, and one that has not
+   * happened yet has no actual. They are what makes "is this batch ahead or
+   * behind?" answerable — `topic` above is the human note and cannot be
+   * compared against anything.
+   */
+  planned_lesson_id: string | null;
+  planned_lesson_title: string | null;
+  actual_lesson_id: string | null;
+  actual_lesson_title: string | null;
+  topic_status: TopicStatus;
 }
+
+/** Where a class sits against the plan. Mirrors `apps.sessions.models.TopicStatus`. */
+export type TopicStatus =
+  | 'planned'
+  | 'in_progress'
+  | 'completed'
+  | 'skipped'
+  | 'rescheduled';
 
 export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
 

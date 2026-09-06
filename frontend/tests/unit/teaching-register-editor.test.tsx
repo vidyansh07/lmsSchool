@@ -210,7 +210,7 @@ describe('RegisterEditor', () => {
 
   it('shows the enrolment status when it is not active', () => {
     render(<StaticRegister entries={[entry({ enrollment_status: 'suspended' })]} />);
-    expect(screen.getByText('suspended')).toBeInTheDocument();
+    expect(screen.getByText('Suspended')).toBeInTheDocument();
   });
 
   it('shows the honest "not available" fallback for online/offline rather than a fabricated count', () => {

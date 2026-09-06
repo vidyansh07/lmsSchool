@@ -71,6 +71,7 @@ export const EVENT_KIND_LABEL: Record<CalendarEventKind, string> = {
   course_start: 'Course starts',
   course_end: 'Course ends',
   assignment_due: 'Assignment due',
+  project_due: 'Project due',
   quiz: 'Quiz',
   exam: 'Exam',
   announcement: 'Announcement',

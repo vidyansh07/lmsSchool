@@ -680,3 +680,29 @@ UI component system, or any working feature.
 | --- | --- | --- | --- |
 | Baseline (6 Sep 2026) | — | 1,339 | 75 |
 | 12.1 RBAC / counsellor foundation | Counsellor role, DSR/performance/export capabilities, report-export hardening, capability mirror | 1,415 | 80 |
+| 12.2 Reversible deletion | `SoftDeleteModel`, three verbs, recycle bin over every adopting model | 1,444 | 80 |
+| 12.3–12.9 Domain features | DSR, course timeline, risk engine, export jobs, transfers and batch kinds | ~1,860 | 80 |
+| 12.10 Role screens | Manager hubs, counsellor pipeline, trainer end-of-class capture, student dashboard, UX primitives | ~1,860 | 581 |
+
+### What is left of the eight gaps
+
+| Gap | State |
+| --- | --- |
+| DSR | ✅ Closed |
+| Soft delete + recovery | ✅ Closed |
+| Export jobs | ✅ Closed |
+| Manager and counsellor dashboards | ✅ Closed — as two drill-down hubs, per the client |
+| Risk / performance engine | ✅ Closed |
+| Planned-vs-actual course timeline | ✅ Closed |
+| Counsellor workflow interface | ✅ Closed |
+| UX speed layer | ✅ Closed |
+
+Two items from the original audit remain open, both known and neither blocking:
+**application caching** (Redis runs, the app caches nothing) and **authentication
+hardening** (MFA, per-account rate limiting, bounded session revocation).
+
+Three brief items are blocked on a decision rather than on work: inline
+"acknowledge a risk flag" and "mark a review done" have no backing state — risk
+flags are computed live and reviews carry no status — and "documents" appears in
+the brief and nowhere in the API. All three were left unbuilt rather than wired
+to endpoints that do not exist.

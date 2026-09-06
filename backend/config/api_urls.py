@@ -39,6 +39,10 @@ urlpatterns = [
     path("recovery/", include("apps.common.recovery_urls")),
     path("users/", include("apps.accounts.user_urls")),
     path("students/", include("apps.students.urls")),
+    path(
+        "trainers/",
+        include((reporting_urls.trainer_rollup_urlpatterns, "trainer-rollups")),
+    ),
     path("trainers/", include("apps.trainers.urls")),
     path("categories/", include((course_urls.category_patterns, "categories"))),
     path(
@@ -85,6 +89,7 @@ urlpatterns = [
                 + assessment_urls.batch_urlpatterns
                 + exam_urls.batch_urlpatterns
                 + progress_urls.batch_urlpatterns
+                + reporting_urls.batch_rollup_urlpatterns
                 + discussion_urls.batch_urlpatterns
                 + dsr_urls.batch_urlpatterns
                 + performance_urls.trainer_urlpatterns,

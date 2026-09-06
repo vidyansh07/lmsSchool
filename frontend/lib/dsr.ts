@@ -5,14 +5,10 @@
  *
  * Two things live here that are not, strictly, "DSR":
  *
- * 1. `SessionWithTopic` / `recordTopic`. The session endpoints already return
- *    `planned_lesson_id`, `actual_lesson_id` and `topic_status` (see
- *    `backend/apps/sessions/serializers.py`), but `types/api.ts`'s
- *    `ClassSession` has not caught up — and this module cannot edit that
- *    shared type. Rather than invent a second `lib/sessions.ts` for three
- *    extra fields, the richer shape is declared here and applied with a
- *    narrowing cast at the one boundary that needs it: this screen, which is
- *    also the only caller that shows a planned-vs-actual lesson at all.
+ * 1. `recordTopic`. The planned-versus-actual lesson fields now live on
+ *    `ClassSession` in `types/api.ts`, where they belong — this module briefly
+ *    carried a local `SessionWithTopic` because the shared type had not caught
+ *    up with the backend, and that shim is gone.
  * 2. The `localStorage` draft. It shadows both the DSR fields *and* the
  *    trainer's in-progress register marks, because from the trainer's chair
  *    both are "what I typed since I opened this class" — losing either to a
@@ -56,13 +52,8 @@ export type TopicStatus = SessionTopicStatus;
 /** `ClassSession` plus the curriculum-topic fields the session endpoints
  *  already return — see the module docstring for why this is not in
  *  `types/api.ts`. */
-export interface SessionWithTopic extends ClassSession {
-  planned_lesson_id: string | null;
-  planned_lesson_title: string | null;
-  actual_lesson_id: string | null;
-  actual_lesson_title: string | null;
-  topic_status: TopicStatus;
-}
+/** Kept as an alias so the screens that named it do not all have to change. */
+export type SessionWithTopic = ClassSession;
 
 export async function getSessionWithTopic(id: string): Promise<SessionWithTopic> {
   const session = await getSession(id);

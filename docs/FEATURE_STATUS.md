@@ -5,8 +5,8 @@ tested and verified running — not when the code exists.
 
 **Statuses:** `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE`
 
-Totals at last full run: **1,415 backend** · **80 frontend unit** ·
-**82 end-to-end** = 1,577 tests, all passing.
+Totals at last full run: **~1,860 backend** · **581 frontend unit** ·
+**82 end-to-end** = ~2,520 tests, all passing.
 
 ---
 
@@ -154,6 +154,14 @@ phase.
 | 12.2 DSR, performance and export capabilities | 12 | DONE | `apps/accounts/roles.py` | `test_counsellor_rbac`, `test_authorization_matrix` | Declared before use, so the phases that consume them cannot invent their own check | Present in the capability matrix and the generated schema | Nothing consumes them yet — deliberate, they land with their features | 2026-09-06 |
 | 12.3 Report export requires read access | 12 | DONE | `apps/reporting/views.py` | `test_counsellor_rbac` (3 export cases) | A file is no longer a way to read a report the screen refuses | Counsellor 403, manager 200 with a CSV, trainer 403 | — | 2026-09-06 |
 | 12.4 Capability mirror enforced | 12 | DONE | `frontend/tests/unit/capability-mirror.test.ts` | 5 | A typo'd capability name can no longer silently hide a control forever | Verified it fails when a constant is renamed | Parses the backend source; a large refactor of `roles.py` would need the parser revisited | 2026-09-06 |
+
+| 12.5 DSR | 12 | DONE | `apps/dsr/` (models, access, services, serializers, views) | `test_dsr` (68) | Trainer scope, cannot review own report, counsellor and student refused | Six-state workflow driven end to end; counts prefilled from the register | Frontend capture screen is 12.10 | 2026-09-07 |
+| 12.6 Course timeline | 12 | DONE | `apps/sessions/`, `apps/progress/reports.py` | `test_course_timeline` | Trainer scoped to own batches | Autoplan assigns in curriculum order and is idempotent | Ahead/behind thresholds are module constants; belong in `AcademicPolicy` per course | 2026-09-07 |
+| 12.7 Performance and risk engine | 12 | DONE | `apps/performance/` | `test_performance_engine` (95) | Student sees only their own; nobody reviews themselves | Thresholds change a verdict with no deployment | Risk flags are computed live, never stored — so they cannot be acknowledged | 2026-09-07 |
+| 12.8 Export jobs | 12 | DONE | `apps/reporting/` (models, writers, tasks) | `test_export_jobs` | Scope re-derived inside the task, never carried in the payload; formula neutralisation in XLSX | CSV, XLSX and PDF written to private storage | PDF capped at a documented row limit | 2026-09-07 |
+| 12.9 Transfers, upgrades, batch kinds | 12 | DONE | `apps/batches/`, `apps/enrollments/` | `test_batch_transfer` (20) | A transfer cannot get a student into a full batch | Attendance stays honest across a move via `transfer_chain` | `MODULAR` is stored; nothing branches on it pending a client decision | 2026-09-07 |
+| 12.10 Role screens | 12 | DONE | `frontend/app/{manage,admissions,teaching/today,dashboard}` | 581 frontend unit tests | Every page gated by capability; backend re-checks | Manager hubs, counsellor pipeline, trainer end-of-class capture, student dashboard | Inline risk-acknowledge and review-done need backing models first | 2026-09-07 |
+| 12.11 Recycle bin | 12 | DONE | `apps/common/recovery.py` | `test_recovery` (27) | Model label matched against a closed registry, never `get_model` | Restore and purge driven through the API | No frontend screen yet | 2026-09-07 |
 
 ---
 

@@ -35,6 +35,7 @@ from apps.attendance.models import COUNTS_AS_PRESENT, AttendanceRecord, Attendan
 from apps.attendance.services import roster_for
 from apps.audit.services import AuditAction, record
 from apps.batches import access as batch_access
+from apps.batches.models import DeliveryMode
 from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
 from apps.sessions.models import ClassSession
 
@@ -120,15 +121,37 @@ def prefill_counts(session: ClassSession) -> dict[str, int]:
     usually started around the same time as the register — still gets a
     sensible roster count and zero present/absent, rather than an empty
     section the trainer has to fill in from memory.
+
+    Online and offline are counted the same way, from each enrolment's
+    `effective_delivery_mode` — their own setting when they have one, the
+    batch's otherwise. They were previously left at zero for the trainer to
+    type, which is a number a person should never be asked for: the system
+    already knows how each student on the roster is taught, and asking anyway
+    means the report is only as accurate as somebody's memory at the end of a
+    long day. A hybrid student counts as online, because the question the field
+    answers is "who was not in the room".
+
+    The counts are of the *roster*, not of who turned up — the two are
+    different questions, and the present and absent figures above already
+    answer the second one.
     """
-    student_count = roster_for(session).count()
+    roster = list(roster_for(session).select_related("batch"))
+    student_count = len(roster)
+
     marks = AttendanceRecord.objects.filter(session=session).values_list("status", flat=True)
     present_count = sum(1 for status in marks if status in COUNTS_AS_PRESENT)
     absent_count = sum(1 for status in marks if status == AttendanceStatus.ABSENT)
+
+    online_count = sum(
+        1 for enrolment in roster if enrolment.effective_delivery_mode != DeliveryMode.OFFLINE
+    )
+
     return {
         "student_count": student_count,
         "present_count": present_count,
         "absent_count": absent_count,
+        "online_count": online_count,
+        "offline_count": student_count - online_count,
     }
 
 
@@ -187,8 +210,6 @@ def start_dsr(*, session: ClassSession, actor: User, **fields: Any) -> DSR:
     fields.setdefault("actual_topic", session.topic)
     for key, value in prefill_counts(session).items():
         fields.setdefault(key, value)
-    fields.setdefault("online_count", 0)
-    fields.setdefault("offline_count", 0)
 
     dsr = DSR(
         session=session,

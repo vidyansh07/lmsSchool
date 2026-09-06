@@ -32,6 +32,11 @@ function classSession(overrides: Partial<ClassSession> = {}): ClassSession {
     cancellation_reason: '',
     attendance_taken_at: null,
     can_take_attendance: true,
+    planned_lesson_id: null,
+    planned_lesson_title: null,
+    actual_lesson_id: null,
+    actual_lesson_title: null,
+    topic_status: 'planned',
     ...overrides,
   };
 }

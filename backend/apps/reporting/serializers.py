@@ -84,6 +84,247 @@ class BatchSummarySerializer(StrictSerializer):
     attendance_percent = serializers.FloatField(allow_null=True)
 
 
+# ---------------------------------------------------------------------------
+# The manager hubs — a landing summary, and the batch and trainer drill-downs
+# beneath it. Every numeric field below is a real number or `None`, never an
+# absent key: a brand-new batch or a trainer with no history yet still
+# serialises the full shape, just with zeroes and nulls in it.
+# ---------------------------------------------------------------------------
+
+
+class AttentionItemSerializer(StrictSerializer):
+    kind = serializers.CharField()
+    label = serializers.CharField()
+    count = serializers.IntegerField()
+    href = serializers.CharField()
+    severity = serializers.ChoiceField(choices=("low", "medium", "high"))
+
+
+class ManagerDashboardBatchesSerializer(StrictSerializer):
+    total = serializers.IntegerField()
+    active = serializers.IntegerField()
+    behind_schedule = serializers.IntegerField()
+    at_risk = serializers.IntegerField()
+
+
+class ManagerDashboardStudentsSerializer(StrictSerializer):
+    total = serializers.IntegerField()
+    active = serializers.IntegerField()
+    at_risk = serializers.IntegerField()
+
+
+class ManagerDashboardTrainersSerializer(StrictSerializer):
+    total = serializers.IntegerField()
+    with_overdue_dsr = serializers.IntegerField()
+
+
+class ManagerDashboardSerializer(StrictSerializer):
+    """The two hubs' landing summary — a KPI strip that summarises the
+    drill-down screens beneath it, and the manager's attention queue."""
+
+    batches = ManagerDashboardBatchesSerializer()
+    students = ManagerDashboardStudentsSerializer()
+    trainers = ManagerDashboardTrainersSerializer()
+    attention = AttentionItemSerializer(many=True)
+    as_of = serializers.CharField()
+
+
+class BatchOverviewBatchSerializer(StrictSerializer):
+    id = serializers.CharField()
+    code = serializers.CharField()
+    name = serializers.CharField()
+    kind = serializers.CharField()
+    status = serializers.CharField()
+    delivery_mode = serializers.CharField()
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    capacity = serializers.IntegerField()
+    seats_taken = serializers.IntegerField()
+
+
+class BatchOverviewCourseSerializer(StrictSerializer):
+    id = serializers.CharField()
+    title = serializers.CharField()
+    code = serializers.CharField()
+
+
+class BatchOverviewTrainerSerializer(StrictSerializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    trainer_id = serializers.CharField()
+
+
+class BatchOverviewAttendanceSerializer(StrictSerializer):
+    percentage = serializers.IntegerField(allow_null=True)
+    present = serializers.IntegerField()
+    absent = serializers.IntegerField()
+    total_sessions = serializers.IntegerField()
+
+
+class BatchOverviewTimelineSerializer(StrictSerializer):
+    """Whatever `apps.progress.reports.timeline_progress` returns, verbatim."""
+
+    as_of = serializers.CharField()
+    sessions_total = serializers.IntegerField()
+    sessions_completed = serializers.IntegerField()
+    course_lessons_total = serializers.IntegerField()
+    lessons_planned = serializers.IntegerField()
+    lessons_covered = serializers.IntegerField()
+    next_lesson = serializers.DictField(allow_null=True)
+    percent_complete = serializers.IntegerField(allow_null=True)
+    percent_expected = serializers.IntegerField(allow_null=True)
+    variance_percent = serializers.IntegerField(allow_null=True)
+    status = serializers.CharField()
+
+
+class BatchOverviewSessionsSerializer(StrictSerializer):
+    total = serializers.IntegerField()
+    completed = serializers.IntegerField()
+    cancelled = serializers.IntegerField()
+    upcoming = serializers.IntegerField()
+
+
+class BatchOverviewDsrSerializer(StrictSerializer):
+    expected = serializers.IntegerField()
+    submitted = serializers.IntegerField()
+    approved = serializers.IntegerField()
+    pending_review = serializers.IntegerField()
+    overdue = serializers.IntegerField()
+
+
+class BatchOverviewAssessmentsSerializer(StrictSerializer):
+    total = serializers.IntegerField()
+    completed = serializers.IntegerField()
+    average_percent = serializers.FloatField(allow_null=True)
+
+
+class BatchOverviewAssignmentsSerializer(StrictSerializer):
+    total = serializers.IntegerField()
+    submitted = serializers.IntegerField()
+    graded = serializers.IntegerField()
+
+
+class BatchOverviewProjectsSerializer(StrictSerializer):
+    total = serializers.IntegerField()
+    submitted = serializers.IntegerField()
+    reviewed = serializers.IntegerField()
+
+
+class BatchOverviewStudentsSerializer(StrictSerializer):
+    total = serializers.IntegerField()
+    active = serializers.IntegerField()
+    at_risk = serializers.IntegerField()
+
+
+class BatchOverviewSerializer(StrictSerializer):
+    """Everything about one batch, in the one request the batch hub asks for."""
+
+    batch = BatchOverviewBatchSerializer()
+    course = BatchOverviewCourseSerializer()
+    trainer = BatchOverviewTrainerSerializer(allow_null=True)
+    attendance = BatchOverviewAttendanceSerializer()
+    timeline = BatchOverviewTimelineSerializer()
+    sessions = BatchOverviewSessionsSerializer()
+    dsr = BatchOverviewDsrSerializer()
+    assessments = BatchOverviewAssessmentsSerializer()
+    assignments = BatchOverviewAssignmentsSerializer()
+    projects = BatchOverviewProjectsSerializer()
+    students = BatchOverviewStudentsSerializer()
+    as_of = serializers.CharField()
+
+
+class BatchRosterRowSerializer(StrictSerializer):
+    """One student's rollup on a batch roster — the batch hub's next drill-down."""
+
+    enrollment_id = serializers.CharField()
+    student_id = serializers.CharField()
+    name = serializers.CharField()
+    status = serializers.CharField()
+    attendance_percent = serializers.IntegerField(allow_null=True)
+    assessment_average = serializers.FloatField(allow_null=True)
+    assignments_submitted = serializers.IntegerField()
+    assignments_total = serializers.IntegerField()
+    projects_submitted = serializers.IntegerField()
+    projects_total = serializers.IntegerField()
+    progress_percent = serializers.IntegerField(allow_null=True)
+    risk_flags = serializers.ListField(child=serializers.CharField())
+    transferred_in = serializers.BooleanField()
+
+
+class TrainerOverviewTrainerSerializer(StrictSerializer):
+    id = serializers.CharField()
+    name = serializers.CharField()
+    trainer_id = serializers.CharField()
+    email = serializers.CharField()
+
+
+class TrainerOverviewBatchesSerializer(StrictSerializer):
+    total = serializers.IntegerField()
+    active = serializers.IntegerField()
+
+
+class TrainerOverviewStudentsSerializer(StrictSerializer):
+    total = serializers.IntegerField()
+    at_risk = serializers.IntegerField()
+
+
+class TrainerOverviewSubmissionSerializer(StrictSerializer):
+    attendance_rate = serializers.FloatField(allow_null=True)
+    dsr_rate = serializers.FloatField(allow_null=True)
+    dsr_approval_rate = serializers.FloatField(allow_null=True)
+
+
+class TrainerOverviewCompletionSerializer(StrictSerializer):
+    assessments = serializers.FloatField(allow_null=True)
+    assignments = serializers.FloatField(allow_null=True)
+    projects = serializers.FloatField(allow_null=True)
+
+
+class TrainerOverviewOutcomesSerializer(StrictSerializer):
+    student_average_score = serializers.FloatField(allow_null=True)
+    student_attendance_percent = serializers.IntegerField(allow_null=True)
+
+
+class TrainerOverviewPendingSerializer(StrictSerializer):
+    dsr_to_submit = serializers.IntegerField()
+    assignments_to_grade = serializers.IntegerField()
+    projects_to_review = serializers.IntegerField()
+    overdue = serializers.IntegerField()
+
+
+class TrainerOverviewReviewSerializer(StrictSerializer):
+    id = serializers.CharField()
+    period_start = serializers.DateField()
+    period_end = serializers.DateField()
+    rating = serializers.IntegerField()
+    summary = serializers.CharField(allow_blank=True)
+    reviewer = serializers.CharField(allow_null=True)
+    created_at = serializers.DateTimeField()
+
+
+class TrainerOverviewFeedbackSerializer(StrictSerializer):
+    id = serializers.CharField()
+    body = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    batch_code = serializers.CharField(allow_null=True)
+
+
+class TrainerOverviewSerializer(StrictSerializer):
+    """Everything about one trainer — their load, their record, what is
+    waiting on them — for the trainer hub's drill-down."""
+
+    trainer = TrainerOverviewTrainerSerializer()
+    batches = TrainerOverviewBatchesSerializer()
+    students = TrainerOverviewStudentsSerializer()
+    submission = TrainerOverviewSubmissionSerializer()
+    completion = TrainerOverviewCompletionSerializer()
+    outcomes = TrainerOverviewOutcomesSerializer()
+    pending = TrainerOverviewPendingSerializer()
+    reviews = TrainerOverviewReviewSerializer(many=True)
+    student_feedback = TrainerOverviewFeedbackSerializer(many=True)
+    as_of = serializers.CharField()
+
+
 class BulkImportSerializer(StrictModelSerializer):
     class Meta:
         model = BulkImport

@@ -248,8 +248,9 @@ def _preview_dsr(session, actor) -> DSR:
         end_time=session.end_time,
         planned_topic=session.topic,
         actual_topic=session.topic,
-        online_count=0,
-        offline_count=0,
+        # `prefill_counts` supplies the online and offline split too, from the
+        # roster's delivery modes — they are no longer zeroes for the trainer
+        # to fill in.
         **counts,
     )
     preview.id = None

@@ -130,8 +130,12 @@ def test_the_prefilled_shape_has_no_id_and_defaults_from_the_session(
     assert body["student_count"] == 2
     assert body["present_count"] == 0
     assert body["absent_count"] == 0
+    # Both students follow the batch, which is taught in the classroom — so the
+    # split is prefilled from the roster rather than left at zero. These were
+    # zeroes until the counts came from `effective_delivery_mode`; a trainer
+    # should not be asked for a number the system already holds.
     assert body["online_count"] == 0
-    assert body["offline_count"] == 0
+    assert body["offline_count"] == 2
     # The topic comes from the session record the trainer already filled in —
     # nothing here should ever ask them to retype it.
     assert body["planned_topic"] == "Filesystem basics"
@@ -997,3 +1001,83 @@ def test_a_trainerless_session_cannot_start_a_report(admin_user, batch):
 
     with pytest.raises(ApplicationError):
         start_dsr(session=session, actor=admin_user)
+
+
+# ---------------------------------------------------------------------------
+# Online and offline, counted rather than remembered
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_online_and_offline_are_prefilled_from_the_roster(
+    admin_user, batch, enrollment, other_enrollment, past_session
+):
+    """A number the system already knows should never be typed by a person.
+
+    These two were left at zero for the trainer to fill in, which makes the
+    report only as accurate as somebody's memory at the end of a long day —
+    while every enrolment on the roster already records how that student is
+    taught.
+    """
+    from apps.batches.models import DeliveryMode
+    from apps.dsr.services import prefill_counts
+
+    other_enrollment.delivery_mode = DeliveryMode.ONLINE
+    other_enrollment.save(update_fields=["delivery_mode"])
+
+    counts = prefill_counts(past_session)
+
+    assert counts["student_count"] == 2
+    assert counts["online_count"] == 1
+    assert counts["offline_count"] == 1
+
+
+@pytest.mark.django_db
+def test_a_hybrid_student_counts_as_online(admin_user, batch, enrollment, past_session):
+    """The question the field answers is "who was not in the room"."""
+    from apps.batches.models import DeliveryMode
+    from apps.dsr.services import prefill_counts
+
+    enrollment.delivery_mode = DeliveryMode.HYBRID
+    enrollment.save(update_fields=["delivery_mode"])
+
+    assert prefill_counts(past_session)["online_count"] == 1
+
+
+@pytest.mark.django_db
+def test_a_student_with_no_setting_follows_the_batch(admin_user, batch, enrollment, past_session):
+    """Null means "however the batch is taught", which is the usual case."""
+    from apps.batches.models import DeliveryMode
+    from apps.dsr.services import prefill_counts
+
+    assert enrollment.delivery_mode == ""
+    batch.delivery_mode = DeliveryMode.ONLINE
+    batch.save(update_fields=["delivery_mode"])
+    enrollment.refresh_from_db()
+
+    counts = prefill_counts(past_session)
+    assert counts["online_count"] == 1
+    assert counts["offline_count"] == 0
+
+
+@pytest.mark.django_db
+def test_the_counts_describe_the_roster_not_who_turned_up(
+    admin_user, batch, enrollment, other_enrollment, past_session
+):
+    """Attendance is a different question, and `present_count` already answers it."""
+    from apps.attendance.models import AttendanceRecord, AttendanceStatus
+    from apps.dsr.services import prefill_counts
+
+    AttendanceRecord.objects.create(
+        session=past_session, enrollment=enrollment, status=AttendanceStatus.PRESENT
+    )
+    AttendanceRecord.objects.create(
+        session=past_session, enrollment=other_enrollment, status=AttendanceStatus.ABSENT
+    )
+
+    counts = prefill_counts(past_session)
+
+    assert counts["present_count"] == 1
+    assert counts["absent_count"] == 1
+    # Both students are still on the roster, however the day went.
+    assert counts["online_count"] + counts["offline_count"] == 2

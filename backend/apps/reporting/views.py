@@ -18,7 +18,8 @@ from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status as http_status
-from rest_framework.generics import get_object_or_404
+from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -34,13 +35,17 @@ from . import access, dashboards, exports, importers, metrics, reports, tasks, w
 from .models import TERMINAL_EXPORT_STATUSES, BulkImport, ExportJob, ExportStatus
 from .serializers import (
     AdminDashboardSerializer,
+    BatchOverviewSerializer,
+    BatchRosterRowSerializer,
     BatchSummarySerializer,
     BulkImportSerializer,
     ExportJobRequestSerializer,
     ExportJobSerializer,
+    ManagerDashboardSerializer,
     MetricSerializer,
     ReportDefinitionSerializer,
     ReportPageSerializer,
+    TrainerOverviewSerializer,
     TrainerWorkloadSerializer,
     TrendPointSerializer,
     UploadSerializer,
@@ -297,10 +302,11 @@ class ExportJobQueueView(APIView):
     itself rather than trusting anything decided here (see that task's
     docstring for why).
 
-    Listing carries neither gate. It shows a job the caller already owns —
-    that a role's export rights changed after the job was queued does not
-    retract the caller's own history of what they asked for — or, for
-    `export.view_any`, everybody's.
+    Listing carries neither gate, so that a role whose export rights changed
+    after a job was queued keeps its own history of what it asked for. It does
+    still require the caller to be somebody who could own a job at all: a
+    student never could, and an endpoint that is permanently empty for a role is
+    better refused than politely blank.
     """
 
     throttle_classes = (BurstThrottle,)
@@ -313,6 +319,8 @@ class ExportJobQueueView(APIView):
         tags=REPORTS_TAG,
     )
     def get(self, request):
+        if not access.could_own_an_export(request.user):
+            return _forbidden(request, "Exports are staff-facing.")
         rows = ExportJob.objects.with_related()
         if not access.can_view_any_export_job(request.user):
             rows = rows.for_user(request.user)
@@ -554,6 +562,117 @@ class BatchSummaryView(APIView):
             return _forbidden(request, "This view is staff-facing.")
         return Response(
             BatchSummarySerializer(dashboards.batch_summaries(request.user), many=True).data
+        )
+
+
+# ---------------------------------------------------------------------------
+# The manager hubs
+#
+# Two screens the client asked for by name — Batches and Trainers — each
+# drilling from a landing summary down to one record's full picture. Routed
+# under `dashboard_urlpatterns` alongside the views above: this app's routes
+# are mounted at `reports/` and `dashboards/` only (see `urls.py`), so the
+# batch and trainer drill-downs live at `/batches/<id>/...` and
+# `/trainers/<id>/...` rather than under a bare `/batches/` or
+# `/trainers/` prefix this app does not own.
+# ---------------------------------------------------------------------------
+
+
+class ManagerDashboardView(APIView):
+    """The two hubs' landing summary — a KPI strip and the attention queue."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Manager hub summary",
+        responses={200: ManagerDashboardSerializer},
+        tags=REPORTS_TAG,
+    )
+    def get(self, request):
+        if not access.can_read_manager_hubs(request.user):
+            return _forbidden(request, "This dashboard is for administrators and managers.")
+        return Response(ManagerDashboardSerializer(dashboards.manager_dashboard(request.user)).data)
+
+
+class BatchOverviewView(APIView):
+    """Everything about one batch — the batches hub's drill-down."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Batch overview",
+        responses={200: BatchOverviewSerializer},
+        tags=REPORTS_TAG,
+    )
+    def get(self, request, batch_id):
+        if not access.can_read_reports(request.user):
+            return _forbidden(request, "This view is staff-facing.")
+        batch = get_object_or_404(access.visible_batches(request.user), pk=batch_id)
+        return Response(BatchOverviewSerializer(dashboards.batch_overview(batch)).data)
+
+
+class BatchStudentsView(ListAPIView):
+    """A batch's roster, one rollup row per student — the batch overview's own drill-down."""
+
+    permission_classes = (IsActiveUser,)
+    serializer_class = BatchRosterRowSerializer
+    filter_backends = (SearchFilter, OrderingFilter)
+    search_fields = (
+        "student__student_id",
+        "student__user__first_name",
+        "student__user__last_name",
+        "student__user__email",
+    )
+    ordering_fields = (
+        "student__user__first_name",
+        "student__user__last_name",
+        "status",
+        "enrolled_at",
+    )
+    ordering = ("student__user__first_name", "student__user__last_name")
+
+    def get_queryset(self):
+        batch = get_object_or_404(
+            access.visible_batches(self.request.user), pk=self.kwargs["batch_id"]
+        )
+        return dashboards.roster_queryset(batch)
+
+    @extend_schema(
+        summary="Batch roster with per-student rollups",
+        parameters=[OpenApiParameter("search", str), OpenApiParameter("ordering", str)],
+        responses={200: BatchRosterRowSerializer(many=True)},
+        tags=REPORTS_TAG,
+    )
+    def list(self, request, *args, **kwargs):
+        if not access.can_read_reports(request.user):
+            return _forbidden(request, "This view is staff-facing.")
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        rows = dashboards.batch_roster_rows(list(page if page is not None else queryset))
+        serializer = self.get_serializer(rows, many=True)
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
+
+
+class TrainerOverviewView(APIView):
+    """Everything about one trainer — the trainers hub's drill-down."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Trainer overview",
+        responses={200: TrainerOverviewSerializer},
+        tags=REPORTS_TAG,
+    )
+    def get(self, request, trainer_id):
+        if not access.can_read_reports(request.user):
+            return _forbidden(request, "This view is staff-facing.")
+        trainer = get_object_or_404(access.visible_trainers(request.user), pk=trainer_id)
+        return Response(
+            TrainerOverviewSerializer(
+                dashboards.trainer_overview(trainer, viewer=request.user)
+            ).data
         )
 
 

@@ -48,6 +48,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { ATTENDANCE_OPTIONS, ATTENDANCE_STATUS_LABEL } from '@/lib/academic-labels';
+import { ENROLLMENT_STATUS_LABEL, ENROLLMENT_STATUS_VARIANT } from '@/lib/batch-labels';
 import { fallback, formatNumber, UNKNOWN } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { AttendanceStatus, RegisterEntry } from '@/types/api';
@@ -251,7 +252,9 @@ export function RegisterEditor({
                       {fallback(entry.student_code)}
                       {entry.was_corrected ? <Badge variant="warning">Corrected</Badge> : null}
                       {entry.enrollment_status && entry.enrollment_status !== 'active' ? (
-                        <Badge variant="neutral">{entry.enrollment_status}</Badge>
+                        <Badge variant={ENROLLMENT_STATUS_VARIANT[entry.enrollment_status]}>
+                          {ENROLLMENT_STATUS_LABEL[entry.enrollment_status]}
+                        </Badge>
                       ) : null}
                     </div>
                   </Td>

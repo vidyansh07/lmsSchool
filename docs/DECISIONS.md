@@ -888,3 +888,49 @@ endpoint a student surface — a student never could have owned a job — so the
 list now requires the caller to be somebody who could have one at all.
 `could_own_an_export` is deliberately wider than "may queue one right now",
 which is the whole point of it being a separate question.
+
+### D-124 · A rollup about a batch is mounted under batches
+**ERP §Manager.** The manager's batch and trainer rollups were built inside
+`apps/reporting` and first landed at `/api/v1/dashboards/batches/<id>/overview/`,
+because that was the only mount point the agent building them was allowed to
+touch. It flagged the deviation rather than quietly shipping it, which was the
+right call and is why this decision exists to be made.
+
+They are now mounted at `/api/v1/batches/<id>/overview/` and
+`/api/v1/trainers/<id>/overview/`. Which app *implements* a view is an internal
+fact; a reader following `/batches/<id>/` should not have to know that one view
+of a batch lives under a different noun. The `dashboards/` prefix stays for
+`/dashboards/manager/`, which really is a dashboard rather than a view of one
+record.
+
+### D-125 · A number the system already holds should never be typed by a person
+**ERP §DSR.** `DSR.online_count` and `offline_count` defaulted to zero for the
+trainer to fill in, while every enrolment on the roster already records how that
+student is taught. Asking anyway makes the report only as accurate as somebody's
+memory at the end of a long day.
+
+They are prefilled from `Enrollment.effective_delivery_mode` now — the student's
+own setting when they have one, the batch's otherwise. A hybrid student counts
+as online, because the question the field answers is "who was not in the room".
+The counts describe the roster rather than who turned up; `present_count` and
+`absent_count` already answer that, and conflating the two would make both
+useless.
+
+Found by the agent building the trainer's workspace, which refused to compute
+the split client-side from data the API does not expose and reported the gap
+instead. That was the right call: a fabricated number is worse than a blank one,
+because nobody knows to distrust it.
+
+### D-126 · A hand-written type union is a claim, and it was wrong
+**ERP §Frontend.** `CalendarEventKind` did not list `project_due`, which
+`apps.dashboards.calendar` has been emitting all along. The type said the case
+could not happen, so `EVENT_KIND_LABEL` — a `Record` over that union — had no
+entry for it, and a project deadline rendered as whatever the fallback branch
+did.
+
+Adding the member surfaced the missing label immediately, which is the argument
+for making the union honest rather than widening it to `string`. The same
+applies to the planned-versus-actual lesson fields on `ClassSession`: the
+backend had returned them since the timeline feature shipped, and the frontend
+type had not caught up, so a screen that needed them declared a local shape
+instead. Both now live on the shared type, and the local shim is gone.
