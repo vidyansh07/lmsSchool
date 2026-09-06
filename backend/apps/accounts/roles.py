@@ -79,6 +79,19 @@ class Capability(models.TextChoices):
     PLATFORM_CONFIGURE = "platform.configure", _("Change platform-wide settings")
     AUDIT_VIEW = "audit.view", _("Read the audit trail")
 
+    # --- Reversible deletion
+    #
+    # Deleting is an ordinary right that lives with each domain: whoever may
+    # edit a batch may remove one. These three are about what happens *after*
+    # that, and they are deliberately not the same right.
+    #
+    # `RECORD_PURGE` is absent from the administrator set on purpose, so only a
+    # superadmin holds it. Everything else on this ladder is reversible; this is
+    # the one act that is not, and the brief asks for it to sit above the rest.
+    RECORD_VIEW_DELETED = "record.view_deleted", _("See deleted records")
+    RECORD_RESTORE = "record.restore", _("Restore a deleted record")
+    RECORD_PURGE = "record.purge", _("Destroy a record permanently")
+
     # --- Academic configuration
     ACADEMIC_CONFIGURE = "academic.configure", _("Change academic rules")
 
@@ -285,6 +298,8 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.COMPLETION_APPROVE,
         Capability.CERTIFICATE_MANAGE,
         Capability.EXPORT_VIEW_ANY,
+        Capability.RECORD_VIEW_DELETED,
+        Capability.RECORD_RESTORE,
     }
 )
 

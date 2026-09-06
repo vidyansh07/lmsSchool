@@ -35,7 +35,12 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.batches.models import DeliveryMode
-from apps.common.models import BaseModel
+from apps.common.models import (
+    BaseModel,
+    SoftDeleteBaseModel,
+    SoftDeleteQuerySet,
+    soft_delete_managers,
+)
 
 
 class EnrollmentStatus(models.TextChoices):
@@ -80,7 +85,7 @@ LIVE_STATUSES = frozenset(LIVE_STATUS_LIST)
 ACCESS_GRANTING_STATUSES = frozenset({EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED})
 
 
-class EnrollmentQuerySet(models.QuerySet):
+class EnrollmentQuerySet(SoftDeleteQuerySet):
     def with_related(self):
         # `batch__trainer__user` is here because every serializer renders the
         # trainer's name: without it a page of twenty-five enrolments made
@@ -102,7 +107,7 @@ class EnrollmentQuerySet(models.QuerySet):
         return self.filter(status__in=ACCESS_GRANTING_STATUSES)
 
 
-class Enrollment(BaseModel):
+class Enrollment(SoftDeleteBaseModel):
     code = models.CharField(
         _("enrolment code"),
         max_length=20,
@@ -174,9 +179,9 @@ class Enrollment(BaseModel):
         related_name="enrollments_created",
     )
 
-    objects = EnrollmentQuerySet.as_manager()
+    objects, all_objects = soft_delete_managers(EnrollmentQuerySet)
 
-    class Meta:
+    class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("enrolment")
         verbose_name_plural = _("enrolments")
         ordering = ("-enrolled_at",)
@@ -185,7 +190,12 @@ class Enrollment(BaseModel):
             # while still allowing a fresh enrolment after a cancellation.
             models.UniqueConstraint(
                 fields=["student", "batch"],
-                condition=models.Q(status__in=LIVE_STATUS_LIST),
+                # `deleted_at` joins the condition for a reason worth stating:
+                # without it, removing an enrolment would permanently bar that
+                # student from that batch, because the deleted row would go on
+                # holding the slot. A soft delete that cannot be undone by
+                # re-enrolling is not soft.
+                condition=models.Q(status__in=LIVE_STATUS_LIST, deleted_at__isnull=True),
                 name="enrollment_one_live_per_student_batch",
             ),
         ]

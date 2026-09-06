@@ -34,7 +34,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import BaseModel
+from apps.common.models import SoftDeleteBaseModel, SoftDeleteQuerySet, soft_delete_managers
 from apps.common.validators import validate_no_control_characters
 
 MAX_CAPACITY = 1000
@@ -90,7 +90,7 @@ class Weekday(models.IntegerChoices):
     SUNDAY = 6, _("Sunday")
 
 
-class BatchQuerySet(models.QuerySet):
+class BatchQuerySet(SoftDeleteQuerySet):
     def with_related(self):
         return self.select_related("course", "course__category", "trainer", "trainer__user")
 
@@ -114,7 +114,7 @@ class BatchQuerySet(models.QuerySet):
         return self.filter(status__in=ENROLLABLE_STATUSES)
 
 
-class Batch(BaseModel):
+class Batch(SoftDeleteBaseModel):
     code = models.CharField(
         _("batch code"),
         max_length=20,
@@ -176,9 +176,9 @@ class Batch(BaseModel):
         related_name="batches_created",
     )
 
-    objects = BatchQuerySet.as_manager()
+    objects, all_objects = soft_delete_managers(BatchQuerySet)
 
-    class Meta:
+    class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("batch")
         verbose_name_plural = _("batches")
         ordering = ("-start_date", "code")
@@ -248,7 +248,7 @@ class Batch(BaseModel):
         return max(self.capacity - self.seats_taken(), 0)
 
 
-class BatchSchedule(BaseModel):
+class BatchSchedule(SoftDeleteBaseModel):
     """One recurring weekly class slot inside a batch's date range.
 
     Times are stored as wall-clock times plus an IANA time-zone name rather than
@@ -289,7 +289,7 @@ class BatchSchedule(BaseModel):
     )
     note = models.CharField(_("note"), max_length=200, blank=True)
 
-    class Meta:
+    class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("batch schedule")
         verbose_name_plural = _("batch schedules")
         ordering = ("weekday", "start_time")

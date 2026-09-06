@@ -188,6 +188,14 @@ class AuditAction(models.TextChoices):
     BULK_IMPORT_CONFIRMED = "data.import.confirmed", _("Bulk import confirmed")
     BULK_IMPORT_REJECTED = "data.import.rejected", _("Bulk import discarded")
 
+    # --- Reversible deletion
+    #
+    # One vocabulary for every model, because "who removed this and can we get
+    # it back?" is the same question whichever table it is asked about.
+    RECORD_DELETED = "record.deleted", _("Record deleted")
+    RECORD_RESTORED = "record.restored", _("Record restored")
+    RECORD_PURGED = "record.purged", _("Record destroyed permanently")
+
     # --- File security
     UPLOAD_REJECTED = "file.upload.rejected", _("Upload rejected by a security check")
 
