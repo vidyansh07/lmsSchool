@@ -188,6 +188,32 @@ class AuditAction(models.TextChoices):
     BULK_IMPORT_CONFIRMED = "data.import.confirmed", _("Bulk import confirmed")
     BULK_IMPORT_REJECTED = "data.import.rejected", _("Bulk import discarded")
 
+    # --- Daily status reports
+    DSR_CREATED = "dsr.created", _("Daily status report started")
+    DSR_UPDATED = "dsr.updated", _("Daily status report updated")
+    DSR_SUBMITTED = "dsr.submitted", _("Daily status report submitted")
+    DSR_REVIEW_STARTED = "dsr.review.started", _("Daily status report under review")
+    DSR_APPROVED = "dsr.approved", _("Daily status report approved")
+    DSR_REJECTED = "dsr.rejected", _("Daily status report rejected")
+    DSR_REVISION_REQUESTED = "dsr.revision_requested", _("Daily status report returned")
+
+    # --- Course timeline
+    SESSION_TOPIC_PLANNED = "session.topic.planned", _("Class topic planned")
+    SESSION_TOPIC_RECORDED = "session.topic.recorded", _("Class topic recorded as taught")
+
+    # --- Performance and reviews
+    REVIEW_RECORDED = "review.recorded", _("Performance review recorded")
+    REVIEW_UPDATED = "review.updated", _("Performance review updated")
+    FEEDBACK_RECORDED = "feedback.recorded", _("Feedback recorded")
+    RISK_THRESHOLDS_UPDATED = "risk.thresholds.updated", _("Risk thresholds changed")
+
+    # --- Exports as background jobs
+    EXPORT_QUEUED = "export.queued", _("Export queued")
+    EXPORT_COMPLETED = "export.completed", _("Export completed")
+    EXPORT_FAILED = "export.failed", _("Export failed")
+    EXPORT_DOWNLOADED = "export.downloaded", _("Export downloaded")
+    EXPORT_CANCELLED = "export.cancelled", _("Export cancelled")
+
     # --- Reversible deletion
     #
     # One vocabulary for every model, because "who removed this and can we get

@@ -19,10 +19,12 @@ from apps.certificates import urls as certificate_urls
 from apps.courses import urls as course_urls
 from apps.dashboards import urls as dashboard_urls
 from apps.discussions import urls as discussion_urls
+from apps.dsr import urls as dsr_urls
 from apps.enrollments import urls as enrollment_urls
 from apps.exams import urls as exam_urls
 from apps.learning import urls as learning_urls
 from apps.notifications import urls as notification_urls
+from apps.performance import urls as performance_urls
 from apps.progress import urls as progress_urls
 from apps.projects import urls as project_urls
 from apps.questions import urls as question_urls
@@ -81,7 +83,9 @@ urlpatterns = [
                 + assessment_urls.batch_urlpatterns
                 + exam_urls.batch_urlpatterns
                 + progress_urls.batch_urlpatterns
-                + discussion_urls.batch_urlpatterns,
+                + discussion_urls.batch_urlpatterns
+                + dsr_urls.batch_urlpatterns
+                + performance_urls.trainer_urlpatterns,
                 "batches",
             )
         ),
@@ -90,12 +94,16 @@ urlpatterns = [
         "sessions/",
         include(
             (
-                session_urls.session_patterns + attendance_urls.session_attendance_patterns,
+                session_urls.session_patterns
+                + attendance_urls.session_attendance_patterns
+                + dsr_urls.session_urlpatterns,
                 "sessions",
             )
         ),
     ),
     path("attendance/", include((attendance_urls.attendance_patterns, "attendance"))),
+    path("dsr/", include((dsr_urls.urlpatterns, "dsr"))),
+    path("performance/", include((performance_urls.urlpatterns, "performance"))),
     path("schedules/", include((batch_urls.schedule_patterns, "schedules"))),
     path(
         "enrollments/",
