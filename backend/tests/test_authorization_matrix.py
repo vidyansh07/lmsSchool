@@ -642,8 +642,27 @@ def test_the_capability_ladder_has_no_ties():
     """
     from itertools import pairwise
 
-    ladder = [UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER]
+    ladder = [UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.COUNSELLOR]
     for higher, lower in pairwise(ladder):
         assert ROLE_CAPABILITIES[lower] < ROLE_CAPABILITIES[higher], (
             f"{lower} does not hold strictly less than {higher}"
         )
+
+
+def test_the_scoped_roles_sit_below_the_ladder():
+    """Trainer and student hold the base set and nothing else.
+
+    They are not a rung: their reach comes from per-record assignment, resolved
+    in each app's `access` module. Stated as a test because granting one of them
+    a global capability "just for now" is exactly the change that would go
+    unnoticed, and it would silently widen every batch, course and report they
+    can see.
+    """
+    from apps.accounts.roles import BASE_CAPABILITIES
+
+    for role in (UserRole.TRAINER, UserRole.STUDENT):
+        assert ROLE_CAPABILITIES[role] == BASE_CAPABILITIES, (
+            f"{role} holds a global capability: "
+            f"{sorted(ROLE_CAPABILITIES[role] - BASE_CAPABILITIES)}"
+        )
+    assert BASE_CAPABILITIES < ROLE_CAPABILITIES[UserRole.COUNSELLOR]

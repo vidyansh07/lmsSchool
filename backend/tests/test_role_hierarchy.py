@@ -26,33 +26,67 @@ PASSWORD = "Str0ng-Passphrase!42"
 #: Every ordered pair of roles, and whether the first may administer the second.
 #: Written out rather than computed: this table *is* the policy, and a reviewer
 #: should be able to read it without running anything.
+#:
+#: `can_administer` is the *second* of two gates, so a `True` here does not mean
+#: the actor can reach an administration endpoint — every one of those also
+#: demands a `user.*` capability that only administrators and superadmins hold.
+#: A manager or counsellor sitting on a `True` row still gets a 403 at the door.
+#: What the row says is narrower and worth stating anyway: *if* they ever held
+#: the capability, this is whose account it would reach.
 AUTHORITY = {
     (UserRole.SUPERADMIN, UserRole.SUPERADMIN): True,  # so a compromised one can be stopped
     (UserRole.SUPERADMIN, UserRole.ADMIN): True,
     (UserRole.SUPERADMIN, UserRole.MANAGER): True,
+    (UserRole.SUPERADMIN, UserRole.COUNSELLOR): True,
     (UserRole.SUPERADMIN, UserRole.TRAINER): True,
     (UserRole.SUPERADMIN, UserRole.STUDENT): True,
     (UserRole.ADMIN, UserRole.SUPERADMIN): False,  # the hole this file closed
     (UserRole.ADMIN, UserRole.ADMIN): False,  # peers cannot trade privileges
     (UserRole.ADMIN, UserRole.MANAGER): True,
+    (UserRole.ADMIN, UserRole.COUNSELLOR): True,
     (UserRole.ADMIN, UserRole.TRAINER): True,
     (UserRole.ADMIN, UserRole.STUDENT): True,
     (UserRole.MANAGER, UserRole.SUPERADMIN): False,
     (UserRole.MANAGER, UserRole.ADMIN): False,
     (UserRole.MANAGER, UserRole.MANAGER): False,
+    (UserRole.MANAGER, UserRole.COUNSELLOR): True,  # the rung below, so: yes
     (UserRole.MANAGER, UserRole.TRAINER): True,
     (UserRole.MANAGER, UserRole.STUDENT): True,
+    (UserRole.COUNSELLOR, UserRole.SUPERADMIN): False,
+    (UserRole.COUNSELLOR, UserRole.ADMIN): False,
+    (UserRole.COUNSELLOR, UserRole.MANAGER): False,  # cannot reach up a rung
+    (UserRole.COUNSELLOR, UserRole.COUNSELLOR): False,
+    # A counsellor holds strictly more than a trainer or a student, so the
+    # subset rule says yes — and the capability gate still says no, because a
+    # counsellor holds no `user.*` capability at all. Both are asserted below.
+    (UserRole.COUNSELLOR, UserRole.TRAINER): True,
+    (UserRole.COUNSELLOR, UserRole.STUDENT): True,
     (UserRole.TRAINER, UserRole.SUPERADMIN): False,
     (UserRole.TRAINER, UserRole.ADMIN): False,
     (UserRole.TRAINER, UserRole.MANAGER): False,
+    (UserRole.TRAINER, UserRole.COUNSELLOR): False,
     (UserRole.TRAINER, UserRole.TRAINER): False,
     (UserRole.TRAINER, UserRole.STUDENT): False,
     (UserRole.STUDENT, UserRole.SUPERADMIN): False,
     (UserRole.STUDENT, UserRole.ADMIN): False,
     (UserRole.STUDENT, UserRole.MANAGER): False,
+    (UserRole.STUDENT, UserRole.COUNSELLOR): False,
     (UserRole.STUDENT, UserRole.TRAINER): False,
     (UserRole.STUDENT, UserRole.STUDENT): False,
 }
+
+
+def test_the_authority_table_covers_every_pair():
+    """A role added without a row here would be untested and nobody would know.
+
+    The table is the policy, so an incomplete table is an unstated policy. This
+    is the guard that makes adding a role a decision rather than an omission.
+    """
+    expected = {(actor, target) for actor in UserRole.values for target in UserRole.values}
+    missing = expected - set(AUTHORITY)
+    unknown = set(AUTHORITY) - expected
+    assert not missing, f"no authority rule stated for: {sorted(missing)}"
+    assert not unknown, f"authority stated for roles that do not exist: {sorted(unknown)}"
 
 
 def _person(role: str, tag: str = "") -> User:

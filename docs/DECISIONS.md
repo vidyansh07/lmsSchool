@@ -773,3 +773,78 @@ sign-in, and sent people hunting for a permissions bug that was never there —
 the click had landed on markup the development server had not finished
 hydrating. The helper now retries when nothing reached the server, and only
 reports a refusal when the server actually refused.
+
+---
+
+## Phase 12 — ERP foundation
+
+### D-105 · The counsellor is a rung on the ladder, not a role beside it
+**ERP §RBAC.** A counsellor's capability set is a strict subset of a manager's.
+That was a choice, and the alternative — a set overlapping manager's without
+being contained by it — would have been easier to write and quietly wrong.
+
+`can_administer` decides who may touch whose account by comparing capability
+sets. Two roles holding incomparable sets are a flat spot in the hierarchy:
+neither can administer the other, for no reason anybody could explain from the
+product. Containment keeps the rule statable in one sentence, and
+`test_the_capability_ladder_has_no_ties` fails if a future change breaks it.
+
+So the ladder is now superadmin ⊃ admin ⊃ manager ⊃ counsellor, with trainer and
+student below it holding only the base set — they are not rungs, because their
+reach comes from per-record assignment rather than from anything global.
+
+### D-106 · A counsellor sets training up and does not run it
+**ERP §Counsellor.** The line is drawn at the handover. Registration, course
+choice, batch creation, timetabling, trainer assignment and enrolment are
+admissions work and the role holds all of it. Attendance, DSR, assessment,
+assignment, project, exam, completion and certification are not, and it holds
+none of them — not even read access.
+
+Nothing about accounts either. A counsellor creates student *records* through
+the student service, which is a different act from administering an account:
+they cannot edit, deactivate or re-role anybody, including students they
+registered themselves.
+
+The one that needed thinking about was reporting. A counsellor holds
+`data.export` because admissions arrive and leave as spreadsheets, and does not
+hold `report.view_any`, because the report catalogue aggregates the whole
+institution and is a management tool. See D-107 for what that combination
+exposed.
+
+### D-107 · Exporting a report requires being allowed to read it
+**ERP §RBAC, found by adding a role.** `ReportExportView` checked `data.export`
+and nothing else, while the on-screen `ReportView` checked `can_read_reports`.
+For four roles that difference was invisible, because every holder of
+`data.export` also held `report.view_any`.
+
+The counsellor is the first role to hold one without the other, and it turned a
+latent inconsistency into a real hole: a file would have been a way to read a
+report that the screen refuses. A file is not a weaker way to read something.
+The export now applies both rules — read the report, and be allowed to export.
+
+No existing role's behaviour changes, which is worth stating plainly: managers
+and administrators pass both gates as before, and trainers were already refused
+by the export capability. This is pure tightening.
+
+### D-108 · The frontend capability list is checked against the backend, not trusted to match
+**ERP §RBAC.** `lib/capabilities.ts` carried a comment saying it mirrored
+`roles.py`. A comment cannot fail.
+
+Drift there is quiet in the worst way: a capability string with a typo matches
+nothing, so the control it guards is hidden from everybody, on every screen,
+with no error anywhere — and nobody reports a button they have never seen.
+`tests/unit/capability-mirror.test.ts` now parses the backend's own source and
+checks both lists in both directions, along with the role list and its labels.
+The backend file is the fixture, because a duplicated list is the thing being
+guarded against.
+
+### D-109 · The demo roster is derived, not counted
+**ERP §RBAC.** `test_seed_is_idempotent` asserted `User.objects.count() == 29`.
+Adding the counsellor to the seeded roster broke it, in a test whose subject is
+whether a second run creates anybody — a question that has nothing to do with
+how many accounts there are. It now compares against the roster the command
+builds, so the next role to arrive changes one place instead of two.
+
+Adding the counsellor to the seed itself was not optional: `verify_demo.sh` and
+`test_seed_creates_an_account_for_every_role` both walk `UserRole.values`, on
+the principle that a role nobody can sign in as is a role nobody exercises.

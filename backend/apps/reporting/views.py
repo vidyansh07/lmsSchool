@@ -175,8 +175,18 @@ class ReportView(APIView):
 class ReportExportView(APIView):
     """The same report, streamed as CSV.
 
-    Exporting needs its own capability: reading a page of a report on screen and
-    walking out with the whole institution in a file are different acts.
+    Two gates, and both are needed.
+
+    **You must be allowed to read the report**, by the same rule the on-screen
+    view uses. This was missing: the export checked only `data.export`, so any
+    role holding that capability could stream a report it could not open. That
+    was harmless while every holder of `data.export` also held `report.view_any`
+    — and stopped being harmless the moment a role held one without the other. A
+    file is not a weaker way to read something.
+
+    **And exporting needs its own capability** on top, because reading a page of
+    a report on screen and walking out with the whole institution in a file are
+    different acts.
     """
 
     # An export walks every visible row and streams a file; it is the most
@@ -193,6 +203,9 @@ class ReportExportView(APIView):
     )
     def get(self, request, key):
         from apps.accounts.roles import Capability, has_capability
+
+        if not access.can_read_reports(request.user):
+            return _forbidden(request, "Reports are staff-facing.")
 
         if not has_capability(request.user, Capability.DATA_EXPORT):
             record(

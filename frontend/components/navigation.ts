@@ -178,7 +178,7 @@ export const STAFF_NAV: NavGroup[] = [
 ];
 
 /** Roles that get the sidebar. Students get the shorter top bar. */
-export const STAFF_ROLES = ['superadmin', 'admin', 'manager', 'trainer'];
+export const STAFF_ROLES = ['superadmin', 'admin', 'manager', 'counsellor', 'trainer'];
 
 /** Whether this person should see a given entry. */
 export function isVisible(

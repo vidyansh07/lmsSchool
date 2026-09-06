@@ -30,6 +30,11 @@ class UserRole(models.TextChoices):
     SUPERADMIN = "superadmin", _("Superadmin")
     ADMIN = "admin", _("Administrator")
     MANAGER = "manager", _("Manager")
+    # Admissions, not academics. A counsellor brings a student in — registers
+    # them, picks the course, opens or chooses the batch, puts a trainer on it —
+    # and then hands over. They hold a strict subset of what a manager holds, so
+    # the ladder stays a ladder (see `can_administer`).
+    COUNSELLOR = "counsellor", _("Counsellor")
     TRAINER = "trainer", _("Trainer")
     STUDENT = "student", _("Student")
 
@@ -107,6 +112,32 @@ class Capability(models.TextChoices):
     ATTENDANCE_CORRECT_ANY = "attendance.correct_any", _("Correct attendance on any class")
     ATTENDANCE_VIEW_ANY = "attendance.view_any", _("View any attendance record")
 
+    # --- Daily status reports
+    #
+    # A trainer holds none of these, for the same reason they hold no attendance
+    # capability: they write the report for the classes they actually took, and
+    # that authority is resolved per record in ``apps.dsr.access``. What needs a
+    # capability is reaching somebody else's report, correcting one, and ruling
+    # on one.
+    #
+    # Reviewing is separated from managing because they are different acts by
+    # different people. A manager approving a report is making a judgement about
+    # work somebody else did; correcting the text of one is editing that work.
+    DSR_VIEW_ANY = "dsr.view_any", _("View any daily status report")
+    DSR_MANAGE_ANY = "dsr.manage_any", _("Create or correct any daily status report")
+    DSR_REVIEW = "dsr.review", _("Approve, reject or return a daily status report")
+
+    # --- Performance and reviews
+    #
+    # Reading a performance picture is separated from writing one down. A
+    # manager does both; a role that should see how a batch is doing without
+    # being able to put a rating on somebody's record can hold only the first.
+    PERFORMANCE_VIEW_ANY = (
+        "performance.view_any",
+        _("View any student's or trainer's performance"),
+    )
+    REVIEW_MANAGE_ANY = "review.manage_any", _("Record feedback and performance reviews")
+
     # --- Assignments
     #
     # A trainer holds none of these globally. Their authority over an assignment
@@ -159,6 +190,11 @@ class Capability(models.TextChoices):
     REPORT_VIEW_ANY = "report.view_any", _("Read reports across the institution")
     DATA_EXPORT = "data.export", _("Export data")
     DATA_IMPORT = "data.import", _("Bulk import data")
+    # `DATA_EXPORT` above is the right to export at all. This is the separate
+    # right to see and cancel somebody *else's* export job. Your own jobs are
+    # yours by ownership and need no capability — an export job names what was
+    # extracted and by whom, so a list of everybody's is an administrative view.
+    EXPORT_VIEW_ANY = "export.view_any", _("View any export job")
 
 
 #: Capabilities every authenticated, active user has regardless of role.
@@ -172,9 +208,15 @@ BASE_CAPABILITIES: frozenset[str] = frozenset(
 #: The authorization matrix. This is the only place a role is turned into
 #: permissions. Roles absent from this mapping get `BASE_CAPABILITIES` only.
 #:
-#: Read it as a ladder: superadmin ⊃ admin ⊃ manager, then two scoped roles that
-#: hold almost nothing globally because their reach comes from per-record
-#: assignment instead (see `courses.access` and `batches.access`).
+#: Read it as a ladder: superadmin ⊃ admin ⊃ manager ⊃ counsellor, then two
+#: scoped roles that hold almost nothing globally because their reach comes from
+#: per-record assignment instead (see `courses.access` and `batches.access`).
+#:
+#: The containment is not decoration. `can_administer` decides who may touch
+#: whose account by comparing capability sets, so two roles holding
+#: incomparable sets would be a flat spot in the hierarchy — neither able to
+#: administer the other, for no reason a person could explain. Keeping each rung
+#: strictly inside the one above is what makes the rule statable in a sentence.
 
 #: What a manager may do: run academic operations day to day.
 _MANAGER_CAPABILITIES = frozenset(
@@ -201,6 +243,11 @@ _MANAGER_CAPABILITIES = frozenset(
         Capability.SESSION_MANAGE_ANY,
         Capability.ATTENDANCE_CORRECT_ANY,
         Capability.ATTENDANCE_VIEW_ANY,
+        Capability.DSR_VIEW_ANY,
+        Capability.DSR_MANAGE_ANY,
+        Capability.DSR_REVIEW,
+        Capability.PERFORMANCE_VIEW_ANY,
+        Capability.REVIEW_MANAGE_ANY,
         Capability.ASSIGNMENT_VIEW_ANY,
         Capability.ASSIGNMENT_MANAGE_ANY,
         Capability.ASSIGNMENT_GRADE_ANY,
@@ -237,6 +284,57 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.AUDIT_VIEW,
         Capability.COMPLETION_APPROVE,
         Capability.CERTIFICATE_MANAGE,
+        Capability.EXPORT_VIEW_ANY,
+    }
+)
+
+#: What a counsellor may do: bring students in, and stop there.
+#:
+#: The workflow this serves is one line — register a student, choose the course,
+#: open or pick the batch, put a trainer on it, enrol them — and every
+#: capability here exists to serve one step of it. Bulk import and export are
+#: included because admissions arrive as spreadsheets.
+#:
+#: Note what is absent, and why:
+#:
+#: * **Nothing academic.** No attendance, assessment, assignment, project, exam,
+#:   DSR or completion right. A counsellor sets the training up; they do not run
+#:   it or mark it.
+#: * **No `REPORT_VIEW_ANY`.** The report catalogue aggregates the whole
+#:   institution and is a management tool. `DATA_EXPORT` is still held, because
+#:   exporting the student and batch lists they already work with is part of the
+#:   job — and those lists come back through the same scoped querysets, so the
+#:   capability cannot widen what they see.
+#: * **Nothing about accounts.** No `USER_*` capability, so a counsellor cannot
+#:   edit, deactivate or re-role anybody, including the students they created.
+#:
+#: Every member of this set is also in `_MANAGER_CAPABILITIES`, which is what
+#: keeps the ladder a ladder rather than two roles standing side by side. The
+#: ladder test asserts it, so the property cannot be lost by accident.
+_COUNSELLOR_CAPABILITIES = frozenset(
+    {
+        # The student record itself, from registration onwards.
+        Capability.STUDENT_VIEW_ANY,
+        Capability.STUDENT_CREATE,
+        Capability.STUDENT_UPDATE_ANY,
+        Capability.STUDENT_SET_FEE_STATUS,
+        # Reading the catalogue, to choose what somebody is enrolling on.
+        Capability.COURSE_VIEW_ANY,
+        # Reading trainers, to put one on a batch. Not creating or editing them.
+        Capability.TRAINER_VIEW_ANY,
+        # Batches: create, choose, timetable, and assign the trainer. Assigning
+        # a trainer goes through `batch.update_any` in `batches.access`.
+        Capability.BATCH_VIEW_ANY,
+        Capability.BATCH_CREATE,
+        Capability.BATCH_UPDATE_ANY,
+        Capability.BATCH_MANAGE_SCHEDULE,
+        # Enrolment, including transfers and status changes.
+        Capability.ENROLMENT_VIEW_ANY,
+        Capability.ENROLMENT_CREATE,
+        Capability.ENROLMENT_UPDATE_ANY,
+        # Admissions arrive as spreadsheets and leave as spreadsheets.
+        Capability.DATA_IMPORT,
+        Capability.DATA_EXPORT,
     }
 )
 
@@ -249,6 +347,9 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
     # no account creation, no role changes, no platform settings. That keeps
     # "can run the school" and "can grant themselves power" separate.
     UserRole.MANAGER: BASE_CAPABILITIES | _MANAGER_CAPABILITIES,
+    # A counsellor sets training up and does not run it. Strictly inside the
+    # manager rung.
+    UserRole.COUNSELLOR: BASE_CAPABILITIES | _COUNSELLOR_CAPABILITIES,
     # Trainers and students hold no global management capability. What they may
     # touch comes from per-record assignment, which is the whole point of
     # §16's "trainer only assigned batches/content".
@@ -317,10 +418,18 @@ def can_administer(actor, target) -> bool:
        top of the ladder can police itself. Every such act is audited.
     3. **Everybody else may administer strictly less than themselves.** The
        target's role must hold a proper subset of the actor's capabilities. So an
-       administrator may administer a manager, a trainer or a student, and may
-       not touch another administrator or a superadmin. A manager may administer
-       trainers and students. Peers cannot edit each other, which is what stops
-       two colleagues quietly trading privileges.
+       administrator may administer a manager, a counsellor, a trainer or a
+       student, and may not touch another administrator or a superadmin. A
+       manager may administer counsellors, trainers and students. Peers cannot
+       edit each other, which is what stops two colleagues quietly trading
+       privileges.
+
+    This is the second of two gates, not the only one. Every endpoint that
+    administers an account also demands a `user.*` capability, and the roles
+    below administrator hold none of them — so a manager or counsellor
+    satisfying this rule still cannot reach the endpoint. The rule answers
+    "whose account, if any?"; the capability answers "may you administer
+    accounts at all?".
     """
     if actor is None or not getattr(actor, "is_authenticated", False) or not actor.is_active:
         return False

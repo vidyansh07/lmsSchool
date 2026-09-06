@@ -7,7 +7,13 @@
  * the two cannot drift.
  */
 
-export type UserRole = 'superadmin' | 'admin' | 'manager' | 'trainer' | 'student';
+export type UserRole =
+  | 'superadmin'
+  | 'admin'
+  | 'manager'
+  | 'counsellor'
+  | 'trainer'
+  | 'student';
 
 export type FeeStatus = 'pending' | 'partial' | 'paid' | 'waived' | 'overdue';
 

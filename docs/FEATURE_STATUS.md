@@ -5,8 +5,8 @@ tested and verified running — not when the code exists.
 
 **Statuses:** `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE`
 
-Totals at last full run: **1,339 backend** (91% coverage) · **75 frontend unit** ·
-**82 end-to-end** = 1,496 tests, all passing.
+Totals at last full run: **1,415 backend** · **80 frontend unit** ·
+**82 end-to-end** = 1,577 tests, all passing.
 
 ---
 
@@ -139,6 +139,21 @@ Totals at last full run: **1,339 backend** (91% coverage) · **75 frontend unit*
 | 8 | Admin control centre, reports, analytics, bulk data | TODO |
 | 9 | Security, performance, reliability hardening | TODO |
 | 10 | Release engineering, staging, verification script | TODO |
+
+---
+
+## Phase 12 — ERP foundation
+
+Built on the audited baseline in `PROJECT_IMPLEMENTATION_REPORT.md`. The eight
+gaps that report names are being closed in order; this table grows a row per
+phase.
+
+| Feature | Phase | Status | Main files | Tests | Security checks | Manual verification | Known limitation | Last verified |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 12.1 COUNSELLOR role | 12 | DONE | `apps/accounts/roles.py`, `migrations/0004_alter_user_role.py` | `test_counsellor_rbac` (63), `test_role_hierarchy` (62; 36 authority pairs + a completeness guard), `test_authorization_matrix` | Ladder containment asserted; the role holds nothing academic and no `user.*`; both authority gates tested together | Registered a student, opened and staffed a batch, enrolled — all through the API as a counsellor | No counsellor screens yet; the workflow UI is Phase 5 of the plan | 2026-09-06 |
+| 12.2 DSR, performance and export capabilities | 12 | DONE | `apps/accounts/roles.py` | `test_counsellor_rbac`, `test_authorization_matrix` | Declared before use, so the phases that consume them cannot invent their own check | Present in the capability matrix and the generated schema | Nothing consumes them yet — deliberate, they land with their features | 2026-09-06 |
+| 12.3 Report export requires read access | 12 | DONE | `apps/reporting/views.py` | `test_counsellor_rbac` (3 export cases) | A file is no longer a way to read a report the screen refuses | Counsellor 403, manager 200 with a CSV, trainer 403 | — | 2026-09-06 |
+| 12.4 Capability mirror enforced | 12 | DONE | `frontend/tests/unit/capability-mirror.test.ts` | 5 | A typo'd capability name can no longer silently hide a control forever | Verified it fails when a constant is renamed | Parses the backend source; a large refactor of `roles.py` would need the parser revisited | 2026-09-06 |
 
 ---
 

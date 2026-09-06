@@ -39,6 +39,11 @@ export const Capability = {
   sessionManageAny: 'session.manage_any',
   attendanceCorrectAny: 'attendance.correct_any',
   attendanceViewAny: 'attendance.view_any',
+  dsrViewAny: 'dsr.view_any',
+  dsrManageAny: 'dsr.manage_any',
+  dsrReview: 'dsr.review',
+  performanceViewAny: 'performance.view_any',
+  reviewManageAny: 'review.manage_any',
   assignmentViewAny: 'assignment.view_any',
   assignmentManageAny: 'assignment.manage_any',
   assignmentGradeAny: 'assignment.grade_any',
@@ -61,6 +66,7 @@ export const Capability = {
   reportViewAny: 'report.view_any',
   dataExport: 'data.export',
   dataImport: 'data.import',
+  exportViewAny: 'export.view_any',
 } as const;
 
 export type CapabilityName = (typeof Capability)[keyof typeof Capability];

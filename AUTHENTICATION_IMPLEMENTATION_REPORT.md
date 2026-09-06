@@ -10,6 +10,10 @@ unit suite (`75 passed`).
 Nothing in this report is inferred from documentation. Every claim below names
 the file that implements it.
 
+**Amended as the ERP phases land.** The audit is a snapshot of 6 September 2026;
+entries closed since then are struck through and marked with the phase that
+closed them, so the original finding stays readable next to the fix.
+
 ---
 
 ## 1. Current implementation
@@ -88,7 +92,8 @@ the file that implements it.
 
 ### 1.5 Authorization / RBAC
 
-- `UserRole`: `superadmin`, `admin`, `manager`, `trainer`, `student`.
+- `UserRole`: `superadmin`, `admin`, `manager`, `counsellor`, `trainer`, `student`.
+  (`counsellor` added in ERP phase 12.1; see `docs/DECISIONS.md` D-105/D-106.)
 - `Capability`: ~60 `resource.action` strings in `accounts/roles.py`.
 - `ROLE_CAPABILITIES` is the single mapping. Superadmin holds
   `frozenset(Capability.values)` — every capability, including ones added later.
@@ -383,7 +388,7 @@ Relative to a production ERP, and relative to the requirements in the brief:
 
 | Missing | Impact |
 | --- | --- |
-| **`COUNSELLOR` role** | The brief's five roles are Admin, Manager, Trainer, Counsellor, Student. Four exist (plus `superadmin`). Counsellor does not, and neither do the capabilities its workflow needs (student registration → course selection → batch creation → trainer assignment). |
+| ~~`COUNSELLOR` role~~ | **Closed in ERP phase 12.1.** The role, its capability set, its place on the ladder and its demo account all exist; the workflow *screens* remain, and are phase 5 of the ERP plan. |
 | MFA / TOTP | See W1 |
 | Per-account brute-force limit and lockout | See W2 |
 | Session inventory / device list | See W9 |
@@ -425,11 +430,11 @@ Ordered by value per unit of risk. None of these require rewriting anything.
 
 **Do before adding ERP features (Phase 2 of the plan):**
 
-1. **Add the `COUNSELLOR` role** to `UserRole` and `ROLE_CAPABILITIES`. This is
-   genuinely a one-entry change by design — plus the new capabilities its
-   workflow needs (`student.create` it already implies, plus batch creation and
-   trainer assignment). Add it to `frontend/lib/capabilities.ts` and to
-   `test_authorization_matrix.py`'s role sweep in the same change.
+1. ~~**Add the `COUNSELLOR` role**~~ — ✅ **done in phase 12.1.** It was the
+   one-entry change the design promised, and adding it surfaced two things the
+   audit had not: the report export checked a different rule from the report
+   screen (now fixed), and the frontend capability list was mirrored by comment
+   rather than by test (now a test).
 2. **Add a per-account login throttle** alongside the per-IP one. A second
    `SimpleRateThrottle` keyed on the *submitted* email (hashed, to avoid a cache
    full of addresses) with a slower rate, plus a temporary lockout after N
@@ -515,14 +520,16 @@ Essentially all of it. Specifically, the ERP build should reuse:
 
 ## 12. What must be changed
 
-- `apps/accounts/roles.py` — add `COUNSELLOR` to `UserRole`, define its
-  capability set, and add the new capabilities the ERP workflows need
-  (DSR review, attendance override scoping, performance review, export job
-  management). This is an **additive** change to the existing matrix.
-- `frontend/lib/capabilities.ts` — mirror the additions.
-- `tests/test_authorization_matrix.py` and `tests/test_role_hierarchy.py` —
-  extend the role sweep to the new role; the suites are structured to make this
-  a data change.
+- ~~`apps/accounts/roles.py`~~ — ✅ **done in phase 12.1.** `COUNSELLOR` added
+  as a strict subset of the manager rung, along with `dsr.view_any`,
+  `dsr.manage_any`, `dsr.review`, `performance.view_any`, `review.manage_any`
+  and `export.view_any`. Additive throughout; the migration alters choices only.
+- ~~`frontend/lib/capabilities.ts`~~ — ✅ done, and the mirror is now enforced by
+  `frontend/tests/unit/capability-mirror.test.ts` rather than asserted in a
+  comment.
+- ~~`tests/test_authorization_matrix.py` and `tests/test_role_hierarchy.py`~~ —
+  ✅ done. The authority table went from 25 ordered pairs to 36 and gained a
+  completeness guard, so the next role cannot be added without a stated rule.
 - `apps/common/throttling.py` — add the per-account login throttle (W2).
 - `apps/accounts/services.py::revoke_sessions` — bound it (W4), when the
   session-inventory table lands.
@@ -569,21 +576,24 @@ Touching any of these would remove a defence that is currently working:
 
 Scored against a production ERP standard, not against "does it work".
 
-### Authentication: 90%
+### Authentication: 92%
+
+*(90% at the 6 September audit; +2 from phase 12.1, which closed the missing
+role and tightened report export. The four remaining gaps are unchanged.)*
 
 | Area | % | What the remaining percent is |
 | --- | --- | --- |
 | **Login** | 95% | Complete and correct. −5 for no per-account throttle/lockout (W2) and no optional verified-email gate (W7) |
 | **Logout** | 100% | Single logout, sign-out-everywhere, idempotent, CSRF-protected, audited, sessions actually deleted |
 | **Sessions** | 85% | Correct and revocable. −10 for the O(n) revocation scan (W4), −5 for no session inventory (W9) |
-| **RBAC** | 80% | Excellent structure; deny-by-default; ladder proven monotonic. −15 for the missing `COUNSELLOR` role, −5 for no organisational scoping |
+| **RBAC** | 95% | Excellent structure; deny-by-default; ladder proven monotonic and now four rungs deep. −5 for no organisational scoping (a manager still sees the whole institution) |
 | **Permissions** | 90% | ~60 capabilities, per-record access layers, 160-test matrix. −10 because capabilities are code, not data, so re-mapping needs a deploy |
 | **Password reset** | 95% | Hashed, single-use, expiring, superseding, non-enumerating, sessions revoked. −5 for token-in-query-string (W5) and no reuse prevention |
 | **Security** | 80% | −10 no MFA (W1), −5 per-IP-only rate limiting (W2), −5 PBKDF2 rather than Argon2id (W6) |
 | **Audit logging** | 95% | Append-only, scrubbed, request-correlated, survives rollback, covers permission-class refusals. −5 because there is no retention job wired and no alerting on the failure patterns it records |
 
-**Weighted overall: Authentication 90%.**
+**Weighted overall: Authentication 92%.**
 
-The 10% gap is four named items: MFA, per-account brute-force limiting, the
-`COUNSELLOR` role, and bounded session revocation. Nothing needs to be rebuilt
-to close any of them.
+The remaining gap is three named items: MFA, per-account brute-force limiting,
+and bounded session revocation. All three are scheduled for phase 14 of the ERP
+plan. Nothing needs to be rebuilt to close any of them.

@@ -529,9 +529,17 @@ The rule now:
 | Actor | May administer |
 | --- | --- |
 | Superadmin | Anyone, including another superadmin |
-| Administrator | Managers, trainers, students |
-| Manager | Trainers, students |
+| Administrator | Managers, counsellors, trainers, students |
+| Manager | Counsellors, trainers, students |
+| Counsellor | Trainers, students — see the note below |
 | Trainer, student | Nobody |
+
+The counsellor row needs its note, because read alone it overstates the case.
+`can_administer` is the second of two gates: every account-administration
+endpoint also demands a `user.*` capability, and a counsellor holds none of
+them. So a counsellor satisfying the ladder rule is still refused at the door.
+The row states what would be reachable *if* they held the capability, which is
+the question the rule exists to answer.
 
 Nobody administers their own account through the staff path; editing your own
 name is self-service, on an endpoint whose serializer does not accept a role.
@@ -540,7 +548,8 @@ somebody has to be able to stop it.
 
 Enforced in the service layer, so the admin site, a management command and any
 endpoint added later obey it. Refused attempts are audited with both roles.
-`tests/test_role_hierarchy.py` checks all twenty-five ordered pairs.
+`tests/test_role_hierarchy.py` checks every ordered pair of roles, and a
+completeness test fails if a role is ever added without a rule stated for it.
 
 ### What an administrator still cannot do
 

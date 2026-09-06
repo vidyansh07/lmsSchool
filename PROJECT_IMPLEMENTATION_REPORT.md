@@ -11,6 +11,11 @@ Companion document: `AUTHENTICATION_IMPLEMENTATION_REPORT.md` covers
 authentication, authorization and audit in depth. This report covers everything
 else and does not repeat it.
 
+**Amended as the ERP phases land.** The audit itself is a snapshot of
+6 September 2026; entries closed since then are struck through and marked with
+the phase that closed them, so the original finding stays readable next to what
+was done about it. The progress log is at the end of §17.
+
 **Headline finding: this is not an early-stage project.** It is a substantially
 complete LMS at "phase 10 / release readiness", with 26 Django apps, ~90 domain
 models, 59 migrations, a full Next.js frontend of ~50 screens, 1,496 tests, and
@@ -76,7 +81,7 @@ defaults live in `base`; relaxations live only in the development modules.
 | App | What it does | Status vs. the ERP brief |
 | --- | --- | --- |
 | `common` | Base models, permissions, pagination, exceptions, throttling, uploads, scanning, storage, validators, logging, middleware, request context | **IMPLEMENTED** |
-| `accounts` | User, roles/capabilities, auth, user administration | **PARTIALLY_IMPLEMENTED** — no `COUNSELLOR` role |
+| `accounts` | User, roles/capabilities, auth, user administration | **IMPLEMENTED** — `COUNSELLOR` added in phase 12.1 |
 | `audit` | Append-only audit log | **IMPLEMENTED** |
 | `health` | Liveness/readiness with a check registry | **IMPLEMENTED** |
 | `students` | `StudentProfile`, human ids (`GRS-S-00042`), fee status flag | **IMPLEMENTED** |
@@ -118,7 +123,7 @@ Mapping the brief's requested entity list to what exists:
 | Permission | `accounts.Capability` + `ROLE_CAPABILITIES` (code, not a table) | Reuse; see §8 |
 | Student | `students.StudentProfile` | Reuse |
 | Trainer | `trainers.TrainerProfile` | Reuse |
-| Counsellor | — | **Create** (as a role; a profile model is optional) |
+| Counsellor | `accounts.UserRole.COUNSELLOR` (phase 12.1) | Reuse. No profile model: unlike a student or trainer, a counsellor has no domain record of their own |
 | Manager / Admin | `UserRole.MANAGER` / `ADMIN` / `SUPERADMIN`, no profile model | Reuse |
 | Course | `courses.Course` | Reuse |
 | CourseModule | `courses.Module` | Reuse |
@@ -435,7 +440,7 @@ This is the actionable list. Everything not named here already exists.
 | # | Gap | Notes |
 | --- | --- | --- |
 | G1 | **DSR (Daily Status Report)** | No model, no API, no screen, no reference anywhere in the repo. The brief specifies ~25 fields and a 6-state workflow (DRAFT → SUBMITTED → UNDER_REVIEW → APPROVED / REJECTED / REVISION_REQUIRED). Entirely new. Natural home: a new `apps/dsr` keyed on `(ClassSession)` or `(Batch, date)`, reusing `ClassSession` for the class and `attendance_summaries` for the counts |
-| G2 | **`COUNSELLOR` role and its workflow** | Role is one entry in `ROLE_CAPABILITIES`. The *workflow* (registration → course selection → batch creation/selection → student added → trainer assigned) is mostly composition of existing APIs: `students.create`, `batches.create`, `enrollments.create`, batch trainer assignment. What is missing is the fast single-screen flow, bulk student import into a batch, student/batch transfer, and duplicate detection on single registration |
+| G2 | ~~`COUNSELLOR` role~~ and its workflow | **Role closed in phase 12.1** — and the API half of the workflow proved to need no new endpoints at all, which the phase's tests demonstrate by driving registration, batch creation, trainer assignment and enrolment through the existing ones. What remains is the *interface*: the fast single-screen flow, bulk student import into a batch, student/batch transfer, and duplicate detection on single registration |
 | G3 | **Soft delete + restore + admin recovery** | No `deleted_at`/`deleted_by`/`delete_reason` on any model; no default-manager filtering; no restore endpoints; no recycle-bin screen. Cross-cutting: needs a `SoftDeleteModel` base in `apps/common/models.py`, a default manager, and a migration per adopting model |
 | G4 | **Export jobs** | No `ExportJob` model, no QUEUED/PROCESSING/COMPLETED/FAILED lifecycle, no background execution. Celery is already running and `stream_csv` already exists — this is a wrapper, not a rewrite |
 | G5 | **Excel and PDF export** | CSV only today. `openpyxl` is already a dependency (used by the importer) and `reportlab` is already used for certificates |
@@ -453,7 +458,7 @@ This is the actionable list. Everything not named here already exists.
 
 | Area | What exists | What is missing |
 | --- | --- | --- |
-| RBAC | Full capability matrix, ladder containment, 160-test sweep | `COUNSELLOR`; capabilities for DSR, exports, performance review |
+| RBAC | Full capability matrix, four-rung ladder, 160-test sweep, counsellor role and the DSR/performance/export capabilities (phase 12.1) | Organisational scoping — a manager still sees the whole institution |
 | Attendance | Records, corrections with history, unique constraint, grouped percentages, bulk marking, CSV import | Status vocabulary (G12); no "today's class workspace" |
 | Exports | 10 reports, streaming CSV, scoped querysets, separate capability | Jobs, formats, background execution |
 | Dashboards | Student, trainer, admin, calendar | Manager, counsellor |
@@ -598,7 +603,7 @@ brief are largely *already done*; what follows is what actually remains.
 | Step | Work | Depends on |
 | --- | --- | --- |
 | **0** | Commit the Phase 11 tree. Triage the three Dependabot PRs separately (do not take Django 6.1 mid-feature) | — |
-| **1** | Add `COUNSELLOR` to `UserRole` + `ROLE_CAPABILITIES` + `lib/capabilities.ts` + the authorization-matrix sweep. Add the new capabilities DSR, exports and performance review will need, in the same change | — |
+| ~~**1**~~ | ✅ **Done (phase 12.1).** `COUNSELLOR` in `UserRole` + `ROLE_CAPABILITIES` + `lib/capabilities.ts` + the matrix sweep; the DSR, performance and export capabilities declared ahead of the features that consume them; report export tightened; the capability mirror made a test | — |
 | **2** | Soft-delete foundation: `SoftDeleteModel` in `apps/common/models.py`, default manager, restore service + audit actions, admin recovery endpoints. Adopt it model by model, migration by migration | 1 |
 | **3** | DSR: new `apps/dsr` — model keyed on `ClassSession`, 6-state workflow, trainer submit / manager review services, access layer, API, tests | 1 |
 | **4** | Course timeline: FK from `ClassSession` to `Lesson` (planned + actual) and per-topic status; planned-vs-actual progress in `apps/progress/reports.py` | — |
@@ -625,7 +630,7 @@ Scored as "an ERP matching the brief", not as "an LMS".
 | --- | --- | --- |
 | Platform foundation (settings, guards, health, errors, logging, request context) | 100% | Complete, tested, hardened |
 | Authentication | 90% | See the authentication report |
-| Authorization / RBAC | 80% | Excellent structure; missing `COUNSELLOR` and org scoping |
+| Authorization / RBAC | 95% | Five roles on a proven-monotonic ladder plus two scoped roles; −5 for no organisational scoping |
 | Audit logging | 95% | Append-only, scrubbed, comprehensive; no retention job or alerting |
 | User / student / trainer management | 95% | Full CRUD, admin screens, per-user audit view |
 | Course catalogue and content | 95% | Categories, courses, modules, lessons, resources, video metadata, authorship |
@@ -659,11 +664,19 @@ Scored as "an ERP matching the brief", not as "an LMS".
 
 **Existing project against its own scope (an LMS): ~93% complete.**
 
-**Existing project against the ERP brief: ~72% complete.**
+**Existing project against the ERP brief: ~74% complete** (72% at the audit;
+phase 12.1 closed the RBAC gap).
 
-The 28% gap is concentrated in eight named items — DSR, the counsellor role and
-workflow, soft delete, export jobs, the manager and counsellor dashboards, the
-risk/performance engine, planned-vs-actual course timeline, and the UX speed
-layer. Every one of them is an **addition**. Nothing in the brief requires
+The remaining gap is concentrated in seven named items — DSR, soft delete,
+export jobs, the manager and counsellor dashboards, the risk/performance engine,
+planned-vs-actual course timeline, the counsellor workflow interface, and the UX
+speed layer. Every one of them is an **addition**. Nothing in the brief requires
 replacing authentication, the database architecture, the API architecture, the
 UI component system, or any working feature.
+
+### Progress log
+
+| Phase | Delivered | Backend tests | Frontend tests |
+| --- | --- | --- | --- |
+| Baseline (6 Sep 2026) | — | 1,339 | 75 |
+| 12.1 RBAC / counsellor foundation | Counsellor role, DSR/performance/export capabilities, report-export hardening, capability mirror | 1,415 | 80 |

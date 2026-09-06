@@ -29,6 +29,7 @@ def test_seed_creates_an_account_for_every_role():
 
     assert User.objects.filter(role=UserRole.SUPERADMIN).count() == 1
     assert User.objects.filter(role=UserRole.MANAGER).count() == 1
+    assert User.objects.filter(role=UserRole.COUNSELLOR).count() == 1
     assert User.objects.filter(role=UserRole.ADMIN).count() == 2
     assert User.objects.filter(role=UserRole.TRAINER).count() == 5
     assert User.objects.filter(role=UserRole.STUDENT).count() == 20
@@ -68,10 +69,24 @@ def test_seeded_profiles_are_not_duplicated_on_a_second_run():
 
 @pytest.mark.django_db
 def test_seed_is_idempotent():
+    """Running it twice produces the roster once.
+
+    Compared against the roster the command builds rather than a number typed
+    here: what this test is about is the *second* run creating nobody, and a
+    literal count turns every new demo account into a failure in a test that has
+    nothing to say about them.
+    """
+    from apps.accounts.management.commands.seed_demo_data import build_demo_accounts
+
+    expected = len(build_demo_accounts())
+
     with mock.patch.dict(os.environ, {"DEMO_USER_PASSWORD": SEED_PASSWORD}):
         call_command("seed_demo_data")
+        after_first_run = User.objects.count()
         call_command("seed_demo_data")
-    assert User.objects.count() == 29
+
+    assert after_first_run == expected
+    assert User.objects.count() == expected
 
 
 @pytest.mark.django_db

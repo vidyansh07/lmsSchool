@@ -110,6 +110,35 @@ def admin_user(db) -> User:
 
 
 @pytest.fixture
+def manager_user(db) -> User:
+    """Runs academic operations; cannot change who anybody *is*."""
+    return User.objects.create_user(
+        email="manager@example.test",
+        password=TEST_PASSWORD,
+        first_name="Mira",
+        last_name="Manager",
+        role=UserRole.MANAGER,
+    )
+
+
+@pytest.fixture
+def counsellor_user(db) -> User:
+    """Brings students in: registers, enrols, staffs the batch, then hands over.
+
+    Holds nothing academic and nothing about accounts, so this fixture is also
+    the one to reach for when a test needs "signed in, trusted with admissions,
+    and refused everything else".
+    """
+    return User.objects.create_user(
+        email="counsellor@example.test",
+        password=TEST_PASSWORD,
+        first_name="Kiran",
+        last_name="Counsellor",
+        role=UserRole.COUNSELLOR,
+    )
+
+
+@pytest.fixture
 def student_profile(admin_user):
     """A student created through the service, so it has a profile and an ID."""
     return create_student(

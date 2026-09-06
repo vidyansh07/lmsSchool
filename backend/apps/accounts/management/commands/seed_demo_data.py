@@ -133,6 +133,7 @@ def build_demo_accounts() -> list[DemoAccount]:
         DemoAccount("admin", "Ada", "Adminson", UserRole.ADMIN),
         DemoAccount("admin2", "Owen", "Operator", UserRole.ADMIN),
         DemoAccount("manager", "Maya", "Managerial", UserRole.MANAGER),
+        DemoAccount("counsellor", "Chetan", "Counsell", UserRole.COUNSELLOR),
     ]
 
     for index, (title, skills, expertise, years) in enumerate(TRAINER_SPECIALITIES, start=1):
