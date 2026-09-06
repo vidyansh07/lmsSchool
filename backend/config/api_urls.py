@@ -35,6 +35,8 @@ app_name = "v1"
 
 urlpatterns = [
     path("auth/", include("apps.accounts.urls")),
+    # Deleted records, across every model that supports recovery.
+    path("recovery/", include("apps.common.recovery_urls")),
     path("users/", include("apps.accounts.user_urls")),
     path("students/", include("apps.students.urls")),
     path("trainers/", include("apps.trainers.urls")),

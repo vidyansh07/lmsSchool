@@ -175,3 +175,29 @@ class ApproveCompletionSerializer(StrictSerializer):
 
 class DecisionNoteSerializer(StrictSerializer):
     note = serializers.CharField(max_length=500)
+
+
+class TimelineNextLessonSerializer(StrictSerializer):
+    id = serializers.CharField()
+    title = serializers.CharField()
+
+
+class TimelineProgressSerializer(StrictSerializer):
+    """`apps.progress.reports.timeline_progress`'s shape, unchanged.
+
+    Percentages are ``allow_null``: a course with no published lessons, a
+    batch with no classes, or one that has not started yet all report `None`
+    rather than a `0` that would misstate what is actually known.
+    """
+
+    as_of = serializers.DateField()
+    sessions_total = serializers.IntegerField()
+    sessions_completed = serializers.IntegerField()
+    course_lessons_total = serializers.IntegerField()
+    lessons_planned = serializers.IntegerField()
+    lessons_covered = serializers.IntegerField()
+    next_lesson = TimelineNextLessonSerializer(allow_null=True)
+    percent_complete = serializers.IntegerField(allow_null=True)
+    percent_expected = serializers.IntegerField(allow_null=True)
+    variance_percent = serializers.IntegerField(allow_null=True)
+    status = serializers.CharField()

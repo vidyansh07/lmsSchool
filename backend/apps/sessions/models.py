@@ -38,6 +38,24 @@ from apps.common.models import BaseModel
 from apps.common.validators import validate_no_control_characters
 
 
+class TopicStatus(models.TextChoices):
+    """Where a *topic* is, as distinct from where the class is.
+
+    `SessionStatus` answers "did the class happen?"; this answers "what was
+    covered, and how far did it get?" — a class can be `COMPLETED` while its
+    topic is `SKIPPED` (nothing was taught, the slot was used for revision or
+    a test) or `RESCHEDULED` (moved onto a later class, without moving the
+    class itself). Keeping the two separate is what lets a plan survive a
+    class being cancelled or moved.
+    """
+
+    PLANNED = "planned", _("Planned")
+    IN_PROGRESS = "in_progress", _("In progress")
+    COMPLETED = "completed", _("Completed")
+    SKIPPED = "skipped", _("Skipped")
+    RESCHEDULED = "rescheduled", _("Rescheduled")
+
+
 class SessionStatus(models.TextChoices):
     """Where a class is in its life.
 
@@ -102,7 +120,38 @@ class ClassSession(BaseModel):
         max_length=250,
         blank=True,
         validators=[validate_no_control_characters],
-        help_text=_("What was covered. Filled in by the trainer."),
+        help_text=_("What was covered. Filled in by the trainer, in their own words."),
+    )
+    planned_lesson = models.ForeignKey(
+        "courses.Lesson",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="planned_sessions",
+        help_text=_(
+            "What the curriculum says this class should cover. Set ahead of "
+            "time, by hand or by autoplan, so a batch's progress can be "
+            "judged against a plan rather than only against the calendar."
+        ),
+    )
+    actual_lesson = models.ForeignKey(
+        "courses.Lesson",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="taught_sessions",
+        help_text=_(
+            "What the class actually covered, confirmed by whoever took it. "
+            "May differ from `planned_lesson` — a trainer who ran behind or "
+            "jumped ahead is exactly the case this field exists to record."
+        ),
+    )
+    topic_status = models.CharField(
+        _("topic status"),
+        max_length=20,
+        choices=TopicStatus.choices,
+        default=TopicStatus.PLANNED,
+        db_index=True,
     )
     notes = models.TextField(_("notes"), max_length=2000, blank=True)
     location = models.CharField(_("location"), max_length=150, blank=True)
@@ -163,6 +212,7 @@ class ClassSession(BaseModel):
             models.Index(fields=["batch", "-session_date"], name="session_batch_date_idx"),
             models.Index(fields=["trainer", "-session_date"], name="session_trainer_date_idx"),
             models.Index(fields=["status", "session_date"], name="session_status_date_idx"),
+            models.Index(fields=["batch", "topic_status"], name="session_batch_topic_idx"),
         ]
 
     def __str__(self) -> str:

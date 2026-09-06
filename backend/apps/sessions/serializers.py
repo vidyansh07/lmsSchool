@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
-from .models import ClassSession, SessionStatus
+from .models import ClassSession, SessionStatus, TopicStatus
 
 
 class ClassSessionSerializer(serializers.ModelSerializer):
@@ -18,6 +18,11 @@ class ClassSessionSerializer(serializers.ModelSerializer):
     ends_at = serializers.DateTimeField(read_only=True)
     duration_minutes = serializers.IntegerField(read_only=True)
     can_take_attendance = serializers.BooleanField(read_only=True)
+    planned_lesson_id = serializers.CharField(read_only=True)
+    planned_lesson_title = serializers.SerializerMethodField()
+    actual_lesson_id = serializers.CharField(read_only=True)
+    actual_lesson_title = serializers.SerializerMethodField()
+    topic_status = serializers.CharField(read_only=True)
 
     class Meta:
         model = ClassSession
@@ -36,6 +41,11 @@ class ClassSessionSerializer(serializers.ModelSerializer):
             "duration_minutes",
             "trainer_name",
             "topic",
+            "planned_lesson_id",
+            "planned_lesson_title",
+            "actual_lesson_id",
+            "actual_lesson_title",
+            "topic_status",
             "location",
             "status",
             "cancellation_reason",
@@ -48,6 +58,30 @@ class ClassSessionSerializer(serializers.ModelSerializer):
     def get_trainer_name(self, obj: ClassSession) -> str:
         """A name, never contact details."""
         return obj.trainer.user.full_name if obj.trainer else ""
+
+    def get_planned_lesson_title(self, obj: ClassSession) -> str | None:
+        return obj.planned_lesson.title if obj.planned_lesson_id else None
+
+    def get_actual_lesson_title(self, obj: ClassSession) -> str | None:
+        return obj.actual_lesson.title if obj.actual_lesson_id else None
+
+
+class SessionTopicSerializer(StrictSerializer):
+    """Record what a class covered — plan or actual, in one call.
+
+    `lesson_id` is optional: a class recorded as `SKIPPED` (see
+    `TopicStatus`) covered nothing, and requiring a lesson for it would force
+    a trainer to pick one that misdescribes what happened.
+    """
+
+    lesson_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    status = serializers.ChoiceField(choices=TopicStatus.choices, default=TopicStatus.COMPLETED)
+
+
+class AutoplanResultSerializer(serializers.Serializer):
+    planned = serializers.IntegerField(read_only=True)
+    lessons_total = serializers.IntegerField(read_only=True)
+    unplanned_remaining = serializers.IntegerField(read_only=True)
 
 
 class ClassSessionWriteSerializer(StrictModelSerializer):

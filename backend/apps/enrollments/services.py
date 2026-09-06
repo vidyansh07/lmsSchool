@@ -50,7 +50,18 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     # progress attached to it — stays exactly as it was.
     EnrollmentStatus.COMPLETED: frozenset(),
     EnrollmentStatus.CANCELLED: frozenset(),
+    # Also terminal, and reached only through `transfer_student` — never by
+    # setting the status directly. A row that says "transferred" but points at
+    # no successor is worse than one that says "cancelled", because a report
+    # would count it as a move and then be unable to say where to.
+    EnrollmentStatus.TRANSFERRED: frozenset(),
 }
+
+#: Statuses a student can be moved *out of*. A completed enrolment is not
+#: transferred anywhere — it finished — and a cancelled one has already ended.
+TRANSFERABLE_STATUSES = frozenset(
+    {EnrollmentStatus.PENDING, EnrollmentStatus.ACTIVE, EnrollmentStatus.SUSPENDED}
+)
 
 
 class CapacityError(ApplicationError):
@@ -352,4 +363,147 @@ def course_progress(enrollment: Enrollment) -> dict[str, Any]:
         "last_lesson_id": str(last.lesson_id) if last else None,
         "last_lesson_title": last.lesson.title if last else None,
         "last_accessed_at": last.last_accessed_at if last else None,
+    }
+
+
+@transaction.atomic
+def transfer_student(
+    *,
+    enrollment: Enrollment,
+    target_batch: Batch,
+    actor: User,
+    reason: str,
+    is_upgrade: bool = False,
+) -> Enrollment:
+    """Move a student from one batch to another, keeping both halves of the story.
+
+    The client moves students between batches often — sideways when a cohort is
+    wrong for them, upwards when they take a longer or different programme — so
+    this is an ordinary operation rather than an administrative correction, and
+    it is built as one.
+
+    What it does *not* do is cancel and re-enrol. That loses the fact that the
+    two rows are one person's single journey, and it makes every transfer look
+    like a drop-out followed by a new sale. Instead the old row moves to
+    ``TRANSFERRED`` and points at the new one, so:
+
+    * a report can tell "left the programme" from "moved batches", which are
+      different facts and were previously the same value;
+    * attendance and progress stay attached to the batch where they happened,
+      which is the only place they mean anything — a class attended in January
+      belongs to January's batch, not to the one the student moved to;
+    * the whole journey is still reachable through
+      :meth:`Enrollment.transfer_chain`, so a percentage across the move can be
+      honest without any single row having to lie.
+
+    An upgrade is the same mechanism with a flag. It is recorded rather than
+    inferred, because "moved to a longer programme" and "moved because the first
+    batch was wrong" are indistinguishable from the two batches afterwards, and
+    only the person doing it knows which happened.
+    """
+    if enrollment.status not in TRANSFERABLE_STATUSES:
+        raise ApplicationError(
+            {
+                "status": [
+                    f"A {enrollment.status} enrolment cannot be transferred. "
+                    "Only a pending, active or suspended one can."
+                ]
+            }
+        )
+    if enrollment.batch_id == target_batch.pk:
+        raise ApplicationError({"batch": ["The student is already on that batch."]})
+    if not reason.strip():
+        # The reason is the only thing that explains the move afterwards, and a
+        # blank one on a screen reads as an answer rather than as silence.
+        raise ApplicationError({"reason": ["Say why the student is being moved."]})
+
+    # Enrolling on the target runs the full set of rules — capacity under a
+    # lock, batch enrollability, duplicate prevention — because a transfer must
+    # not be a way into a batch that would otherwise refuse the student.
+    new_enrollment = enrol_student(
+        student=enrollment.student,
+        batch=target_batch,
+        actor=actor,
+        status=EnrollmentStatus.ACTIVE
+        if enrollment.status == EnrollmentStatus.ACTIVE
+        else EnrollmentStatus.PENDING,
+        note=reason,
+    )
+
+    previous_status = enrollment.status
+    enrollment.status = EnrollmentStatus.TRANSFERRED
+    enrollment.status_changed_at = timezone.now()
+    enrollment.status_note = reason
+    enrollment.transferred_to = new_enrollment
+    enrollment.is_upgrade = is_upgrade
+    enrollment.save(
+        update_fields=[
+            "status",
+            "status_changed_at",
+            "status_note",
+            "transferred_to",
+            "is_upgrade",
+            "updated_at",
+        ]
+    )
+
+    record(
+        action=AuditAction.ENROLLMENT_UPGRADED
+        if is_upgrade
+        else AuditAction.ENROLLMENT_TRANSFERRED,
+        actor=actor,
+        resource_type="enrollment",
+        resource_id=enrollment.pk,
+        context={
+            "student": enrollment.student.student_id,
+            "from_batch": enrollment.batch.code,
+            "to_batch": target_batch.code,
+            "from_status": previous_status,
+            "new_enrollment": new_enrollment.code,
+            "reason": reason,
+            "is_upgrade": is_upgrade,
+        },
+    )
+    return new_enrollment
+
+
+def transfer_attendance_summary(enrollment: Enrollment) -> dict[str, Any]:
+    """Attendance across a student's whole journey, not just their current row.
+
+    The client's requirement, stated as arithmetic: a percentage has to stay
+    honest when somebody moves batches. Read from the current enrolment alone it
+    does not — a student who transferred in March shows as having attended only
+    the classes since March, which makes a long-standing student look new and a
+    struggling one look fine.
+
+    So the figure is summed over :meth:`Enrollment.transfer_chain`. Each batch's
+    own numbers are kept alongside the total, because "78% overall, but 45% on
+    the batch they are on now" is the sentence somebody actually needs, and a
+    single blended number hides it.
+    """
+    from apps.attendance.models import attendance_summaries
+
+    chain = enrollment.transfer_chain()
+    summaries = attendance_summaries([row.pk for row in chain])
+
+    attended = sum(summaries[row.pk]["attended"] or 0 for row in chain)
+    total = sum(summaries[row.pk]["total_sessions"] or 0 for row in chain)
+
+    return {
+        "attended": attended,
+        "total_sessions": total,
+        # None, not zero: a student whose classes have not happened yet has no
+        # attendance percentage, and reporting 0% would read as a failure and
+        # put them on a risk list on their first day.
+        "percentage": round(attended * 100 / total) if total else None,
+        "spans_batches": len(chain) > 1,
+        "per_batch": [
+            {
+                "enrollment": str(row.pk),
+                "batch_code": row.batch.code,
+                "is_current": row.pk == enrollment.pk,
+                **summaries[row.pk],
+            }
+            for row in chain
+        ],
     }

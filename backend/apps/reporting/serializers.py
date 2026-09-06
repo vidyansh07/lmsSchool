@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from apps.common.serializers import StrictModelSerializer, StrictSerializer
 
-from .models import BulkImport
+from .models import BulkImport, ExportFormat, ExportStatus
 
 
 class ColumnSerializer(StrictSerializer):
@@ -109,3 +109,62 @@ class UploadSerializer(StrictSerializer):
     file = serializers.FileField()
     #: Students only: enrol everybody in the file on this batch as well.
     batch = serializers.UUIDField(required=False, allow_null=True)
+
+
+# ---------------------------------------------------------------------------
+# Background export jobs
+# ---------------------------------------------------------------------------
+
+
+class ExportJobRequestSerializer(StrictSerializer):
+    """What it takes to queue an export. Everything else is derived server-side."""
+
+    report_key = serializers.CharField()
+    format = serializers.ChoiceField(choices=ExportFormat.choices)
+    batch = serializers.UUIDField(required=False, allow_null=True)
+    course = serializers.UUIDField(required=False, allow_null=True)
+
+
+class ExportJobSerializer(StrictSerializer):
+    """An export job's status. Not a `ModelSerializer`.
+
+    Deliberately does not expose the underlying `FileField`: DRF's default
+    rendering of a `FileField` is the storage URL, and for a job backed by S3
+    that is a *signed* URL — a bearer credential that would otherwise leave the
+    API response and land in browser history. `download_url` points at this
+    app's own download view instead, which re-checks ownership and expiry on
+    every request. See `apps.common.storage` for why that indirection exists at
+    all.
+
+    Every field that can be empty is a real, typed value here rather than
+    conditionally present, so a job that has not started yet serialises with
+    `started_at: null`, not a missing key.
+    """
+
+    id = serializers.UUIDField(read_only=True)
+    report_key = serializers.CharField()
+    format = serializers.ChoiceField(choices=ExportFormat.choices)
+    filters = serializers.JSONField()
+    status = serializers.ChoiceField(choices=ExportStatus.choices)
+    requested_by_email = serializers.SerializerMethodField()
+    queued_at = serializers.DateTimeField()
+    started_at = serializers.DateTimeField(allow_null=True)
+    finished_at = serializers.DateTimeField(allow_null=True)
+    row_count = serializers.IntegerField()
+    original_filename = serializers.CharField()
+    checksum = serializers.CharField()
+    size_bytes = serializers.IntegerField()
+    error = serializers.CharField()
+    expires_at = serializers.DateTimeField(allow_null=True)
+    download_url = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField()
+
+    def get_requested_by_email(self, obj) -> str | None:
+        return obj.requested_by.email if obj.requested_by_id else None
+
+    def get_download_url(self, obj) -> str | None:
+        if obj.status != ExportStatus.COMPLETED or not obj.file:
+            return None
+        path = f"/api/v1/reports/exports/{obj.pk}/download/"
+        request = self.context.get("request")
+        return request.build_absolute_uri(path) if request is not None else path

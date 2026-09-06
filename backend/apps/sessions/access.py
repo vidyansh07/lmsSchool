@@ -59,6 +59,38 @@ def can_take_attendance(user, session: ClassSession) -> bool:
     return trainer.pk in {session.batch.trainer_id, session.trainer_id}
 
 
+def _teaches(user, batch) -> bool:
+    trainer = batch_access.trainer_profile(user)
+    return trainer is not None and batch.trainer_id == trainer.pk
+
+
+def can_manage_topic(user, session: ClassSession) -> bool:
+    """Record what a class actually covered, or plan what it should.
+
+    Deliberately *not* the same rule as :func:`can_manage_session`. That one
+    answers "may this person edit the timetable?" — `BATCH_MANAGE_SCHEDULE`,
+    which a counsellor holds while setting a batch up. Judging what a class
+    covered against the curriculum is an academic call a counsellor has no
+    business making, so this checks `SESSION_MANAGE_ANY` instead — held by
+    managers and administrators — plus the trainer who actually teaches the
+    batch.
+    """
+    if has_capability(user, Capability.SESSION_MANAGE_ANY):
+        return True
+    return _teaches(user, session.batch)
+
+
+def can_manage_batch_topics(user, batch) -> bool:
+    """Run `autoplan_batch` for a batch. Same rule as :func:`can_manage_topic`
+
+    — autoplanning only ever sets `planned_lesson`, the field a trainer may
+    already set for one class by hand.
+    """
+    if has_capability(user, Capability.SESSION_MANAGE_ANY):
+        return True
+    return _teaches(user, batch)
+
+
 def manageable_sessions(user) -> QuerySet[ClassSession]:
     base = ClassSession.objects.with_related()
     if has_capability(user, Capability.BATCH_MANAGE_SCHEDULE):

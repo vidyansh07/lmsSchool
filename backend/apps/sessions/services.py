@@ -16,7 +16,7 @@ from apps.audit.services import AuditAction, record
 from apps.batches.models import Batch, BatchStatus
 from apps.common.exceptions import ApplicationError
 
-from .models import ClassSession, SessionStatus, TrainerAssignmentHistory
+from .models import ClassSession, SessionStatus, TopicStatus, TrainerAssignmentHistory
 
 #: How far ahead sessions may be generated in one call. Bounded because a
 #: mistyped date should not create ten thousand rows.
@@ -312,3 +312,110 @@ def record_trainer_assignment(
     return TrainerAssignmentHistory.objects.create(
         batch=batch, trainer=trainer, assigned_at=now, assigned_by=actor, note=note
     )
+
+
+# ---------------------------------------------------------------------------
+# Planned-versus-actual topics
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def plan_session_topic(*, session: ClassSession, actor: User, lesson) -> ClassSession:
+    """Set what a class is meant to cover, ahead of the class itself.
+
+    Kept separate from :func:`record_session_topic`: a plan is a prediction
+    made in advance, by hand or by :func:`autoplan_batch`, and a class that
+    ran differently should not silently erase it — the gap between the two is
+    the whole point of `apps.progress.reports.timeline_progress`.
+    """
+    session.planned_lesson = lesson
+    session.full_clean()
+    session.save(update_fields=["planned_lesson", "updated_at"])
+
+    record(
+        action=AuditAction.SESSION_TOPIC_PLANNED,
+        actor=actor,
+        resource_type="class_session",
+        resource_id=session.pk,
+        context={
+            "batch_code": session.batch.code,
+            "date": session.session_date.isoformat(),
+            "lesson_id": str(lesson.pk) if lesson else None,
+        },
+    )
+    return session
+
+
+@transaction.atomic
+def record_session_topic(
+    *, session: ClassSession, actor: User, lesson=None, status: str = TopicStatus.COMPLETED
+) -> ClassSession:
+    """Record what a class actually covered, once it has happened.
+
+    `lesson` is optional: a class recorded as `SKIPPED` covered nothing, and
+    forcing a lesson onto it would misdescribe what happened rather than
+    document it.
+    """
+    session.actual_lesson = lesson
+    session.topic_status = status
+    session.full_clean()
+    session.save(update_fields=["actual_lesson", "topic_status", "updated_at"])
+
+    record(
+        action=AuditAction.SESSION_TOPIC_RECORDED,
+        actor=actor,
+        resource_type="class_session",
+        resource_id=session.pk,
+        context={
+            "batch_code": session.batch.code,
+            "date": session.session_date.isoformat(),
+            "lesson_id": str(lesson.pk) if lesson else None,
+            "topic_status": status,
+        },
+    )
+    return session
+
+
+@transaction.atomic
+def autoplan_batch(*, batch: Batch, actor: User) -> dict[str, Any]:
+    """Assign a batch's unplanned classes the next uncovered lesson in order.
+
+    The curriculum is a sequence — module position, then lesson position —
+    and a batch's classes are a sequence too, so the obvious first plan is to
+    pair them up in order. A session that already carries a hand-made plan is
+    left untouched, and the lesson it uses is removed from the queue so it is
+    never handed to a second class; this is what keeps a second call a no-op.
+    Only published lessons are ever queued, and a cancelled or superseded
+    (rescheduled-away) class is never given one, because neither will happen.
+    """
+    from apps.courses.models import Lesson, PublishStatus
+
+    lessons = list(
+        Lesson.objects.filter(
+            module__course_id=batch.course_id, status=PublishStatus.PUBLISHED
+        ).order_by("module__position", "position")
+    )
+
+    used_lesson_ids = set(
+        ClassSession.objects.filter(batch=batch, planned_lesson_id__isnull=False).values_list(
+            "planned_lesson_id", flat=True
+        )
+    )
+    available = [lesson for lesson in lessons if lesson.pk not in used_lesson_ids]
+
+    sessions = list(
+        ClassSession.objects.filter(batch=batch, planned_lesson_id__isnull=True)
+        .exclude(status__in=(SessionStatus.CANCELLED, SessionStatus.RESCHEDULED))
+        .order_by("session_date", "start_time")
+    )
+
+    planned = 0
+    for session, lesson in zip(sessions, available, strict=False):
+        plan_session_topic(session=session, actor=actor, lesson=lesson)
+        planned += 1
+
+    return {
+        "planned": planned,
+        "lessons_total": len(lessons),
+        "unplanned_remaining": max(len(sessions) - len(available), 0),
+    }

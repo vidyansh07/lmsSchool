@@ -49,6 +49,11 @@ class EnrollmentStatus(models.TextChoices):
     SUSPENDED = "suspended", _("Suspended")
     COMPLETED = "completed", _("Completed")
     CANCELLED = "cancelled", _("Cancelled")
+    # The student did not stop; they went somewhere else. Kept apart from
+    # CANCELLED because "left the programme" and "moved to another batch" are
+    # different facts, and a report that cannot tell them apart will report
+    # every transfer as a drop-out.
+    TRANSFERRED = "transferred", _("Transferred to another batch")
 
 
 #: Statuses that occupy a seat in the batch. A cancelled enrolment frees its
@@ -75,6 +80,16 @@ LIVE_STATUS_LIST = [
     EnrollmentStatus.SUSPENDED,
 ]
 LIVE_STATUSES = frozenset(LIVE_STATUS_LIST)
+
+#: TRANSFERRED appears in none of the three status sets, which is the whole
+#: behaviour: a moved enrolment frees its seat, grants no access, and is not
+#: live — so the student can be enrolled on that batch again later without the
+#: uniqueness constraint objecting to the row they left behind.
+
+#: How many links a transfer chain may have before we stop walking it. A cycle
+#: is only reachable through a data error, but a hung request is a worse way to
+#: find one than a short list.
+_MAX_CHAIN = 25
 
 #: Statuses that grant access to the course content.
 #:
@@ -171,6 +186,20 @@ class Enrollment(SoftDeleteBaseModel):
         help_text=_("Why the status last changed. Shown to administrators only."),
     )
 
+    transferred_to = models.OneToOneField(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="transferred_from",
+        help_text=_("Where this student went. Set when the enrolment was moved, not cancelled."),
+    )
+    is_upgrade = models.BooleanField(
+        _("was an upgrade"),
+        default=False,
+        help_text=_("A move to a different or longer programme, rather than a lateral transfer."),
+    )
+
     created_by = models.ForeignKey(
         "accounts.User",
         null=True,
@@ -231,6 +260,44 @@ class Enrollment(SoftDeleteBaseModel):
     @property
     def holds_seat(self) -> bool:
         return self.status in SEAT_HOLDING_STATUSES
+
+    @property
+    def was_moved(self) -> bool:
+        return self.status == EnrollmentStatus.TRANSFERRED
+
+    def transfer_chain(self) -> list[Enrollment]:
+        """Every enrolment this student held for this journey, oldest first.
+
+        A transfer ends one enrolment and starts another, so a student who moved
+        batches twice has three rows and no single one of them tells the truth
+        about their attendance or their progress. The client was explicit that a
+        percentage has to stay honest across a move, and this is what makes that
+        possible: a caller asks for the chain and aggregates over all of it,
+        rather than reporting the fragment that happens to be current.
+
+        Walks backwards to the first row and then forwards, so it returns the
+        same list whichever link it is called on. Bounded by ``_MAX_CHAIN``
+        because a cycle is only reachable through a data error — but a hung
+        request is a worse way to discover one than a short list.
+        """
+        first = self
+        seen = {first.pk}
+        while len(seen) < _MAX_CHAIN:
+            previous = getattr(first, "transferred_from", None)
+            if previous is None or previous.pk in seen:
+                break
+            first = previous
+            seen.add(first.pk)
+
+        chain = [first]
+        current = first
+        while len(chain) < _MAX_CHAIN:
+            nxt = current.transferred_to
+            if nxt is None or nxt.pk in {row.pk for row in chain}:
+                break
+            chain.append(nxt)
+            current = nxt
+        return chain
 
     @property
     def effective_delivery_mode(self) -> str:

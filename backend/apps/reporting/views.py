@@ -14,25 +14,30 @@ whole result set in memory.
 
 from __future__ import annotations
 
-from django.http import Http404, StreamingHttpResponse
+from django.http import FileResponse, Http404, StreamingHttpResponse
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status as http_status
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.roles import Capability, has_capability
 from apps.audit.services import AuditAction, record
 from apps.batches import access as batch_access
+from apps.common.exceptions import ConflictError
 from apps.common.permissions import IsActiveUser
 from apps.common.throttling import BurstThrottle
 from apps.courses import access as course_access
 
-from . import access, dashboards, exports, importers, metrics, reports
-from .models import BulkImport
+from . import access, dashboards, exports, importers, metrics, reports, tasks, writers
+from .models import TERMINAL_EXPORT_STATUSES, BulkImport, ExportJob, ExportStatus
 from .serializers import (
     AdminDashboardSerializer,
     BatchSummarySerializer,
     BulkImportSerializer,
+    ExportJobRequestSerializer,
+    ExportJobSerializer,
     MetricSerializer,
     ReportDefinitionSerializer,
     ReportPageSerializer,
@@ -76,8 +81,21 @@ def _filters(request):
 
 def _queryset_for(request, source: str, batch, course):
     """The scoped queryset a report producer expects."""
+    return _queryset_for_user(request.user, source, batch, course)
+
+
+def _queryset_for_user(user, source: str, batch, course):
+    """The same resolution, keyed on a user rather than a request.
+
+    Split out so `apps.reporting.tasks.run_export` can re-derive a job's
+    queryset from the requesting user's *current* access without needing a
+    request object — there is no request inside a worker. This is the only
+    function a background export uses to build its queryset, which is what
+    keeps "run it the same way the screen and the synchronous download do" true
+    for the queued path as well.
+    """
     if source == "batches":
-        rows = batch_access.visible_batches(request.user)
+        rows = batch_access.visible_batches(user)
         if batch is not None:
             rows = rows.filter(pk=batch.pk)
         if course is not None:
@@ -87,9 +105,9 @@ def _queryset_for(request, source: str, batch, course):
     if source == "trainers":
         from apps.trainers.models import TrainerProfile
 
-        if not access.can_read_everything(request.user):
+        if not access.can_read_everything(user):
             # A trainer sees their own activity and nobody else's.
-            trainer = batch_access.trainer_profile(request.user)
+            trainer = batch_access.trainer_profile(user)
             return (
                 TrainerProfile.objects.filter(pk=trainer.pk)
                 if trainer
@@ -100,7 +118,7 @@ def _queryset_for(request, source: str, batch, course):
             rows = rows.filter(batches=batch)
         return rows.distinct()
 
-    rows = batch_access.visible_enrollments(request.user)
+    rows = batch_access.visible_enrollments(user)
     if batch is not None:
         rows = rows.filter(batch=batch)
     if course is not None:
@@ -202,8 +220,6 @@ class ReportExportView(APIView):
         tags=REPORTS_TAG,
     )
     def get(self, request, key):
-        from apps.accounts.roles import Capability, has_capability
-
         if not access.can_read_reports(request.user):
             return _forbidden(request, "Reports are staff-facing.")
 
@@ -245,6 +261,215 @@ class ReportExportView(APIView):
         response["X-Content-Type-Options"] = "nosniff"
         response["Cache-Control"] = "private, no-store"
         return response
+
+
+# ---------------------------------------------------------------------------
+# Background export jobs
+# ---------------------------------------------------------------------------
+
+
+def _export_job_for(request, job_id) -> ExportJob:
+    """The one job, or 404 — for somebody else's id exactly as for your own.
+
+    Filtering by ownership *before* `get_object_or_404` is what makes the two
+    cases indistinguishable: a job that does not exist and a job that belongs
+    to somebody else both raise the same `Http404`, the same way
+    `apps.reporting.views._import_for` and
+    `apps.assignments.views.SubmissionFileDownloadView` already do it. A 403
+    here would tell a caller a job id is real, just not theirs — which is
+    exactly the id-enumeration a 404 is meant to close off.
+    """
+    rows = ExportJob.objects.with_related()
+    if not access.can_view_any_export_job(request.user):
+        rows = rows.for_user(request.user)
+    return get_object_or_404(rows, pk=job_id)
+
+
+class ExportJobQueueView(APIView):
+    """Queue a report to be rendered off the request cycle, and list jobs.
+
+    Queueing carries the same two gates as `ReportExportView`, for the same
+    reason: reading a report and exporting one are different rights, and a
+    role holding only one of them (the counsellor holds `data.export` without
+    `report.view_any`) must be refused here exactly as it is refused there.
+    Queueing does no work itself beyond validating the request and creating
+    the row — `run_export` does the rest, and re-derives this same scope for
+    itself rather than trusting anything decided here (see that task's
+    docstring for why).
+
+    Listing carries neither gate. It shows a job the caller already owns —
+    that a role's export rights changed after the job was queued does not
+    retract the caller's own history of what they asked for — or, for
+    `export.view_any`, everybody's.
+    """
+
+    throttle_classes = (BurstThrottle,)
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="List export jobs",
+        parameters=[],
+        responses={200: ExportJobSerializer(many=True)},
+        tags=REPORTS_TAG,
+    )
+    def get(self, request):
+        rows = ExportJob.objects.with_related()
+        if not access.can_view_any_export_job(request.user):
+            rows = rows.for_user(request.user)
+        serializer = ExportJobSerializer(rows, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="Queue a background export",
+        request=ExportJobRequestSerializer,
+        responses={202: ExportJobSerializer},
+        tags=REPORTS_TAG,
+    )
+    def post(self, request):
+        if not access.can_read_reports(request.user):
+            return _forbidden(request, "Reports are staff-facing.")
+        if not has_capability(request.user, Capability.DATA_EXPORT):
+            record(
+                action=AuditAction.PERMISSION_DENIED,
+                actor=request.user,
+                resource_type="report",
+                resource_id="",
+                result="failure",
+                context={"attempted": "export.queue"},
+            )
+            return _forbidden(request, "You cannot export data.")
+
+        serializer = ExportJobRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        key = serializer.validated_data["report_key"]
+        if key not in reports.REPORTS:
+            raise Http404
+
+        batch = course = None
+        batch_id = serializer.validated_data.get("batch")
+        course_id = serializer.validated_data.get("course")
+        if batch_id:
+            batch = get_object_or_404(batch_access.visible_batches(request.user), pk=batch_id)
+        if course_id:
+            course = get_object_or_404(course_access.visible_courses(request.user), pk=course_id)
+
+        job = ExportJob.objects.create(
+            report_key=key,
+            format=serializer.validated_data["format"],
+            filters={
+                "batch_id": str(batch.pk) if batch else None,
+                "batch_label": batch.code if batch else None,
+                "course_id": str(course.pk) if course else None,
+                "course_label": course.title if course else None,
+            },
+            requested_by=request.user,
+            status=ExportStatus.QUEUED,
+        )
+        record(
+            action=AuditAction.EXPORT_QUEUED,
+            actor=request.user,
+            resource_type="export_job",
+            resource_id=job.pk,
+            context={"report": key, "format": job.format},
+            durable=False,
+        )
+        tasks.run_export.delay(str(job.pk))
+        # In production this call only enqueues — `job` is still `QUEUED` when
+        # the response is built, correctly. Under `CELERY_TASK_ALWAYS_EAGER`
+        # (`config.settings.test`), the task above has already run against a
+        # separate row fetched from the database, and this in-memory `job`
+        # instance would otherwise serialise the stale values it was created
+        # with. Re-reading makes the response accurate in both cases.
+        job.refresh_from_db()
+        return Response(
+            ExportJobSerializer(job, context={"request": request}).data,
+            status=http_status.HTTP_202_ACCEPTED,
+        )
+
+
+class ExportJobDetailView(APIView):
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Export job status", responses={200: ExportJobSerializer}, tags=REPORTS_TAG
+    )
+    def get(self, request, job_id):
+        job = _export_job_for(request, job_id)
+        return Response(ExportJobSerializer(job, context={"request": request}).data)
+
+
+class ExportJobDownloadView(APIView):
+    """Stream a finished export. The private-storage rules apply here too:
+    the application serves the download after its own authorization check,
+    never a signed storage URL — see `apps.common.storage`.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Download a finished export",
+        responses={200: OpenApiResponse(description="The file, as an attachment.")},
+        tags=REPORTS_TAG,
+    )
+    def get(self, request, job_id):
+        job = _export_job_for(request, job_id)
+        # Not ready, failed, cancelled, past its lifetime, or the file object
+        # is somehow missing: every one of these reads as "not found" rather
+        # than a distinguishable error, so a caller cannot use the response
+        # shape to probe why a job they do not fully control isn't available.
+        if (
+            job.status != ExportStatus.COMPLETED
+            or not job.file
+            or (job.expires_at is not None and job.expires_at <= timezone.now())
+        ):
+            raise Http404
+
+        record(
+            action=AuditAction.EXPORT_DOWNLOADED,
+            actor=request.user,
+            resource_type="export_job",
+            resource_id=job.pk,
+            context={"report": job.report_key, "format": job.format},
+            durable=False,
+        )
+
+        name = job.original_filename or writers.filename_for(job.report_key, job.format)
+        response = FileResponse(
+            job.file.open("rb"),
+            content_type=writers.CONTENT_TYPES.get(job.format, "application/octet-stream"),
+        )
+        response["Content-Disposition"] = f'attachment; filename="{name}"'
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        return response
+
+
+class ExportJobCancelView(APIView):
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Cancel an export job",
+        request=None,
+        responses={200: ExportJobSerializer},
+        tags=REPORTS_TAG,
+    )
+    def post(self, request, job_id):
+        job = _export_job_for(request, job_id)
+        if job.status in TERMINAL_EXPORT_STATUSES:
+            raise ConflictError(f"This export is already {job.get_status_display().lower()}.")
+
+        job.status = ExportStatus.CANCELLED
+        job.finished_at = timezone.now()
+        job.save(update_fields=["status", "finished_at", "updated_at"])
+        record(
+            action=AuditAction.EXPORT_CANCELLED,
+            actor=request.user,
+            resource_type="export_job",
+            resource_id=job.pk,
+            context={"report": job.report_key},
+            durable=False,
+        )
+        return Response(ExportJobSerializer(job, context={"request": request}).data)
 
 
 class MetricsView(APIView):
@@ -338,8 +563,6 @@ class BatchSummaryView(APIView):
 
 
 def _may_import(request) -> bool:
-    from apps.accounts.roles import Capability, has_capability
-
     return has_capability(request.user, Capability.DATA_IMPORT)
 
 

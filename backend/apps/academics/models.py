@@ -75,6 +75,10 @@ DEFAULT_POLICY: dict[str, object] = {
     "final_exam_required_for_completion": False,
     "batch_directory_visible": True,
     "grade_bands": DEFAULT_GRADE_BANDS,
+    "risk_attendance_percent": Decimal("75.00"),
+    "risk_assessment_average_percent": Decimal("50.00"),
+    "risk_missed_assignments": 2,
+    "risk_progress_variance_percent": Decimal("15.00"),
 }
 
 #: Every configurable rule, in one list, so the API, the admin and the resolver
@@ -199,6 +203,51 @@ class AcademicPolicy(BaseModel):
         help_text=_("Names and student ids only — never contact details (§7.7)."),
     )
 
+    # --- Risk thresholds
+    #
+    # These feed `apps.performance.risk`, not the completion rules above: a
+    # student can be fully eligible to complete a course and still be flagged
+    # as at risk along the way — risk is an early warning, completion is a
+    # gate. Kept on this table rather than a new one because they are the same
+    # kind of number, resolved the same way (course, then institution, then the
+    # code default), and a second table would just be this one with different
+    # field names.
+    risk_attendance_percent = models.DecimalField(
+        _("attendance risk threshold %"),
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_("Below this attendance percentage, a student is flagged at risk."),
+    )
+    risk_assessment_average_percent = models.DecimalField(
+        _("assessment average risk threshold %"),
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_("Below this weekly-test average, a student is flagged at risk."),
+    )
+    risk_missed_assignments = models.PositiveSmallIntegerField(
+        _("missed assignments risk threshold"),
+        null=True,
+        blank=True,
+        help_text=_(
+            "This many overdue assignments with no submission at all flags a student at risk."
+        ),
+    )
+    risk_progress_variance_percent = models.DecimalField(
+        _("progress variance risk threshold %"),
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=_(
+            "How far behind the schedule implied by the batch's dates a student's "
+            "lesson progress may fall before they are flagged at risk."
+        ),
+    )
+
     updated_by = models.ForeignKey(
         "accounts.User",
         null=True,
@@ -281,6 +330,9 @@ class AcademicPolicy(BaseModel):
             "minimum_test_average_percent",
             "minimum_test_completion_percent",
             "minimum_lesson_completion_percent",
+            "risk_attendance_percent",
+            "risk_assessment_average_percent",
+            "risk_progress_variance_percent",
         ):
             value = getattr(self, field)
             if value is not None and not (Decimal(0) <= value <= Decimal(100)):
@@ -290,6 +342,8 @@ class AcademicPolicy(BaseModel):
             not 1 <= self.assignment_default_max_attempts <= 20
         ):
             errors["assignment_default_max_attempts"] = "Allow between 1 and 20 attempts."
+        if self.risk_missed_assignments is not None and self.risk_missed_assignments < 1:
+            errors["risk_missed_assignments"] = "Must be at least 1 missed assignment."
         for field in ("assignment_default_max_marks", "test_default_max_marks"):
             value = getattr(self, field)
             if value is not None and value <= 0:

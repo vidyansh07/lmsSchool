@@ -38,6 +38,16 @@ from typing import Any
 
 from apps.progress.bulk import ProgressInputs
 
+#: How far `percent_complete` may sit from `percent_expected` before a batch
+#: is called `ahead` or `behind` rather than `on_track`. Provisional: the
+#: client has said batches routinely run behind schedule and that this is
+#: normal here, so a tight band would flag most batches most of the time and
+#: be ignored within a week. These belong in `AcademicPolicy`, configurable
+#: per course or per institution, once somebody asks for that — today they are
+#: one global number.
+TIMELINE_AHEAD_THRESHOLD_PERCENT = 15
+TIMELINE_BEHIND_THRESHOLD_PERCENT = -15
+
 
 def _percent(done: int, total: int) -> int:
     return round(done * 100 / total) if total else 0
@@ -287,3 +297,121 @@ def progress_reports(enrollments) -> Iterator[tuple[Any, dict[str, Any]]]:
     data = ProgressInputs(rows)
     for enrollment in rows:
         yield enrollment, progress_report(enrollment, data)
+
+
+# ---------------------------------------------------------------------------
+# timeline_progress — planned-versus-actual, at the batch rather than the
+# student. Above answers "how far is this student?"; this answers "is this
+# batch's teaching where the curriculum says it should be?" — a question
+# `ClassSession.topic` alone could never answer, because free text cannot be
+# compared to a position in a course.
+# ---------------------------------------------------------------------------
+
+
+def timeline_progress(batch) -> dict[str, Any]:
+    """Planned-versus-actual progress for one batch, as of today.
+
+    Two things this must never do, because a dashboard renders it unattended:
+    divide by zero, and return ``NaN``. A course with no published lessons, a
+    batch with no classes yet, and a batch that has not started are all real,
+    unremarkable states — each is reported with ``None`` percentages and a
+    `not_started` status, not a crash and not a misleading ``0``.
+
+    Costed at two queries regardless of the course's size or the batch's
+    length: one for the course's published lessons (needed in full, to name
+    `next_lesson`), one aggregate over the batch's classes. Neither grows with
+    how many lessons or classes exist.
+    """
+    from django.utils import timezone
+
+    from apps.courses.models import Lesson, PublishStatus
+
+    course_lessons = list(
+        Lesson.objects.filter(module__course_id=batch.course_id, status=PublishStatus.PUBLISHED)
+        .order_by("module__position", "position")
+        .values("id", "title")
+    )
+    course_lessons_total = len(course_lessons)
+
+    stats = _timeline_session_stats(batch)
+    sessions_total = stats["sessions_total"]
+
+    covered_ids = set(stats["covered_lesson_ids"] or [])
+    next_lesson = next(
+        (
+            {"id": str(lesson["id"]), "title": lesson["title"]}
+            for lesson in course_lessons
+            if lesson["id"] not in covered_ids
+        ),
+        None,
+    )
+
+    result: dict[str, Any] = {
+        "as_of": timezone.localdate().isoformat(),
+        "sessions_total": sessions_total,
+        "sessions_completed": stats["sessions_completed"],
+        "course_lessons_total": course_lessons_total,
+        "lessons_planned": stats["lessons_planned"],
+        "lessons_covered": len(covered_ids),
+        "next_lesson": next_lesson,
+        "percent_complete": None,
+        "percent_expected": None,
+        "variance_percent": None,
+        "status": "not_started",
+    }
+
+    # A course nobody has published anything on, or a batch with no classes
+    # yet, has nothing to measure progress against — reporting 0% here would
+    # claim to know something that is actually unknowable.
+    if course_lessons_total == 0 or sessions_total == 0:
+        return result
+
+    result["percent_complete"] = round(len(covered_ids) * 100 / course_lessons_total)
+
+    today = timezone.localdate()
+    if today < batch.start_date:
+        return result
+
+    total_days = max((batch.end_date - batch.start_date).days, 1)
+    elapsed_days = min(max((today - batch.start_date).days, 0), total_days)
+    percent_expected = round(elapsed_days * 100 / total_days)
+    result["percent_expected"] = percent_expected
+
+    variance = result["percent_complete"] - percent_expected
+    result["variance_percent"] = variance
+    if variance > TIMELINE_AHEAD_THRESHOLD_PERCENT:
+        result["status"] = "ahead"
+    elif variance < TIMELINE_BEHIND_THRESHOLD_PERCENT:
+        result["status"] = "behind"
+    else:
+        result["status"] = "on_track"
+    return result
+
+
+def _timeline_session_stats(batch) -> dict[str, Any]:
+    """The one aggregate query `timeline_progress` needs over a batch's classes.
+
+    Kept separate mainly so the query itself — every number `timeline_progress`
+    needs, gathered in a single round trip — is readable on its own.
+    """
+    from django.contrib.postgres.aggregates import ArrayAgg
+    from django.db.models import Count, Q
+
+    from apps.sessions.models import ClassSession, SessionStatus, TopicStatus
+
+    return (
+        ClassSession.objects.filter(batch=batch)
+        .exclude(status__in=(SessionStatus.CANCELLED, SessionStatus.RESCHEDULED))
+        .aggregate(
+            sessions_total=Count("id"),
+            sessions_completed=Count("id", filter=Q(status=SessionStatus.COMPLETED)),
+            lessons_planned=Count(
+                "planned_lesson_id", filter=Q(planned_lesson_id__isnull=False), distinct=True
+            ),
+            covered_lesson_ids=ArrayAgg(
+                "actual_lesson_id",
+                filter=Q(topic_status=TopicStatus.COMPLETED, actual_lesson_id__isnull=False),
+                distinct=True,
+            ),
+        )
+    )

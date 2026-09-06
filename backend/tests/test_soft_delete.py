@@ -90,6 +90,30 @@ def test_every_model_offers_a_way_to_see_deleted_rows(model):
 @pytest.mark.parametrize(
     "model", soft_deletable_models(), ids=[m._meta.label for m in soft_deletable_models()]
 )
+def test_both_managers_can_answer_about_deleted_rows(model):
+    """`alive()`, `dead()` and `with_deleted()` exist on every adopting model.
+
+    A model whose domain queryset inherits plain `models.QuerySet` still filters
+    correctly and still passes every test above — and then has none of these
+    methods. The gap surfaced as an `AttributeError` raised from inside the
+    recycle bin, a screen with no obvious connection to the model that broke it.
+
+    `soft_delete_managers` now refuses that queryset at import time, so this is
+    the belt to that brace: it also covers a model that builds its managers by
+    hand and never calls the helper at all.
+    """
+    for manager_name in ("objects", "all_objects"):
+        manager = getattr(model, manager_name)
+        for method in ("alive", "dead", "with_deleted"):
+            assert hasattr(manager, method), (
+                f"{model._meta.label}.{manager_name} has no {method}() — its queryset "
+                f"probably inherits models.QuerySet instead of SoftDeleteQuerySet"
+            )
+
+
+@pytest.mark.parametrize(
+    "model", soft_deletable_models(), ids=[m._meta.label for m in soft_deletable_models()]
+)
 def test_the_base_manager_does_not(model):
     """The footgun this test exists for.
 

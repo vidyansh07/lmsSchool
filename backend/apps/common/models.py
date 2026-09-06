@@ -105,11 +105,22 @@ def soft_delete_managers(queryset_class: type[models.QuerySet]) -> tuple[models.
     ``objects`` filters and keeps the domain queryset's own methods;
     ``all_objects`` keeps them and sees everything.
 
-    The domain queryset should also inherit :class:`SoftDeleteQuerySet` so
-    ``alive()``, ``dead()`` and ``with_deleted()`` are available on it.
-    ``tests/test_soft_delete.py`` asserts the filtering actually happens, per
-    model, rather than trusting that this was called.
+    The domain queryset **must** inherit :class:`SoftDeleteQuerySet`, and that is
+    checked here rather than asked for in prose. It was prose once, and the
+    first model written against it inherited plain ``models.QuerySet``: the
+    filtering worked, the tests passed, and `alive()`/`dead()` were simply
+    absent — which surfaced later as an `AttributeError` from inside the recycle
+    bin, a screen nobody had connected to the model that broke it.
+
+    Failing at import time turns that into one clear sentence at the moment the
+    mistake is made.
     """
+    if not issubclass(queryset_class, SoftDeleteQuerySet):
+        raise TypeError(
+            f"{queryset_class.__name__} must inherit SoftDeleteQuerySet to be used with "
+            "soft_delete_managers(); without it the model has no alive()/dead()/with_deleted(), "
+            "and anything reading deleted rows — the recycle bin above all — fails at runtime."
+        )
     return (
         SoftDeleteManager.from_queryset(queryset_class)(),
         models.Manager.from_queryset(queryset_class)(),

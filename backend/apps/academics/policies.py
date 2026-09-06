@@ -42,6 +42,10 @@ class EffectivePolicy:
     final_exam_required_for_completion: bool
     batch_directory_visible: bool
     grade_bands: list
+    risk_attendance_percent: Decimal
+    risk_assessment_average_percent: Decimal
+    risk_missed_assignments: int
+    risk_progress_variance_percent: Decimal
 
     def as_dict(self) -> dict[str, Any]:
         return {field: getattr(self, field) for field in POLICY_FIELDS}

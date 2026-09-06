@@ -30,6 +30,11 @@ def can_read_everything(user) -> bool:
     return has_capability(user, Capability.REPORT_VIEW_ANY)
 
 
+def can_view_any_export_job(user) -> bool:
+    """Whether `user` may see and cancel export jobs they did not queue."""
+    return has_capability(user, Capability.EXPORT_VIEW_ANY)
+
+
 def visible_batches(user):
     return batch_access.visible_batches(user)
 

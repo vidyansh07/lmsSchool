@@ -54,6 +54,30 @@ class DeliveryMode(models.TextChoices):
     HYBRID = "hybrid", _("Both")
 
 
+class BatchKind(models.TextChoices):
+    """What shape of training this batch runs.
+
+    A field rather than three products, for the same reason `DeliveryMode` is:
+    all three kinds share courses, sessions, attendance, assessments and
+    certificates. What differs is how the institution talks about them and, in
+    time, which completion rules apply — configuration, not architecture.
+
+    Added because the client names internship and modular cohorts alongside
+    regular ones and moves students between them. Nothing in the model said a
+    batch had a kind, so screens were inferring it from the name.
+
+    ``MODULAR`` is recorded but nothing yet branches on it. Whether a modular
+    student is enrolled on the whole course and taking it in pieces, or on only
+    some of its modules, is an open question with the client — and the two give
+    different answers for progress and completion. The field is safe to store
+    now; guessing the semantics would not be.
+    """
+
+    REGULAR = "regular", _("Regular")
+    INTERNSHIP = "internship", _("Internship")
+    MODULAR = "modular", _("Modular")
+
+
 class BatchStatus(models.TextChoices):
     """Where a batch is in its life.
 
@@ -141,6 +165,14 @@ class Batch(SoftDeleteBaseModel):
         choices=DeliveryMode.choices,
         default=DeliveryMode.OFFLINE,
         help_text=_("How this cohort is taught. A student may differ; see Enrollment."),
+    )
+    kind = models.CharField(
+        _("kind"),
+        max_length=12,
+        choices=BatchKind.choices,
+        default=BatchKind.REGULAR,
+        db_index=True,
+        help_text=_("Regular, internship or modular. Descriptive today; see BatchKind."),
     )
 
     trainer = models.ForeignKey(

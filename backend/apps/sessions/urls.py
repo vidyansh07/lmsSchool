@@ -5,12 +5,15 @@ from django.urls import path
 from .views import (
     BatchSessionGenerateView,
     BatchSessionsView,
+    BatchTimelineAutoplanView,
+    BatchTimelineView,
     BatchTrainerHistoryView,
     MySessionsTodayView,
     SessionDetailView,
     SessionListView,
     SessionRescheduleView,
     SessionStatusView,
+    SessionTopicView,
 )
 
 session_patterns = [
@@ -20,6 +23,7 @@ session_patterns = [
     path("<uuid:session_id>/", SessionDetailView.as_view(), name="detail"),
     path("<uuid:session_id>/status/", SessionStatusView.as_view(), name="status"),
     path("<uuid:session_id>/reschedule/", SessionRescheduleView.as_view(), name="reschedule"),
+    path("<uuid:session_id>/topic/", SessionTopicView.as_view(), name="topic"),
 ]
 
 #: Mounted under the batch routes, because a batch is where classes come from.
@@ -34,5 +38,11 @@ batch_session_patterns = [
         "<uuid:batch_id>/trainer-history/",
         BatchTrainerHistoryView.as_view(),
         name="trainer-history",
+    ),
+    path("<uuid:batch_id>/timeline/", BatchTimelineView.as_view(), name="timeline"),
+    path(
+        "<uuid:batch_id>/timeline/autoplan/",
+        BatchTimelineAutoplanView.as_view(),
+        name="timeline-autoplan",
     ),
 ]

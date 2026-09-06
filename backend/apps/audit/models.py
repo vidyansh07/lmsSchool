@@ -94,6 +94,8 @@ class AuditAction(models.TextChoices):
     ENROLLMENT_SUSPENDED = "enrollment.suspended", _("Enrolment suspended")
     ENROLLMENT_CANCELLED = "enrollment.cancelled", _("Enrolment cancelled")
     ENROLLMENT_COMPLETED = "enrollment.completed", _("Enrolment completed")
+    ENROLLMENT_TRANSFERRED = "enrollment.transferred", _("Student transferred to another batch")
+    ENROLLMENT_UPGRADED = "enrollment.upgraded", _("Student upgraded to another batch")
 
     # --- Class sessions
     SESSIONS_GENERATED = "session.generated", _("Class sessions generated")

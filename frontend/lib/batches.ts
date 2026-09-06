@@ -127,6 +127,11 @@ export async function enrolStudent(payload: {
   return apiMutate<Enrollment>('/api/v1/enrollments/', { method: 'POST', body: payload });
 }
 
+/** One enrolment, for the transfer screen's "here is what this is" preview. */
+export async function getEnrollment(id: string): Promise<Enrollment> {
+  return apiFetch<Enrollment>(`/api/v1/enrollments/${id}/`);
+}
+
 export async function setEnrollmentStatus(
   id: string,
   status: EnrollmentStatus,
@@ -140,6 +145,53 @@ export async function setEnrollmentStatus(
 
 export async function getEnrollmentProgress(id: string): Promise<CourseProgress> {
   return apiFetch<CourseProgress>(`/api/v1/enrollments/${id}/progress/`);
+}
+
+/**
+ * All of a student's enrolments, most recent first.
+ *
+ * There is no `student` filter on `/api/v1/enrollments/` — only `batch` and
+ * `course`, because the usual caller wants one class or one course, not one
+ * person. Searching by the student's own code stands in for it: codes are
+ * unique and fixed-format (`GRS-S-00042`), so a substring match against
+ * `student__student_id` cannot pick up anyone else's row. The client-side
+ * filter below is the belt to that braces, in case a future code format ever
+ * makes that assumption less safe.
+ */
+export async function listStudentEnrollments(studentCode: string): Promise<Enrollment[]> {
+  const page = await listEnrollments({
+    search: studentCode,
+    page_size: 100,
+    ordering: '-enrolled_at',
+  });
+  return page.results.filter((row) => row.student_code === studentCode);
+}
+
+/**
+ * Move one enrolment to a different batch.
+ *
+ * Enrols on the new batch *first* and only cancels the old enrolment once that
+ * succeeds. A transfer that stopped halfway would otherwise be able to leave a
+ * student holding no seat at all — enrolling first means the worst case is an
+ * extra seat briefly held, never a dropped one.
+ */
+export async function transferEnrollment(params: {
+  studentId: string;
+  fromEnrollmentId: string;
+  toBatchId: string;
+  note?: string;
+}): Promise<{ created: Enrollment; cancelled: Enrollment }> {
+  const created = await enrolStudent({
+    student_id: params.studentId,
+    batch_id: params.toBatchId,
+    note: params.note || 'Transferred from another batch.',
+  });
+  const cancelled = await setEnrollmentStatus(
+    params.fromEnrollmentId,
+    'cancelled',
+    params.note || `Transferred to ${created.batch_code}.`,
+  );
+  return { created, cancelled };
 }
 
 export async function setLessonCompletion(

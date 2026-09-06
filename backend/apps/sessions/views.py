@@ -18,16 +18,19 @@ from rest_framework.views import APIView
 
 from apps.batches import access as batch_access
 from apps.common.permissions import IsActiveUser
+from apps.progress.serializers import TimelineProgressSerializer
 
 from . import access, services
 from .models import ClassSession, SessionStatus, TrainerAssignmentHistory
 from .serializers import (
+    AutoplanResultSerializer,
     ClassSessionSerializer,
     ClassSessionWriteSerializer,
     GenerateSessionsSerializer,
     GenerationResultSerializer,
     RescheduleSerializer,
     SessionStatusSerializer,
+    SessionTopicSerializer,
     TrainerHistorySerializer,
 )
 
@@ -211,6 +214,52 @@ class SessionRescheduleView(APIView):
         )
 
 
+class SessionTopicView(APIView):
+    """Plan or record what a class covers against the curriculum.
+
+    Authorization is `access.can_manage_topic`, deliberately not the same
+    check as the other session-management endpoints above: a counsellor holds
+    `BATCH_MANAGE_SCHEDULE` and may edit a batch's timetable, but recording
+    what was actually taught is an academic judgement, gated on
+    `SESSION_MANAGE_ANY` plus the trainer who teaches the class.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Record a class's topic",
+        request=SessionTopicSerializer,
+        responses={200: ClassSessionSerializer},
+        tags=SESSIONS_TAG,
+    )
+    def post(self, request, session_id):
+        session = get_object_or_404(access.visible_sessions(request.user), pk=session_id)
+        if not access.can_manage_topic(request.user, session):
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("You do not have permission to record this class's topic.")
+
+        serializer = SessionTopicSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        lesson = None
+        lesson_id = data.get("lesson_id")
+        if lesson_id:
+            from apps.courses.models import Lesson
+
+            # Scoped to the batch's own course — a lesson id from anywhere
+            # else does not describe this class, whatever it says elsewhere.
+            lesson = get_object_or_404(
+                Lesson.objects.filter(module__course_id=session.batch.course_id), pk=lesson_id
+            )
+
+        updated = services.record_session_topic(
+            session=session, actor=request.user, lesson=lesson, status=data["status"]
+        )
+        return Response(ClassSessionSerializer(updated).data)
+
+
 class BatchSessionsView(APIView):
     """A batch's classes, and the endpoint that generates them."""
 
@@ -319,3 +368,48 @@ class BatchTrainerHistoryView(APIView):
                 for row in rows
             ]
         )
+
+
+class BatchTimelineView(APIView):
+    """A batch's planned-versus-actual progress against its curriculum.
+
+    Visibility only — no management capability is required, the same as
+    `BatchSessionsView.get`: anyone who may see the batch (its trainer, its
+    enrolled students, staff with `BATCH_VIEW_ANY`) may see how it is doing.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="A batch's planned-versus-actual timeline",
+        responses={200: TimelineProgressSerializer},
+        tags=SESSIONS_TAG,
+    )
+    def get(self, request, batch_id):
+        batch = get_object_or_404(batch_access.visible_batches(request.user), pk=batch_id)
+
+        from apps.progress.reports import timeline_progress
+
+        return Response(TimelineProgressSerializer(timeline_progress(batch)).data)
+
+
+class BatchTimelineAutoplanView(APIView):
+    """Assign the curriculum onto a batch's unplanned classes, in order."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Autoplan a batch's curriculum onto its classes",
+        request=None,
+        responses={200: AutoplanResultSerializer},
+        tags=SESSIONS_TAG,
+    )
+    def post(self, request, batch_id):
+        batch = get_object_or_404(batch_access.visible_batches(request.user), pk=batch_id)
+        if not access.can_manage_batch_topics(request.user, batch):
+            return _forbidden(
+                request, "You do not have permission to plan this batch's curriculum."
+            )
+
+        result = services.autoplan_batch(batch=batch, actor=request.user)
+        return Response(AutoplanResultSerializer(result).data)
