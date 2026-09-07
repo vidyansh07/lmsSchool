@@ -1,10 +1,29 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter } from 'next/font/google';
 import { headers } from 'next/headers';
 
 import { AppShell } from '@/components/app-shell';
 import { AuthProvider } from '@/components/auth-provider';
 
+import { BrandTheme } from '@/components/brand-theme';
+
 import './globals.css';
+
+/**
+ * Inter, self-hosted by Next rather than fetched from Google at runtime.
+ *
+ * It is what grras.com uses, so the ERP and the public site read as one
+ * organisation. Self-hosting matters twice over here: the Content-Security-
+ * Policy in `middleware.ts` does not allow a third-party font origin, and a
+ * webfont fetched on first paint is the classic cause of text appearing a
+ * beat late. `display: swap` means the fallback shows immediately and is
+ * replaced, rather than the page holding blank text while it waits.
+ */
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+});
 
 export const metadata: Metadata = {
   title: { default: 'Grras LMS', template: '%s · Grras LMS' },
@@ -40,8 +59,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   await headers();
 
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <body className="font-sans antialiased">
+        <BrandTheme />
         <AuthProvider>
           <AppShell>{children}</AppShell>
         </AuthProvider>

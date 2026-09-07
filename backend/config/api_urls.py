@@ -35,6 +35,8 @@ app_name = "v1"
 
 urlpatterns = [
     path("auth/", include("apps.accounts.urls")),
+    # Read by every screen on first paint; written only by a superadmin.
+    path("branding/", include("apps.branding.urls")),
     # Deleted records, across every model that supports recovery.
     path("recovery/", include("apps.common.recovery_urls")),
     path("users/", include("apps.accounts.user_urls")),

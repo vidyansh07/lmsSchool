@@ -3,48 +3,98 @@
 /*
  * Design tokens.
  *
- * Colours are declared once as CSS custom properties and consumed through
- * Tailwind theme variables, so a brand change is a single edit here rather than
- * a sweep through every component.
+ * Colours, type, spacing and motion are declared once here and consumed through
+ * Tailwind theme variables, so a brand change is a single edit rather than a
+ * sweep through every component.
+ *
+ * The palette is Grras's own
+ * --------------------------
+ * Taken from grras.com rather than invented: the orange `#EF7220` that carries
+ * the site's calls to action, on the slate ink `#1F2937` it uses for text, set
+ * in Inter. Measured off the live site, so the ERP and the public site read as
+ * one organisation.
+ *
+ * The brand orange itself is 2.96:1 on white — below AA for anything but large
+ * decorative blocks. So it lives in `--color-brand`, used for fills a person
+ * looks *at*, and `--color-primary` is the same hue darkened until white text
+ * on it clears 4.5:1. Two tokens because they do two jobs; using the bright one
+ * for a button label would make the label unreadable, and using the dark one
+ * for the logo would make it look like a different company.
  *
  * Light only, deliberately
  * ------------------------
  * This used to follow `prefers-color-scheme`, which meant the same install
  * looked different on two people's machines and nobody could say what the
- * product looked like. It is now light everywhere, regardless of the operating
+ * product looked like. It is light everywhere, regardless of the operating
  * system, so a demonstration is the same demonstration for everyone.
  *
  * Built as a light palette rather than an inverted dark one. The difference
- * shows in two places: `background` is a faint grey and `surface` is pure
+ * shows in two places: `background` is a faint warm grey and `surface` is pure
  * white, so cards and tables lift off the page without needing a heavy border;
  * and the accent colours are darkened to carry text, because a colour that
- * reads well as a large dark block is usually illegible as small text on white.
+ * reads well as a large block is usually illegible as small text on white.
  *
  * Every foreground/background pair used by the interface is measured against
  * WCAG AA in `tests/unit/theme-contrast.test.ts`. That test parses this file,
  * so a token changed here without checking it fails there.
  */
 @theme {
-  /* The page, and the surfaces that sit on it. */
-  --color-background: oklch(98.5% 0.003 250);
+  /* The page, and the surfaces that sit on it. Warmed a few degrees toward the
+     brand hue so white cards read as deliberate rather than as the default. */
+  --color-background: oklch(98.6% 0.004 60);
   --color-surface: oklch(100% 0 0);
-  --color-foreground: oklch(24% 0.02 258);
-  --color-muted: oklch(96% 0.005 250);
-  --color-muted-foreground: oklch(45% 0.02 256);
-  --color-border: oklch(88.5% 0.008 250);
+  --color-foreground: oklch(27.8% 0.03 256.8);
+  --color-muted: oklch(96.4% 0.007 60);
+  --color-muted-foreground: oklch(46.5% 0.021 258);
+  --color-border: oklch(89.5% 0.01 60);
 
-  /* One accent, used for the primary action on a screen and for focus. */
-  --color-primary: oklch(47% 0.15 152);
-  --color-primary-foreground: oklch(99.5% 0.005 152);
-  --color-accent: oklch(96% 0.025 152);
+  /* The action colour: Grras orange, darkened until white text on it is legible.
+     Also the focus ring, which is why it is checked as a boundary colour too. */
+  --color-primary: oklch(57% 0.18 47.9);
+  --color-primary-foreground: oklch(99.5% 0.01 47.9);
+  --color-accent: oklch(96% 0.03 47.9);
 
-  /* Semantic colours, darkened enough to carry small text on white. */
+  /* The brand orange exactly as grras.com uses it: #EF7220. Large fills, the
+     logo lockup, a chart series — never small text, and never a button label.
+     `--color-primary` above is the legible sibling for anything with words on it. */
+  --color-brand: oklch(68.9% 0.176 47.9);
+
+  /* Semantic colours, darkened enough to carry small text on white. Hues are
+     kept apart from the brand so "orange" never has to mean both "this is the
+     action" and "this is a warning". */
   --color-destructive: oklch(50.5% 0.19 25);
   --color-destructive-foreground: oklch(99% 0.005 25);
-  --color-warning: oklch(47% 0.12 70);
-  --color-success: oklch(47% 0.14 152);
+  --color-warning: oklch(52% 0.13 75);
+  --color-success: oklch(48.5% 0.13 155);
 
-  --radius-card: 0.75rem;
+  /* Type. Inter is what grras.com uses; the numeric face is separated out
+     because data columns need tabular figures — proportional digits make a
+     column of marks jitter as it updates, which reads as a rendering bug. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.125rem;
+  --text-2xl: 1.375rem;
+  --text-3xl: 1.75rem;
+
+  /* Dense by design: this is an operations tool somebody reads all day, not a
+     marketing page. A 14px base with a tight scale fits a batch roster on one
+     screen, which is the difference between scanning and scrolling. */
+  --radius-card: 0.625rem;
+
+  /* Motion. One vocabulary, so everything in the product moves the same way.
+     Exits are faster than entrances — an interface that lingers on the way out
+     feels slow even when it is not. */
+  --ease-out-quick: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-instant: 90ms;
+  --duration-quick: 150ms;
+  --duration-base: 220ms;
+  --duration-slow: 320ms;
 }
 
 @layer base {
@@ -62,7 +112,31 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-size: var(--text-base);
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Headings carry weight rather than size in a dense interface: at this scale
+     a heading two steps larger would push the content it introduces off-screen,
+     so hierarchy comes from weight and colour instead. */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 600;
+    letter-spacing: -0.011em;
+    line-height: 1.25;
+  }
+
+  /* Digits in a column must line up. Proportional figures make a table of marks
+     shift sideways as values change, which looks like a bug and makes a column
+     impossible to scan down. */
+  table,
+  [data-numeric],
+  .tabular {
+    font-variant-numeric: tabular-nums;
   }
 
   /* Visible focus for keyboard users is an accessibility requirement, not a
@@ -70,5 +144,129 @@
   :focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* A person who has asked their operating system for less movement has said
+     something specific. Honour it everywhere at once rather than per component,
+     so a new animation cannot forget. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /*
+   * Motion utilities.
+   *
+   * Hand-written rather than pulled from a plugin: the whole set is six
+   * keyframes, and a dependency that ships two hundred is a dependency to
+   * upgrade forever. Each one animates only `transform` and `opacity`, which
+   * the compositor can do without touching layout — animating width, height or
+   * top forces a reflow every frame and is what makes an interface feel cheap.
+   */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+  }
+
+  @keyframes slide-in-right {
+    from {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes shimmer {
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in var(--duration-base) var(--ease-out-quick) both;
+  }
+
+  .animate-rise-in {
+    animation: rise-in var(--duration-base) var(--ease-out-quick) both;
+  }
+
+  .animate-scale-in {
+    animation: scale-in var(--duration-quick) var(--ease-out-quick) both;
+  }
+
+  .animate-slide-in-right {
+    animation: slide-in-right var(--duration-base) var(--ease-out-quick) both;
+  }
+
+  /*
+   * Stagger for lists. A row appearing 40ms after the one above it reads as
+   * the list arriving; all of them at once reads as a flash, and 200ms apart
+   * reads as slow. Capped at eight because past that the last row is waiting
+   * long enough to feel broken.
+   */
+  .stagger > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger > *:nth-child(2) {
+    animation-delay: 40ms;
+  }
+  .stagger > *:nth-child(3) {
+    animation-delay: 80ms;
+  }
+  .stagger > *:nth-child(4) {
+    animation-delay: 120ms;
+  }
+  .stagger > *:nth-child(5) {
+    animation-delay: 160ms;
+  }
+  .stagger > *:nth-child(6) {
+    animation-delay: 200ms;
+  }
+  .stagger > *:nth-child(7) {
+    animation-delay: 240ms;
+  }
+  .stagger > *:nth-child(n + 8) {
+    animation-delay: 280ms;
+  }
+
+  /* A pressable surface dips very slightly. Enough to confirm the press
+     happened, small enough that a person clicking through forty rows does not
+     notice it at all. */
+  .press {
+    transition:
+      transform var(--duration-instant) var(--ease-out-quick),
+      background-color var(--duration-quick) var(--ease-out-quick);
+  }
+
+  .press:active {
+    transform: scale(0.985);
   }
 }

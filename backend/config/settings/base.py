@@ -79,6 +79,7 @@ LOCAL_APPS = [
     "apps.assignments",
     "apps.assessments",
     "apps.academics",
+    "apps.branding",
     "apps.projects",
     "apps.progress",
     "apps.performance",

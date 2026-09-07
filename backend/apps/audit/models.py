@@ -135,6 +135,9 @@ class AuditAction(models.TextChoices):
     RESULT_IMPORT_CONFIRMED = "result.import.confirmed", _("Result import confirmed")
     RESULT_IMPORT_REJECTED = "result.import.rejected", _("Result import rejected")
 
+    # --- Appearance
+    BRANDING_UPDATED = "branding.updated", _("Branding changed")
+
     # --- Academic configuration
     ACADEMIC_POLICY_UPDATED = "academic.policy.updated", _("Academic rules changed")
 

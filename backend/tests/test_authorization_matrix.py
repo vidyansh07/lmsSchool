@@ -155,6 +155,12 @@ STUDENT_REACHABLE = frozenset(
         "/api/v1/auth/email/verify/",
         "/api/v1/auth/email/verify/confirm/",
         "/api/v1/students/me/",
+        # How the interface draws itself. Every signed-in user needs it on the
+        # first paint of every page, so withholding it from students would mean
+        # the product renders in the wrong colours for the people who use it
+        # most. It carries a colour and an institution name and nothing else;
+        # writing it is `platform.configure`, which only a superadmin holds.
+        "/api/v1/branding/",
         # The catalogue and what they are enrolled on.
         "/api/v1/categories/",
         "/api/v1/courses/",
