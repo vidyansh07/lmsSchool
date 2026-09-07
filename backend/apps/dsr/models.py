@@ -65,7 +65,16 @@ class DSRStatus(models.TextChoices):
 EDITABLE_STATUSES = frozenset({DSRStatus.DRAFT, DSRStatus.REVISION_REQUIRED})
 
 #: Statuses nothing further can happen to.
-TERMINAL_STATUSES = frozenset({DSRStatus.APPROVED, DSRStatus.REJECTED})
+#:
+#: Only `APPROVED`. `REJECTED` was here too, and that was a trap: a rejected
+#: report could not be revised and — because one report per class is enforced
+#: against every row including soft-deleted ones — no replacement could be
+#: written either. The class permanently had no acceptable report and nobody,
+#: at any level, could fix it.
+#:
+#: The class happened, so a report about it has to be possible. Rejecting one
+#: sends it back to the trainer as a draft to rewrite; see `TRANSITIONS`.
+TERMINAL_STATUSES = frozenset({DSRStatus.APPROVED})
 
 
 class DSRQuerySet(SoftDeleteQuerySet):

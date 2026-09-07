@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status as http_status
 from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.response import Response
@@ -203,6 +203,36 @@ class DSRReviewView(APIView):
             decision=serializer.validated_data["decision"],
             comments=serializer.validated_data.get("comments", ""),
         )
+        return Response(DSRSerializer(dsr).data)
+
+
+class DSRReopenView(APIView):
+    """Take a rejected report back to a draft so it can be rewritten.
+
+    The trainer's way out of a rejection, and the reason a rejection is not a
+    dead end for the class.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Reopen a rejected report",
+        request=None,
+        responses={
+            200: DSRSerializer,
+            403: OpenApiResponse(description="Not your report to rewrite."),
+            409: OpenApiResponse(description="Only a rejected report can be reopened."),
+        },
+        tags=DSR_TAG,
+    )
+    def post(self, request, dsr_id):
+        dsr = _dsr_for(request, dsr_id)
+        # The same rule as editing: the trainer whose report it is, or the
+        # override. A reviewer does not rewrite somebody else's report for them.
+        if not access.can_write_dsr(request.user, dsr, ignore_status=True):
+            return _forbidden(request, "You cannot rewrite this report.")
+
+        dsr = services.reopen_dsr(dsr=dsr, actor=request.user)
         return Response(DSRSerializer(dsr).data)
 
 

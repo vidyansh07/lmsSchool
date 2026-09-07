@@ -10,6 +10,7 @@ import pytest
 from django.utils import timezone
 
 from apps.audit.models import AuditAction, AuditLog
+from apps.common.exceptions import ConflictError
 from apps.dsr.models import DSR, DSRStatus
 from apps.dsr.services import review_dsr, start_dsr, submit_dsr, update_dsr
 
@@ -1081,3 +1082,134 @@ def test_the_counts_describe_the_roster_not_who_turned_up(
     assert counts["absent_count"] == 1
     # Both students are still on the roster, however the day went.
     assert counts["online_count"] + counts["offline_count"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Rejection is not a dead end
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_rejected_report_can_be_taken_back_to_a_draft(admin_user, trainer_profile, submitted_dsr):
+    """The trap this closes.
+
+    A rejected report had no outgoing transition, and `start_dsr` refuses a
+    second report for a class — including against soft-deleted rows. So a class
+    whose report was rejected could never have an acceptable one, and nobody at
+    any level could fix it. The class happened; a report about it has to remain
+    possible.
+    """
+    from apps.dsr.services import reopen_dsr, review_dsr
+
+    review_dsr(
+        dsr=submitted_dsr, actor=admin_user, decision=DSRStatus.REJECTED, comments="Not usable."
+    )
+    submitted_dsr.refresh_from_db()
+    assert submitted_dsr.status == DSRStatus.REJECTED
+
+    reopened = reopen_dsr(dsr=submitted_dsr, actor=trainer_profile.user)
+
+    assert reopened.status == DSRStatus.DRAFT
+    assert reopened.submitted_at is None
+
+
+@pytest.mark.django_db
+def test_a_reopened_report_can_be_written_and_submitted_again(
+    admin_user, trainer_profile, submitted_dsr
+):
+    """The whole loop, end to end, because half a way out is not a way out."""
+    from apps.dsr.services import reopen_dsr, review_dsr, submit_dsr, update_dsr
+
+    review_dsr(dsr=submitted_dsr, actor=admin_user, decision=DSRStatus.REJECTED, comments="Redo.")
+    reopen_dsr(dsr=submitted_dsr, actor=trainer_profile.user)
+
+    update_dsr(
+        dsr=submitted_dsr, actor=trainer_profile.user, teaching_notes="Rewritten from scratch."
+    )
+    resubmitted = submit_dsr(dsr=submitted_dsr, actor=trainer_profile.user)
+
+    assert resubmitted.status == DSRStatus.SUBMITTED
+    assert resubmitted.teaching_notes == "Rewritten from scratch."
+
+
+@pytest.mark.django_db
+def test_the_managers_reason_survives_the_reopening(admin_user, trainer_profile, submitted_dsr):
+    """It is the only explanation, and it becomes useful exactly now."""
+    from apps.dsr.services import reopen_dsr, review_dsr
+
+    review_dsr(
+        dsr=submitted_dsr,
+        actor=admin_user,
+        decision=DSRStatus.REJECTED,
+        comments="No record of the assessment that ran.",
+    )
+    reopened = reopen_dsr(dsr=submitted_dsr, actor=trainer_profile.user)
+
+    assert reopened.manager_comments == "No record of the assessment that ran."
+
+
+@pytest.mark.django_db
+def test_an_approved_report_is_still_final(admin_user, trainer_profile, submitted_dsr):
+    """Only rejection got a way out. Approval is still the end of the road."""
+    from apps.dsr.services import reopen_dsr, review_dsr
+
+    review_dsr(dsr=submitted_dsr, actor=admin_user, decision=DSRStatus.APPROVED)
+
+    with pytest.raises(ConflictError, match="cannot be taken back"):
+        reopen_dsr(dsr=submitted_dsr, actor=trainer_profile.user)
+
+
+@pytest.mark.django_db
+def test_a_draft_cannot_be_reopened(trainer_profile, draft_dsr):
+    from apps.dsr.services import reopen_dsr
+
+    with pytest.raises(ConflictError, match="cannot be taken back"):
+        reopen_dsr(dsr=draft_dsr, actor=trainer_profile.user)
+
+
+@pytest.mark.django_db
+def test_reopening_is_audited_as_its_own_event(admin_user, trainer_profile, submitted_dsr):
+    """A report going from rejected back to the trainer is a real event."""
+    from apps.audit.models import AuditAction, AuditLog
+    from apps.dsr.services import reopen_dsr, review_dsr
+
+    review_dsr(dsr=submitted_dsr, actor=admin_user, decision=DSRStatus.REJECTED, comments="No.")
+    reopen_dsr(dsr=submitted_dsr, actor=trainer_profile.user)
+
+    entry = (
+        AuditLog.objects.filter(action=AuditAction.DSR_UPDATED, resource_id=str(submitted_dsr.pk))
+        .order_by("-created_at")
+        .first()
+    )
+    assert entry is not None
+    assert entry.context["reason"] == "reopened_after_rejection"
+    assert entry.context["from"] == DSRStatus.REJECTED
+
+
+@pytest.mark.django_db
+def test_another_trainer_cannot_reopen_somebody_elses_report(
+    api_client_no_csrf, admin_user, trainer_profile_two, submitted_dsr
+):
+    from apps.dsr.services import review_dsr
+
+    review_dsr(dsr=submitted_dsr, actor=admin_user, decision=DSRStatus.REJECTED, comments="No.")
+    api_client_no_csrf.force_login(trainer_profile_two.user)
+
+    response = api_client_no_csrf.post(f"/api/v1/dsr/{submitted_dsr.pk}/reopen/")
+
+    assert response.status_code in (403, 404)
+
+
+@pytest.mark.django_db
+def test_the_trainer_can_reopen_through_the_api(
+    api_client_no_csrf, admin_user, trainer_profile, submitted_dsr
+):
+    from apps.dsr.services import review_dsr
+
+    review_dsr(dsr=submitted_dsr, actor=admin_user, decision=DSRStatus.REJECTED, comments="No.")
+    api_client_no_csrf.force_login(trainer_profile.user)
+
+    response = api_client_no_csrf.post(f"/api/v1/dsr/{submitted_dsr.pk}/reopen/")
+
+    assert response.status_code == 200, response.data
+    assert response.data["status"] == DSRStatus.DRAFT

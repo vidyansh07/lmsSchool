@@ -63,12 +63,19 @@ def visible_dsrs(user) -> QuerySet[DSR]:
     return base.none()
 
 
-def can_write_dsr(user, dsr: DSR) -> bool:
+def can_write_dsr(user, dsr: DSR, *, ignore_status: bool = False) -> bool:
     """Create or edit the content of one report.
 
     The trainer who wrote it, while it is still theirs to change, or the
     holder of the override capability at any time (a manager correcting a
     typo after the fact does not need the report un-approved first).
+
+    ``ignore_status`` asks the ownership half of the question on its own — "is
+    this person's report?" — without the "and is it still editable?" half.
+    Reopening a rejected report needs exactly that: the report is not editable
+    *yet*, and reopening is what makes it so. Keeping it as one function means
+    ownership is decided in one place rather than reimplemented at the call
+    site with a subtly different rule.
     """
     if has_capability(user, Capability.DSR_MANAGE_ANY):
         return True
@@ -76,7 +83,7 @@ def can_write_dsr(user, dsr: DSR) -> bool:
     trainer = batch_access.trainer_profile(user)
     if trainer is None or dsr.trainer_id != trainer.pk:
         return False
-    return dsr.status in EDITABLE_STATUSES
+    return True if ignore_status else dsr.status in EDITABLE_STATUSES
 
 
 def can_start_dsr(user, session) -> bool:

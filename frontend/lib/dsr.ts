@@ -28,9 +28,10 @@
  */
 
 import { getSession, recordSessionTopic, type SessionTopicStatus } from './academics';
-import { apiFetch, apiMutate } from './api';
+import { apiFetch, apiMutate, queryString } from './api';
 import { NOT_AVAILABLE } from './format';
-import type { AttendanceStatus, ClassSession } from '@/types/api';
+import type { ListQuery } from './people';
+import type { AttendanceStatus, ClassSession, Paginated } from '@/types/api';
 
 /**
  * `HH:MM` from a session's `HH:MM:SS` wall-clock string, or the app's
@@ -187,6 +188,41 @@ export async function updateDsr(id: string, changes: DSRWritePayload): Promise<D
  *  trainer who autosaved, stepped away, and comes back only to submit. */
 export async function submitDsr(id: string): Promise<DSR> {
   return apiMutate<DSR>(`/api/v1/dsr/${id}/submit/`, { method: 'POST' });
+}
+
+/**
+ * A `DSR` from a list endpoint, where `id` is never null.
+ *
+ * `DSR.id` is nullable because `GET /sessions/<id>/dsr/` overloads the same
+ * shape onto an unsaved preview (see `DSR`'s own docstring) — but nothing
+ * `listDsr` returns is ever a preview; every row it hands back is a
+ * persisted report with a real primary key. Narrowing it here means the
+ * manager's review queue can key rows and build URLs from `row.id` directly,
+ * rather than every call site re-deriving "but this list never has that
+ * case" on its own.
+ */
+export type DSRListItem = DSR & { id: string };
+
+/**
+ * Every report the caller may see, across every batch — `GET /api/v1/dsr/`,
+ * staff-only (`apps.dsr.access.can_read_dsrs` refuses a student or a
+ * counsellor outright rather than answering with an empty page). Backs the
+ * manager's review queue at `/dsr`, which is the one screen in this app that
+ * needs a cross-batch view of reports rather than one class's or one batch's.
+ *
+ * `DSRFilterSet` recognises `batch`, `trainer`, `status`, `date_after` and
+ * `date_before`; anything else in `query` (a stray `search` or `ordering`, for
+ * instance) is simply not a field the filter backend looks at and is ignored
+ * rather than rejected — `ListQuery`'s shape is shared across every list
+ * screen in the app, not tailored per endpoint, so this is the normal way an
+ * endpoint that supports a subset of it behaves. There genuinely is no
+ * `ordering` parameter to send: the view declares no ordering filter backend,
+ * so results always come back in the model's own newest-first order
+ * (`Meta.ordering` on `DSR`), which is exactly what the queue wants by
+ * default and is not something a client request can change.
+ */
+export function listDsr(query: ListQuery = {}): Promise<Paginated<DSRListItem>> {
+  return apiFetch<Paginated<DSRListItem>>(`/api/v1/dsr/${queryString(query)}`);
 }
 
 // --- Local draft (autosave fallback) ----------------------------------------

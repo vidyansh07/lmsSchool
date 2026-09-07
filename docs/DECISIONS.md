@@ -934,3 +934,43 @@ applies to the planned-versus-actual lesson fields on `ClassSession`: the
 backend had returned them since the timeline feature shipped, and the frontend
 type had not caught up, so a screen that needed them declared a local shape
 instead. Both now live on the shared type, and the local shim is gone.
+
+### D-127 · Rejecting a daily status report was a dead end, and a class cannot have one
+**ERP §DSR, found by an agent reading the transition table while building the
+review screen.** `REJECTED` had no outgoing transition, and `start_dsr` refuses
+a second report for a class — including against soft-deleted rows, deliberately,
+so a stale report does not surface as an opaque integrity error.
+
+Put together those two correct-looking rules made a trap: a manager rejects a
+report, and the class can now never have an acceptable one. Not by the trainer,
+not by a manager with the override, not by anybody. Nothing in either rule looks
+wrong on its own, which is why it survived review and a test suite.
+
+The class happened. A report about it has to remain possible. So `REJECTED` now
+leads back to `DRAFT`, and `reopen_dsr` is the deliberate, audited act of taking
+it there.
+
+That also gives the two negative decisions distinct meanings, which they needed:
+`REVISION_REQUIRED` keeps the submission and asks for an amendment;
+`REJECTED` sends it back to be written again. Both end up resubmittable — they
+must — but one says "change this" and the other says "do it again". `APPROVED`
+remains the only terminal state.
+
+The manager's comments survive the reopening. They are the reason the report is
+being rewritten, and clearing them would delete the only explanation at the
+exact moment it becomes useful.
+
+### D-128 · Two nav links pointed at screens that did not exist
+**ERP §Frontend, my own error.** `navigation.ts` linked to `/dsr` and
+`/admin/recovery` from the phase that added the capabilities, before either
+screen was built. Both backends were finished and tested throughout; only the
+pages were missing, so every manager and administrator had two dead links.
+
+Wiring navigation ahead of the screens is the mistake, and it is invisible from
+the backend — the tests that would have caught it are the ones nobody writes,
+because "the sidebar points somewhere real" does not feel like a behaviour.
+
+A route-versus-link sweep found exactly these two and nothing else: 42 nav
+destinations and every detail route, checked against the running app. Worth
+recording the number, because "multiple pages are broken" and "two pages are
+broken" call for different responses, and only one of them was true.

@@ -57,7 +57,15 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     ),
     DSRStatus.REVISION_REQUIRED: frozenset({DSRStatus.SUBMITTED}),
     DSRStatus.APPROVED: frozenset(),
-    DSRStatus.REJECTED: frozenset(),
+    # Back to the trainer as a draft, not a dead end. A rejected report used to
+    # have no outgoing transition at all, and `start_dsr` refuses a second
+    # report for a class, so the class was left permanently unreportable.
+    #
+    # Rewriting is what distinguishes this from `REVISION_REQUIRED`, which keeps
+    # the submission and asks for an amendment. Both end up resubmittable, which
+    # they must — the class happened either way — but one says "change this" and
+    # the other says "do it again".
+    DSRStatus.REJECTED: frozenset({DSRStatus.DRAFT}),
 }
 
 #: The audit action each review decision writes.
@@ -288,6 +296,42 @@ def submit_dsr(*, dsr: DSR, actor: User) -> DSR:
         resource_type="dsr",
         resource_id=dsr.pk,
         context={"from": previous},
+        durable=False,
+    )
+    return dsr
+
+
+@transaction.atomic
+def reopen_dsr(*, dsr: DSR, actor: User) -> DSR:
+    """Take a rejected report back to a draft, so it can be written again.
+
+    The way out of a rejection. Without it a rejected report is a dead end: it
+    cannot be revised, and `start_dsr` refuses a second report for the class, so
+    the class is left permanently unreportable — by anybody, at any level.
+
+    Deliberately its own service rather than a side effect of editing. A report
+    going from "the manager rejected this" back to "the trainer is writing it"
+    is a real event in the class's history, and it should be findable in the
+    audit trail rather than inferred from a later edit.
+
+    The manager's comments are kept. They are the reason this is being rewritten
+    and the trainer needs to read them; clearing them here would delete the only
+    explanation at the moment it becomes useful.
+    """
+    if DSRStatus.DRAFT not in TRANSITIONS.get(dsr.status, frozenset()):
+        raise ConflictError({"status": [f"A {dsr.status} report cannot be taken back to a draft."]})
+
+    previous = dsr.status
+    dsr.status = DSRStatus.DRAFT
+    dsr.submitted_at = None
+    dsr.save(update_fields=["status", "submitted_at", "updated_at"])
+
+    record(
+        action=AuditAction.DSR_UPDATED,
+        actor=actor,
+        resource_type="dsr",
+        resource_id=dsr.pk,
+        context={"from": previous, "to": DSRStatus.DRAFT, "reason": "reopened_after_rejection"},
         durable=False,
     )
     return dsr
