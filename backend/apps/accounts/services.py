@@ -53,6 +53,37 @@ class InvalidTokenError(ApplicationError):
 # ---------------------------------------------------------------------------
 
 
+def resolve_branch_for_new_record(*, actor, branch, required: bool = True):
+    """Which centre a newly created record belongs to.
+
+    Shared by :func:`create_user`, ``create_student``, ``create_trainer`` and
+    ``create_batch``, because "whose centre is this?" has to have one answer on
+    the write side or the read side will eventually disagree with it.
+
+    ``required=False`` is for the one record that may legitimately have no
+    centre: a superadmin's account, where ``NULL`` is what "every centre" means.
+
+    A **bounded** actor's own centre is *forced*, and any supplied one ignored.
+    Validating instead of forcing would let a manager plant a record in another
+    city by sending an id; forcing it means the worst a wrong id can do is be
+    silently right.
+
+    An **unbounded** actor names the centre, and must — a branchless record is
+    one that, under the fail-closed rule, nobody can see, and a branchless staff
+    account is one that can see nothing.
+    """
+    from apps.organisation.scoping import actor_branch_id, is_unbounded
+
+    if actor is not None and not is_unbounded(actor) and actor_branch_id(actor) is not None:
+        # The instance, not the id: it is written straight onto the new record
+        # and, for a student or a trainer, onto both halves of it.
+        return actor.branch
+
+    if branch is None and required:
+        raise ApplicationError({"branch": ["Choose the centre this record belongs to."]})
+    return branch
+
+
 @transaction.atomic
 def create_user(
     *,
@@ -64,6 +95,7 @@ def create_user(
     phone: str = "",
     is_active: bool = True,
     actor: User | None = None,
+    branch=None,
     send_invitation: bool = True,
 ) -> User:
     """Create a user and record the action.
@@ -77,6 +109,10 @@ def create_user(
             {"role": ["You cannot create a user with a role that holds more than your own."]}
         )
 
+    branch = resolve_branch_for_new_record(
+        actor=actor, branch=branch, required=role != UserRole.SUPERADMIN
+    )
+
     try:
         user = User.objects.create_user(
             email=email,
@@ -86,6 +122,7 @@ def create_user(
             role=role,
             phone=phone,
             is_active=is_active,
+            branch=branch,
         )
     except IntegrityError as exc:
         # Reachable only by administrators, so naming the conflict is safe here.
@@ -119,22 +156,60 @@ def _guard_administration(*, actor: User, target: User, action: str) -> None:
     """
     if actor is not None and target is not None and actor.pk == target.pk:
         return
-    if can_administer(actor, target):
-        return
+    if not can_administer(actor, target):
+        record(
+            action=action,
+            actor=actor,
+            resource_type="user",
+            resource_id=getattr(target, "pk", ""),
+            result=AuditResult.DENIED,
+            context={
+                "refused": "outside_authority",
+                "actor_role": getattr(actor, "role", ""),
+                "target_role": getattr(target, "role", ""),
+            },
+        )
+        raise AuthorityError({"user": ["You do not have authority over this account."]})
 
-    record(
-        action=action,
-        actor=actor,
-        resource_type="user",
-        resource_id=getattr(target, "pk", ""),
-        result=AuditResult.DENIED,
-        context={
-            "refused": "outside_authority",
-            "actor_role": getattr(actor, "role", ""),
-            "target_role": getattr(target, "role", ""),
-        },
-    )
-    raise AuthorityError({"user": ["You do not have authority over this account."]})
+    # A bounded actor administers only their own centre. Checked here rather
+    # than inside `can_administer` because the ladder is about *capability* and
+    # a branch is about *reach*: an administrator in Jaipur is neither senior
+    # nor junior to one in Pune, they are simply not in each other's world.
+    # Folding it into the ladder would also mean editing the AUTHORITY table in
+    # `tests/test_role_hierarchy.py`, which states a policy that has not changed.
+    #
+    # Placed after the ladder check and below the self-service exemption, so
+    # editing your own name keeps working for everybody — including the
+    # superadmin, who has no branch at all.
+    #
+    # "Unbounded" is asked of `is_unbounded`, never inferred from a null column.
+    # An actor with no centre who is not a platform operator has authority over
+    # nobody, which is the same answer `scope_to_branch` gives their querysets:
+    # one meaning of unbounded, in the service and in the SQL. Reading the null
+    # as "no branch check applies" would have let an account created through the
+    # Django admin — the door that bypasses `create_user` — administer anybody.
+    from apps.organisation.scoping import actor_branch_id, is_unbounded
+
+    actors_branch = actor_branch_id(actor)
+    if not is_unbounded(actor) and (
+        actors_branch is None or getattr(target, "branch_id", None) != actors_branch
+    ):
+        record(
+            action=action,
+            actor=actor,
+            resource_type="user",
+            resource_id=getattr(target, "pk", ""),
+            result=AuditResult.DENIED,
+            context={
+                "refused": "outside_branch",
+                "actor_role": getattr(actor, "role", ""),
+                "target_role": getattr(target, "role", ""),
+            },
+        )
+        # The same message the ladder refusal gives, and it names nothing: a
+        # 403 that said "different centre" would confirm which accounts exist
+        # elsewhere in the institution.
+        raise AuthorityError({"user": ["You do not have authority over this account."]})
 
 
 @transaction.atomic
@@ -144,6 +219,14 @@ def update_user(*, user: User, actor: User, **fields: Any) -> User:
     Role changes are audited separately because they are a privilege change, and
     a reviewer should be able to find every one of them with a single query.
     """
+    if "branch" in fields or "branch_id" in fields:
+        # Moving somebody between centres is a governance event with its own
+        # capability and its own audit action; see `move_user_to_branch`.
+        # Allowed here it would also let an administrator move *themselves*
+        # out of their own branch, which is the one act that must not be a
+        # side effect of editing a phone number.
+        raise ApplicationError({"branch": ["A centre is changed through its own action."]})
+
     previous_role = user.role
     previous_email = user.email
     changed: list[str] = []
@@ -270,6 +353,45 @@ def set_user_active(*, user: User, is_active: bool, actor: User, reason: str = "
     if not is_active:
         revoke_sessions(user=user, actor=actor, reason="deactivated")
 
+    return user
+
+
+@transaction.atomic
+def move_user_to_branch(*, user: User, branch, actor: User, reason: str = "") -> User:
+    """Move an account to another centre.
+
+    Its own service rather than a field on :func:`update_user`, because it is
+    the only edit that changes what a person can *see* rather than what they
+    are. A reviewer asking "who gave this manager sight of Pune?" should find
+    the answer with one query on one action, not by diffing a list of changed
+    field names.
+
+    Guarded by :func:`_guard_administration`, so a bounded administrator can
+    only move somebody who is already in their own centre — they may hand a
+    person on, never reach across and take one.
+    """
+    _guard_administration(actor=actor, target=user, action=AuditAction.USER_BRANCH_CHANGED)
+
+    previous = user.branch
+    new_branch_id = getattr(branch, "pk", None)
+    if user.branch_id == new_branch_id:
+        return user
+
+    user.branch = branch
+    user.save(update_fields=["branch", "updated_at"])
+
+    record(
+        action=AuditAction.USER_BRANCH_CHANGED,
+        actor=actor,
+        resource_type="user",
+        resource_id=user.pk,
+        context={
+            "from": previous.code if previous is not None else None,
+            "to": branch.code if branch is not None else None,
+            "reason": reason,
+        },
+        durable=False,
+    )
     return user
 
 

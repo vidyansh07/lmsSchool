@@ -51,11 +51,13 @@ def _add_students(batch, count: int, *, start: int = 0) -> list[Enrollment]:
             last_name=f"Student {start + index}",
             role=UserRole.STUDENT,
             is_active=True,
+            branch=batch.branch,
         )
         for index in range(count)
     )
     profiles = StudentProfile.objects.bulk_create(
-        StudentProfile(user=user, student_id=next_student_id()) for user in users
+        StudentProfile(user=user, student_id=next_student_id(), branch=batch.branch)
+        for user in users
     )
     enrollments = Enrollment.objects.bulk_create(
         Enrollment(
@@ -376,6 +378,7 @@ def test_the_batch_report_does_not_query_per_batch(
             name=f"Perf batch {index}",
             course=published_course,
             trainer=trainer_profile,
+            branch=trainer_profile.branch,
             start_date=date.today() - timedelta(days=30),
             end_date=date.today() + timedelta(days=30),
             capacity=50,
@@ -409,11 +412,13 @@ def test_the_trainer_report_does_not_query_per_trainer(
             last_name=f"Trainer {index}",
             role=UserRole.TRAINER,
             is_active=True,
+            branch=trainer_profile.branch,
         )
         for index in range(10)
     )
     TrainerProfile.objects.bulk_create(
-        TrainerProfile(user=user, trainer_id=next_trainer_id()) for user in users
+        TrainerProfile(user=user, trainer_id=next_trainer_id(), branch=trainer_profile.branch)
+        for user in users
     )
     assert measure() == small
 

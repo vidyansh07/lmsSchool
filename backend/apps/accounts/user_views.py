@@ -15,8 +15,10 @@ from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView, ge
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.access import visible_accounts
 from apps.accounts.roles import has_capability
 from apps.common.permissions import Capability, HasCapability
+from apps.organisation.access import resolve_submitted_branch
 
 from . import services
 from .models import User
@@ -27,9 +29,15 @@ from .serializers import (
     CredentialActionSerializer,
     SetActiveSerializer,
     UserAuditEntrySerializer,
+    UserBranchSerializer,
 )
 
 USERS_TAG = ["users"]
+
+
+#: The definition moved to `apps.accounts.access` once a second app needed it.
+#: The local name stays because six routes in this module resolve through it.
+_scoped_users = visible_accounts
 
 
 class UserFilterSet(django_filters.FilterSet):
@@ -39,6 +47,7 @@ class UserFilterSet(django_filters.FilterSet):
     free-form field lookup, so a client cannot craft an expensive query.
     """
 
+    branch = django_filters.UUIDFilter(field_name="branch_id")
     role = django_filters.CharFilter(field_name="role", lookup_expr="exact")
     is_active = django_filters.BooleanFilter(field_name="is_active")
     is_email_verified = django_filters.BooleanFilter(field_name="is_email_verified")
@@ -47,7 +56,7 @@ class UserFilterSet(django_filters.FilterSet):
 
     class Meta:
         model = User
-        fields = ("role", "is_active", "is_email_verified")
+        fields = ("branch", "role", "is_active", "is_email_verified")
 
 
 class UserListCreateView(ListCreateAPIView):
@@ -78,7 +87,10 @@ class UserListCreateView(ListCreateAPIView):
     ordering = ("-created_at",)
 
     def get_queryset(self):
-        return User.objects.select_related("student_profile", "trainer_profile").all()
+        # Without this a branch-scoped manager listing accounts would see every
+        # one in the institution while seeing none of their batches, which is
+        # the kind of inconsistency people report as a data leak.
+        return _scoped_users(self.request.user)
 
     def get_serializer_class(self):
         return (
@@ -103,7 +115,9 @@ class UserListCreateView(ListCreateAPIView):
     def post(self, request, *args, **kwargs):
         serializer = AdminUserCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = services.create_user(actor=request.user, **serializer.validated_data)
+        fields = dict(serializer.validated_data)
+        branch = resolve_submitted_branch(request.user, fields.pop("branch", None))
+        user = services.create_user(actor=request.user, branch=branch, **fields)
         return Response(
             AdminUserDetailSerializer(user, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -122,7 +136,7 @@ class UserDetailView(RetrieveUpdateAPIView):
     lookup_url_kwarg = "user_id"
 
     def get_queryset(self):
-        return User.objects.select_related("student_profile", "trainer_profile").all()
+        return _scoped_users(self.request.user)
 
     def get_serializer_class(self):
         return (
@@ -186,7 +200,13 @@ class UserSetActiveView(APIView):
         tags=USERS_TAG,
     )
     def post(self, request, user_id):
-        user = get_object_or_404(User, pk=user_id)
+        # Resolved through the scoped queryset, like its sibling routes.
+        # `services.set_user_active` still calls `_guard_administration` and is
+        # still the authority — but resolving by raw pk first and letting the
+        # guard answer 403 would tell a caller in Jaipur that a uuid they
+        # guessed names a real account in Pune, which is exactly the
+        # enumeration oracle the 404 discipline exists to close.
+        user = get_object_or_404(_scoped_users(request.user), pk=user_id)
         serializer = SetActiveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -255,6 +275,49 @@ class UserCredentialActionView(APIView):
         )
 
 
+class UserBranchView(APIView):
+    """Move an account to another centre.
+
+    Its own endpoint, and its own capability, because it is the one change to an
+    account that alters what its owner can see rather than what they are. Folded
+    into the patch body it would be flippable while somebody corrected a phone
+    number, and an administrator could move themselves.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.ORGANISATION_ASSIGN_USERS
+
+    @extend_schema(
+        summary="Move a user to another branch",
+        request=UserBranchSerializer,
+        responses={
+            200: AdminUserDetailSerializer,
+            403: OpenApiResponse(description="Outside your authority."),
+        },
+        tags=USERS_TAG,
+    )
+    def post(self, request, user_id):
+        from apps.organisation import access as organisation_access
+
+        user = get_object_or_404(_scoped_users(request.user), pk=user_id)
+        serializer = UserBranchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        # Resolved out of the caller's own visible branches, so a bounded
+        # administrator cannot hand somebody to a centre they cannot see.
+        branch = get_object_or_404(
+            organisation_access.visible_branches(request.user),
+            pk=serializer.validated_data["branch_id"],
+        )
+        updated = services.move_user_to_branch(
+            user=user,
+            branch=branch,
+            actor=request.user,
+            reason=serializer.validated_data.get("reason", ""),
+        )
+        return Response(AdminUserDetailSerializer(updated, context={"request": request}).data)
+
+
 class UserAuditView(APIView):
     """What has been done to this account, most recent first.
 
@@ -280,7 +343,12 @@ class UserAuditView(APIView):
     def get(self, request, user_id):
         from apps.audit.models import AuditLog
 
-        user = get_object_or_404(User.objects.all(), pk=user_id)
+        # Resolved out of the scoped queryset, not `User.objects.all()`: this
+        # view has no authority guard of its own, so `audit.view` plus a guessed
+        # uuid would otherwise return another centre's account history. The fix
+        # has to be the queryset rather than a check after the fetch, or the
+        # 404 becomes a 403 that confirms the id is real.
+        user = get_object_or_404(_scoped_users(request.user), pk=user_id)
         entries = (
             AuditLog.objects.filter(resource_type="user", resource_id=str(user.pk))
             .select_related("actor")

@@ -934,3 +934,55 @@ applies to the planned-versus-actual lesson fields on `ClassSession`: the
 backend had returned them since the timeline feature shipped, and the frontend
 type had not caught up, so a screen that needed them declared a local shape
 instead. Both now live on the shared type, and the local shim is gone.
+
+### D-127 · A branch bounds people and classes, and a null branch means nothing
+**ERP §Organisation.** GRRAS runs one syllabus at several centres, so a branch is
+deliberately **not** a tenant: one database, one course catalogue, one question
+bank, one academic policy. What a branch bounds is *people and classes* — who a
+manager may see and which classes appear on their screens. A manager comparing
+two centres is a thing the product is for, and that manager is a superadmin.
+
+The foreign key lives on four models — `User`, `StudentProfile`, `TrainerProfile`
+and `Batch` — and everything else reaches a centre through one of them: an
+enrolment through its batch, a class session through its batch, a review through
+its subject, an export job or an import run through the person who asked for it.
+Stamping every table would have meant four places to keep in step for every
+record and a second answer to "which centre is this?" the day they diverged.
+
+**A null branch means *no* centre, never *every* centre.** `is_unbounded` and
+`actor_branch_id` are two questions, not one, and only a platform operator
+answers yes to the first. A staff account with no branch — the one the Django
+admin's add form produces, bypassing `create_user` — therefore sees `.none()`.
+That is a choice, and the alternative was to read the null as "unrestricted"
+because it is what the column looked like before branches existed. The worst case
+under this rule is a manager who sees an empty screen and reports it within the
+hour; under the other it is a manager who quietly sees another city's students,
+found months later by whoever notices the totals do not add up. An administrator
+who genuinely needs the institution is made a superadmin: one auditable act,
+rather than the absence of a value. **Administrators are bounded** for the same
+reason — "widest capability set" and "sees every centre" are different claims,
+and the first must not silently imply the second.
+
+The rule is **one module** (`apps.organisation.scoping`), not a filter in each of
+the sixteen `access.py` files that call it. Authorization restated twenty times
+is nineteen correct copies and one that is not, and this codebase already refuses
+that shape for capabilities. It also concentrates the trap: `filter(batch__branch_id=X)`
+on a *nullable* foreign key is an INNER JOIN, so it silently drops every
+course-wide assignment and project from every bounded manager, with no error and
+nothing in the logs. `scope_to_branch_or_shared` owns that reasoning once.
+
+**One model is the exception, and it is the exception that leaked.** For an
+announcement `batch IS NULL` does not mean "every batch": the model's own
+`announcement_audience_matches_target` constraint requires a null batch for
+`selected` and `course` as well as for `everyone`. Applying the shared-row helper
+there classified every notice addressed to *named people* as institution-wide and
+served it — title, body, and a headcount of its recipients — to the capability
+holder at every other centre, who could then edit it and archive it. The
+noticeboard scopes on the **audience** instead: `everyone` is institution-wide, a
+batch notice belongs to its batch's centre, and a course or private notice to the
+centre of whoever wrote it. Readable everywhere is still not editable everywhere.
+
+Deliberately **not** scoped: `apps.courses` and the question bank, which are the
+shared catalogue and would be wrong to bound; and `apps.progress` and
+`apps.discussions`, which inherit their scope through `apps.batches.access` and
+would only gain a second, drifting answer by filtering again.

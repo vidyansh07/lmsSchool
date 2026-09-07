@@ -13,6 +13,7 @@ from django.db.models import Q, QuerySet
 
 from apps.accounts.roles import Capability, has_capability
 from apps.batches import access as batch_access
+from apps.organisation.scoping import scope_to_branch
 
 from .models import Exam, ExamAttempt
 
@@ -42,7 +43,9 @@ def visible_exams(user) -> QuerySet[Exam]:
     base = Exam.objects.with_related()
 
     if has_capability(user, Capability.EXAM_VIEW_ANY):
-        return base
+        # `Exam.batch` is not nullable — an examination is always somebody's
+        # class — so a plain branch filter drops nothing.
+        return scope_to_branch(base, user, path="batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -60,7 +63,7 @@ def manageable_exams(user) -> QuerySet[Exam]:
     base = Exam.objects.with_related()
 
     if has_capability(user, Capability.EXAM_MANAGE_ANY):
-        return base
+        return scope_to_branch(base, user, path="batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -99,7 +102,7 @@ def visible_attempts(user) -> QuerySet[ExamAttempt]:
     base = ExamAttempt.objects.with_related()
 
     if has_capability(user, Capability.EXAM_VIEW_ANY):
-        return base
+        return scope_to_branch(base, user, path="enrollment__batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

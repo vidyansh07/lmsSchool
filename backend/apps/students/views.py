@@ -23,8 +23,9 @@ from rest_framework.views import APIView
 
 from apps.accounts.roles import UserRole, has_capability
 from apps.common.permissions import Capability, HasCapability, IsActiveUser, IsOwnerOrHasCapability
+from apps.organisation.access import resolve_submitted_branch
 
-from . import services
+from . import access, services
 from .models import StudentProfile
 from .serializers import (
     AdminStudentProfileSerializer,
@@ -44,14 +45,11 @@ class StudentFilterSet(django_filters.FilterSet):
     is_active = django_filters.BooleanFilter(field_name="user__is_active")
     qualification = django_filters.CharFilter(field_name="qualification", lookup_expr="exact")
     city = django_filters.CharFilter(field_name="city", lookup_expr="iexact")
+    branch = django_filters.UUIDFilter(field_name="branch_id")
 
     class Meta:
         model = StudentProfile
-        fields = ("fee_status", "qualification", "city")
-
-
-def _base_queryset():
-    return StudentProfile.objects.select_related("user", "fee_status_updated_by")
+        fields = ("fee_status", "qualification", "city", "branch")
 
 
 class StudentListCreateView(ListCreateAPIView):
@@ -76,7 +74,7 @@ class StudentListCreateView(ListCreateAPIView):
     serializer_class = StudentListSerializer
 
     def get_queryset(self):
-        return _base_queryset()
+        return access.visible_students(self.request.user)
 
     @extend_schema(
         summary="List students", responses={200: StudentListSerializer}, tags=STUDENTS_TAG
@@ -98,7 +96,10 @@ class StudentListCreateView(ListCreateAPIView):
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
         profile_fields = data.pop("profile", None) or {}
-        profile = services.create_student(actor=request.user, profile_fields=profile_fields, **data)
+        branch = resolve_submitted_branch(request.user, data.pop("branch", None))
+        profile = services.create_student(
+            actor=request.user, branch=branch, profile_fields=profile_fields, **data
+        )
         return Response(AdminStudentProfileSerializer(profile).data, status=status.HTTP_201_CREATED)
 
 
@@ -114,7 +115,9 @@ class StudentDetailView(RetrieveUpdateAPIView):
     lookup_url_kwarg = "student_id"
 
     def get_queryset(self):
-        return _base_queryset()
+        # The branch, and only the branch: `IsOwnerOrHasCapability` still
+        # answers the audience question, and it answers it with a 403.
+        return access.reachable_students(self.request.user)
 
     def get_object(self):
         profile = get_object_or_404(self.get_queryset(), pk=self.kwargs["student_id"])
@@ -222,7 +225,7 @@ class StudentFeeStatusView(APIView):
         tags=STUDENTS_TAG,
     )
     def post(self, request, student_id):
-        profile = get_object_or_404(_base_queryset(), pk=student_id)
+        profile = get_object_or_404(access.visible_students(request.user), pk=student_id)
         serializer = FeeStatusUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         updated = services.set_fee_status(

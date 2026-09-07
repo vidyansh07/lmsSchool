@@ -123,10 +123,17 @@ class TrainerProfileFieldsSerializer(StrictModelSerializer):
 
 
 class TrainerCreateSerializer(StrictSerializer):
+    """Administrator creating a trainer account and profile together.
+
+    ``branch``: ignored for a bounded caller, required of the platform operator.
+    See `organisation.access.resolve_submitted_branch`.
+    """
+
     email = serializers.EmailField(max_length=254)
     first_name = SafeCharField(max_length=100)
     last_name = SafeCharField(max_length=100, required=False, allow_blank=True, default="")
     phone = SafeCharField(max_length=20, required=False, allow_blank=True, default="")
+    branch = serializers.UUIDField(required=False, allow_null=True)
     profile = TrainerProfileFieldsSerializer(required=False)
 
     def validate_email(self, value: str) -> str:

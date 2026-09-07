@@ -84,8 +84,14 @@ function Account() {
   }
   return (
     <div className="flex items-center gap-2">
-      <span className="hidden text-sm text-muted-foreground sm:inline">
-        {user.full_name || user.email}
+      <span className="hidden flex-col items-end leading-tight sm:flex">
+        <span className="text-sm text-muted-foreground">{user.full_name || user.email}</span>
+        {/* Which centre this account is bounded to. Rendered only when there is
+            one — a superadmin belongs to none, and an empty line under their
+            name would read as a missing value rather than as "all of them". */}
+        {user.branch_name ? (
+          <span className="text-xs text-muted-foreground">{user.branch_name}</span>
+        ) : null}
       </span>
       <Badge>{user.role}</Badge>
       <Button variant="outline" size="sm" onClick={() => void signOut()}>

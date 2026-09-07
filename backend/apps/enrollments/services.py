@@ -91,6 +91,12 @@ def _validate_enrollable(*, student, batch: Batch) -> None:
         problems["batch"] = [
             f"A {batch.get_status_display().lower()} batch is not accepting students."
         ]
+    elif student.branch_id != batch.branch_id:
+        # A 400 naming the reason, not a 404: a counsellor can see both the
+        # student and the class on their own screen, so "not found" would be a
+        # lie. Joins the same `problems` dict so it surfaces alongside the
+        # other refusals in one response.
+        problems["batch"] = ["That class is at a different centre."]
 
     if problems:
         raise ApplicationError(problems)
@@ -412,6 +418,8 @@ def transfer_student(
         )
     if enrollment.batch_id == target_batch.pk:
         raise ApplicationError({"batch": ["The student is already on that batch."]})
+    if enrollment.student.branch_id != target_batch.branch_id:
+        raise ApplicationError({"batch": ["That class is at a different centre."]})
     if not reason.strip():
         # The reason is the only thing that explains the move afterwards, and a
         # blank one on a screen reads as an answer rather than as silence.

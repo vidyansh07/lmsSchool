@@ -7,7 +7,7 @@ from typing import Any
 from django.db import transaction
 
 from apps.accounts.models import User, UserRole
-from apps.accounts.services import create_user
+from apps.accounts.services import create_user, resolve_branch_for_new_record
 from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError, ConflictError
 from apps.common.identifiers import next_trainer_id
@@ -23,11 +23,17 @@ def create_trainer(
     last_name: str = "",
     phone: str = "",
     actor: User,
+    branch=None,
     profile_fields: dict[str, Any] | None = None,
     password: str | None = None,
     send_invitation: bool = True,
 ) -> TrainerProfile:
-    """Create the user account and the trainer profile as one unit."""
+    """Create the user account and the trainer profile as one unit.
+
+    The centre is resolved once and written to both halves — see
+    ``apps.students.services.create_student`` for why.
+    """
+    branch = resolve_branch_for_new_record(actor=actor, branch=branch)
     user = create_user(
         email=email,
         password=password,
@@ -36,11 +42,17 @@ def create_trainer(
         phone=phone,
         role=UserRole.TRAINER,
         actor=actor,
+        branch=branch,
         send_invitation=send_invitation,
     )
 
-    profile = TrainerProfile(user=user, trainer_id=next_trainer_id(), **(profile_fields or {}))
-    profile.full_clean(exclude=["user", "trainer_id"])
+    profile = TrainerProfile(
+        user=user,
+        trainer_id=next_trainer_id(),
+        branch=user.branch,
+        **(profile_fields or {}),
+    )
+    profile.full_clean(exclude=["user", "trainer_id", "branch"])
     profile.save()
 
     record(
@@ -98,7 +110,9 @@ def get_or_create_profile_for(user: User, *, actor: User | None = None) -> Train
     if profile is not None:
         return profile
     with transaction.atomic():
-        profile = TrainerProfile.objects.create(user=user, trainer_id=next_trainer_id())
+        profile = TrainerProfile.objects.create(
+            user=user, trainer_id=next_trainer_id(), branch=user.branch
+        )
         record(
             action=AuditAction.TRAINER_CREATED,
             actor=actor or user,

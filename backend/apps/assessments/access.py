@@ -16,6 +16,7 @@ from django.db.models import Q, QuerySet
 
 from apps.accounts.roles import Capability, has_capability
 from apps.batches import access as batch_access
+from apps.organisation.scoping import scope_to_branch
 
 from .models import Assessment, AssessmentResult
 
@@ -45,7 +46,9 @@ def visible_assessments(user) -> QuerySet[Assessment]:
     base = Assessment.objects.with_related()
 
     if has_capability(user, Capability.ASSESSMENT_VIEW_ANY):
-        return base
+        # `Assessment.batch` is not nullable, so there is no course-wide row to
+        # preserve here and a plain branch filter is the whole rule.
+        return scope_to_branch(base, user, path="batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -63,7 +66,7 @@ def manageable_assessments(user) -> QuerySet[Assessment]:
     base = Assessment.objects.with_related()
 
     if has_capability(user, Capability.ASSESSMENT_MANAGE_ANY):
-        return base
+        return scope_to_branch(base, user, path="batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -107,7 +110,7 @@ def visible_results(user) -> QuerySet[AssessmentResult]:
     base = AssessmentResult.objects.with_related()
 
     if has_capability(user, Capability.ASSESSMENT_VIEW_ANY):
-        return base
+        return scope_to_branch(base, user, path="enrollment__batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

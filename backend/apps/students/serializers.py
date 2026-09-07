@@ -125,12 +125,19 @@ class StudentProfileFieldsSerializer(StrictModelSerializer):
 
 
 class StudentCreateSerializer(StrictSerializer):
-    """Administrator creating a student account and profile together."""
+    """Administrator creating a student account and profile together.
+
+    ``branch`` is ignored for a bounded caller, whose own centre is forced onto
+    both halves of the record. It is here for the platform operator, who has no
+    centre of their own and must therefore name one — see
+    `organisation.access.resolve_submitted_branch`.
+    """
 
     email = serializers.EmailField(max_length=254)
     first_name = SafeCharField(max_length=100)
     last_name = SafeCharField(max_length=100, required=False, allow_blank=True, default="")
     phone = SafeCharField(max_length=20, required=False, allow_blank=True, default="")
+    branch = serializers.UUIDField(required=False, allow_null=True)
     profile = StudentProfileFieldsSerializer(required=False)
 
     def validate_email(self, value: str) -> str:

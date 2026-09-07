@@ -30,6 +30,7 @@ from apps.common.exceptions import ConflictError
 from apps.common.permissions import IsActiveUser
 from apps.common.throttling import BurstThrottle
 from apps.courses import access as course_access
+from apps.organisation.scoping import scope_to_branch
 
 from . import access, dashboards, exports, importers, metrics, reports, tasks, writers
 from .models import TERMINAL_EXPORT_STATUSES, BulkImport, ExportJob, ExportStatus
@@ -118,7 +119,10 @@ def _queryset_for_user(user, source: str, batch, course):
                 if trainer
                 else TrainerProfile.objects.none()
             )
-        rows = TrainerProfile.objects.all()
+        # Scoped to the caller's centre for the same reason the batch source
+        # above is: a report that covers trainers this caller cannot open is a
+        # report that leaks who works where.
+        rows = scope_to_branch(TrainerProfile.objects.all(), user, path="branch")
         if batch is not None:
             rows = rows.filter(batches=batch)
         return rows.distinct()
@@ -283,11 +287,13 @@ def _export_job_for(request, job_id) -> ExportJob:
     `apps.assignments.views.SubmissionFileDownloadView` already do it. A 403
     here would tell a caller a job id is real, just not theirs — which is
     exactly the id-enumeration a 404 is meant to close off.
+
+    That is also why `access.visible_export_jobs` narrows the
+    `export.view_any` case to the caller's own centre rather than the rule
+    being written out here: an administrator in Jaipur asking for a Pune job id
+    must not be able to tell it from an id that names nothing.
     """
-    rows = ExportJob.objects.with_related()
-    if not access.can_view_any_export_job(request.user):
-        rows = rows.for_user(request.user)
-    return get_object_or_404(rows, pk=job_id)
+    return get_object_or_404(access.visible_export_jobs(request.user), pk=job_id)
 
 
 class ExportJobQueueView(APIView):
@@ -321,9 +327,7 @@ class ExportJobQueueView(APIView):
     def get(self, request):
         if not access.could_own_an_export(request.user):
             return _forbidden(request, "Exports are staff-facing.")
-        rows = ExportJob.objects.with_related()
-        if not access.can_view_any_export_job(request.user):
-            rows = rows.for_user(request.user)
+        rows = access.visible_export_jobs(request.user)
         serializer = ExportJobSerializer(rows, many=True, context={"request": request})
         return Response(serializer.data)
 
@@ -750,10 +754,12 @@ class AttendanceImportView(APIView):
 
 
 def _import_for(request, import_id) -> BulkImport:
-    rows = BulkImport.objects.all()
-    if not access.can_read_everything(request.user):
-        rows = rows.filter(uploaded_by=request.user)
-    return get_object_or_404(rows, pk=import_id)
+    """The one resolver behind the detail, confirm and reject routes.
+
+    Out of the access queryset, so an id from another centre is a 404 on all
+    three rather than a 200 on the first and a mutation on the other two.
+    """
+    return get_object_or_404(access.visible_bulk_imports(request.user), pk=import_id)
 
 
 class ImportDetailView(APIView):

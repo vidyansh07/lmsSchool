@@ -128,6 +128,7 @@ Totals at last full run: **1,818 backend** (3 skipped) · **581 frontend unit** 
 | 10.x Cancelled batch on today's list (bug fix) | 10 | DONE | `apps/sessions/views.py` | `test_class_sessions` (2) | A cancelled batch is not teaching today | Its class disappears; history kept | — | 2026-09-02 |
 | 10.x Seeder died on a batch with no timetable (bug fix) | 10 | DONE | `seed_academics.py` | `test_seed_academics` | Skipped and reported, not fatal | Seed completes with timetables stripped | — | 2026-09-02 |
 | 10.x One shared E2E sign-in helper | 10 | DONE | `frontend/e2e/helpers.ts` | whole suite | Waits out the credential throttle rather than raising it | 45→61 staging passes | Seven specs still dev-specific | 2026-09-02 |
+| 12.1 Branch scoping | 12 | DONE | `apps/organisation/`, sixteen `access.py` modules | `test_branch_scoping` (248), `test_branch_scoping_api` (218), `organisation/tests/test_scoping` (32) | A null branch is `.none()`, never the institution; every id from another centre is a 404 | Two populated centres; the noticeboard and bulk-import leaks each reproduced over HTTP before being fixed | Courses and the question bank stay institution-wide, by design (D-127) | 2026-09-07 |
 
 ## Phases 5–10 — not started
 

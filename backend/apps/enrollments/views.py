@@ -19,10 +19,9 @@ from rest_framework.views import APIView
 
 from apps.accounts.roles import Capability, has_capability
 from apps.batches import access
-from apps.batches.models import Batch
 from apps.common.permissions import IsActiveUser
 from apps.courses.models import Lesson
-from apps.students.models import StudentProfile
+from apps.students import access as students_access
 
 from . import services
 from .models import Enrollment
@@ -111,10 +110,13 @@ class EnrollmentListCreateView(ListCreateAPIView):
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
 
+        # Both resolved out of the caller's own scoped querysets: an id they
+        # cannot reach is a 404, and a pairing across two centres they *can*
+        # both reach is refused by the service with a 400 naming the reason.
         student = get_object_or_404(
-            StudentProfile.objects.select_related("user"), pk=data.pop("student_id")
+            students_access.visible_students(request.user), pk=data.pop("student_id")
         )
-        batch = get_object_or_404(Batch.objects.select_related("course"), pk=data.pop("batch_id"))
+        batch = get_object_or_404(access.visible_batches(request.user), pk=data.pop("batch_id"))
 
         enrollment = services.enrol_student(
             student=student, batch=batch, actor=request.user, **data

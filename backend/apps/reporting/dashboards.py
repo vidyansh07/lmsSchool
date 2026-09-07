@@ -18,34 +18,50 @@ from django.utils import timezone
 
 
 def admin_dashboard(user) -> dict[str, Any]:
-    """What an administrator needs on opening the product."""
-    from apps.batches.models import Batch, BatchStatus
+    """What an administrator needs on opening the product.
+
+    Every count is taken over a queryset the caller could have opened for
+    themselves, because an administrator is bounded to a centre (D-127) and a
+    total is still somebody's data. This was the half of the branch change that
+    `access.scope_for` fixed for `metrics` and that these plain counts beside it
+    were left out of: the tiles read the institution while the batch list under
+    them read one centre. Nobody audits a total, which is what makes the
+    aggregate the *worst* place to leak from rather than the mildest.
+
+    `published_courses` is the one figure that stays institution-wide, and it is
+    correct that it does: a course is curriculum, shared by every centre.
+    """
+    from apps.batches.models import BatchStatus
     from apps.certificates.models import Certificate, CertificateStatus
     from apps.courses.models import Course, PublishStatus
-    from apps.enrollments.models import Enrollment, EnrollmentStatus
+    from apps.enrollments.models import EnrollmentStatus
     from apps.progress.models import CompletionStatus, CourseCompletion
-    from apps.trainers.models import TrainerProfile
+    from apps.trainers import access as trainers_access
 
     from . import access, metrics
 
     scope = access.scope_for(user)
+    batches = access.visible_batches(user)
+    enrollments = access.visible_enrollments(user)
+    completions = CourseCompletion.objects.filter(enrollment__in=enrollments)
 
     return {
-        "active_students": Enrollment.objects.filter(status=EnrollmentStatus.ACTIVE)
+        "active_students": enrollments.filter(status=EnrollmentStatus.ACTIVE)
         .values("student_id")
         .distinct()
         .count(),
-        "active_trainers": TrainerProfile.objects.filter(
-            user__is_active=True, batches__status=BatchStatus.ACTIVE
-        )
+        "active_trainers": trainers_access.visible_trainers(user)
+        .filter(user__is_active=True, batches__status=BatchStatus.ACTIVE)
         .distinct()
         .count(),
         "published_courses": Course.objects.filter(status=PublishStatus.PUBLISHED).count(),
-        "active_batches": Batch.objects.filter(status=BatchStatus.ACTIVE).count(),
-        "awaiting_completion_approval": CourseCompletion.objects.filter(
+        "active_batches": batches.filter(status=BatchStatus.ACTIVE).count(),
+        "awaiting_completion_approval": completions.filter(
             status=CompletionStatus.ELIGIBLE
         ).count(),
-        "certificates_issued": Certificate.objects.filter(status=CertificateStatus.ISSUED).count(),
+        "certificates_issued": Certificate.objects.filter(
+            status=CertificateStatus.ISSUED, completion__in=completions
+        ).count(),
         "metrics": metrics.compute(
             scope,
             [
@@ -304,7 +320,11 @@ def _behind_schedule_batch_ids(batches) -> set:
     from apps.progress.reports import TIMELINE_BEHIND_THRESHOLD_PERCENT
     from apps.sessions.models import ClassSession, SessionStatus, TopicStatus
 
-    rows = list(batches.only("id", "course_id", "start_date", "end_date"))
+    # `select_related(None)` before `only()`: the caller now hands in the
+    # access layer's queryset, which pulls the course, trainer and branch, and
+    # Django refuses a field that is both deferred and select_related. Cleared
+    # here rather than at the call site so any caller may pass any queryset.
+    rows = list(batches.select_related(None).only("id", "course_id", "start_date", "end_date"))
     if not rows:
         return set()
 
@@ -349,12 +369,18 @@ def _behind_schedule_batch_ids(batches) -> set:
     return behind
 
 
-def _overdue_dsr_trainer_count() -> int:
+def _overdue_dsr_trainer_count(batches) -> int:
     """How many trainers currently have a finished class with no submitted report.
 
     Grouped by the trainer frozen onto each session — the one who actually
     took the class, which may not be the batch's *current* trainer after a
     reassignment — rather than walked one trainer at a time.
+
+    Takes the batches to count over rather than reading every session in the
+    institution, so the figure is about the centre whose dashboard is being
+    drawn. A trainer at another centre with an overdue report is not this
+    manager's problem, and counting them made the number both wrong and a
+    statement about staffing somewhere else.
     """
     from apps.dsr.models import DSR, DSRStatus
     from apps.sessions.models import ClassSession, SessionStatus
@@ -363,7 +389,9 @@ def _overdue_dsr_trainer_count() -> int:
         "session_id", flat=True
     )
     return (
-        ClassSession.objects.filter(status=SessionStatus.COMPLETED, trainer__isnull=False)
+        ClassSession.objects.filter(
+            batch__in=batches, status=SessionStatus.COMPLETED, trainer__isnull=False
+        )
         .exclude(id__in=reported_session_ids)
         .values_list("trainer_id", flat=True)
         .distinct()
@@ -390,27 +418,41 @@ def manager_dashboard(user) -> dict[str, Any]:
     daily-report queue, `performance.view_any` for the review queue — so a
     role that can read this dashboard but not, say, daily status reports,
     sees a shorter queue rather than a number it has no way to act on.
+
+    Every queryset below starts from the access layer rather than from a model
+    manager, because the person reading this is bounded to a centre and a KPI
+    strip is not exempt from that. "A summary of the page below it" is the whole
+    design, and a summary counting classes, students and trainers that the page
+    below cannot show is not a summary of anything — it is another centre's
+    figures, on a screen that looks entirely normal.
     """
     from apps.accounts.roles import Capability, has_capability
-    from apps.batches.models import Batch, BatchStatus
-    from apps.dsr.models import DSR, DSRStatus
-    from apps.enrollments.models import Enrollment, EnrollmentStatus
+    from apps.batches.models import BatchStatus
+    from apps.dsr import access as dsr_access
+    from apps.dsr.models import DSRStatus
+    from apps.enrollments.models import EnrollmentStatus
     from apps.performance.models import PerformanceReview, PerformanceSubjectType
-    from apps.students.models import StudentProfile
-    from apps.trainers.models import TrainerProfile
+    from apps.students import access as students_access
+    from apps.trainers import access as trainers_access
+
+    from . import access
 
     today = timezone.localdate()
 
-    active_batches = Batch.objects.filter(status=BatchStatus.ACTIVE)
+    batches = access.visible_batches(user)
+    trainers = trainers_access.visible_trainers(user)
+    active_batches = batches.filter(status=BatchStatus.ACTIVE)
     behind_ids = _behind_schedule_batch_ids(active_batches)
-    risk = _risk_rollup(Enrollment.objects.filter(status=EnrollmentStatus.ACTIVE))
+    risk = _risk_rollup(access.visible_enrollments(user).filter(status=EnrollmentStatus.ACTIVE))
 
     attention: list[dict[str, Any]] = []
 
     if has_capability(user, Capability.DSR_VIEW_ANY):
-        pending_dsr = DSR.objects.filter(
-            status__in=(DSRStatus.SUBMITTED, DSRStatus.UNDER_REVIEW)
-        ).count()
+        pending_dsr = (
+            dsr_access.visible_dsrs(user)
+            .filter(status__in=(DSRStatus.SUBMITTED, DSRStatus.UNDER_REVIEW))
+            .count()
+        )
         if pending_dsr:
             attention.append(
                 {
@@ -456,7 +498,7 @@ def manager_dashboard(user) -> dict[str, Any]:
         reviewed_trainer_ids = PerformanceReview.objects.filter(
             subject_type=PerformanceSubjectType.TRAINER
         ).values("trainer_id")
-        missing_reviews = TrainerProfile.objects.exclude(pk__in=reviewed_trainer_ids).count()
+        missing_reviews = trainers.exclude(pk__in=reviewed_trainer_ids).count()
         if missing_reviews:
             attention.append(
                 {
@@ -473,19 +515,19 @@ def manager_dashboard(user) -> dict[str, Any]:
 
     return {
         "batches": {
-            "total": Batch.objects.count(),
+            "total": batches.count(),
             "active": active_batches.count(),
             "behind_schedule": len(behind_ids),
             "at_risk": risk["at_risk_batches"],
         },
         "students": {
-            "total": StudentProfile.objects.count(),
+            "total": students_access.visible_students(user).count(),
             "active": risk["active_students"],
             "at_risk": risk["at_risk_students"],
         },
         "trainers": {
-            "total": TrainerProfile.objects.count(),
-            "with_overdue_dsr": _overdue_dsr_trainer_count(),
+            "total": trainers.count(),
+            "with_overdue_dsr": _overdue_dsr_trainer_count(batches),
         },
         "attention": attention,
         "as_of": today.isoformat(),

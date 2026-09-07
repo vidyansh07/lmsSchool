@@ -22,6 +22,7 @@ from django.db.models import QuerySet
 
 from apps.accounts.roles import Capability, has_capability
 from apps.batches import access as batch_access
+from apps.organisation.scoping import scope_to_branch
 
 from .models import DSR, EDITABLE_STATUSES
 
@@ -48,7 +49,7 @@ def visible_dsrs(user) -> QuerySet[DSR]:
     base = DSR.objects.with_related()
 
     if has_capability(user, Capability.DSR_VIEW_ANY):
-        return base
+        return scope_to_branch(base, user, path="session__batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

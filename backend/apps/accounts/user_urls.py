@@ -4,6 +4,7 @@ from django.urls import path
 
 from .user_views import (
     UserAuditView,
+    UserBranchView,
     UserCredentialActionView,
     UserDetailView,
     UserListCreateView,
@@ -23,6 +24,7 @@ urlpatterns = [
         name="credential-link",
     ),
     path("<uuid:user_id>/audit/", UserAuditView.as_view(), name="audit"),
+    path("<uuid:user_id>/branch/", UserBranchView.as_view(), name="branch"),
     path("<uuid:user_id>/profile-image/", ProfileImageFileView.as_view(), name="profile-image"),
     path(
         "<uuid:user_id>/profile-image/remove/",

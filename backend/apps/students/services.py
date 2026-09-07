@@ -8,7 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.models import User, UserRole
-from apps.accounts.services import create_user
+from apps.accounts.services import create_user, resolve_branch_for_new_record
 from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError, ConflictError
 from apps.common.identifiers import next_student_id
@@ -24,6 +24,7 @@ def create_student(
     last_name: str = "",
     phone: str = "",
     actor: User,
+    branch=None,
     profile_fields: dict[str, Any] | None = None,
     password: str | None = None,
     send_invitation: bool = True,
@@ -33,7 +34,11 @@ def create_student(
     Both happen in a single transaction: an account without a profile would be a
     student who cannot be found by student ID, and a profile without an account
     would be unreachable. Neither half is allowed to exist alone.
+
+    The centre is resolved once and written to both halves, so an account and
+    its profile can never disagree about where somebody is.
     """
+    branch = resolve_branch_for_new_record(actor=actor, branch=branch)
     user = create_user(
         email=email,
         password=password,
@@ -42,11 +47,17 @@ def create_student(
         phone=phone,
         role=UserRole.STUDENT,
         actor=actor,
+        branch=branch,
         send_invitation=send_invitation,
     )
 
-    profile = StudentProfile(user=user, student_id=next_student_id(), **(profile_fields or {}))
-    profile.full_clean(exclude=["user", "student_id"])
+    profile = StudentProfile(
+        user=user,
+        student_id=next_student_id(),
+        branch=user.branch,
+        **(profile_fields or {}),
+    )
+    profile.full_clean(exclude=["user", "student_id", "branch"])
     profile.save()
 
     record(
@@ -139,7 +150,8 @@ def get_or_create_profile_for(user: User, *, actor: User | None = None) -> Stude
     """Fetch the profile for a student account, creating it if it is missing.
 
     Covers accounts whose role was changed to student after creation. The
-    profile is empty, not fabricated: only the identifier is allocated.
+    profile is empty, not fabricated: only the identifier is allocated, and the
+    centre is taken from the account rather than guessed.
     """
     if user.role != UserRole.STUDENT:
         raise ConflictError("This account does not have the student role.")
@@ -147,7 +159,9 @@ def get_or_create_profile_for(user: User, *, actor: User | None = None) -> Stude
     if profile is not None:
         return profile
     with transaction.atomic():
-        profile = StudentProfile.objects.create(user=user, student_id=next_student_id())
+        profile = StudentProfile.objects.create(
+            user=user, student_id=next_student_id(), branch=user.branch
+        )
         record(
             action=AuditAction.STUDENT_CREATED,
             actor=actor or user,

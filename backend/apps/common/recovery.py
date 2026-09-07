@@ -30,24 +30,42 @@ Seeing the bin, restoring from it, and emptying it are different acts:
 `record.view_deleted`, `record.restore` and `record.purge`. Only the last is
 withheld from administrators, because everything else on this ladder can be
 undone and that one cannot.
+
+Why the bin itself is not branch-scoped
+---------------------------------------
+Every other staff screen narrowed to the caller's centre when branches arrived;
+this one deliberately did not. A deleted record's whole point is that nobody
+sees it through the normal screens, so the bin is a recovery tool for whoever
+holds `record.view_deleted` rather than a second view of the institution — and
+somebody looking for a batch that vanished should not have to know which centre
+it was filed under to find out that it was deleted at all.
+
+Restoring is different, because it is a *write* that puts a row back into
+circulation, and an administrator is now bounded to a centre. So
+:class:`RestoreRecordView` refuses a record whose branch is not the actor's,
+using :data:`BRANCH_PATHS` below. Purging is superadmin-only and therefore
+always unbounded.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from django.apps import apps as django_apps
-from django.db.models import Model
+from django.db.models import Model, QuerySet
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.audit.services import AuditAction, AuditResult, record
 from apps.common.deletion import purge, restore
 from apps.common.models import SoftDeleteModel
 from apps.common.pagination import DefaultPagination
 from apps.common.permissions import Capability, HasCapability
 from apps.common.serializers import SafeCharField, StrictSerializer
+from apps.organisation.scoping import scope_to_branch
 
 RECOVERY_TAG = ["recovery"]
 
@@ -66,6 +84,44 @@ def recoverable_models() -> dict[str, type[Model]]:
         for model in django_apps.get_models()
         if issubclass(model, SoftDeleteModel) and not model._meta.abstract
     }
+
+
+def _scoped_by_performance_subject(queryset: QuerySet, user) -> QuerySet:
+    """The branch of a review or a piece of feedback, which is a person's.
+
+    A dotted path cannot express it: the subject is reached through one of two
+    mutually exclusive nullable relations, so the rule is a pair of ``Q``
+    objects rather than a join. Borrowed from `apps.performance.access` instead
+    of restated, because a second definition of "whose review is this?" is a
+    second thing to get wrong. The import is local, per the cross-app rule.
+    """
+    from apps.performance.access import scope_by_subject
+
+    return scope_by_subject(queryset, user)
+
+
+#: How to reach a branch from each soft-deletable model, for the restore guard.
+#: A model absent from this map has no path to a centre — a course, a category,
+#: a question — and is treated as unscoped, which is correct: those are
+#: institution-wide records and restoring one is not an act on anybody's centre.
+#: All seven soft-deletable models are named here today; the absence that means
+#: "unscoped" is a claim about a *future* model, and whoever adds one has to
+#: make it deliberately.
+#:
+#: Written by hand rather than derived, because "which relation is the branch?"
+#: is a judgement (an enrolment belongs to the centre of its *class*, not of its
+#: student, who may since have moved) and a wrong automatic answer here would be
+#: silent. An export job belongs to the centre of the person who asked for it,
+#: since that is whose access the worker re-derives the rows from.
+BRANCH_PATHS: dict[str, str | Callable[[QuerySet, Any], QuerySet]] = {
+    "batches.batch": "branch",
+    "batches.batchschedule": "batch__branch",
+    "dsr.dsr": "session__batch__branch",
+    "enrollments.enrollment": "batch__branch",
+    "performance.feedback": _scoped_by_performance_subject,
+    "performance.performancereview": _scoped_by_performance_subject,
+    "reporting.exportjob": "requested_by__branch",
+}
 
 
 def _model_or_404(label: str) -> type[Model]:
@@ -202,6 +258,22 @@ class DeletedRecordListView(APIView):
         )
 
 
+def _restorable_by(user, model: type[Model], instance: Model) -> bool:
+    """Whether this caller may put this particular record back.
+
+    A 403 rather than a 404, unlike everywhere else in this codebase: the bin
+    already showed them the row, so pretending it does not exist would be a lie
+    they can see through. What the refusal does not say is which centre it
+    belongs to.
+    """
+    rule = BRANCH_PATHS.get(model._meta.label_lower)
+    if rule is None:
+        return True
+    row = model.all_objects.filter(pk=instance.pk)
+    scoped = rule(row, user) if callable(rule) else scope_to_branch(row, user, path=rule)
+    return scoped.exists()
+
+
 class RestoreRecordView(APIView):
     """Bring one record back."""
 
@@ -227,6 +299,26 @@ class RestoreRecordView(APIView):
             from django.http import Http404
 
             raise Http404
+
+        if not _restorable_by(request.user, model, instance):
+            record(
+                action=AuditAction.PERMISSION_DENIED,
+                actor=request.user,
+                resource_type="deleted_record",
+                resource_id=instance.pk,
+                result=AuditResult.DENIED,
+                context={"refused": "outside_branch", "label": model._meta.label_lower},
+            )
+            return Response(
+                {
+                    "error": {
+                        "code": "permission_denied",
+                        "message": "You do not have permission to restore this record.",
+                        "request_id": getattr(request, "request_id", "-"),
+                    }
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         restore(instance=instance, actor=request.user)
         instance.refresh_from_db()

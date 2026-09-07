@@ -155,14 +155,22 @@ class BatchWriteSerializer(StrictModelSerializer):
     Absent on purpose: `code` (system-allocated), `status` (its own endpoint and
     transition table), `trainer` (its own endpoint, because assignment checks
     the timetable) and `created_by`.
+
+    `branch` is accepted on create and refused on edit. A bounded caller's own
+    centre is forced onto a new class whatever they send, so the field is really
+    there for the platform operator, who has no centre to force. Moving an
+    existing class between centres is a different act from correcting its name —
+    it would take its timetable, its roster and its marks with it — so it is not
+    something a PATCH does by accident.
     """
 
     name = SafeCharField(max_length=200)
     capacity = serializers.IntegerField(min_value=1, max_value=MAX_CAPACITY)
+    branch = serializers.UUIDField(required=False, allow_null=True)
 
     class Meta:
         model = Batch
-        fields = ("name", "course", "description", "start_date", "end_date", "capacity")
+        fields = ("name", "course", "description", "start_date", "end_date", "capacity", "branch")
 
     def validate(self, attrs):
         start = attrs.get("start_date") or getattr(self.instance, "start_date", None)
@@ -170,6 +178,10 @@ class BatchWriteSerializer(StrictModelSerializer):
         if start and end and end < start:
             raise serializers.ValidationError(
                 {"end_date": ["The end date cannot be before the start date."]}
+            )
+        if self.instance is not None and "branch" in attrs:
+            raise serializers.ValidationError(
+                {"branch": ["A class cannot be moved to another centre by editing it."]}
             )
         return attrs
 

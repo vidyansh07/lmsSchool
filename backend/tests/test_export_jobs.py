@@ -735,15 +735,25 @@ def test_a_queued_jobs_null_fields_serialise_as_json_null(
 
 @pytest.mark.django_db
 def test_requested_by_email_is_null_once_the_account_is_gone(
-    api_client_no_csrf, admin_user, enrollment
+    api_client_no_csrf, admin_user, unbounded_superadmin, enrollment
 ):
+    """Read back by a platform operator, not by the administrator who queued it.
+
+    A job's centre is its requester's (`access.visible_export_jobs`), so once
+    the account is gone the job belongs to no centre and no bounded caller
+    reaches it — including the administrator whose account it used to be, whose
+    id is exactly the thing that has just been cleared. That is the fail-closed
+    reading, and `tests/test_branch_scoping_api.py` states it as a rule of its
+    own. What this test is about is unchanged: the serializer renders a missing
+    requester as `null` rather than blowing up on the null relation.
+    """
     response = _queue(api_client_no_csrf, admin_user)
     job = ExportJob.objects.get(pk=response.json()["id"])
 
     job.requested_by = None
     job.save(update_fields=["requested_by"])
 
-    api_client_no_csrf.force_login(admin_user)
+    api_client_no_csrf.force_login(unbounded_superadmin)
     body = api_client_no_csrf.get(_detail_url(job.pk)).json()
     assert body["requested_by_email"] is None
 

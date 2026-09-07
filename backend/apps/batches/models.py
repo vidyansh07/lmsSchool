@@ -116,7 +116,9 @@ class Weekday(models.IntegerChoices):
 
 class BatchQuerySet(SoftDeleteQuerySet):
     def with_related(self):
-        return self.select_related("course", "course__category", "trainer", "trainer__user")
+        return self.select_related(
+            "course", "course__category", "trainer", "trainer__user", "branch"
+        )
 
     def with_counts(self):
         """Annotate the seat count.
@@ -157,6 +159,13 @@ class Batch(SoftDeleteBaseModel):
         on_delete=models.PROTECT,
         related_name="batches",
         help_text=_("Protected: deleting a course with batches would orphan its students."),
+    )
+    branch = models.ForeignKey(
+        "organisation.Branch",
+        on_delete=models.PROTECT,
+        related_name="batches",
+        verbose_name=_("branch"),
+        help_text=_("The centre this class runs at. A course is shared; a class is not."),
     )
     description = models.TextField(_("description"), max_length=2000, blank=True)
     delivery_mode = models.CharField(

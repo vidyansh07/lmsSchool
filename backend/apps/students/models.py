@@ -93,6 +93,16 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         related_name="student_profile",
         help_text=_("Deleting the account removes the profile; accounts are deactivated instead."),
     )
+    branch = models.ForeignKey(
+        "organisation.Branch",
+        on_delete=models.PROTECT,
+        related_name="students",
+        verbose_name=_("branch"),
+        help_text=_(
+            "The centre this student was admitted to. A later transfer may put "
+            "their class at another one; this is where their record is kept."
+        ),
+    )
 
     date_of_birth = models.DateField(_("date of birth"), null=True, blank=True)
 

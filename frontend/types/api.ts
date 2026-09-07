@@ -51,6 +51,11 @@ export interface CurrentUser extends User {
   capabilities: string[];
   profile_type: 'student' | 'trainer' | null;
   profile_id: string | null;
+  /** The centre this account belongs to. Null for a superadmin, who is
+   *  bounded to none of them. */
+  branch_id: string | null;
+  branch_code: string | null;
+  branch_name: string | null;
 }
 
 export interface AdminUser extends User {
@@ -1641,4 +1646,17 @@ export interface AcademicEvent {
 export interface GradeBand {
   label: string;
   min_percent: string;
+}
+
+/** One centre. A branch bounds who a manager may see and which classes appear
+ *  on their screens; it is not a tenant — the course catalogue and the academic
+ *  rules are shared across all of them. */
+export interface Branch {
+  id: string;
+  code: string;
+  name: string;
+  city: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }

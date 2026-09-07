@@ -11,8 +11,8 @@ from .models import StudentProfile
 
 @admin.register(StudentProfile)
 class StudentProfileAdmin(admin.ModelAdmin):
-    list_display = ("student_id", "user", "city", "qualification", "fee_status", "created_at")
-    list_filter = ("fee_status", "qualification", "country", "created_at")
+    list_display = ("student_id", "user", "branch", "city", "qualification", "fee_status")
+    list_filter = ("branch", "fee_status", "qualification", "country", "created_at")
     search_fields = ("student_id", "user__email", "user__first_name", "user__last_name")
     readonly_fields = (
         "id",
@@ -22,5 +22,5 @@ class StudentProfileAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
-    autocomplete_fields = ("user",)
+    autocomplete_fields = ("user", "branch")
     ordering = ("-created_at",)

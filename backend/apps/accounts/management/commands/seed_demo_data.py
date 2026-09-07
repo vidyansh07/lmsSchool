@@ -29,10 +29,16 @@ from django.db import transaction
 
 from apps.accounts.models import User, UserRole
 from apps.common.identifiers import next_student_id, next_trainer_id
+from apps.organisation.models import Branch
 from apps.students.models import FeeStatus, Qualification, StudentProfile
 from apps.trainers.models import TrainerProfile
 
 DEMO_EMAIL_DOMAIN = "demo.grras.invalid"
+
+# Matches organisation.0002_default_branch, so seeding a fresh database and
+# migrating an existing one land on the same centre rather than two.
+DEFAULT_BRANCH_CODE = "MAIN"
+DEFAULT_BRANCH_NAME = "Main centre"
 
 FIRST_NAMES = [
     "Aarav",
@@ -219,10 +225,18 @@ class Command(BaseCommand):
                 "DEMO_USER_PASSWORD does not meet the password policy: " + "; ".join(exc.messages)
             ) from exc
 
+        # Every demo account but the superadmin belongs to a centre: a bounded
+        # role with no branch sees nothing (apps.organisation.scoping), so a
+        # branchless roster would seed a demo where half the screens are empty.
+        branch, _ = Branch.objects.get_or_create(
+            code=DEFAULT_BRANCH_CODE,
+            defaults={"name": DEFAULT_BRANCH_NAME, "is_active": True},
+        )
+
         created = updated = 0
         by_role: dict[str, int] = {}
         for account in build_demo_accounts():
-            was_created = self._upsert(account, password, force=options["force"])
+            was_created = self._upsert(account, password, force=options["force"], branch=branch)
             created += int(was_created)
             updated += int(not was_created)
             by_role[account.role] = by_role.get(account.role, 0) + 1
@@ -239,7 +253,7 @@ class Command(BaseCommand):
             "Credentials are printed nowhere and stored in no file."
         )
 
-    def _upsert(self, account: DemoAccount, password: str, *, force: bool) -> bool:
+    def _upsert(self, account: DemoAccount, password: str, *, force: bool, branch) -> bool:
         user = User.objects.filter(email=account.email).first()
         is_new = user is None
 
@@ -252,6 +266,7 @@ class Command(BaseCommand):
                 role=account.role,
                 is_staff=account.role in STAFF_ROLES,
                 is_active=True,
+                branch=None if account.role == UserRole.SUPERADMIN else branch,
             )
         else:
             user.first_name = account.first_name
@@ -259,6 +274,7 @@ class Command(BaseCommand):
             user.role = account.role
             user.is_active = True
             user.is_staff = account.role in STAFF_ROLES
+            user.branch = None if account.role == UserRole.SUPERADMIN else branch
             if force:
                 user.set_password(password)
             user.save()
@@ -274,11 +290,19 @@ class Command(BaseCommand):
 
         if account.role == UserRole.STUDENT:
             self._upsert_profile(
-                StudentProfile, user, account.profile, next_student_id, "student_id"
+                StudentProfile,
+                user,
+                {**account.profile, "branch": branch},
+                next_student_id,
+                "student_id",
             )
         elif account.role == UserRole.TRAINER:
             self._upsert_profile(
-                TrainerProfile, user, account.profile, next_trainer_id, "trainer_id"
+                TrainerProfile,
+                user,
+                {**account.profile, "branch": branch},
+                next_trainer_id,
+                "trainer_id",
             )
 
         return is_new

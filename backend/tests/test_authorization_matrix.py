@@ -320,11 +320,17 @@ def test_the_two_teaching_roles_hold_no_administrative_capability():
 
 
 @pytest.fixture
-def rival(db, admin_user, published_course, trainer_profile_two):
+def rival(branch, admin_user, published_course, trainer_profile_two):
     """A second batch, with a second trainer and a second student in it.
 
     Everything below asks the same question in a different place: can somebody
     reach this object by naming it, when it belongs to the other side?
+
+    Deliberately at the *same* centre as everything else: the question these
+    tests ask is about ownership, not geography, and putting the rival in
+    another branch would let a branch filter answer them without the ownership
+    rule ever being exercised. The cross-branch case is asked separately, at
+    the bottom of this module.
     """
     from apps.accounts.models import User
     from apps.batches.models import Batch, BatchStatus
@@ -337,6 +343,7 @@ def rival(db, admin_user, published_course, trainer_profile_two):
         name="Somebody else's batch",
         course=published_course,
         trainer=trainer_profile_two,
+        branch=branch,
         start_date=date.today() - timedelta(days=20),
         end_date=date.today() + timedelta(days=40),
         capacity=30,
@@ -349,8 +356,9 @@ def rival(db, admin_user, published_course, trainer_profile_two):
         first_name="Rival",
         last_name="Student",
         role=UserRole.STUDENT,
+        branch=branch,
     )
-    profile = StudentProfile.objects.create(user=user, student_id=next_student_id())
+    profile = StudentProfile.objects.create(user=user, student_id=next_student_id(), branch=branch)
     enrollment = Enrollment.objects.create(
         code=next_enrolment_code(),
         student=profile,

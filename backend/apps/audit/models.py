@@ -230,6 +230,16 @@ class AuditAction(models.TextChoices):
     # --- Authorization
     PERMISSION_DENIED = "authz.denied", _("Permission denied")
 
+    # --- Organisation
+    #
+    # Moving somebody between centres is its own event rather than a field
+    # change on `user.updated`: it is the one edit that changes what a person
+    # can see rather than what they are, and it should be findable with a
+    # single query.
+    BRANCH_CREATED = "branch.created", _("Branch created")
+    BRANCH_UPDATED = "branch.updated", _("Branch updated")
+    USER_BRANCH_CHANGED = "user.branch_changed", _("Account moved between branches")
+
 
 class AuditResult(models.TextChoices):
     SUCCESS = "success", _("Success")

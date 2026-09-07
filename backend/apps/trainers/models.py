@@ -59,6 +59,16 @@ class TrainerProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         on_delete=models.CASCADE,
         related_name="trainer_profile",
     )
+    branch = models.ForeignKey(
+        "organisation.Branch",
+        on_delete=models.PROTECT,
+        related_name="trainers",
+        verbose_name=_("branch"),
+        help_text=_(
+            "The centre this trainer works at. It is what stops a class at one "
+            "centre being staffed from another."
+        ),
+    )
 
     professional_title = models.CharField(
         _("professional title"),
