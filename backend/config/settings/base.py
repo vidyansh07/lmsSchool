@@ -69,6 +69,7 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     "apps.common",
     "apps.accounts",
+    "apps.configuration",
     "apps.students",
     "apps.trainers",
     "apps.courses",

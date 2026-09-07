@@ -234,22 +234,29 @@ def _matches_family(head: bytes, family: str) -> bool:
     return any(head.startswith(signature) for signature in signatures)
 
 
-def validate_resource_upload(uploaded_file) -> tuple[str, str]:
+def validate_resource_upload(uploaded_file, *, limit_bytes: int | None = None) -> tuple[str, str]:
     """Validate a course resource file.
 
     Returns ``(extension, content_type)`` for the caller to store. Raises
     ``ValidationError`` describing the first failure.
+
+    ``limit_bytes`` is the institution's configured ceiling, passed in by the
+    domain service that resolved it. It arrives as an argument rather than
+    being read here because ``apps.common`` is the base every app imports, and
+    importing a domain app back into it would be a load cycle — and because a
+    pure validator stays testable without a database. Omitted, the behaviour is
+    byte-for-byte what it was: ``MAX_RESOURCE_BYTES``.
     """
     original_name = getattr(uploaded_file, "name", "") or ""
     suffix = PurePosixPath(original_name).suffix.lower()
+    limit = limit_bytes or MAX_RESOURCE_BYTES
 
     size = getattr(uploaded_file, "size", None)
     if not size:
         raise ValidationError(_("The uploaded file is empty."), code="empty_file")
-    if size > MAX_RESOURCE_BYTES:
+    if size > limit:
         raise ValidationError(
-            _("File must be %(limit)d MB or smaller.")
-            % {"limit": MAX_RESOURCE_BYTES // (1024 * 1024)},
+            _("File must be %(limit)d MB or smaller.") % {"limit": limit // (1024 * 1024)},
             code="file_too_large",
         )
 

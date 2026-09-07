@@ -48,7 +48,7 @@ from apps.common.logging import scrub_text
 from apps.courses import access as course_access
 
 from . import access, reports, writers
-from .models import EXPORT_RETENTION, ExportJob, ExportStatus
+from .models import ExportJob, ExportStatus
 
 logger = logging.getLogger("grras.reporting")
 
@@ -122,6 +122,16 @@ def run_export(job_id: str) -> bool:
     delivery of this same task, or by a cancellation racing it — must be a
     no-op rather than a second attempt or a resurrected cancelled job.
     """
+    # Cross-app imports inside the function on purpose.
+    from apps.configuration.settings_resolver import export_retention, forget_resolved_settings
+
+    # The settings memo is scoped to a request, and a worker has none:
+    # `RequestContextMiddleware` is what calls `request_context.reset()`, and it
+    # never runs here, so the first job a worker process handles would pin the
+    # retention window for the life of that process. An operator who shortened
+    # "keep exports for" would then see no change until the next deploy.
+    forget_resolved_settings()
+
     job = ExportJob.objects.select_related("requested_by").filter(pk=job_id).first()
     if job is None:
         return False
@@ -155,7 +165,11 @@ def run_export(job_id: str) -> bool:
         job.row_count = row_count
         job.status = ExportStatus.COMPLETED
         job.finished_at = timezone.now()
-        job.expires_at = job.finished_at + EXPORT_RETENTION
+        # How long a file stays reachable is an operator's decision, not a
+        # release's. `EXPORT_RETENTION` stays as the code default that
+        # `DEFAULT_SETTINGS["export_retention_days"]` mirrors, for a system
+        # nobody has configured yet.
+        job.expires_at = job.finished_at + export_retention()
         job.error = ""
         job.save(
             update_fields=[

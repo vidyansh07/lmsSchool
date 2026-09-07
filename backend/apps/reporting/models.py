@@ -116,6 +116,10 @@ TERMINAL_EXPORT_STATUSES = frozenset(
 #: mitigation: `expires_at` is set the moment a job completes, the download view
 #: honours it, and nothing keeps a five-year-old spreadsheet of students
 #: reachable forever just because nobody deleted the row.
+#:
+#: This is the code default. How long an institution actually keeps its exports
+#: is `SystemSetting.export_retention_days`, which mirrors this number, and it
+#: is what `run_export` reads.
 EXPORT_RETENTION = timedelta(days=14)
 
 

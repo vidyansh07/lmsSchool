@@ -7,6 +7,7 @@ import { AccountDetailsForm } from './account-details-form';
 import { useAuth } from '@/components/auth-provider';
 import { ProfileImageField } from '@/components/profile-image-field';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { SupportCard } from '@/components/support-card';
 
 function ProfileContent() {
   const { user } = useAuth();
@@ -34,6 +35,8 @@ function ProfileContent() {
 
       {user?.profile_type === 'student' ? <StudentProfileForm /> : null}
       {user?.profile_type === 'trainer' ? <TrainerProfileForm /> : null}
+
+      <SupportCard />
     </div>
   );
 }

@@ -35,6 +35,7 @@ export const Capability = {
   enrolmentUpdateAny: 'enrolment.update_any',
   platformConfigure: 'platform.configure',
   auditView: 'audit.view',
+  settingsManage: 'settings.manage',
   recordViewDeleted: 'record.view_deleted',
   recordRestore: 'record.restore',
   recordPurge: 'record.purge',

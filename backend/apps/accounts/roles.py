@@ -79,6 +79,16 @@ class Capability(models.TextChoices):
     PLATFORM_CONFIGURE = "platform.configure", _("Change platform-wide settings")
     AUDIT_VIEW = "audit.view", _("Read the audit trail")
 
+    # --- Institution settings
+    #
+    # Deliberately not `platform.configure`. That one is superadmin-only
+    # because it is what `can_grant_role` exists to withhold; changing the
+    # institution's own name and support address is an administrator's job.
+    # Conflating them would either lock every administrator out of the screen
+    # they are the intended user of, or hand every administrator the ladder's
+    # top rung.
+    SETTINGS_MANAGE = "settings.manage", _("Change the institution's settings")
+
     # --- Reversible deletion
     #
     # Deleting is an ordinary right that lives with each domain: whoever may
@@ -294,6 +304,7 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.TRAINER_CREATE,
         Capability.TRAINER_UPDATE_ANY,
         Capability.ACADEMIC_CONFIGURE,
+        Capability.SETTINGS_MANAGE,
         Capability.AUDIT_VIEW,
         Capability.COMPLETION_APPROVE,
         Capability.CERTIFICATE_MANAGE,

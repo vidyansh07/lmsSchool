@@ -228,6 +228,11 @@ export const STAFF_NAV: NavGroup[] = [
         capability: Capability.academicConfigure,
       },
       {
+        href: '/admin/settings',
+        label: 'Settings',
+        capability: Capability.settingsManage,
+      },
+      {
         href: '/admin/recovery',
         label: 'Deleted records',
         capability: Capability.recordViewDeleted,
