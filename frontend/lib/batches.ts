@@ -217,3 +217,38 @@ export async function getStudentDashboard(): Promise<StudentDashboard> {
 export async function getTrainerDashboard(): Promise<TrainerDashboard> {
   return apiFetch<TrainerDashboard>('/api/v1/dashboard/trainer/');
 }
+
+
+/** What `POST /batches/<id>/set-up/` reports back. */
+export interface TimetableSetupResult {
+  weekdays: number[];
+  schedules_created: number;
+  schedules_already_present: number;
+  sessions: { created: number; skipped: number; on_holiday: number; from: string; to: string } | null;
+  curriculum: { planned: number; lessons_total: number; unplanned_remaining: number } | null;
+}
+
+/**
+ * Set a batch up for teaching in one call: timetable, classes, curriculum.
+ *
+ * `weekdays` is omitted for the usual case — the server defaults to Monday to
+ * Saturday, the six-day week this institute runs. Safe to call twice; the
+ * result says what already existed rather than creating a second copy.
+ */
+export async function setUpBatchTimetable(
+  id: string,
+  payload: {
+    start_time: string;
+    end_time: string;
+    weekdays?: number[];
+    location?: string;
+    trainer_id?: string | null;
+    generate?: boolean;
+    autoplan?: boolean;
+  },
+): Promise<TimetableSetupResult> {
+  return apiMutate<TimetableSetupResult>(`/api/v1/batches/${id}/set-up/`, {
+    method: 'POST',
+    body: payload,
+  });
+}

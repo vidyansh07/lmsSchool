@@ -21,6 +21,7 @@ import {
   assignBatchTrainer,
   createSchedule,
   deleteSchedule,
+  setUpBatchTimetable,
   enrolStudent,
   getBatch,
   getBatchRoster,
@@ -154,6 +155,44 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
   const [isSaving, setIsSaving] = useState(false);
   const [generated, setGenerated] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSettingUp, setIsSettingUp] = useState(false);
+
+  // Setting a batch up used to mean three visits in the right order: write six
+  // timetable rows by hand, generate the classes, then plan the curriculum. A
+  // batch that had only had the first two looked exactly like one nobody had
+  // started. This does all three, defaulting to the six-day week the institute
+  // actually runs, and is safe to press twice.
+  async function onSetUp() {
+    setIsSettingUp(true);
+    setErrors({});
+    setGenerated('');
+    try {
+      const result = await setUpBatchTimetable(batch.id, { start_time: start, end_time: end, location });
+      const said: string[] = [];
+      said.push(
+        result.schedules_created
+          ? `${result.schedules_created} teaching day${result.schedules_created === 1 ? '' : 's'} added`
+          : 'timetable already set',
+      );
+      if (result.schedules_already_present) {
+        said.push(`${result.schedules_already_present} already there`);
+      }
+      if (result.sessions) {
+        said.push(`${result.sessions.created} class${result.sessions.created === 1 ? '' : 'es'} created`);
+        if (result.sessions.skipped) said.push(`${result.sessions.skipped} already existed`);
+        if (result.sessions.on_holiday) said.push(`${result.sessions.on_holiday} skipped as holidays`);
+      }
+      if (result.curriculum) {
+        said.push(`${result.curriculum.planned} lesson${result.curriculum.planned === 1 ? '' : 's'} planned`);
+      }
+      setGenerated(`${said.join(', ')}.`);
+      onChanged();
+    } catch (cause) {
+      setErrors(fieldErrors(cause));
+    } finally {
+      setIsSettingUp(false);
+    }
+  }
 
   async function onGenerate() {
     setIsGenerating(true);
@@ -267,6 +306,24 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
             {isSaving ? 'Adding…' : 'Add class'}
           </Button>
         </form>
+
+        <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+          <p className="text-sm font-medium">Set this batch up for teaching</p>
+          <p className="text-sm text-muted-foreground">
+            Writes a Monday to Saturday timetable at the times above, turns it into dated
+            classes, and puts the course&rsquo;s published lessons on them in order. Days already
+            in the timetable are left as they are, and running it again creates nothing.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            disabled={isSettingUp}
+            onClick={() => void onSetUp()}
+          >
+            <CalendarPlus className="size-4" aria-hidden="true" />
+            {isSettingUp ? 'Setting up…' : 'Set up six-day teaching week'}
+          </Button>
+        </div>
 
         <div className="space-y-2 rounded-md border border-border p-3">
           <p className="text-sm font-medium">Classes from this timetable</p>
