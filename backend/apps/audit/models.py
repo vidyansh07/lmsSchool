@@ -86,6 +86,7 @@ class AuditAction(models.TextChoices):
     BATCH_UPDATED = "batch.updated", _("Batch updated")
     BATCH_STATUS_CHANGED = "batch.status.changed", _("Batch status changed")
     BATCH_TRAINER_ASSIGNED = "batch.trainer.assigned", _("Batch trainer assigned")
+    BATCH_TIMETABLE_SET = "batch.timetable.set", _("Batch timetable set up")
     SCHEDULE_CREATED = "schedule.created", _("Class schedule created")
     SCHEDULE_UPDATED = "schedule.updated", _("Class schedule updated")
     SCHEDULE_DELETED = "schedule.deleted", _("Class schedule deleted")

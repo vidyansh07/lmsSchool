@@ -35,6 +35,7 @@ from .serializers import (
     BatchScheduleWriteSerializer,
     BatchStatusSerializer,
     BatchWriteSerializer,
+    SetUpTimetableSerializer,
 )
 
 BATCHES_TAG = ["batches"]
@@ -238,6 +239,57 @@ class BatchRosterView(APIView):
             "student__student_id"
         )
         return Response(RosterEntrySerializer(roster, many=True).data)
+
+
+class BatchTimetableSetupView(APIView):
+    """Write the weekly timetable, make the classes, and plan the curriculum.
+
+    One action because it was always one intention. Doing it by hand meant three
+    screens visited in the right order, and a batch that had only had the first
+    two looked identical to one nobody had started.
+
+    Re-runnable: every step underneath already refuses to duplicate itself, so a
+    second call reports zeroes rather than a second timetable.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Set up a batch's timetable, classes and curriculum",
+        request=SetUpTimetableSerializer,
+        responses={
+            200: OpenApiResponse(description="What was created, and what already existed."),
+            409: OpenApiResponse(description="The trainer is already teaching at that time."),
+        },
+        tags=BATCHES_TAG,
+    )
+    def post(self, request, batch_id):
+        from apps.trainers.models import TrainerProfile
+
+        batch = _batch_for(request, batch_id, manage=True)
+        serializer = SetUpTimetableSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        trainer = None
+        trainer_id = data.get("trainer_id")
+        if trainer_id:
+            trainer = get_object_or_404(
+                TrainerProfile.objects.select_related("user"), pk=trainer_id
+            )
+
+        summary = services.setup_batch_timetable(
+            batch=batch,
+            actor=request.user,
+            start_time=data["start_time"],
+            end_time=data["end_time"],
+            weekdays=data.get("weekdays"),
+            location=data.get("location", ""),
+            trainer=trainer,
+            generate=data["generate"],
+            autoplan=data["autoplan"],
+        )
+        return Response(summary)
 
 
 class BatchSchedulesView(APIView):

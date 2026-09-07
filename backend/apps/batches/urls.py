@@ -8,6 +8,7 @@ from .views import (
     BatchRosterView,
     BatchSchedulesView,
     BatchStatusView,
+    BatchTimetableSetupView,
     BatchTrainerView,
     ScheduleDetailView,
 )
@@ -19,6 +20,7 @@ batch_patterns = [
     path("<uuid:batch_id>/trainer/", BatchTrainerView.as_view(), name="trainer"),
     path("<uuid:batch_id>/roster/", BatchRosterView.as_view(), name="roster"),
     path("<uuid:batch_id>/schedules/", BatchSchedulesView.as_view(), name="schedules"),
+    path("<uuid:batch_id>/set-up/", BatchTimetableSetupView.as_view(), name="set-up"),
 ]
 
 schedule_patterns = [

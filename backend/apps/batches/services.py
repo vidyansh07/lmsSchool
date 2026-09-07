@@ -13,6 +13,7 @@ Two rules carry the weight:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from django.db import transaction
@@ -23,7 +24,7 @@ from apps.common.exceptions import ApplicationError
 from apps.common.identifiers import next_batch_code
 
 from .conflicts import find_conflicts, trainer_conflicts_for_batch
-from .models import Batch, BatchSchedule, BatchStatus
+from .models import Batch, BatchSchedule, BatchStatus, Weekday
 
 #: Allowed status transitions. Anything absent is refused.
 #:
@@ -297,3 +298,132 @@ def delete_schedule(*, schedule: BatchSchedule, actor: User) -> None:
         resource_id=schedule_id,
         context={"batch_code": batch_code, "weekday": weekday, "start": start},
     )
+
+
+#: The teaching week this institute actually runs: Monday to Saturday.
+#:
+#: Six days, not five. Sunday is the only day off, which is normal for an Indian
+#: training institute and is the shape every batch here has been created with by
+#: hand. Making it the default turns the common case into no decision at all,
+#: and the uncommon one into passing a different list.
+DEFAULT_TEACHING_WEEKDAYS: tuple[int, ...] = (
+    Weekday.MONDAY,
+    Weekday.TUESDAY,
+    Weekday.WEDNESDAY,
+    Weekday.THURSDAY,
+    Weekday.FRIDAY,
+    Weekday.SATURDAY,
+)
+
+
+@transaction.atomic
+def setup_batch_timetable(
+    *,
+    batch: Batch,
+    actor: User,
+    start_time,
+    end_time,
+    weekdays: Sequence[int] | None = None,
+    location: str = "",
+    trainer=None,
+    generate: bool = True,
+    autoplan: bool = True,
+) -> dict[str, Any]:
+    """Set a batch up for teaching in one action.
+
+    Three steps that were always done together and never in one place: write the
+    weekly timetable, materialise the classes it implies, and put the curriculum
+    on them in order. Somebody opening a new batch had to find three screens and
+    know to visit them in that sequence — and a batch left half-configured looks
+    exactly like one nobody has got to yet.
+
+    Nothing here is new machinery. `create_schedule` still refuses a trainer
+    clash, `generate_sessions` still skips the academic calendar's holidays, and
+    `autoplan_batch` still assigns only published lessons in curriculum order.
+    This composes them so the common case is one decision instead of three.
+
+    **Safe to run twice**, which matters because an operator will:
+
+    * a weekday that already has a timetable entry is left alone rather than
+      given a second one — the existing slot is the one that has classes hanging
+      off it, and replacing it would orphan them;
+    * `generate_sessions` skips classes that already exist, by a database
+      constraint rather than by checking first;
+    * `autoplan_batch` leaves a planned session alone and never hands the same
+      lesson to two classes.
+
+    So a second call reports zeroes rather than doubling the timetable.
+
+    `generate` and `autoplan` are separable because they fail differently. A
+    batch with no published lessons yet can still have its classes made; asking
+    for a curriculum that does not exist should not cost it the timetable.
+    """
+    chosen = tuple(weekdays) if weekdays is not None else DEFAULT_TEACHING_WEEKDAYS
+    if not chosen:
+        raise ApplicationError({"weekdays": ["Choose at least one teaching day."]})
+
+    unknown = sorted(set(chosen) - set(Weekday.values))
+    if unknown:
+        raise ApplicationError({"weekdays": [f"Not days of the week: {unknown}."]})
+
+    if start_time >= end_time:
+        raise ApplicationError({"end_time": ["A class must end after it starts."]})
+
+    existing = {schedule.weekday: schedule for schedule in batch.schedules.all()}
+    created_schedules: list[BatchSchedule] = []
+    reused_days: list[int] = []
+
+    for weekday in sorted(set(chosen)):
+        if weekday in existing:
+            # Already timetabled. Its classes hang off this row, so replacing it
+            # would orphan them for no gain.
+            reused_days.append(int(weekday))
+            continue
+        created_schedules.append(
+            create_schedule(
+                batch=batch,
+                actor=actor,
+                weekday=weekday,
+                start_time=start_time,
+                end_time=end_time,
+                location=location,
+                trainer=trainer,
+            )
+        )
+
+    summary: dict[str, Any] = {
+        "weekdays": [int(day) for day in sorted(set(chosen))],
+        "schedules_created": len(created_schedules),
+        "schedules_already_present": len(reused_days),
+        "sessions": None,
+        "curriculum": None,
+    }
+
+    if generate:
+        from apps.sessions.services import generate_sessions
+
+        summary["sessions"] = generate_sessions(batch=batch, actor=actor)
+
+    if autoplan and generate:
+        # Only worth doing once there are classes to plan onto. Running it
+        # against an empty batch is not an error, it is just nothing.
+        from apps.sessions.services import autoplan_batch
+
+        summary["curriculum"] = autoplan_batch(batch=batch, actor=actor)
+
+    record(
+        action=AuditAction.BATCH_TIMETABLE_SET,
+        actor=actor,
+        resource_type="batch",
+        resource_id=batch.pk,
+        context={
+            "code": batch.code,
+            "weekdays": summary["weekdays"],
+            "start_time": str(start_time),
+            "end_time": str(end_time),
+            "schedules_created": summary["schedules_created"],
+            "sessions_created": (summary["sessions"] or {}).get("created"),
+            "lessons_planned": (summary["curriculum"] or {}).get("planned"),
+        },
+    )
+    return summary

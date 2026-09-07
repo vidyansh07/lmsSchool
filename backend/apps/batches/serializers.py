@@ -187,3 +187,30 @@ class AssignTrainerSerializer(StrictSerializer):
     """
 
     trainer_id = serializers.UUIDField(allow_null=True)
+
+
+class SetUpTimetableSerializer(StrictSerializer):
+    """Set a batch up for teaching in one request.
+
+    `weekdays` is optional and defaults to Monday to Saturday — the six-day week
+    this institute actually runs — so the common case sends nothing but the two
+    times. Passing a list is how you say "not that".
+    """
+
+    start_time = serializers.TimeField()
+    end_time = serializers.TimeField()
+    weekdays = serializers.ListField(
+        child=serializers.IntegerField(min_value=0, max_value=6),
+        required=False,
+        allow_empty=False,
+        max_length=7,
+        help_text="0 is Monday. Defaults to Monday to Saturday.",
+    )
+    location = SafeCharField(max_length=150, required=False, allow_blank=True, default="")
+    trainer_id = serializers.UUIDField(required=False, allow_null=True)
+    generate = serializers.BooleanField(
+        default=True, help_text="Materialise the classes the timetable implies."
+    )
+    autoplan = serializers.BooleanField(
+        default=True, help_text="Put the course's published lessons on those classes, in order."
+    )
