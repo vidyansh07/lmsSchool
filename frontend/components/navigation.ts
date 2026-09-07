@@ -232,6 +232,11 @@ export const STAFF_NAV: NavGroup[] = [
         label: 'Deleted records',
         capability: Capability.recordViewDeleted,
       },
+      {
+        href: '/admin/branding',
+        label: 'Branding',
+        capability: Capability.platformConfigure,
+      },
       { href: '/calendar', label: 'Calendar', roles: ['trainer'] },
     ],
   },
