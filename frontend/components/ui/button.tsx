@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+  'press relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
   {
     variants: {
       variant: {
@@ -16,8 +16,13 @@ const buttonVariants = cva(
         destructive: 'bg-destructive text-destructive-foreground hover:opacity-90',
       },
       size: {
-        sm: 'h-8 px-3 text-xs',
-        md: 'h-10 px-4',
+        // The visible box stays compact — this is a dense operations tool and a
+        // toolbar of 44px buttons pushes the table off the screen. The *hit*
+        // area is expanded to 44px with a centred pseudo-element instead, so a
+        // finger gets the target the guidelines ask for without the layout
+        // paying for it. `relative` is on the base class for this reason.
+        sm: "h-8 px-3 text-xs before:absolute before:left-0 before:right-0 before:top-1/2 before:h-11 before:-translate-y-1/2 before:content-['']",
+        md: "h-10 px-4 before:absolute before:left-0 before:right-0 before:top-1/2 before:h-11 before:-translate-y-1/2 before:content-['']",
         lg: 'h-11 px-6 text-base',
       },
     },

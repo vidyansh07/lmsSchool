@@ -33,14 +33,7 @@ export function Textarea({
   );
 }
 
-export function Select({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      className={cn(
-        'h-10 w-full rounded-md border border-border bg-surface px-3 text-sm disabled:opacity-50',
-        className,
-      )}
-      {...props}
-    />
-  );
-}
+// `Select` now lives in `./select` (native `<select>`, extended with size
+// variants) — re-exported here so the ~90 existing call sites that import it
+// from this file do not need to change. See `select.tsx` for why.
+export { Select, type SelectProps } from './select';

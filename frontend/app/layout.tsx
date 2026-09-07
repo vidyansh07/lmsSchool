@@ -6,6 +6,7 @@ import { AppShell } from '@/components/app-shell';
 import { AuthProvider } from '@/components/auth-provider';
 
 import { BrandTheme } from '@/components/brand-theme';
+import { Toaster, ToastProvider } from '@/components/ui/toast';
 
 import './globals.css';
 
@@ -62,9 +63,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="en" className={inter.variable}>
       <body className="font-sans antialiased">
         <BrandTheme />
-        <AuthProvider>
-          <AppShell>{children}</AppShell>
-        </AuthProvider>
+        {/* Outside `AppShell` so a toast survives a route change and is not
+            clipped by the shell's own scroll container — a confirmation that
+            disappears with the screen that caused it has confirmed nothing. */}
+        <ToastProvider>
+          <AuthProvider>
+            <AppShell>{children}</AppShell>
+          </AuthProvider>
+          <Toaster />
+        </ToastProvider>
       </body>
     </html>
   );

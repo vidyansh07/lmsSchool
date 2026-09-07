@@ -204,9 +204,15 @@
     }
   }
 
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
+  @keyframes slide-in-left {
+    from {
+      transform: translateX(-100%);
+    }
+  }
+
+  @keyframes slide-in-bottom {
+    from {
+      transform: translateY(100%);
     }
   }
 
@@ -224,6 +230,22 @@
 
   .animate-slide-in-right {
     animation: slide-in-right var(--duration-base) var(--ease-out-quick) both;
+  }
+
+  .animate-slide-in-left {
+    animation: slide-in-left var(--duration-base) var(--ease-out-quick) both;
+  }
+
+  /* A sheet from the bottom is the right shape on a phone — it arrives from
+     the thumb rather than from an edge the hand is nowhere near. */
+  .animate-slide-in-bottom {
+    animation: slide-in-bottom var(--duration-base) var(--ease-out-quick) both;
+  }
+
+  /* The sweep across a loading placeholder. Paired with a `::before` the caller
+     positions; the keyframe only moves it, so nothing here forces a reflow. */
+  .animate-shimmer {
+    animation: shimmer 1.4s var(--ease-in-out-soft) infinite;
   }
 
   /*
