@@ -15,7 +15,15 @@ vi.mock('@/lib/manage', async () => {
 vi.mock('@/components/manage/attention-strip', () => ({ ManagerAttentionStrip: () => null }));
 
 const push = vi.hoisted(() => vi.fn());
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+// The hub reads `?attention=` from the address bar and the filter chip
+// clears it, so the test controls the search string and sees the replace.
+const searchParams = vi.hoisted(() => ({ value: '' }));
+const replace = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push, replace }),
+  useSearchParams: () => new URLSearchParams(searchParams.value),
+  usePathname: () => '/manage/hub',
+}));
 
 function page(results: ManageBatchRow[]) {
   return { count: results.length, page: 1, page_size: 20, total_pages: 1, next: null, previous: null, results };
@@ -127,5 +135,27 @@ describe('BatchesHub', () => {
     const user = userEvent.setup();
     await user.click(screen.getByText('Morning Linux batch'));
     expect(push).toHaveBeenCalledWith('/manage/batches/batch-1');
+  });
+});
+
+
+describe('BatchesHub — arriving from the attention strip', () => {
+  it('opens narrowed to the link that brought the person, says so, and can show all', async () => {
+    searchParams.value = 'attention=behind_schedule';
+    listManageBatches.mockResolvedValue({ count: 0, page: 1, page_size: 20, total_pages: 1, next: null, previous: null, results: [] });
+    const user = userEvent.setup();
+    render(<BatchesHub />);
+
+    await waitFor(() => expect(listManageBatches).toHaveBeenCalled());
+    expect(listManageBatches).toHaveBeenCalledWith(expect.objectContaining({ attention: 'behind_schedule' }));
+    expect(screen.getByRole('status')).toHaveTextContent(/behind schedule/i);
+
+    await user.click(screen.getByRole('button', { name: /show all/i }));
+
+    await waitFor(() =>
+      expect(listManageBatches).toHaveBeenLastCalledWith(expect.not.objectContaining({ attention: expect.anything() })),
+    );
+    expect(replace).toHaveBeenCalledWith('/manage/hub');
+    searchParams.value = '';
   });
 });

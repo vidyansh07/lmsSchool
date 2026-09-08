@@ -15,13 +15,16 @@
  * a manager to the right trainer quickly, not to repeat that screen in
  * miniature.
  */
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
 import { ListToolbar } from '@/components/list-toolbar';
+import { AttentionChip } from '@/components/manage/attention-chip';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
+import { LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { useList } from '@/hooks/use-list';
 import { Capability } from '@/lib/capabilities';
@@ -30,7 +33,12 @@ import { listManageTrainers, type ManageTrainerRow } from '@/lib/manage';
 
 export function TrainersHub() {
   const router = useRouter();
-  const list = useList<ManageTrainerRow>(listManageTrainers, { page_size: 20 });
+  // The attention strip links here with `?attention=…` — "the batches running
+  // behind", "the trainers with no review" — so the list opens already
+  // narrowed to the thing the person clicked on, rather than to everything.
+  const searchParams = useSearchParams();
+  const attention = searchParams.get('attention') ?? '';
+  const list = useList<ManageTrainerRow>(listManageTrainers, { page_size: 20, ...(attention ? { attention } : {}) });
 
   const columns: DataTableColumn<ManageTrainerRow>[] = [
     {
@@ -116,6 +124,11 @@ export function TrainersHub() {
       <ManagerAttentionStrip />
 
       <div className="space-y-4">
+        <AttentionChip
+          value={String(list.query.attention ?? '')}
+          onClear={() => list.setQuery({ attention: undefined, page: 1 })}
+        />
+
         <ListToolbar
           search={String(list.query.search ?? '')}
           onSearchChange={(value) => list.setQuery({ search: value })}
@@ -155,7 +168,9 @@ export function TrainersHub() {
 export default function ManageTrainersPage() {
   return (
     <RequireAuth capability={Capability.trainerViewAny}>
-      <TrainersHub />
+      <Suspense fallback={<LoadingState label="Loading…" rows={6} />}>
+        <TrainersHub />
+      </Suspense>
     </RequireAuth>
   );
 }

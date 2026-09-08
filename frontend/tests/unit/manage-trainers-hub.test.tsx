@@ -15,7 +15,15 @@ vi.mock('@/lib/manage', async () => {
 vi.mock('@/components/manage/attention-strip', () => ({ ManagerAttentionStrip: () => null }));
 
 const push = vi.hoisted(() => vi.fn());
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+// The hub reads `?attention=` from the address bar and the filter chip
+// clears it, so the test controls the search string and sees the replace.
+const searchParams = vi.hoisted(() => ({ value: '' }));
+const replace = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push, replace }),
+  useSearchParams: () => new URLSearchParams(searchParams.value),
+  usePathname: () => '/manage/hub',
+}));
 
 function page(results: ManageTrainerRow[]) {
   return { count: results.length, page: 1, page_size: 20, total_pages: 1, next: null, previous: null, results };
@@ -90,5 +98,27 @@ describe('TrainersHub', () => {
     const user = userEvent.setup();
     await user.click(screen.getByText('Tina Trainer'));
     expect(push).toHaveBeenCalledWith('/manage/trainers/trainer-1');
+  });
+});
+
+
+describe('TrainersHub — arriving from the attention strip', () => {
+  it('opens narrowed to the link that brought the person, says so, and can show all', async () => {
+    searchParams.value = 'attention=review_missing';
+    listManageTrainers.mockResolvedValue({ count: 0, page: 1, page_size: 20, total_pages: 1, next: null, previous: null, results: [] });
+    const user = userEvent.setup();
+    render(<TrainersHub />);
+
+    await waitFor(() => expect(listManageTrainers).toHaveBeenCalled());
+    expect(listManageTrainers).toHaveBeenCalledWith(expect.objectContaining({ attention: 'review_missing' }));
+    expect(screen.getByRole('status')).toHaveTextContent(/no performance review/i);
+
+    await user.click(screen.getByRole('button', { name: /show all/i }));
+
+    await waitFor(() =>
+      expect(listManageTrainers).toHaveBeenLastCalledWith(expect.not.objectContaining({ attention: expect.anything() })),
+    );
+    expect(replace).toHaveBeenCalledWith('/manage/hub');
+    searchParams.value = '';
   });
 });

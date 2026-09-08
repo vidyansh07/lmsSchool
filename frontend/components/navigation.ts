@@ -300,7 +300,15 @@ export const STAFF_NAV: NavGroup[] = [
         icon: Palette,
         capability: Capability.platformConfigure,
       },
-      { href: '/calendar', label: 'Calendar', icon: CalendarDays, roles: ['trainer'] },
+      // Every source on the calendar scopes itself to what the caller may see,
+      // so a manager gets every batch's classes and milestones and a trainer
+      // only theirs. The link was trainer-only by oversight, not by design.
+      {
+        href: '/calendar',
+        label: 'Calendar',
+        icon: CalendarDays,
+        roles: ['trainer', 'counsellor', 'manager', 'admin', 'superadmin'],
+      },
     ],
   },
   {

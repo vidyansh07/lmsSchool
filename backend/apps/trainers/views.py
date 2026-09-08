@@ -42,10 +42,21 @@ class TrainerFilterSet(django_filters.FilterSet):
     min_experience = django_filters.NumberFilter(
         field_name="years_of_experience", lookup_expr="gte"
     )
+    # The manager's attention strip links here: `?attention=review_missing`
+    # narrows to the trainers it counted, by the same test that counted them.
+    attention = django_filters.ChoiceFilter(
+        choices=(("review_missing", "No performance review on file"),),
+        method="filter_attention",
+    )
 
     class Meta:
         model = TrainerProfile
         fields = ("is_accepting_assignments",)
+
+    def filter_attention(self, queryset, name, value):
+        from apps.reporting.dashboards import trainers_without_review_ids
+
+        return queryset.filter(pk__in=trainers_without_review_ids())
 
     def filter_skill(self, queryset, name, value):
         return queryset.filter(skills__icontains=value)

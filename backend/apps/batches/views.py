@@ -63,10 +63,22 @@ class BatchFilterSet(django_filters.FilterSet):
     trainer = django_filters.UUIDFilter(field_name="trainer_id")
     starts_after = django_filters.DateFilter(field_name="start_date", lookup_expr="gte")
     starts_before = django_filters.DateFilter(field_name="start_date", lookup_expr="lte")
+    # The manager's attention strip links here: `?attention=behind_schedule`
+    # narrows to the batches it counted, by the same test that counted them.
+    attention = django_filters.ChoiceFilter(
+        choices=(("behind_schedule", "Behind schedule"), ("at_risk", "Students at risk")),
+        method="filter_attention",
+    )
 
     class Meta:
         model = Batch
         fields = ("status", "course", "trainer")
+
+    def filter_attention(self, queryset, name, value):
+        from apps.reporting.dashboards import at_risk_batch_ids, behind_schedule_batch_ids
+
+        ids = behind_schedule_batch_ids() if value == "behind_schedule" else at_risk_batch_ids()
+        return queryset.filter(pk__in=ids)
 
 
 class BatchListCreateView(ListCreateAPIView):

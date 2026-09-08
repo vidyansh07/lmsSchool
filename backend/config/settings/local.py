@@ -45,7 +45,14 @@ CSRF_TRUSTED_ORIGINS = CSRF_TRUSTED_ORIGINS or [
 DATABASES["default"]["CONN_MAX_AGE"] = env.int("DATABASE_CONN_MAX_AGE", default=0)
 
 API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=True)
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# Console by default: a local run prints mail to the worker's log instead of
+# sending it. Setting EMAIL_BACKEND in `.env` (with the SMTP host, user and
+# password beside it) is how to try real delivery from a laptop — this used to
+# be pinned to console regardless, which made "email is not working" the only
+# possible local finding.
+EMAIL_BACKEND = env.str(
+    "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
+)
 
 # Local/test environments may create fake demo data.
 ALLOW_DEMO_SEED = True

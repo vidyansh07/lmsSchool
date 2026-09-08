@@ -22,13 +22,16 @@
  * carries them.
  */
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ListToolbar } from '@/components/list-toolbar';
+import { AttentionChip } from '@/components/manage/attention-chip';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
+import { LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/input';
 import { useList } from '@/hooks/use-list';
@@ -85,7 +88,12 @@ function DsrStateCell({ row }: { row: ManageBatchRow }) {
 
 export function BatchesHub() {
   const router = useRouter();
-  const list = useList<ManageBatchRow>(listManageBatches, { page_size: 20 });
+  // The attention strip links here with `?attention=…` — "the batches running
+  // behind", "the trainers with no review" — so the list opens already
+  // narrowed to the thing the person clicked on, rather than to everything.
+  const searchParams = useSearchParams();
+  const attention = searchParams.get('attention') ?? '';
+  const list = useList<ManageBatchRow>(listManageBatches, { page_size: 20, ...(attention ? { attention } : {}) });
 
   const columns: DataTableColumn<ManageBatchRow>[] = [
     {
@@ -141,6 +149,11 @@ export function BatchesHub() {
       <ManagerAttentionStrip />
 
       <div className="space-y-4">
+        <AttentionChip
+          value={String(list.query.attention ?? '')}
+          onClear={() => list.setQuery({ attention: undefined, page: 1 })}
+        />
+
         <ListToolbar
           search={String(list.query.search ?? '')}
           onSearchChange={(value) => list.setQuery({ search: value })}
@@ -199,7 +212,9 @@ export function BatchesHub() {
 export default function ManageBatchesPage() {
   return (
     <RequireAuth capability={Capability.batchViewAny}>
-      <BatchesHub />
+      <Suspense fallback={<LoadingState label="Loading…" rows={6} />}>
+        <BatchesHub />
+      </Suspense>
     </RequireAuth>
   );
 }

@@ -241,6 +241,47 @@ def _risk_rollup(active_enrollments) -> dict[str, int]:
     }
 
 
+# ---------------------------------------------------------------------------
+# The attention predicates, as sets of ids
+# ---------------------------------------------------------------------------
+#
+# The attention strip says "3 batches running behind schedule" and links to a
+# list. The list has to be *those three*, by the same test that counted them —
+# so the list filters below reuse these, rather than defining "behind" or "at
+# risk" a second time somewhere else.
+
+
+def behind_schedule_batch_ids() -> set:
+    """Active batches whose teaching has fallen behind their own dates."""
+    from apps.batches.models import Batch, BatchStatus
+
+    return _behind_schedule_batch_ids(Batch.objects.filter(status=BatchStatus.ACTIVE))
+
+
+def at_risk_batch_ids() -> set:
+    """Batches with at least one active student the risk engine has flagged."""
+    from apps.enrollments.models import Enrollment, EnrollmentStatus
+    from apps.performance.engine import student_performance_bulk
+
+    rows = list(
+        Enrollment.objects.filter(status=EnrollmentStatus.ACTIVE).select_related("course", "batch")
+    )
+    bulk = student_performance_bulk(rows)
+    return {row.batch_id for row in rows if bulk[row.pk]["risk"]["at_risk"]}
+
+
+def trainers_without_review_ids():
+    """Trainers with no performance review on file — as a queryset of ids, so
+    a filter can use it in one `NOT IN` rather than materialising the set."""
+    from apps.performance.models import PerformanceReview, PerformanceSubjectType
+    from apps.trainers.models import TrainerProfile
+
+    reviewed = PerformanceReview.objects.filter(subject_type=PerformanceSubjectType.TRAINER).values(
+        "trainer_id"
+    )
+    return TrainerProfile.objects.exclude(pk__in=reviewed).values("pk")
+
+
 def _dsr_rollup(sessions) -> dict[str, int]:
     """Expected, submitted, approved, pending-review and overdue daily reports.
 
@@ -425,6 +466,10 @@ def manager_dashboard(user) -> dict[str, Any]:
                 }
             )
 
+    # Every href here is a *frontend* route with the filter the page reads —
+    # `/manage/batches?attention=…` — not an API path. These used to point at
+    # `/batches?status=behind_schedule`, a page that does not exist, so the
+    # attention strip's most useful links were 404s.
     if behind_ids:
         behind_count = len(behind_ids)
         attention.append(
@@ -435,7 +480,7 @@ def manager_dashboard(user) -> dict[str, Any]:
                     "running behind schedule"
                 ),
                 "count": behind_count,
-                "href": "/batches?status=behind_schedule",
+                "href": "/manage/batches?attention=behind_schedule",
                 "severity": _severity(behind_count),
             }
         )
@@ -447,7 +492,7 @@ def manager_dashboard(user) -> dict[str, Any]:
                 "kind": "students_at_risk",
                 "label": f"{at_risk} {_plural(at_risk, 'student')} flagged at risk",
                 "count": at_risk,
-                "href": "/batches?at_risk=true",
+                "href": "/manage/batches?attention=at_risk",
                 "severity": _severity(at_risk),
             }
         )
@@ -466,7 +511,7 @@ def manager_dashboard(user) -> dict[str, Any]:
                         "performance review on file"
                     ),
                     "count": missing_reviews,
-                    "href": "/trainers?review=missing",
+                    "href": "/manage/trainers?attention=review_missing",
                     "severity": _severity(missing_reviews),
                 }
             )

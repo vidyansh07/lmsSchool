@@ -1178,3 +1178,99 @@ def test_trainer_overview_completion_and_outcomes_reuse_the_performance_engine(
     assert body["submission"]["dsr_rate"] == direct["dsr_submission_rate"]
     assert body["pending"]["assignments_to_grade"] == direct["pending_work"]["assignments"]
     assert body["pending"]["overdue"] == direct["overdue_work"]["total"]
+
+
+# ---------------------------------------------------------------------------
+# The attention strip's links go somewhere, and the somewhere is narrowed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_every_attention_link_is_a_page_that_exists(
+    api_client_no_csrf, manager_user, admin_user, trainer_profile, published_course
+):
+    """The strip used to link to `/batches?status=behind_schedule` — an API-ish
+    path with no page behind it, so its most useful links were 404s. Every
+    href is now a frontend route: the two hubs, or the reports queue."""
+    behind = _active_batch(
+        admin_user,
+        published_course,
+        trainer=trainer_profile,
+        start_date=timezone.localdate() - timedelta(days=40),
+        end_date=timezone.localdate() + timedelta(days=27),
+        capacity=5,
+    )
+    _completed_session(admin_user, behind, offset_days=35, topic="Nothing covered yet")
+    api_client_no_csrf.force_login(manager_user)
+
+    body = api_client_no_csrf.get(MANAGER_URL).json()
+
+    assert body["attention"], "the fixture should put something on the queue"
+    for item in body["attention"]:
+        assert item["href"].startswith(("/manage/batches", "/manage/trainers", "/dsr")), item
+
+
+@pytest.mark.django_db
+def test_the_batch_list_narrows_to_the_batches_the_strip_counted(
+    api_client_no_csrf, manager_user, admin_user, trainer_profile, published_course
+):
+    behind = _active_batch(
+        admin_user,
+        published_course,
+        trainer=trainer_profile,
+        start_date=timezone.localdate() - timedelta(days=40),
+        end_date=timezone.localdate() + timedelta(days=27),
+        capacity=5,
+    )
+    _completed_session(admin_user, behind, offset_days=35, topic="Nothing covered yet")
+    fine = _active_batch(
+        admin_user,
+        published_course,
+        trainer=trainer_profile,
+        start_date=timezone.localdate() + timedelta(days=5),
+        end_date=timezone.localdate() + timedelta(days=60),
+        capacity=5,
+    )
+    api_client_no_csrf.force_login(manager_user)
+
+    rows = api_client_no_csrf.get("/api/v1/batches/?attention=behind_schedule").json()["results"]
+
+    assert [row["id"] for row in rows] == [str(behind.pk)]
+    assert str(fine.pk) not in {row["id"] for row in rows}
+    # The same page, unfiltered, still shows both — the parameter narrows, it
+    # does not replace the list.
+    everything = api_client_no_csrf.get("/api/v1/batches/").json()["results"]
+    assert {str(behind.pk), str(fine.pk)} <= {row["id"] for row in everything}
+
+
+@pytest.mark.django_db
+def test_the_trainer_list_narrows_to_those_with_no_review(
+    api_client_no_csrf, manager_user, trainer_profile, trainer_profile_two
+):
+    from apps.performance.services import create_review
+
+    create_review(
+        actor=manager_user,
+        trainer=trainer_profile,
+        rating=4,
+        summary="Solid.",
+        period_start=timezone.localdate() - timedelta(days=30),
+        period_end=timezone.localdate(),
+    )
+    api_client_no_csrf.force_login(manager_user)
+
+    rows = api_client_no_csrf.get("/api/v1/trainers/?attention=review_missing").json()["results"]
+
+    ids = {row["id"] for row in rows}
+    assert str(trainer_profile_two.pk) in ids
+    assert str(trainer_profile.pk) not in ids
+
+
+@pytest.mark.django_db
+def test_an_unknown_attention_value_is_refused_rather_than_ignored(api_client_no_csrf, manager_user):
+    """Ignoring it would show *everything* under a heading that promised a
+    subset — the quiet version of the 404 this replaced."""
+    api_client_no_csrf.force_login(manager_user)
+
+    assert api_client_no_csrf.get("/api/v1/batches/?attention=whatever").status_code == 400
+    assert api_client_no_csrf.get("/api/v1/trainers/?attention=whatever").status_code == 400
