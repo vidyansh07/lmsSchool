@@ -164,3 +164,63 @@ def test_a_counsellor_can_set_the_referrer_later(
     assert response.status_code == 200, response.data
     other_student_profile.refresh_from_db()
     assert other_student_profile.referred_by == student_profile
+
+
+@pytest.mark.django_db
+def test_a_working_professional_is_registered_with_their_designation(
+    api_client_no_csrf, counsellor_user
+):
+    api_client_no_csrf.force_login(counsellor_user)
+
+    response = api_client_no_csrf.post(
+        STUDENTS_URL,
+        {
+            "email": "pro@example.test",
+            "first_name": "Pro",
+            "profile": {
+                "institution": "Infosys",
+                "institution_kind": "employer",
+                "job_title": "Senior Systems Engineer",
+            },
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201, response.data
+    assert response.json()["job_title"] == "Senior Systems Engineer"
+
+
+@pytest.mark.django_db
+def test_a_college_student_is_registered_with_their_graduation_year(
+    api_client_no_csrf, counsellor_user
+):
+    api_client_no_csrf.force_login(counsellor_user)
+
+    response = api_client_no_csrf.post(
+        STUDENTS_URL,
+        {
+            "email": "grad@example.test",
+            "first_name": "Grad",
+            "profile": {
+                "institution": "JECRC University",
+                "institution_kind": "college",
+                "graduation_year": 2027,
+            },
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201, response.data
+    body = response.json()
+    assert body["graduation_year"] == 2027
+    assert body["job_title"] == ""
+
+
+@pytest.mark.django_db
+def test_a_student_may_update_their_own_designation(api_client_no_csrf, student_profile):
+    api_client_no_csrf.force_login(student_profile.user)
+
+    response = api_client_no_csrf.patch(ME_URL, {"job_title": "Team Lead"}, format="json")
+
+    assert response.status_code == 200, response.data
+    assert response.json()["job_title"] == "Team Lead"

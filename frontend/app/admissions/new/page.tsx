@@ -29,6 +29,13 @@ import { useEffect, useState } from 'react';
 
 import { DuplicateMatch } from '@/components/admissions/duplicate-match';
 import { SearchPicker, type PickerOption } from '@/components/admissions/search-picker';
+import {
+  backgroundToProfile,
+  describeBackground,
+  EMPTY_BACKGROUND,
+  StudentBackgroundFields,
+  type StudentBackground,
+} from '@/components/admissions/student-background-fields';
 import { StepIndicator, type WizardStep } from '@/components/admissions/step-indicator';
 import { RequireAuth } from '@/components/require-auth';
 import { Alert } from '@/components/ui/alert';
@@ -44,9 +51,8 @@ import { Capability } from '@/lib/capabilities';
 import { listCourses } from '@/lib/courses';
 import { QUALIFICATION_OPTIONS } from '@/lib/labels';
 import { formatCurrency } from '@/lib/format';
-import { INSTITUTION_KIND_OPTIONS } from '@/lib/labels';
 import { createStudent, listStudents, listTrainers } from '@/lib/people';
-import type { BatchDetail, BatchListRow, CourseListRow, Enrollment, InstitutionKind, StudentListRow, StudentProfile, TrainerListRow } from '@/types/api';
+import type { BatchDetail, BatchListRow, CourseListRow, Enrollment, StudentListRow, StudentProfile, TrainerListRow } from '@/types/api';
 
 type StepKey = 'student' | 'course' | 'batch' | 'trainer' | 'confirm';
 
@@ -93,8 +99,7 @@ export function RegistrationWizard() {
   // Where the student is coming from — a college or an employer — and what
   // was agreed for the course. Both decided at the desk, both optional: a
   // walk-in may not know the fee yet, and the record should not wait on it.
-  const [institutionKind, setInstitutionKind] = useState<InstitutionKind | ''>('');
-  const [institution, setInstitution] = useState('');
+  const [background, setBackground] = useState<StudentBackground>(EMPTY_BACKGROUND);
   const [feeAmount, setFeeAmount] = useState('');
   // Who sent them. Optional, and only ever an existing student picked from a
   // search — a free-text name would be a referral nobody could credit.
@@ -382,8 +387,7 @@ export function RegistrationWizard() {
       profile: {
         city: city.trim(),
         qualification,
-        institution: institution.trim(),
-        institution_kind: institutionKind,
+        ...backgroundToProfile(background),
         referred_by: referrer?.id ?? null,
       },
       // Sent only when a figure was typed: an empty field means "not decided",
@@ -603,35 +607,6 @@ export function RegistrationWizard() {
                   </Select>
                 </Field>
                 <Field
-                  label="Studying or working at"
-                  htmlFor="reg-institution-kind"
-                  error={studentErrors.institution_kind}
-                >
-                  <Select
-                    value={institutionKind}
-                    onChange={(event) => setInstitutionKind(event.target.value as InstitutionKind | '')}
-                  >
-                    <option value="">Not specified</option>
-                    {INSTITUTION_KIND_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field
-                  label={institutionKind === 'employer' ? 'Company name' : 'College name'}
-                  htmlFor="reg-institution"
-                  error={studentErrors.institution}
-                  hint="Where the student studies or works, for the record."
-                >
-                  <Input
-                    value={institution}
-                    onChange={(event) => setInstitution(event.target.value)}
-                    placeholder={institutionKind === 'employer' ? 'e.g. Infosys' : 'e.g. JECRC University'}
-                  />
-                </Field>
-                <Field
                   label="Agreed fee (₹)"
                   htmlFor="reg-fee"
                   error={studentErrors.fee_amount}
@@ -648,6 +623,13 @@ export function RegistrationWizard() {
                   />
                 </Field>
               </div>
+
+              <StudentBackgroundFields
+                idPrefix="reg"
+                value={background}
+                onChange={setBackground}
+                errors={studentErrors}
+              />
 
               <div className="space-y-2 rounded-[var(--radius-card)] border border-dashed border-border p-4">
                 <p className="text-sm font-medium">Referred by</p>
@@ -893,9 +875,13 @@ export function RegistrationWizard() {
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">
-                      {institutionKind === 'employer' ? 'Employer' : 'College'}
+                      {background.kind === 'employer'
+                        ? 'Working professional'
+                        : background.kind === 'college'
+                          ? 'College student'
+                          : 'Background'}
                     </dt>
-                    <dd className="font-medium">{institution.trim() || 'Not specified'}</dd>
+                    <dd className="font-medium">{describeBackground(background)}</dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Referred by</dt>

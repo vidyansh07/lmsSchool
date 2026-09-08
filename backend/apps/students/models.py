@@ -85,6 +85,7 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         "qualification",
         "institution",
         "institution_kind",
+        "job_title",
         "graduation_year",
         "emergency_contact_name",
         "emergency_contact_phone",
@@ -148,6 +149,15 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         choices=InstitutionKind.choices,
         blank=True,
         help_text=_("Whether the institution named is where the student studies or works."),
+    )
+    # For a working professional: what they do there. The one field that makes
+    # "working professional" a category rather than a label, and the first
+    # thing a corporate-training conversation asks.
+    job_title = models.CharField(
+        _("designation"),
+        max_length=120,
+        blank=True,
+        validators=[validate_no_control_characters],
     )
     graduation_year = models.PositiveSmallIntegerField(_("graduation year"), null=True, blank=True)
 

@@ -112,6 +112,7 @@ function student(overrides: Partial<StudentProfile> = {}): StudentProfile {
     qualification: '',
     institution: '',
     institution_kind: '',
+    job_title: '',
     graduation_year: null,
     emergency_contact_name: '',
     emergency_contact_phone: '',
@@ -391,10 +392,12 @@ describe('RegistrationWizard — confirming', () => {
     const user = userEvent.setup();
     render(<RegistrationWizard />);
     await fillStudentStep(user);
-    await user.selectOptions(screen.getByLabelText('Studying or working at'), 'employer');
-    // The name field relabels itself for an employer, so the counsellor is
-    // never asked for a "college" from somebody who has a job.
+    // Choosing "working professional" is what makes the company and
+    // designation questions appear; a college student is never asked them.
+    expect(screen.queryByLabelText('Company name')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /working professional/i }));
     await user.type(screen.getByLabelText('Company name'), 'Infosys');
+    await user.type(screen.getByLabelText('Designation'), 'Senior Engineer');
     await user.type(screen.getByLabelText(/Agreed fee/), '25000');
     await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
 
@@ -405,9 +408,11 @@ describe('RegistrationWizard — confirming', () => {
     await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search trainers results'), 'trainer-1');
 
-    // The confirm step repeats both back before anything is created.
+    // The confirm step repeats both back before anything is created — the
+    // background as one line, the way a counsellor would say it aloud.
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
-    expect(screen.getByText('Infosys')).toBeInTheDocument();
+    expect(screen.getByText('Working professional')).toBeInTheDocument();
+    expect(screen.getByText('Infosys — Senior Engineer')).toBeInTheDocument();
     expect(screen.getByText('₹25,000')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
@@ -416,7 +421,12 @@ describe('RegistrationWizard — confirming', () => {
     expect(createStudent).toHaveBeenCalledWith(
       expect.objectContaining({
         fee_amount: '25000',
-        profile: expect.objectContaining({ institution: 'Infosys', institution_kind: 'employer' }),
+        profile: expect.objectContaining({
+          institution: 'Infosys',
+          institution_kind: 'employer',
+          job_title: 'Senior Engineer',
+          graduation_year: null,
+        }),
       }),
     );
   });

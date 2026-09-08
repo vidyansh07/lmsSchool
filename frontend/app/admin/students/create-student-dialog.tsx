@@ -2,15 +2,20 @@
 
 import { useState } from 'react';
 
+import {
+  backgroundToProfile,
+  EMPTY_BACKGROUND,
+  StudentBackgroundFields,
+  type StudentBackground,
+} from '@/components/admissions/student-background-fields';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
 import { fieldErrors } from '@/lib/api';
-import { INSTITUTION_KIND_OPTIONS, QUALIFICATION_OPTIONS } from '@/lib/labels';
+import { QUALIFICATION_OPTIONS } from '@/lib/labels';
 import { createStudent } from '@/lib/people';
-import type { InstitutionKind } from '@/types/api';
 
 /**
  * Create a student account and profile in one step.
@@ -31,8 +36,7 @@ export function CreateStudentDialog({
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
   const [qualification, setQualification] = useState('');
-  const [institutionKind, setInstitutionKind] = useState<InstitutionKind | ''>('');
-  const [institution, setInstitution] = useState('');
+  const [background, setBackground] = useState<StudentBackground>(EMPTY_BACKGROUND);
   const [feeAmount, setFeeAmount] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -47,7 +51,7 @@ export function CreateStudentDialog({
         first_name: firstName,
         last_name: lastName,
         phone,
-        profile: { city, qualification, institution: institution.trim(), institution_kind: institutionKind },
+        profile: { city, qualification, ...backgroundToProfile(background) },
         fee_amount: feeAmount.trim() === '' ? null : feeAmount.trim(),
       });
       onCreated();
@@ -103,26 +107,6 @@ export function CreateStudentDialog({
                 ))}
               </Select>
             </Field>
-            <Field label="Studying or working at" htmlFor="new-institution-kind" error={errors.institution_kind}>
-              <Select
-                value={institutionKind}
-                onChange={(event) => setInstitutionKind(event.target.value as InstitutionKind | '')}
-              >
-                <option value="">Not specified</option>
-                {INSTITUTION_KIND_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field
-              label={institutionKind === 'employer' ? 'Company name' : 'College name'}
-              htmlFor="new-institution"
-              error={errors.institution}
-            >
-              <Input value={institution} onChange={(event) => setInstitution(event.target.value)} />
-            </Field>
             <Field
               label="Agreed fee (₹)"
               htmlFor="new-fee"
@@ -139,6 +123,8 @@ export function CreateStudentDialog({
               />
             </Field>
           </div>
+
+          <StudentBackgroundFields idPrefix="new" value={background} onChange={setBackground} errors={errors} />
 
           <div className="flex gap-2">
             <Button type="submit" disabled={isSaving}>

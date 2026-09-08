@@ -67,6 +67,7 @@ class StudentProfileSerializer(StrictModelSerializer):
             "qualification",
             "institution",
             "institution_kind",
+            "job_title",
             "graduation_year",
             "emergency_contact_name",
             "emergency_contact_phone",
@@ -164,6 +165,7 @@ class StudentProfileFieldsSerializer(StrictModelSerializer):
     institution_kind = serializers.ChoiceField(
         choices=InstitutionKind.choices, required=False, allow_blank=True
     )
+    job_title = SafeCharField(max_length=120, required=False, allow_blank=True)
     qualification = serializers.ChoiceField(
         choices=Qualification.choices, required=False, allow_blank=True
     )
@@ -222,6 +224,7 @@ class StudentSelfUpdateSerializer(StrictModelSerializer):
     institution_kind = serializers.ChoiceField(
         choices=InstitutionKind.choices, required=False, allow_blank=True
     )
+    job_title = SafeCharField(max_length=120, required=False, allow_blank=True)
 
     class Meta:
         model = StudentProfile
@@ -238,6 +241,7 @@ class AdminStudentUpdateSerializer(StrictModelSerializer):
     institution_kind = serializers.ChoiceField(
         choices=InstitutionKind.choices, required=False, allow_blank=True
     )
+    job_title = SafeCharField(max_length=120, required=False, allow_blank=True)
 
     class Meta:
         model = StudentProfile

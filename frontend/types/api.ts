@@ -94,6 +94,8 @@ export interface StudentProfile {
   qualification: Qualification | '';
   institution: string;
   institution_kind: InstitutionKind | '';
+  /** For a working professional: what they do there. */
+  job_title: string;
   graduation_year: number | null;
   emergency_contact_name: string;
   emergency_contact_phone: string;
