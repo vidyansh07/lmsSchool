@@ -476,6 +476,12 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               <dt className="text-xs text-muted-foreground">City</dt>
               <dd>{student.city || 'Not provided'}</dd>
             </div>
+            {student.roll_number ? (
+              <div>
+                <dt className="text-xs text-muted-foreground">Roll number</dt>
+                <dd className="font-mono">{student.roll_number}</dd>
+              </div>
+            ) : null}
             <div>
               <dt className="text-xs text-muted-foreground">Qualification</dt>
               <dd>{student.qualification ? QUALIFICATION_LABEL[student.qualification] : 'Not provided'}</dd>

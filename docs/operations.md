@@ -212,3 +212,32 @@ Verify any environment with:
 ```bash
 ./scripts/verify_demo.sh staging
 ```
+
+
+## Importing the SITP ACE workbooks
+
+Each SITP workbook is one college batch: an *Attendance* sheet (the roster and
+a P/A grid, one column per class), a *DSR* sheet (one row per class day), an
+*Assessment* sheet (one column per test, marks per student), plus a *Course
+Timeline* and a *Project* sheet.
+
+```
+docker compose exec backend python manage.py import_sitp_workbooks var/sitp-import \
+    --actor admin@example.test --dry-run --report /app/var/sitp-import/dry.json
+```
+
+Drop `--dry-run` to apply. One workbook becomes one course (in review, with an
+outline lesson), one batch, its roster enrolled, a class for every day a
+register was taken or a report written, the register for each, a submitted
+daily status report per DSR row, and an assessment with results per marked
+column. Everything goes through the domain services, so every record is
+validated as if typed and audited under `--actor`; running it twice changes
+nothing.
+
+What it will not do, and says so in the report, row by row: invent an email
+(students without one get `rtu-<roll>@sitp.grras.invalid`, an address that
+cannot receive mail, and cannot sign in until a real one is set), guess a mark
+it cannot read, guess a maximum a column does not state, or import the
+*Course Timeline*, *Project* and *Quiz* sheets, which have no home in the LMS
+yet. Dates typed as day numbers (`25, 26, …`) are read as days of the
+programme's months and reported as a reconstruction.

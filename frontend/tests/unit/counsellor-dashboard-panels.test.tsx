@@ -36,6 +36,7 @@ function student(overrides: Partial<StudentListRow> = {}): StudentListRow {
     fee_status: 'pending',
     fee_amount: null,
     institution: '',
+    roll_number: '',
     institution_kind: '',
     referred_by: null,
     is_active: true,

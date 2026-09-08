@@ -68,6 +68,7 @@ class StudentProfileSerializer(StrictModelSerializer):
             "institution",
             "institution_kind",
             "job_title",
+            "roll_number",
             "graduation_year",
             "emergency_contact_name",
             "emergency_contact_phone",
@@ -146,6 +147,7 @@ class StudentListSerializer(serializers.ModelSerializer):
             "fee_status",
             "fee_amount",
             "institution",
+            "roll_number",
             "institution_kind",
             "referred_by",
             "is_active",
@@ -166,6 +168,7 @@ class StudentProfileFieldsSerializer(StrictModelSerializer):
         choices=InstitutionKind.choices, required=False, allow_blank=True
     )
     job_title = SafeCharField(max_length=120, required=False, allow_blank=True)
+    roll_number = SafeCharField(max_length=32, required=False, allow_blank=True)
     qualification = serializers.ChoiceField(
         choices=Qualification.choices, required=False, allow_blank=True
     )
@@ -225,6 +228,7 @@ class StudentSelfUpdateSerializer(StrictModelSerializer):
         choices=InstitutionKind.choices, required=False, allow_blank=True
     )
     job_title = SafeCharField(max_length=120, required=False, allow_blank=True)
+    roll_number = SafeCharField(max_length=32, required=False, allow_blank=True)
 
     class Meta:
         model = StudentProfile
@@ -242,6 +246,7 @@ class AdminStudentUpdateSerializer(StrictModelSerializer):
         choices=InstitutionKind.choices, required=False, allow_blank=True
     )
     job_title = SafeCharField(max_length=120, required=False, allow_blank=True)
+    roll_number = SafeCharField(max_length=32, required=False, allow_blank=True)
 
     class Meta:
         model = StudentProfile

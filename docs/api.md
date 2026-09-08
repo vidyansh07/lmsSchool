@@ -148,7 +148,10 @@ the field rather than ignoring it. Every change is audited with both values
 (`student.fee_amount.changed`).
 
 **College or employer.** `profile.institution` is the name; `profile.institution_kind`
-says which it is (`college` | `employer` | empty). Both are self-editable.
+says which it is (`college` | `employer` | empty). Both are self-editable, as are
+`profile.job_title` (a working professional's designation) and
+`profile.roll_number` (a college roll number — searchable, since for a college
+batch it is often the only identifier a spreadsheet carries).
 
 **Referrals.** A working professional who joins to learn a new skill is also a
 channel, so a counsellor may record `profile.referred_by` — the id of the

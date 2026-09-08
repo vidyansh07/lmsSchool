@@ -175,7 +175,12 @@ function StudentsTable() {
               <tbody className="stagger">
                 {list.data?.results.map((row) => (
                   <Tr key={row.id} className="animate-fade-in">
-                    <Td className="font-mono text-xs font-semibold text-foreground">{row.student_id}</Td>
+                    <Td className="font-mono text-xs font-semibold text-foreground">
+                      {row.student_id}
+                      {row.roll_number ? (
+                        <span className="mt-0.5 block font-normal text-muted-foreground">{row.roll_number}</span>
+                      ) : null}
+                    </Td>
                     {/* Name and email in one cell, as the reference does it: the
                         two are one identity, and a column each spent a fifth of
                         the table saying the same thing twice. */}

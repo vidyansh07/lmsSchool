@@ -73,6 +73,7 @@ class StudentListCreateView(ListCreateAPIView):
     filterset_class = StudentFilterSet
     search_fields = (
         "student_id",
+        "roll_number",
         "user__email",
         "user__first_name",
         "user__last_name",

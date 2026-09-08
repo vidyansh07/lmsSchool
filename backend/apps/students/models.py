@@ -86,6 +86,7 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         "institution",
         "institution_kind",
         "job_title",
+        "roll_number",
         "graduation_year",
         "emergency_contact_name",
         "emergency_contact_phone",
@@ -107,6 +108,18 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         "emergency_contact_phone",
     )
 
+    # An identifier issued by somebody else — a university roll number, an
+    # employer's staff id — that the student is known by outside this system.
+    # For a college batch it is often the *only* identifier a spreadsheet
+    # carries, so it is indexed and searchable.
+    roll_number = models.CharField(
+        _("roll number"),
+        max_length=32,
+        blank=True,
+        db_index=True,
+        validators=[validate_no_control_characters],
+        help_text=_("The student's roll or registration number at their college, if any."),
+    )
     student_id = models.CharField(
         _("student ID"),
         max_length=20,

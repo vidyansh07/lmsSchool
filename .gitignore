@@ -61,3 +61,6 @@ Thumbs.db
 # Local scan output
 .gitleaks-report.json
 backups/
+
+# Local scratch: staged spreadsheets for one-off imports, dry-run reports.
+backend/var/

@@ -96,6 +96,9 @@ export interface StudentProfile {
   institution_kind: InstitutionKind | '';
   /** For a working professional: what they do there. */
   job_title: string;
+  /** An identifier issued elsewhere — a university roll number — that the
+   *  student is known by outside this system. */
+  roll_number: string;
   graduation_year: number | null;
   emergency_contact_name: string;
   emergency_contact_phone: string;
@@ -135,6 +138,7 @@ export interface StudentListRow {
   fee_status: FeeStatus;
   fee_amount: string | null;
   institution: string;
+  roll_number: string;
   institution_kind: InstitutionKind | '';
   referred_by: string | null;
   is_active: boolean;
