@@ -162,9 +162,16 @@ services:
       # have HOSTNAME set, and naming a worker that does not answer reports a
       # perfectly healthy process as unhealthy — which in a deployment means
       # restarting it on a loop. Pinging the queue answers the real question.
-      test: ["CMD", "celery", "-A", "config", "inspect", "ping", "--timeout", "10"]
+      #
+      # `inspect ping` waits its full --timeout collecting replies even after
+      # the first one arrives, so the command always takes roughly
+      # startup + --timeout. At `--timeout 10` under a 10s limit that is a
+      # check which can only ever be killed: the worker answered "pong" every
+      # single time and was still marked unhealthy, 55 failures running.
+      # Celery's wait now sits comfortably inside Docker's.
+      test: ["CMD", "celery", "-A", "config", "inspect", "ping", "--timeout", "5"]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
       start_period: 30s
 
