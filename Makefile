@@ -86,8 +86,14 @@ worker-ping: ## Check a worker is consuming the queue
 
 test: test-backend test-frontend ## Run backend and frontend test suites
 
+# The container exports DJANGO_SETTINGS_MODULE=config.settings.local for the
+# dev server, and pytest-django lets the environment win over the pyproject
+# setting. Without these two overrides the suite silently runs on the *local*
+# settings — real Celery, real SMTP, the dev media root — and 23 tests fail for
+# reasons that have nothing to do with the code under test.
 test-backend: ## Backend tests with coverage
-	$(BACKEND) pytest --cov --cov-report=term-missing
+	$(BACKEND) env DJANGO_ENV=test DJANGO_SETTINGS_MODULE=config.settings.test \
+		pytest --cov --cov-report=term-missing
 
 test-frontend: ## Frontend unit tests
 	$(FRONTEND) npm test
