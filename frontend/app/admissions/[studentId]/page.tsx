@@ -99,7 +99,7 @@ function EnrolPanel({ student, onEnrolled }: { student: StudentProfile; onEnroll
   }));
 
   return (
-    <Card>
+    <Card className="animate-rise-in">
       <CardHeader>
         <CardTitle>Enrol on another batch</CardTitle>
         <CardDescription>Adds a new enrolment without touching any existing one.</CardDescription>
@@ -176,7 +176,7 @@ function EnrolmentHistory({
   }
 
   return (
-    <Card>
+    <Card className="animate-rise-in">
       <CardHeader>
         <CardTitle>Enrolment history</CardTitle>
         <CardDescription>Every batch this student has been placed on, most recent first.</CardDescription>
@@ -318,7 +318,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
   if (!student) return <LoadingState label="Loading student…" rows={6} />;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Link
         href="/admissions"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -327,7 +327,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
         All admissions
       </Link>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="animate-rise-in flex flex-wrap items-center gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">
           {student.user.full_name || student.user.email}
         </h1>
@@ -340,12 +340,12 @@ export function StudentDetail({ studentId }: { studentId: string }) {
         </Badge>
       </div>
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Contact and background</CardTitle>
         </CardHeader>
         <CardContent>
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <dt className="text-xs text-muted-foreground">Email</dt>
               <dd>{student.user.email}</dd>

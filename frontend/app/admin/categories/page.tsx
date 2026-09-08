@@ -49,7 +49,7 @@ function CategoryAdmin() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Course categories</h1>
         <p className="text-sm text-muted-foreground">
@@ -97,20 +97,20 @@ function CategoryAdmin() {
         <EmptyState title="No categories yet" description="Add the first one above." />
       ) : (
         <>
-          <TableWrapper>
+          <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
             <Table>
               <thead>
                 <tr>
-                  <Th>Name</Th>
-                  <Th>Slug</Th>
-                  <Th>Published courses</Th>
-                  <Th>Status</Th>
-                  <Th>Actions</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Name</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Slug</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Published courses</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Status</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Actions</Th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="stagger">
                 {list.data?.results.map((category) => (
-                  <tr key={category.id}>
+                  <tr key={category.id} className="animate-fade-in transition-colors hover:bg-muted/40">
                     <Td className="font-medium">{category.name}</Td>
                     <Td className="font-mono text-xs">{category.slug}</Td>
                     <Td>{category.course_count}</Td>

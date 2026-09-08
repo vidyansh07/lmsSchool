@@ -149,8 +149,8 @@ export function ImportFlow() {
   const canConfirm = run?.status === 'preview' && run.valid_count > 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4">
+      <div className="animate-rise-in flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Import students</h1>
           <p className="text-sm text-muted-foreground">
@@ -170,7 +170,7 @@ export function ImportFlow() {
       {error ? <Alert variant="error">{error}</Alert> : null}
 
       {!run ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Choose a file</CardTitle>
             <CardDescription>
@@ -218,7 +218,7 @@ export function ImportFlow() {
         </Card>
       ) : (
         <>
-          <Card>
+          <Card className="animate-rise-in">
             <CardHeader>
               <CardTitle>{run.original_filename || 'Import preview'}</CardTitle>
               <CardDescription>
@@ -282,7 +282,7 @@ export function ImportFlow() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="animate-rise-in">
             <CardHeader>
               <CardTitle>Every row</CardTitle>
               <CardDescription>Valid and invalid rows both, so nothing is hidden.</CardDescription>

@@ -99,7 +99,7 @@ function ClassCompleteSummary({
   onChangeClass?: () => void;
 }) {
   return (
-    <Card>
+    <Card className="animate-rise-in">
       <CardHeader>
         <CardTitle>Class complete</CardTitle>
         <CardDescription>
@@ -471,7 +471,7 @@ export function ClassWorkspace({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <ClassHeader
         session={session}
         attendanceTaken={Boolean(register.attendance_taken_at)}
@@ -619,7 +619,7 @@ export function TodayWorkspace() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Today&rsquo;s class</h1>
         <p className="text-sm text-muted-foreground">

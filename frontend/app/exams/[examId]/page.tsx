@@ -125,8 +125,8 @@ function ExamPlayer({ examId }: { examId: string }) {
   const finished = paper.attempt.status !== 'in_progress';
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <span className="font-mono text-xs text-muted-foreground">
             {paper.attempt.exam_code}
@@ -152,7 +152,7 @@ function ExamPlayer({ examId }: { examId: string }) {
       {formError ? <Alert variant="error">{formError}</Alert> : null}
 
       {finished ? (
-        <Alert variant="success" role="status">
+        <Alert variant="success" role="status" className="animate-rise-in">
           Your paper has been submitted. Results appear once your trainer releases them.
         </Alert>
       ) : null}
@@ -160,7 +160,7 @@ function ExamPlayer({ examId }: { examId: string }) {
       {paper.questions.map((question) => {
         const current = answers[question.id] ?? question;
         return (
-          <Card key={question.id} data-testid="exam-question">
+          <Card key={question.id} data-testid="exam-question" className="animate-rise-in">
             <CardHeader className="gap-1">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="neutral">Question {question.position + 1}</Badge>

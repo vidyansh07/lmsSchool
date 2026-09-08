@@ -105,7 +105,7 @@ function Certificates() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Certificates</h1>
@@ -220,19 +220,23 @@ function Certificates() {
           description="Approve a completion, then issue its certificate from the completions queue."
         />
       ) : (
-        <TableWrapper>
+        <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
           <Table>
             <thead>
               <tr>
-                <Th>Certificate</Th>
-                <Th>Student</Th>
-                <Th>Course</Th>
-                <Th>Actions</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Certificate</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Student</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Course</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Actions</Th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="stagger">
               {rows.map((row) => (
-                <tr key={row.id} data-testid="certificate-row">
+                <tr
+                  key={row.id}
+                  data-testid="certificate-row"
+                  className="animate-fade-in transition-colors hover:bg-muted/40"
+                >
                   <Td>
                     <div className="font-mono text-xs">{row.number}</div>
                     <Badge variant={CERTIFICATE_STATUS_VARIANT[row.status]} className="mt-1">

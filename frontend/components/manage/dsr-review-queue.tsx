@@ -90,9 +90,13 @@ export function DsrReviewQueue({ batchId, onReviewed }: { batchId: string; onRev
   }
 
   return (
-    <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
+    <ul className="stagger divide-y divide-border rounded-[var(--radius-card)] border border-border">
       {rows.map((row) => (
-        <li key={row.id} className="space-y-1.5 px-4 py-3" data-testid="dsr-queue-row">
+        <li
+          key={row.id}
+          className="animate-fade-in space-y-1.5 px-4 py-3 transition-colors hover:bg-muted/40"
+          data-testid="dsr-queue-row"
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="text-sm font-medium">

@@ -59,13 +59,13 @@ function SecuritySettings() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Security</h1>
         <p className="text-sm text-muted-foreground">Manage your password and active sessions.</p>
       </div>
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Change password</CardTitle>
           <CardDescription>
@@ -125,7 +125,7 @@ function SecuritySettings() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Active sessions</CardTitle>
           <CardDescription>

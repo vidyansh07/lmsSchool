@@ -271,7 +271,7 @@ export function DsrQueue() {
   const isAwaitingReviewView = (list.query.status ?? '') === 'submitted';
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Daily reports</h1>
         <p className="text-sm text-muted-foreground">

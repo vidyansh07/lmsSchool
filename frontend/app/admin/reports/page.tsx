@@ -81,7 +81,7 @@ function Reports() {
   const definition = definitions.find((row) => row.key === selected);
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
         <p className="text-sm text-muted-foreground">
@@ -163,18 +163,20 @@ function Reports() {
                 ) : (
                   <Badge variant="neutral">{page.row_count} rows</Badge>
                 )}
-                <TableWrapper>
+                <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
                   <Table>
                     <thead>
                       <tr>
                         {page.columns.map((column) => (
-                          <Th key={column.key}>{column.label}</Th>
+                          <Th key={column.key} className="sticky top-0 z-10 bg-muted">
+                            {column.label}
+                          </Th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody data-testid="report-body">
+                    <tbody data-testid="report-body" className="stagger">
                       {page.rows.map((row, index) => (
-                        <tr key={index}>
+                        <tr key={index} className="animate-fade-in hover:bg-muted/40">
                           {page.columns.map((column) => (
                             <Td key={column.key}>
                               {row[column.key] === null || row[column.key] === undefined

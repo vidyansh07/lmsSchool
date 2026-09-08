@@ -159,7 +159,7 @@ function KpiTileSection({
 }) {
   if (isLoading) {
     return (
-      <Card>
+      <Card className="animate-rise-in">
         <CardContent className="flex flex-col gap-2 p-5">
           <Skeleton className="h-4 w-24" />
           <Skeleton className="h-7 w-16" />
@@ -167,7 +167,7 @@ function KpiTileSection({
       </Card>
     );
   }
-  return <KpiTile label={label} value={failed ? null : value} />;
+  return <KpiTile className="animate-rise-in" label={label} value={failed ? null : value} />;
 }
 
 export function AdmissionsDashboardContent() {
@@ -225,7 +225,7 @@ export function AdmissionsDashboardContent() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Admissions dashboard</h1>
         <p className="text-sm text-muted-foreground">
@@ -235,7 +235,7 @@ export function AdmissionsDashboardContent() {
 
       <QuickActions actions={quickActions} />
 
-      <DashboardGrid>
+      <DashboardGrid className="stagger">
         <KpiTileSection
           label="Registered today"
           value={registeredToday}
@@ -262,7 +262,7 @@ export function AdmissionsDashboardContent() {
         />
       </DashboardGrid>
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Registered, not yet enrolled</CardTitle>
           <CardDescription>
@@ -283,8 +283,8 @@ export function AdmissionsDashboardContent() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+      <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Pending confirmation</CardTitle>
             <CardDescription>Enrolled, but not yet moved to active.</CardDescription>
@@ -300,7 +300,7 @@ export function AdmissionsDashboardContent() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Starting soon</CardTitle>
             <CardDescription>Upcoming batches, soonest first.</CardDescription>
@@ -317,8 +317,8 @@ export function AdmissionsDashboardContent() {
         </Card>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+      <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Filling up</CardTitle>
             <CardDescription>Batches with few seats left.</CardDescription>
@@ -334,7 +334,7 @@ export function AdmissionsDashboardContent() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Recent activity</CardTitle>
             <CardDescription>Registrations and enrolments, most recent first.</CardDescription>

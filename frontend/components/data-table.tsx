@@ -24,6 +24,15 @@
  * - The density toggle reads and writes `localStorage` inside try/catch: a
  *   private browsing window throws on access, and a table that cannot
  *   remember a viewer's preference should still render, not crash.
+ * - The scroll area is capped (`min(36rem, 65vh)`) and every header cell is
+ *   `sticky top-0`, so a long roster scrolls under its own header instead of
+ *   carrying it off the top of the viewport — the header needs an opaque
+ *   background for this to read correctly, which is why it is forced to a
+ *   solid `bg-muted` here rather than the primitive's own translucent default.
+ *   Data rows fade in with a capped stagger on mount (opacity only — a
+ *   transform on a `<tr>` is the one animation this app avoids, since
+ *   `translate`/`scale` on table-row boxes is inconsistently supported); the
+ *   loading skeleton does not, since nothing is arriving for it to announce.
  */
 import {
   useEffect,
@@ -238,13 +247,13 @@ export function DataTable<Row>({
       ) : !isLoading && rows.length === 0 ? (
         <EmptyState title={emptyTitle} description={emptyDescription} />
       ) : (
-        <TableWrapper>
+        <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
           <Table aria-busy={isLoading || undefined}>
             {caption ? <caption className="sr-only">{caption}</caption> : null}
             <thead>
               <tr>
                 {selection ? (
-                  <Th className={cn('sticky left-0 z-10 w-10 bg-muted', cellPadding)}>
+                  <Th className={cn('sticky left-0 top-0 z-20 w-10 bg-muted', cellPadding)}>
                     <HeaderCheckbox
                       state={selection.pageSelectionState(rowIds)}
                       onToggle={() => selection.toggleAll(rowIds)}
@@ -266,8 +275,12 @@ export function DataTable<Row>({
                       className={cn(
                         ALIGN_CLASS[column.align ?? 'left'],
                         cellPadding,
-                        column.sticky && 'bg-muted',
                         stickyPositionClass(column),
+                        // Deliberately last: a header cell must win the merge
+                        // over `stickyPositionClass`'s own `z-10`, so it stacks
+                        // above a horizontally-sticky *body* column rather than
+                        // being scrolled under it.
+                        'sticky top-0 z-20 bg-muted',
                       )}
                     >
                       {column.header}
@@ -276,7 +289,7 @@ export function DataTable<Row>({
                 })}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="stagger">
               {isLoading
                 ? Array.from({ length: 5 }, (_, index) => (
                     <tr key={index}>
@@ -307,8 +320,8 @@ export function DataTable<Row>({
                         onKeyDown={(event) => handleRowKeyDown(event, index)}
                         onClick={() => onRowActivate?.(row)}
                         className={cn(
-                          'outline-none',
-                          onRowActivate && 'cursor-pointer hover:bg-muted/60',
+                          'animate-fade-in outline-none transition-colors',
+                          onRowActivate && 'cursor-pointer hover:bg-muted/60 active:bg-muted',
                           isSelected && 'bg-accent',
                           focusedIndex === index && 'ring-1 ring-inset ring-primary',
                         )}

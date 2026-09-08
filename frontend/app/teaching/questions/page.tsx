@@ -13,6 +13,7 @@ import { Input, Select, Textarea } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { ApiError, fieldErrors } from '@/lib/api';
 import { DIFFICULTY_LABEL, QUESTION_TYPE_LABEL } from '@/lib/academic-labels';
+import { formatNumber, NO_DATA } from '@/lib/format';
 import { createQuestion, listQuestions } from '@/lib/exams';
 import { listBatches } from '@/lib/batches';
 import type { BatchListRow, Difficulty, Question, QuestionType } from '@/types/api';
@@ -117,7 +118,7 @@ function QuestionBank() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Question bank</h1>
@@ -320,19 +321,19 @@ function QuestionBank() {
           description="Add questions here, then draw examinations from them."
         />
       ) : (
-        <TableWrapper>
+        <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
           <Table>
             <thead>
               <tr>
-                <Th>Question</Th>
-                <Th>Type</Th>
-                <Th>Marks</Th>
-                <Th>Tags</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Question</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Type</Th>
+                <Th className="sticky top-0 z-10 bg-muted text-right">Marks</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Tags</Th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="stagger">
               {rows.map((row) => (
-                <tr key={row.id}>
+                <tr key={row.id} className="animate-fade-in transition-colors hover:bg-muted/40">
                   <Td>
                     <div className="font-medium">{row.text}</div>
                     {row.is_active ? null : <Badge variant="neutral">Retired</Badge>}
@@ -343,11 +344,11 @@ function QuestionBank() {
                       {DIFFICULTY_LABEL[row.difficulty]}
                     </div>
                   </Td>
-                  <Td>
-                    {row.marks}
-                    {Number(row.negative_marks) > 0 ? ` / −${row.negative_marks}` : ''}
+                  <Td className="text-right tabular-nums">
+                    {formatNumber(row.marks)}
+                    {Number(row.negative_marks) > 0 ? ` / −${formatNumber(row.negative_marks)}` : ''}
                   </Td>
-                  <Td>{row.tags.join(', ') || '—'}</Td>
+                  <Td>{row.tags.join(', ') || NO_DATA}</Td>
                 </tr>
               ))}
             </tbody>

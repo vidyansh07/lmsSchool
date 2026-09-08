@@ -21,6 +21,7 @@ import {
   LIFECYCLE_VARIANT,
   formatDateTime,
 } from '@/lib/academic-labels';
+import { fallback, NO_DATA } from '@/lib/format';
 import {
   confirmImport,
   getMarksSheet,
@@ -127,7 +128,7 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
   const { assessment } = sheet;
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={LIFECYCLE_VARIANT[assessment.status]}>
@@ -278,19 +279,19 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
           <CardDescription>{sheet.entries.length} students in the cohort.</CardDescription>
         </CardHeader>
         <CardContent>
-          <TableWrapper>
+          <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
             <Table>
               <thead>
                 <tr>
-                  <Th>Student</Th>
-                  <Th>Marks</Th>
-                  <Th>Source</Th>
-                  <Th>Action</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Student</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Marks</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Source</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Action</Th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="stagger">
                 {sheet.entries.map((entry) => (
-                  <tr key={entry.enrollment_id}>
+                  <tr key={entry.enrollment_id} className="animate-fade-in transition-colors hover:bg-muted/40">
                     <Td>
                       <div className="font-medium">{entry.student_name}</div>
                       <div className="font-mono text-xs text-muted-foreground">
@@ -312,7 +313,7 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
                         />
                       </Field>
                     </Td>
-                    <Td>{entry.is_absent ? 'Absent' : entry.source || '—'}</Td>
+                    <Td>{entry.is_absent ? 'Absent' : fallback(entry.source, NO_DATA)}</Td>
                     <Td className="space-y-2">
                       <Button
                         type="button"

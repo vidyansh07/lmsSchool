@@ -58,7 +58,7 @@ function Teaching() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Teaching today</h1>
         <p className="text-sm text-muted-foreground">
@@ -87,9 +87,13 @@ function Teaching() {
           description="Nothing is scheduled for today on the batches you teach."
         />
       ) : (
-        <div className="space-y-4">
+        <div className="stagger space-y-4">
           {sessions.map((session) => (
-            <Card key={session.id} data-testid="today-class">
+            <Card
+              key={session.id}
+              data-testid="today-class"
+              className="animate-fade-in transition-colors hover:border-primary/40"
+            >
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={SESSION_STATUS_VARIANT[session.status]}>

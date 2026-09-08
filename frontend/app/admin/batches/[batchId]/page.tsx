@@ -254,9 +254,12 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
         ) : null}
 
         {batch.schedules.length > 0 ? (
-          <ul className="divide-y divide-border rounded-md border border-border">
+          <ul className="stagger divide-y divide-border rounded-md border border-border">
             {batch.schedules.map((schedule) => (
-              <li key={schedule.id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
+              <li
+                key={schedule.id}
+                className="animate-fade-in flex flex-wrap items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-muted/40"
+              >
                 <span className="w-24 font-medium">{schedule.weekday_label}</span>
                 <span className="text-muted-foreground">
                   {schedule.start_time.slice(0, 5)}–{schedule.end_time.slice(0, 5)}
@@ -450,19 +453,19 @@ function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () =
         {roster.length === 0 ? (
           <EmptyState title="Nobody enrolled yet" description="Add the first student below." />
         ) : (
-          <TableWrapper>
+          <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
             <Table className="min-w-[36rem]">
               <thead>
                 <tr>
-                  <Th>Student ID</Th>
-                  <Th>Name</Th>
-                  <Th>Status</Th>
-                  {canManage ? <Th>Actions</Th> : null}
+                  <Th className="sticky top-0 z-10 bg-muted">Student ID</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Name</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Status</Th>
+                  {canManage ? <Th className="sticky top-0 z-10 bg-muted">Actions</Th> : null}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="stagger">
                 {roster.map((entry) => (
-                  <tr key={entry.id}>
+                  <tr key={entry.id} className="animate-fade-in transition-colors hover:bg-muted/40">
                     <Td className="font-mono text-xs">{entry.student_code}</Td>
                     <Td className="font-medium">{entry.full_name || entry.email}</Td>
                     <Td>
@@ -605,7 +608,7 @@ function BatchDetailView({ batchId }: { batchId: string }) {
   if (!batch) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">

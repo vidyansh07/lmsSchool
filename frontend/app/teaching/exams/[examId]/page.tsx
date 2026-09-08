@@ -20,6 +20,7 @@ import {
   LIFECYCLE_VARIANT,
   formatDateTime,
 } from '@/lib/academic-labels';
+import { formatNumber, NO_DATA } from '@/lib/format';
 import {
   getExam,
   getExamReadiness,
@@ -116,7 +117,7 @@ function ExamDetail({ examId }: { examId: string }) {
   if (!exam) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={LIFECYCLE_VARIANT[exam.status]}>{LIFECYCLE_LABEL[exam.status]}</Badge>
@@ -225,9 +226,9 @@ function ExamDetail({ examId }: { examId: string }) {
           {queue.length === 0 ? (
             <EmptyState title="Nothing to mark" description="No written answers are pending." />
           ) : (
-            <div className="space-y-4">
+            <div className="stagger space-y-4">
               {queue.map((row) => (
-                <div key={row.id} className="rounded-md border border-border p-3">
+                <div key={row.id} className="animate-fade-in rounded-md border border-border p-3">
                   <div className="text-sm font-medium">
                     {row.student_name}{' '}
                     <span className="font-mono text-xs text-muted-foreground">
@@ -293,19 +294,19 @@ function ExamDetail({ examId }: { examId: string }) {
           {attempts.length === 0 ? (
             <EmptyState title="Nobody has sat it yet" description="Attempts appear here." />
           ) : (
-            <TableWrapper>
+            <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
               <Table>
                 <thead>
                   <tr>
-                    <Th>Candidate</Th>
-                    <Th>Submitted</Th>
-                    <Th>Score</Th>
-                    <Th>Status</Th>
+                    <Th className="sticky top-0 z-10 bg-muted">Candidate</Th>
+                    <Th className="sticky top-0 z-10 bg-muted">Submitted</Th>
+                    <Th className="sticky top-0 z-10 bg-muted text-right">Score</Th>
+                    <Th className="sticky top-0 z-10 bg-muted">Status</Th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="stagger">
                   {attempts.map((attempt) => (
-                    <tr key={attempt.id}>
+                    <tr key={attempt.id} className="animate-fade-in transition-colors hover:bg-muted/40">
                       <Td>
                         <div className="font-medium">{attempt.student_name}</div>
                         <div className="font-mono text-xs text-muted-foreground">
@@ -313,10 +314,10 @@ function ExamDetail({ examId }: { examId: string }) {
                         </div>
                       </Td>
                       <Td>{formatDateTime(attempt.submitted_at)}</Td>
-                      <Td>
+                      <Td className="text-right tabular-nums">
                         {attempt.total_score === null
-                          ? '—'
-                          : `${attempt.total_score} / ${attempt.max_score}`}
+                          ? NO_DATA
+                          : `${formatNumber(attempt.total_score)} / ${formatNumber(attempt.max_score)}`}
                         {attempt.needs_manual_marking ? (
                           <div className="text-xs text-muted-foreground">awaiting marking</div>
                         ) : null}

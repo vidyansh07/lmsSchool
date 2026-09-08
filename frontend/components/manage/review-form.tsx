@@ -69,7 +69,7 @@ export function TrainerReviewForm({ trainerId, onSaved }: { trainerId: string; o
     <form
       onSubmit={(event) => void onSubmit(event)}
       aria-label="Write a review"
-      className="space-y-4 rounded-[var(--radius-card)] border border-border p-4"
+      className="animate-rise-in space-y-4 rounded-[var(--radius-card)] border border-border p-4"
     >
       {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
 

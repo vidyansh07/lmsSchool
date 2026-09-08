@@ -475,8 +475,8 @@ export function TransferContent() {
   const [mode, setMode] = useState<Mode>('student');
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4">
+      <div className="animate-rise-in flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Transfer</h1>
           <p className="text-sm text-muted-foreground">
@@ -497,7 +497,7 @@ export function TransferContent() {
         </Button>
       </div>
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>{mode === 'student' ? 'Move one student' : 'Move a whole batch'}</CardTitle>
           <CardDescription>

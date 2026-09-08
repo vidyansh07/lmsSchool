@@ -58,8 +58,8 @@ function MyExams() {
   const byExam = new Map(attempts.map((attempt) => [attempt.exam, attempt]));
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Examinations</h1>
         <p className="text-sm text-muted-foreground">
           Final examinations set for your batch. Your time starts when you open one.
@@ -75,7 +75,7 @@ function MyExams() {
         exams.map((exam) => {
           const mine = byExam.get(exam.id);
           return (
-            <Card key={exam.id} data-testid="exam-card">
+            <Card key={exam.id} data-testid="exam-card" className="animate-rise-in">
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-muted-foreground">{exam.code}</span>
@@ -144,7 +144,7 @@ function MyExams() {
       )}
 
       {attempts.length > 0 ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>My attempts</CardTitle>
           </CardHeader>

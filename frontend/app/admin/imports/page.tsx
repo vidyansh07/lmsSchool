@@ -77,7 +77,7 @@ function Imports() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Bulk import</h1>
         <p className="text-sm text-muted-foreground">
@@ -197,9 +197,9 @@ function Imports() {
                         <Th>Name</Th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="stagger">
                       {preview.report.rows.slice(0, 20).map((row, index) => (
-                        <tr key={index}>
+                        <tr key={index} className="animate-fade-in hover:bg-muted/40">
                           <Td>{String(row.line)}</Td>
                           <Td>{String(row.email)}</Td>
                           <Td>

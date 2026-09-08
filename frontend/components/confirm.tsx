@@ -16,11 +16,20 @@
  * Traps focus while open (Tab cycles inside the dialog, Escape closes it) and
  * restores focus to whatever triggered it on close — the same contract every
  * dialog in this app must honour.
+ *
+ * Open/close motion mirrors `components/ui/dialog.tsx` exactly — a backdrop
+ * fade plus a panel scale, reversed at the faster exit duration on the way
+ * out — via the same `usePresence` hook, so an irreversible-action prompt
+ * does not read as a different, cruder kind of dialog than the rest of the
+ * app's overlays.
  */
 import { useEffect, useId, useRef } from 'react';
 
 import { Button, type ButtonProps } from '@/components/ui/button';
+import { usePresence } from '@/hooks/use-presence';
 import { cn } from '@/lib/utils';
+
+const EXIT_DURATION_MS = 90; // mirrors --duration-instant, the reverse of .animate-scale-in's --duration-quick
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -53,6 +62,7 @@ export function Confirm({
   const previouslyFocused = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
+  const mounted = usePresence(open, EXIT_DURATION_MS);
 
   useEffect(() => {
     if (!open) return;
@@ -94,22 +104,35 @@ export function Confirm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onCancel();
       }}
     >
+      <div
+        aria-hidden="true"
+        className={cn('absolute inset-0 bg-foreground/40', open ? 'animate-fade-in' : undefined)}
+        style={!open ? { animation: 'fade-in var(--duration-quick) var(--ease-out-quick) reverse both' } : undefined}
+      />
       <div
         ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
-        className={cn('w-full max-w-sm rounded-[var(--radius-card)] border border-border bg-surface p-5 shadow-lg')}
+        className={cn(
+          'relative w-full max-w-sm rounded-[var(--radius-card)] border border-border bg-surface p-5 shadow-lg',
+          open ? 'animate-scale-in' : undefined,
+        )}
+        style={
+          !open
+            ? { animation: `scale-in ${EXIT_DURATION_MS}ms var(--ease-out-quick) reverse both` }
+            : undefined
+        }
       >
         <h2 id={titleId} className="text-base font-semibold">
           {title}

@@ -55,15 +55,15 @@ function MyResults() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My tests and results</h1>
         <p className="text-sm text-muted-foreground">
           Weekly tests set on your batch, and the marks recorded for them.
         </p>
       </div>
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Results</CardTitle>
           <CardDescription>Marks recorded against you.</CardDescription>
@@ -128,16 +128,16 @@ function MyResults() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Scheduled tests</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="stagger space-y-3">
           {tests.length === 0 ? (
             <EmptyState title="Nothing scheduled" description="No tests are set on your batch." />
           ) : (
             tests.map((test) => (
-              <div key={test.id} className="rounded-md border border-border p-3">
+              <div key={test.id} className="animate-rise-in rounded-md border border-border p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-muted-foreground">{test.code}</span>
                   <Badge variant={test.is_open ? 'success' : 'neutral'}>

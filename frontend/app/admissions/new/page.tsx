@@ -478,7 +478,7 @@ export function RegistrationWizard() {
         : 'Not named yet';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Register a student</h1>
@@ -500,7 +500,7 @@ export function RegistrationWizard() {
       />
 
       {step === 'student' ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Student details</CardTitle>
             <CardDescription>
@@ -510,7 +510,7 @@ export function RegistrationWizard() {
           <CardContent>
             <form onSubmit={onStudentSubmit} className="space-y-4" noValidate>
               {studentErrors.__all__ ? <Alert variant="error">{studentErrors.__all__}</Alert> : null}
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Email" htmlFor="reg-email" error={studentErrors.email} required>
                   <Input
                     type="email"
@@ -566,7 +566,7 @@ export function RegistrationWizard() {
       ) : null}
 
       {step === 'course' ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Course</CardTitle>
             <CardDescription>What is {firstName || 'this student'} enrolling on?</CardDescription>
@@ -589,7 +589,7 @@ export function RegistrationWizard() {
       ) : null}
 
       {step === 'batch' ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Batch</CardTitle>
             <CardDescription>
@@ -632,7 +632,7 @@ export function RegistrationWizard() {
               />
             ) : (
               <form onSubmit={onDraftBatchSubmit} className="space-y-4" noValidate>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field label="Batch name" htmlFor="new-batch-name" error={batchErrors.name} required>
                     <Input
                       autoFocus
@@ -675,7 +675,7 @@ export function RegistrationWizard() {
       ) : null}
 
       {step === 'trainer' ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Trainer</CardTitle>
             <CardDescription>
@@ -727,7 +727,7 @@ export function RegistrationWizard() {
       ) : null}
 
       {step === 'confirm' ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Confirm and enrol</CardTitle>
             <CardDescription>Nothing has been created yet. This is the step that does it.</CardDescription>
@@ -753,7 +753,7 @@ export function RegistrationWizard() {
               </Alert>
             ) : (
               <>
-                <dl className="grid gap-3 sm:grid-cols-2">
+                <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <dt className="text-xs text-muted-foreground">Student</dt>
                     <dd className="font-medium">

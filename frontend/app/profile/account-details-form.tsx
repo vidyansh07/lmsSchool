@@ -44,7 +44,7 @@ export function AccountDetailsForm() {
   }
 
   return (
-    <Card>
+    <Card className="animate-rise-in">
       <CardHeader>
         <CardTitle>Account details</CardTitle>
         <CardDescription>
@@ -56,7 +56,7 @@ export function AccountDetailsForm() {
           {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
           {saved ? <Alert variant="success">Your details were saved.</Alert> : null}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="First name" htmlFor="first-name" error={errors.first_name} required>
               <Input value={firstName} onChange={(event) => setFirstName(event.target.value)} />
             </Field>

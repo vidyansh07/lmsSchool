@@ -138,7 +138,7 @@ export function BatchDetail({ batchId }: { batchId: string }) {
     overview;
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <Link
         href="/manage/batches"
         className="inline-block text-sm text-muted-foreground hover:text-foreground"

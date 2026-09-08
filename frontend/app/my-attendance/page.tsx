@@ -56,8 +56,8 @@ function MyAttendancePage_() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My attendance</h1>
         <p className="text-sm text-muted-foreground">
           Every class you were on a register for, and how you stand against the requirement.
@@ -73,7 +73,7 @@ function MyAttendancePage_() {
         rows.map((row) => {
           const { summary } = row;
           return (
-            <Card key={row.enrollment_id}>
+            <Card key={row.enrollment_id} className="animate-rise-in">
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-muted-foreground">{row.batch_code}</span>

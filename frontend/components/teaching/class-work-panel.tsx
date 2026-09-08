@@ -73,7 +73,7 @@ function AssignmentQuickCreate({
   }
 
   return (
-    <div className="space-y-2 border-t border-border pt-3">
+    <div className="animate-rise-in space-y-2 border-t border-border pt-3">
       {created ? (
         <Alert variant="success" role="status">
           Assignment {created} created.{' '}
@@ -145,7 +145,7 @@ function AssessmentQuickCreate({ batchId }: { batchId: string }) {
   }
 
   return (
-    <div className="space-y-2 border-t border-border pt-3">
+    <div className="animate-rise-in space-y-2 border-t border-border pt-3">
       {created ? (
         <Alert variant="success" role="status">
           Assessment {created} created.{' '}

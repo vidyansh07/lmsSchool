@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ChevronRight } from 'lucide-react';
 
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
@@ -17,12 +19,13 @@ import type { AdminUser } from '@/types/api';
 
 function UsersTable() {
   const list = useList<AdminUser>(listUsers);
+  const router = useRouter();
 
   const sortDirection = list.query.ordering?.startsWith('-') ? 'desc' : 'asc';
   const sortField = list.query.ordering?.replace(/^-/, '');
 
   return (
-    <div className="space-y-4">
+    <div className="animate-rise-in space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
@@ -86,7 +89,7 @@ function UsersTable() {
         />
       ) : (
         <>
-          <TableWrapper>
+          <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
             <Table>
               <thead>
                 <tr>
@@ -95,34 +98,41 @@ function UsersTable() {
                     active={sortField === 'email'}
                     direction={sortDirection}
                     onSort={() => list.toggleSort('email')}
+                    className="sticky top-0 z-10 bg-muted"
                   >
                     Email
                   </Th>
-                  <Th>Name</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Name</Th>
                   <Th
                     sortable
                     active={sortField === 'role'}
                     direction={sortDirection}
                     onSort={() => list.toggleSort('role')}
+                    className="sticky top-0 z-10 bg-muted"
                   >
                     Role
                   </Th>
-                  <Th>Status</Th>
-                  <Th>Email verified</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Status</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Email verified</Th>
                   <Th
                     sortable
                     active={sortField === 'date_joined'}
                     direction={sortDirection}
                     onSort={() => list.toggleSort('date_joined')}
+                    className="sticky top-0 z-10 bg-muted"
                   >
                     Joined
                   </Th>
-                  <Th>Actions</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Actions</Th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="stagger">
                 {list.data?.results.map((row) => (
-                  <tr key={row.id}>
+                  <tr
+                    key={row.id}
+                    onClick={() => router.push(`/admin/users/${row.id}`)}
+                    className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/60 active:bg-muted"
+                  >
                     <Td className="font-medium">{row.email}</Td>
                     <Td>{row.full_name || '—'}</Td>
                     <Td>
@@ -145,12 +155,17 @@ function UsersTable() {
                       {/* One way in, rather than a row of controls per row:
                           everything an administrator can do to an account lives
                           on that account's own screen, where the audit history
-                          sits beside it. */}
+                          sits beside it. The row itself is the click target
+                          (see the `<tr onClick>` above); this stays a real link
+                          underneath for keyboard and screen-reader users, just
+                          no longer the only visible affordance. */}
                       <Link
                         href={`/admin/users/${row.id}`}
-                        className="text-sm font-medium underline hover:text-foreground"
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex items-center gap-0.5 text-sm font-medium text-muted-foreground hover:text-primary hover:underline"
                       >
                         Manage
+                        <ChevronRight className="size-3.5" aria-hidden="true" />
                       </Link>
                     </Td>
                   </tr>

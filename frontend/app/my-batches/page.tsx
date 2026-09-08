@@ -69,8 +69,8 @@ function MyBatches() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My batches</h1>
         <p className="text-sm text-muted-foreground">
           Every batch you have been enrolled on, including finished ones.
@@ -88,11 +88,11 @@ function MyBatches() {
           }
         />
       ) : (
-        <div className="space-y-4">
+        <div className="stagger space-y-4">
           {enrollments.map((enrollment) => {
             const batch = batches[enrollment.batch_id];
             return (
-              <Card key={enrollment.id}>
+              <Card key={enrollment.id} className="animate-rise-in">
                 <CardHeader className="gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={ENROLLMENT_STATUS_VARIANT[enrollment.status]}>

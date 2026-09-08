@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
@@ -29,13 +30,14 @@ function BatchList() {
   const { can } = useAuth();
   const list = useList<BatchListRow>(listBatches, { page_size: 20 });
   const [showCreate, setShowCreate] = useState(false);
+  const router = useRouter();
 
   const isAdmin = can(Capability.batchViewAny);
   const sortDirection = list.query.ordering?.startsWith('-') ? 'desc' : 'asc';
   const sortField = list.query.ordering?.replace(/^-/, '');
 
   return (
-    <div className="space-y-4">
+    <div className="animate-rise-in space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">
@@ -106,32 +108,41 @@ function BatchList() {
         />
       ) : (
         <>
-          <TableWrapper>
+          <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
             <Table>
               <thead>
                 <tr>
-                  <Th>Code</Th>
-                  <Th>Batch</Th>
-                  <Th>Course</Th>
-                  <Th>Trainer</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Code</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Batch</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Course</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Trainer</Th>
                   <Th
                     sortable
                     active={sortField === 'start_date'}
                     direction={sortDirection}
                     onSort={() => list.toggleSort('start_date')}
+                    className="sticky top-0 z-10 bg-muted"
                   >
                     Runs
                   </Th>
-                  <Th>Seats</Th>
-                  <Th>Status</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Seats</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Status</Th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="stagger">
                 {list.data?.results.map((batch) => (
-                  <tr key={batch.id}>
+                  <tr
+                    key={batch.id}
+                    onClick={() => router.push(`/admin/batches/${batch.id}`)}
+                    className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/60 active:bg-muted"
+                  >
                     <Td className="font-mono text-xs">{batch.code}</Td>
                     <Td className="font-medium">
-                      <Link href={`/admin/batches/${batch.id}`} className="hover:text-primary">
+                      <Link
+                        href={`/admin/batches/${batch.id}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="hover:text-primary hover:underline"
+                      >
                         {batch.name}
                       </Link>
                     </Td>

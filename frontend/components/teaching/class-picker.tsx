@@ -26,7 +26,7 @@ import type { ClassSession } from '@/types/api';
 
 function SessionOption({ session, onSelect }: { session: ClassSession; onSelect: () => void }) {
   return (
-    <li>
+    <li className="animate-fade-in">
       <button
         type="button"
         onClick={onSelect}
@@ -137,7 +137,7 @@ export function ClassPicker({
           description="Nothing is scheduled on the batches you teach for this day."
         />
       ) : (
-        <ul className="space-y-2">
+        <ul className="stagger space-y-2">
           {sessions.map((session) => (
             <SessionOption key={session.id} session={session} onSelect={() => onSelect(session)} />
           ))}

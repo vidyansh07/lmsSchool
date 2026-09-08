@@ -114,9 +114,13 @@ function StudentFeedbackSection({ studentCode }: { studentCode: string | null })
     return <EmptyState title="No feedback yet" description="Nothing has been left for this student." />;
   }
   return (
-    <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
+    <ul className="stagger divide-y divide-border rounded-[var(--radius-card)] border border-border">
       {items.map((item) => (
-        <li key={item.id} className="space-y-1 px-4 py-3" data-testid="student-feedback-item">
+        <li
+          key={item.id}
+          className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-muted/40"
+          data-testid="student-feedback-item"
+        >
           <p className="text-sm">{fallback(item.body, NO_DATA)}</p>
           <p className="text-xs text-muted-foreground">
             {fallback(item.author_name, UNKNOWN)} · {fallback(item.batch_code)} · {formatDate(item.created_at)}
@@ -187,7 +191,7 @@ export function StudentPerformance({ enrollmentId }: { enrollmentId: string }) {
   const studentCode = enrollment.student_code ?? null;
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <Link
         href={`/manage/batches/${enrollment.batch_id}/students`}
         className="inline-block text-sm text-muted-foreground hover:text-foreground"

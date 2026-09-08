@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
@@ -20,6 +21,7 @@ import type { BatchListRow, Exam } from '@/types/api';
 
 /** Examinations, and the form that sets one. */
 function Exams() {
+  const router = useRouter();
   const [rows, setRows] = useState<Exam[]>([]);
   const [batches, setBatches] = useState<BatchListRow[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
@@ -97,7 +99,7 @@ function Exams() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Examinations</h1>
@@ -257,22 +259,27 @@ function Exams() {
       {rows.length === 0 ? (
         <EmptyState title="No examinations yet" description="Set one with the button above." />
       ) : (
-        <TableWrapper>
+        <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
           <Table>
             <thead>
               <tr>
-                <Th>Examination</Th>
-                <Th>Batch</Th>
-                <Th>Opens</Th>
-                <Th>Status</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Examination</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Batch</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Opens</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Status</Th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="stagger">
               {rows.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  onClick={() => router.push(`/teaching/exams/${row.id}`)}
+                  className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/60 active:bg-muted"
+                >
                   <Td>
                     <Link
                       href={`/teaching/exams/${row.id}`}
+                      onClick={(event) => event.stopPropagation()}
                       className="font-medium underline hover:text-foreground"
                     >
                       {row.title}

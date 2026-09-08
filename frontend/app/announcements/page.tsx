@@ -119,8 +119,8 @@ function Announcements() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Announcements</h1>
           <p className="text-sm text-muted-foreground">
@@ -144,7 +144,7 @@ function Announcements() {
       ) : null}
 
       {isOpen ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>New announcement</CardTitle>
             <CardDescription>
@@ -233,7 +233,7 @@ function Announcements() {
         <EmptyState title="Nothing on the board" description="No announcements to show." />
       ) : (
         rows.map((row) => (
-          <Card key={row.id} data-testid="announcement-card">
+          <Card key={row.id} data-testid="announcement-card" className="animate-rise-in">
             <CardHeader className="gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 {row.is_pinned ? <Badge variant="warning">Pinned</Badge> : null}

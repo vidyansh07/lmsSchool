@@ -98,18 +98,22 @@ function History({ userId }: { userId: string }) {
           />
         ) : null}
         {entries && entries.length > 0 ? (
-          <TableWrapper>
+          <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
             <Table>
               <thead>
                 <tr>
-                  <Th>When</Th>
-                  <Th>What</Th>
-                  <Th>By</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">When</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">What</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">By</Th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="stagger">
                 {entries.map((entry) => (
-                  <tr key={entry.id} data-testid="audit-entry">
+                  <tr
+                    key={entry.id}
+                    data-testid="audit-entry"
+                    className="animate-fade-in transition-colors hover:bg-muted/40"
+                  >
                     <Td className="whitespace-nowrap text-muted-foreground">
                       {formatWhen(entry.created_at)}
                     </Td>
@@ -212,7 +216,7 @@ function UserAdministration({ userId }: { userId: string }) {
   const mayAdminister = user.can_administer;
 
   return (
-    <div className="space-y-4">
+    <div className="animate-rise-in space-y-4">
       <Link
         href="/admin/users"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"

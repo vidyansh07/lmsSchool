@@ -84,7 +84,7 @@ function CreateBatchInline({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <Card>
+    <Card className="animate-rise-in">
       <CardHeader>
         <CardTitle>New batch</CardTitle>
         <CardDescription>Starts as upcoming, with no trainer — assign one afterwards.</CardDescription>
@@ -92,7 +92,7 @@ function CreateBatchInline({ onCreated }: { onCreated: () => void }) {
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
           {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Field label="Batch name" htmlFor="ab-name" error={errors.name} required>
               <Input value={name} onChange={(event) => setName(event.target.value)} />
             </Field>
@@ -185,7 +185,7 @@ export function BatchBrowser() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="animate-rise-in flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Batches</h1>
           <p className="text-sm text-muted-foreground">Open cohorts, their seats, and their rosters.</p>
@@ -258,7 +258,7 @@ export function BatchBrowser() {
         <EmptyState title="No batches yet" description="Create the first batch to start enrolling students." />
       ) : (
         <>
-          <TableWrapper>
+          <TableWrapper className="animate-fade-in">
             <Table>
               <thead>
                 <tr>

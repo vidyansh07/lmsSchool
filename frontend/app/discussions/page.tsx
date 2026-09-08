@@ -75,8 +75,8 @@ function Discussions() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Discussions</h1>
           <p className="text-sm text-muted-foreground">
@@ -91,7 +91,7 @@ function Discussions() {
       </div>
 
       {isOpen ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Ask a question</CardTitle>
           </CardHeader>
@@ -149,9 +149,9 @@ function Discussions() {
           description="Ask the first question — your trainer is notified when you do."
         />
       ) : (
-        <div className="space-y-2">
+        <div className="stagger space-y-2">
           {rows.map((row) => (
-            <Card key={row.id} data-testid="thread-row">
+            <Card key={row.id} data-testid="thread-row" className="animate-rise-in">
               <CardContent className="space-y-1 pt-6">
                 <div className="flex flex-wrap items-center gap-2">
                   {row.is_pinned ? <Badge variant="warning">Pinned</Badge> : null}

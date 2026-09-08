@@ -22,6 +22,7 @@ import {
   formatBytes,
   formatDateTime,
 } from '@/lib/academic-labels';
+import { NO_DATA } from '@/lib/format';
 import {
   getAssignment,
   gradeSubmission,
@@ -108,7 +109,7 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
   if (!assignment) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={LIFECYCLE_VARIANT[assignment.status]}>
@@ -218,20 +219,20 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
           {submissions.length === 0 ? (
             <EmptyState title="Nothing handed in yet" description="Submissions appear here." />
           ) : (
-            <TableWrapper>
+            <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
               <Table>
                 <thead>
                   <tr>
-                    <Th>Student</Th>
-                    <Th>Submitted</Th>
-                    <Th>Files</Th>
-                    <Th>Mark</Th>
-                    <Th>Action</Th>
+                    <Th className="sticky top-0 z-10 bg-muted">Student</Th>
+                    <Th className="sticky top-0 z-10 bg-muted">Submitted</Th>
+                    <Th className="sticky top-0 z-10 bg-muted">Files</Th>
+                    <Th className="sticky top-0 z-10 bg-muted">Mark</Th>
+                    <Th className="sticky top-0 z-10 bg-muted">Action</Th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="stagger">
                   {submissions.map((row) => (
-                    <tr key={row.id}>
+                    <tr key={row.id} className="animate-fade-in transition-colors hover:bg-muted/40">
                       <Td>
                         <div className="font-medium">{row.student_name}</div>
                         <div className="font-mono text-xs text-muted-foreground">
@@ -248,7 +249,7 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
                       <Td>{formatDateTime(row.submitted_at)}</Td>
                       <Td>
                         {row.files.length === 0 ? (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">{NO_DATA}</span>
                         ) : (
                           <ul className="space-y-1">
                             {row.files.map((file) => (

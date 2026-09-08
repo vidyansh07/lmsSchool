@@ -56,8 +56,8 @@ function Review({ attemptId }: { attemptId: string }) {
   const { attempt } = review;
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in space-y-1">
         <span className="font-mono text-xs text-muted-foreground">{attempt.exam_code}</span>
         <h1 className="text-2xl font-semibold tracking-tight">{attempt.exam_title}</h1>
         <p className="text-sm text-muted-foreground">
@@ -65,7 +65,7 @@ function Review({ attemptId }: { attemptId: string }) {
         </p>
       </div>
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle data-testid="review-score">
             {attempt.total_score} / {attempt.max_score}
@@ -82,7 +82,7 @@ function Review({ attemptId }: { attemptId: string }) {
       </Card>
 
       {review.questions.map((question) => (
-        <Card key={question.position} data-testid="review-question">
+        <Card key={question.position} data-testid="review-question" className="animate-rise-in">
           <CardHeader className="gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="neutral">Question {question.position + 1}</Badge>

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { ApiError } from '@/lib/api';
+import { formatNumber, formatPercent, NO_DATA } from '@/lib/format';
 import { adminDashboard, attendanceTrend } from '@/lib/reporting';
 import type { AdminDashboard, TrendPoint } from '@/types/api';
 
@@ -68,7 +69,7 @@ function Overview() {
   ] as const;
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
@@ -86,12 +87,12 @@ function Overview() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="stagger grid gap-3 sm:grid-cols-3">
         {headline.map(([label, value]) => (
-          <Card key={label} data-testid="headline-figure">
+          <Card key={label} data-testid="headline-figure" className="animate-rise-in">
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="text-3xl font-semibold">{value}</p>
+              <p className="text-3xl font-semibold tabular-nums">{formatNumber(value)}</p>
             </CardContent>
           </Card>
         ))}
@@ -110,12 +111,10 @@ function Overview() {
             <div key={metric.key} className="rounded-md border border-border p-3" data-testid="metric">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-medium">{metric.label}</span>
-                <span className="text-2xl font-semibold">
-                  {metric.value === null
-                    ? '—'
-                    : metric.unit === 'percent'
-                      ? `${metric.value}%`
-                      : metric.value}
+                <span className="text-2xl font-semibold tabular-nums">
+                  {metric.unit === 'percent'
+                    ? formatPercent(metric.value, { fallbackLabel: NO_DATA })
+                    : formatNumber(metric.value, { fallbackLabel: NO_DATA })}
                 </span>
               </div>
               <p className="mt-1 text-sm text-muted-foreground" data-testid="metric-definition">
@@ -143,28 +142,28 @@ function Overview() {
           {trend.length === 0 ? (
             <p className="text-sm text-muted-foreground">No registers taken yet.</p>
           ) : (
-            <TableWrapper>
+            <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
               <Table>
                 <thead>
                   <tr>
-                    <Th>Week</Th>
-                    <Th>Counted</Th>
-                    <Th>Attended</Th>
-                    <Th>Rate</Th>
+                    <Th className="sticky top-0 z-10 bg-muted">Week</Th>
+                    <Th className="sticky top-0 z-10 bg-muted text-right">Counted</Th>
+                    <Th className="sticky top-0 z-10 bg-muted text-right">Attended</Th>
+                    <Th className="sticky top-0 z-10 bg-muted text-right">Rate</Th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="stagger">
                   {trend.map((point) => (
-                    <tr key={point.week}>
+                    <tr key={point.week} className="animate-fade-in hover:bg-muted/40">
                       <Td>{point.week}</Td>
-                      <Td>{point.counted}</Td>
-                      <Td>{point.attended}</Td>
-                      <Td>
+                      <Td className="text-right tabular-nums">{formatNumber(point.counted)}</Td>
+                      <Td className="text-right tabular-nums">{formatNumber(point.attended)}</Td>
+                      <Td className="text-right">
                         {point.percent === null ? (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">{NO_DATA}</span>
                         ) : (
                           <Badge variant={point.percent >= 75 ? 'success' : 'warning'}>
-                            {point.percent}%
+                            {formatPercent(point.percent)}
                           </Badge>
                         )}
                       </Td>

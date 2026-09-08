@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
@@ -26,6 +27,7 @@ import type { Assessment, AssessmentDelivery, BatchListRow } from '@/types/api';
 
 /** Weekly tests: schedule them, then mark or import their results. */
 function Assessments() {
+  const router = useRouter();
   const [rows, setRows] = useState<Assessment[]>([]);
   const [batches, setBatches] = useState<BatchListRow[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
@@ -100,7 +102,7 @@ function Assessments() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Weekly tests</h1>
@@ -245,22 +247,27 @@ function Assessments() {
       {rows.length === 0 ? (
         <EmptyState title="No tests yet" description="Schedule one with the button above." />
       ) : (
-        <TableWrapper>
+        <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
           <Table>
             <thead>
               <tr>
-                <Th>Test</Th>
-                <Th>Batch</Th>
-                <Th>When</Th>
-                <Th>Status</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Test</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Batch</Th>
+                <Th className="sticky top-0 z-10 bg-muted">When</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Status</Th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="stagger">
               {rows.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  onClick={() => router.push(`/teaching/assessments/${row.id}`)}
+                  className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/60 active:bg-muted"
+                >
                   <Td>
                     <Link
                       href={`/teaching/assessments/${row.id}`}
+                      onClick={(event) => event.stopPropagation()}
                       className="font-medium underline hover:text-foreground"
                     >
                       {row.title}

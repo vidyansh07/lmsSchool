@@ -9,6 +9,14 @@
  * dozen pages and visits a few of them, so they keep a top bar: giving them a
  * sidebar would spend a fifth of a laptop screen on links they do not use.
  *
+ * The staff sidebar is simply present at `lg:` and wider — this is a desktop-
+ * first operations tool. Below that it collapses into a `Sheet`: a real modal
+ * drawer with its own focus trap, backdrop and Escape handling, rather than a
+ * panel that pushes the page down. Because a `Sheet` covers the header while
+ * open, the account controls (name, role, sign out) are reachable from inside
+ * the drawer too, in its footer — closing the menu should never be the price
+ * of signing out.
+ *
  * The navigation is presentational throughout. Which links a person sees comes
  * from the capability list the server returned; which requests succeed is
  * decided by the server on every call. Hiding a link is a courtesy, never a
@@ -17,12 +25,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Menu } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
 import { STAFF_NAV, STAFF_ROLES, STUDENT_NAV, isVisible, type NavItem } from '@/components/navigation';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { env } from '@/lib/env';
 import { cn } from '@/lib/utils';
 
@@ -43,12 +53,17 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       href={item.href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'block rounded-md px-3 py-2 text-sm transition-colors',
+        'press relative block rounded-md py-2 pl-3.5 pr-3 text-sm transition-colors',
         'hover:bg-muted hover:text-foreground',
-        // Marked two ways on purpose: colour alone is not a signal for everyone,
-        // and the weight change survives a screenshot in greyscale.
+        // Marked three ways on purpose: colour alone is not a signal for
+        // everyone, the weight change survives a screenshot in greyscale, and
+        // the accent bar is a positional signal that needs no colour vision
+        // at all.
         active
-          ? 'bg-accent font-medium text-foreground'
+          ? cn(
+              'bg-accent font-medium text-foreground',
+              "before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary before:content-['']",
+            )
           : 'text-muted-foreground',
       )}
     >
@@ -57,10 +72,19 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
+/** The wordmark plus a small decorative swatch in the true brand orange — the
+ *  one place in the shell `--color-brand` appears, since it is a fill to look
+ *  at, not text to read (see `globals.css`). The environment badge rides
+ *  alongside it so a non-production build never looks like the real thing. */
 function Brand() {
   return (
     <div className="flex items-center gap-2">
-      <Link href="/" className="text-sm font-semibold tracking-tight">
+      <Link href="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+        <span
+          aria-hidden="true"
+          className="size-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: 'var(--color-brand)' }}
+        />
         Grras <span className="text-primary">LMS</span>
       </Link>
       {env.appEnv !== 'production' ? (
@@ -70,6 +94,15 @@ function Brand() {
       ) : null}
     </div>
   );
+}
+
+/** First and last initial, for the avatar fallback — "Amy Admin" → "AA". */
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = parts[0]?.[0] ?? '';
+  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '';
+  return (first + last).toUpperCase() || '?';
 }
 
 function Account() {
@@ -82,12 +115,14 @@ function Account() {
       </Button>
     );
   }
+  const name = user.full_name || user.email;
   return (
-    <div className="flex items-center gap-2">
-      <span className="hidden text-sm text-muted-foreground sm:inline">
-        {user.full_name || user.email}
-      </span>
-      <Badge>{user.role}</Badge>
+    <div className="flex items-center gap-2.5">
+      <Avatar size="sm" className="hidden sm:inline-flex">
+        <AvatarFallback>{initials(name)}</AvatarFallback>
+      </Avatar>
+      <span className="hidden text-sm text-muted-foreground sm:inline">{name}</span>
+      <Badge className="capitalize">{user.role}</Badge>
       <Button variant="outline" size="sm" onClick={() => void signOut()}>
         Sign out
       </Button>
@@ -117,7 +152,7 @@ function StaffLayout({ children }: { children: ReactNode }) {
 
   const active = useActiveHref(groups.flatMap((group) => group.items.map((item) => item.href)));
 
-  const sidebar = (
+  const navGroups = (
     <nav aria-label="Main" className="flex h-full flex-col gap-6 overflow-y-auto p-4">
       {groups.map((group, index) => (
         <div key={group.title ?? `group-${index}`} className="space-y-1">
@@ -153,27 +188,21 @@ function StaffLayout({ children }: { children: ReactNode }) {
           <div className="border-b border-border px-4 py-3">
             <Brand />
           </div>
-          {sidebar}
+          {navGroups}
         </div>
       </aside>
 
       <div className="flex min-h-dvh min-w-0 flex-col">
-        <header className="border-b border-border bg-surface">
+        <header className="sticky top-0 z-30 border-b border-border bg-surface">
           <div className="flex items-center gap-3 px-4 py-3 sm:px-6">
             <Button
               variant="outline"
               size="sm"
               className="lg:hidden"
-              aria-expanded={open}
-              aria-controls="staff-navigation"
-              onClick={() => setOpen((current) => !current)}
+              aria-label="Open navigation menu"
+              onClick={() => setOpen(true)}
             >
-              {open ? (
-                <X className="size-4" aria-hidden="true" />
-              ) : (
-                <Menu className="size-4" aria-hidden="true" />
-              )}
-              <span className="sr-only">{open ? 'Close the menu' : 'Open the menu'}</span>
+              <Menu className="size-4" aria-hidden="true" />
             </Button>
             <div className="lg:hidden">
               <Brand />
@@ -184,18 +213,31 @@ function StaffLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        {/* Narrow screens: the same links, as a panel under the header. It is
-            rendered rather than duplicated, so there is one list to maintain. */}
-        {open ? (
-          <div id="staff-navigation" className="border-b border-border bg-surface lg:hidden">
-            {sidebar}
-          </div>
-        ) : null}
-
         <main id="main-content" className="w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
           {children}
         </main>
       </div>
+
+      {/* Narrow screens: the same links, in a real modal drawer rather than a
+          panel that vanishes into "not there" — see the module docstring. */}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent size="sm" className="flex flex-col">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: 'var(--color-brand)' }}
+              />
+              Grras <span className="text-primary">LMS</span>
+            </SheetTitle>
+          </SheetHeader>
+          <div className="-mx-5 flex-1 overflow-y-auto border-y border-border">{navGroups}</div>
+          <SheetFooter className="justify-start">
+            <Account />
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

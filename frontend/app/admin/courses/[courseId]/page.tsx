@@ -10,6 +10,7 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { ApiError } from '@/lib/api';
 import {
   createModule,
@@ -79,7 +80,7 @@ function ModulePanel({
   }
 
   return (
-    <Card data-testid="module-card">
+    <Card data-testid="module-card" className="animate-rise-in">
       <CardHeader className="gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="flex-1">{module.title}</CardTitle>
@@ -127,7 +128,7 @@ function ModulePanel({
         ) : (
           <ul className="divide-y divide-border rounded-md border border-border">
             {module.lessons.map((lesson, lessonIndex) => (
-              <li key={lesson.id} className="space-y-3 px-3 py-2">
+              <li key={lesson.id} className="space-y-3 px-3 py-2 transition-colors hover:bg-muted/40">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="min-w-0 flex-1 truncate font-medium">{lesson.title}</span>
                   <Badge>{CONTENT_TYPE_LABEL[lesson.content_type]}</Badge>
@@ -301,7 +302,7 @@ function CourseEditor({ courseId }: { courseId: string }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -329,7 +330,7 @@ function CourseEditor({ courseId }: { courseId: string }) {
             description="Add the first module to start building the course."
           />
         ) : (
-          <div className="space-y-4">
+          <div className="stagger space-y-4">
             {course.modules.map((module, index) => (
               <ModulePanel
                 key={module.id}
@@ -348,9 +349,8 @@ function CourseEditor({ courseId }: { courseId: string }) {
             <label htmlFor="new-module" className="mb-1.5 block text-sm font-medium">
               New module title
             </label>
-            <input
+            <Input
               id="new-module"
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm"
               value={newModuleTitle}
               onChange={(event) => setNewModuleTitle(event.target.value)}
             />

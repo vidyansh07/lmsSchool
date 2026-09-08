@@ -107,7 +107,7 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
   if (!register) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Register</h1>
         <p className="text-sm text-muted-foreground">
@@ -163,18 +163,18 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
             </Button>
           </div>
 
-          <TableWrapper>
+          <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
             <Table>
               <thead>
                 <tr>
-                  <Th>Student</Th>
-                  <Th>Attendance</Th>
-                  <Th>Note</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Student</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Attendance</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Note</Th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="stagger">
                 {register.entries.map((entry) => (
-                  <tr key={entry.enrollment_id}>
+                  <tr key={entry.enrollment_id} className="animate-fade-in transition-colors hover:bg-muted/40">
                     <Td>
                       <div className="font-medium">{entry.full_name}</div>
                       <div className="font-mono text-xs text-muted-foreground">

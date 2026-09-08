@@ -216,16 +216,16 @@ export function RegisterEditor({
         </p>
       ) : null}
 
-      <TableWrapper>
+      <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
         <Table>
           <caption className="sr-only">Class register, one row per student</caption>
           <thead>
             <tr>
-              <Th>Student</Th>
-              <Th>Attendance</Th>
+              <Th className="sticky top-0 z-10 bg-muted">Student</Th>
+              <Th className="sticky top-0 z-10 bg-muted">Attendance</Th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="stagger">
             {entries.map((entry, index) => {
               const status = marks[entry.enrollment_id] ?? null;
               const isFocused = focusedIndex === index;
@@ -242,7 +242,7 @@ export function RegisterEditor({
                   onFocus={() => setFocusedIndex(index)}
                   onKeyDown={(event) => handleRowKeyDown(event, index, entry.enrollment_id)}
                   className={cn(
-                    'cursor-default outline-none',
+                    'animate-fade-in cursor-default outline-none transition-colors hover:bg-muted/40',
                     isFocused && 'bg-accent/40 ring-2 ring-inset ring-primary',
                   )}
                 >

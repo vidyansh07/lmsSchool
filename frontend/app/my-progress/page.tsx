@@ -68,8 +68,8 @@ function MyProgress() {
   const byCourse = new Map(certificates.map((row) => [row.course_title, row]));
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My progress</h1>
         <p className="text-sm text-muted-foreground">
           How far you are on each course, and what is still required to complete it.
@@ -86,7 +86,7 @@ function MyProgress() {
           const { progress, completion } = row;
           const certificate = byCourse.get(progress.course_title);
           return (
-            <Card key={progress.enrollment_id} data-testid="progress-card">
+            <Card key={progress.enrollment_id} data-testid="progress-card" className="animate-rise-in">
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-muted-foreground">

@@ -83,8 +83,8 @@ function MyLearning() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My learning</h1>
         <p className="text-sm text-muted-foreground">
           Where you left off, what is coming, and everything you have saved.
@@ -98,7 +98,7 @@ function MyLearning() {
         />
       ) : (
         home.map((row) => (
-          <Card key={row.enrollment_id} data-testid="learning-card">
+          <Card key={row.enrollment_id} data-testid="learning-card" className="animate-rise-in">
             <CardHeader className="gap-1">
               <span className="font-mono text-xs text-muted-foreground">{row.batch_code}</span>
               <CardTitle>{row.course_title}</CardTitle>
@@ -163,7 +163,7 @@ function MyLearning() {
         ))
       )}
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Coming up</CardTitle>
           <CardDescription>The next two weeks, from your calendar.</CardDescription>
@@ -187,8 +187,8 @@ function MyLearning() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
+      <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Bookmarks</CardTitle>
           </CardHeader>
@@ -217,7 +217,7 @@ function MyLearning() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>My notes</CardTitle>
           </CardHeader>

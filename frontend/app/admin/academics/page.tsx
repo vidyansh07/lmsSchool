@@ -114,7 +114,7 @@ function AcademicRules() {
   if (!policy) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Academic rules</h1>
         <p className="text-sm text-muted-foreground">

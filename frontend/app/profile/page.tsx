@@ -12,15 +12,15 @@ function ProfileContent() {
   const { user } = useAuth();
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My profile</h1>
         <p className="text-sm text-muted-foreground">
           Update your contact details and the information your trainers and administrators can see.
         </p>
       </div>
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Photo</CardTitle>
           <CardDescription>Shown next to your name across the platform.</CardDescription>

@@ -153,6 +153,9 @@ describe('PurgeControl confirmation', () => {
 
     await waitFor(() => expect(screen.getByText('Only a deleted record can be destroyed.')).toBeInTheDocument());
     expect(onPurged).not.toHaveBeenCalled();
-    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    // `Confirm` now plays the same fade/scale exit `components/ui/dialog.tsx`
+    // uses, staying mounted for the exit animation's duration — see
+    // `tests/unit/ui-dialog.test.tsx`'s identical wait for the same reason.
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
   });
 });

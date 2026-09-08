@@ -1,22 +1,29 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from "react";
 
-import { ProgressRules } from '@/components/progress-rules';
-import { RequireAuth } from '@/components/require-auth';
-import { EmptyState, ErrorState, LoadingState } from '@/components/states';
-import { Alert } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Field } from '@/components/ui/field';
-import { Input, Select } from '@/components/ui/input';
-import { ApiError, errorMessage } from '@/lib/api';
+import { ProgressRules } from "@/components/progress-rules";
+import { RequireAuth } from "@/components/require-auth";
+import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Input, Select } from "@/components/ui/input";
+import { ApiError, errorMessage } from "@/lib/api";
 import {
   COMPLETION_STATUS_LABEL,
   COMPLETION_STATUS_VARIANT,
   formatDate,
-} from '@/lib/academic-labels';
+} from "@/lib/academic-labels";
+import { fallback, UNKNOWN } from "@/lib/format";
 import {
   approveCompletion,
   getEnrollmentProgress,
@@ -25,9 +32,13 @@ import {
   refreshBatchCompletions,
   rejectCompletion,
   reopenCompletion,
-} from '@/lib/progress';
-import { listBatches } from '@/lib/batches';
-import type { BatchListRow, CompletionEvaluation, CourseCompletion } from '@/types/api';
+} from "@/lib/progress";
+import { listBatches } from "@/lib/batches";
+import type {
+  BatchListRow,
+  CompletionEvaluation,
+  CourseCompletion,
+} from "@/types/api";
 
 /**
  * The approval queue — §6.6.
@@ -39,9 +50,11 @@ import type { BatchListRow, CompletionEvaluation, CourseCompletion } from '@/typ
 function Completions() {
   const [rows, setRows] = useState<CourseCompletion[]>([]);
   const [batches, setBatches] = useState<BatchListRow[]>([]);
-  const [detail, setDetail] = useState<Record<string, CompletionEvaluation>>({});
-  const [status, setStatus] = useState('eligible');
-  const [batch, setBatch] = useState('');
+  const [detail, setDetail] = useState<Record<string, CompletionEvaluation>>(
+    {},
+  );
+  const [status, setStatus] = useState("eligible");
+  const [batch, setBatch] = useState("");
   const [error, setError] = useState<ApiError | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -50,13 +63,23 @@ function Completions() {
   const [notes, setNotes] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
-    setRows((await listCompletions({ status: status || undefined, batch: batch || undefined })).results);
+    setRows(
+      (
+        await listCompletions({
+          status: status || undefined,
+          batch: batch || undefined,
+        })
+      ).results,
+    );
   }, [status, batch]);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      listCompletions({ status: status || undefined, batch: batch || undefined }),
+      listCompletions({
+        status: status || undefined,
+        batch: batch || undefined,
+      }),
       listBatches({ page_size: 100 }),
     ])
       .then(([page, batchPage]) => {
@@ -75,7 +98,11 @@ function Completions() {
     };
   }, [status, batch]);
 
-  async function run(key: string, action: () => Promise<unknown>, message: string) {
+  async function run(
+    key: string,
+    action: () => Promise<unknown>,
+    message: string,
+  ) {
     setBusy(key);
     setFormError(null);
     setNotice(null);
@@ -84,7 +111,7 @@ function Completions() {
       await load();
       setNotice(message);
     } catch (cause) {
-      setFormError(errorMessage(cause, 'That could not be done.'));
+      setFormError(errorMessage(cause, "That could not be done."));
     } finally {
       setBusy(null);
     }
@@ -111,9 +138,11 @@ function Completions() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Course completions</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Course completions
+        </h1>
         <p className="text-sm text-muted-foreground">
           Students who have met the rules, waiting for a decision.
         </p>
@@ -129,7 +158,11 @@ function Completions() {
       <Card>
         <CardContent className="flex flex-wrap items-end gap-3 pt-6">
           <Field label="Status" htmlFor="status" className="min-w-48">
-            <Select id="status" value={status} onChange={(event) => setStatus(event.target.value)}>
+            <Select
+              id="status"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
               <option value="">Everything</option>
               <option value="eligible">Eligible</option>
               <option value="in_progress">In progress</option>
@@ -138,7 +171,11 @@ function Completions() {
             </Select>
           </Field>
           <Field label="Batch" htmlFor="batch" className="min-w-64">
-            <Select id="batch" value={batch} onChange={(event) => setBatch(event.target.value)}>
+            <Select
+              id="batch"
+              value={batch}
+              onChange={(event) => setBatch(event.target.value)}
+            >
               <option value="">Every batch</option>
               {batches.map((row) => (
                 <option key={row.id} value={row.id}>
@@ -150,12 +187,12 @@ function Completions() {
           <Button
             type="button"
             variant="outline"
-            disabled={!batch || busy === 'refresh'}
+            disabled={!batch || busy === "refresh"}
             onClick={() =>
               run(
-                'refresh',
+                "refresh",
                 () => refreshBatchCompletions(batch),
-                'Re-evaluated against the current rules.',
+                "Re-evaluated against the current rules.",
               )
             }
           >
@@ -170,122 +207,156 @@ function Completions() {
           description="No completions match. Try re-evaluating a batch after changing the rules."
         />
       ) : (
-        rows.map((row) => (
-          <Card key={row.id} data-testid="completion-row">
-            <CardHeader className="gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={COMPLETION_STATUS_VARIANT[row.status]}>
-                  {COMPLETION_STATUS_LABEL[row.status]}
-                </Badge>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {row.student_code} · {row.batch_code}
-                </span>
-              </div>
-              <CardTitle>{row.student_name}</CardTitle>
-              <CardDescription>
-                {row.course_title}
-                {row.completed_on ? ` · completed ${formatDate(row.completed_on)}` : ''}
-                {row.decision_note ? ` · ${row.decision_note}` : ''}
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="space-y-3">
-              <Button type="button" size="sm" variant="ghost" onClick={() => showRules(row)}>
-                {detail[row.id] ? 'Hide the rules' : 'Show the rules'}
-              </Button>
-              {detail[row.id] ? (
-                <ProgressRules rules={detail[row.id]?.rules ?? []} />
-              ) : null}
-
-              {row.status !== 'approved' ? (
-                <>
-                  <Field label="Note" htmlFor={`note-${row.id}`}>
-                    <Input
-                      id={`note-${row.id}`}
-                      value={notes[row.id] ?? ''}
-                      onChange={(event) => setNotes({ ...notes, [row.id]: event.target.value })}
-                    />
-                  </Field>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={busy === row.id}
-                      onClick={() =>
-                        run(
-                          row.id,
-                          () =>
-                            approveCompletion(row.enrollment, { note: notes[row.id] ?? '' }),
-                          `Approved ${row.student_name}.`,
-                        )
-                      }
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={busy === row.id || !notes[row.id]}
-                      onClick={() =>
-                        run(
-                          row.id,
-                          () => rejectCompletion(row.enrollment, notes[row.id] ?? ''),
-                          `Declined ${row.student_name}.`,
-                        )
-                      }
-                    >
-                      Decline
-                    </Button>
+        <div className="stagger space-y-4">
+          {rows.map((row) => {
+            // Both of these are optional on the API type, so a completion whose
+            // student record is incomplete would otherwise put the literal text
+            // "undefined" into the heading and into every confirmation message.
+            const studentName = fallback(row.student_name, UNKNOWN);
+            const studentCode = fallback(row.student_code, UNKNOWN);
+            return (
+              <Card
+                key={row.id}
+                data-testid="completion-row"
+                className="animate-fade-in"
+              >
+                <CardHeader className="gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={COMPLETION_STATUS_VARIANT[row.status]}>
+                      {COMPLETION_STATUS_LABEL[row.status]}
+                    </Badge>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {studentCode} · {row.batch_code}
+                    </span>
                   </div>
-                </>
-              ) : (
-                <div className="flex flex-wrap items-end gap-2">
+                  <CardTitle>{studentName}</CardTitle>
+                  <CardDescription>
+                    {row.course_title}
+                    {row.completed_on
+                      ? ` · completed ${formatDate(row.completed_on)}`
+                      : ""}
+                    {row.decision_note ? ` · ${row.decision_note}` : ""}
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent className="space-y-3">
                   <Button
                     type="button"
                     size="sm"
-                    disabled={busy === row.id}
-                    onClick={() =>
-                      run(
-                        row.id,
-                        () => issueCertificate(row.enrollment),
-                        `Certificate issued for ${row.student_name}.`,
-                      )
-                    }
+                    variant="ghost"
+                    onClick={() => showRules(row)}
                   >
-                    Issue the certificate
+                    {detail[row.id] ? "Hide the rules" : "Show the rules"}
                   </Button>
-                  <Field label="Note" htmlFor={`reopen-${row.id}`}>
-                    <Input
-                      id={`reopen-${row.id}`}
-                      value={notes[row.id] ?? ''}
-                      onChange={(event) => setNotes({ ...notes, [row.id]: event.target.value })}
-                    />
-                  </Field>
-                  {/* People approve things by mistake. The API has always
+                  {detail[row.id] ? (
+                    <ProgressRules rules={detail[row.id]?.rules ?? []} />
+                  ) : null}
+
+                  {row.status !== "approved" ? (
+                    <>
+                      <Field label="Note" htmlFor={`note-${row.id}`}>
+                        <Input
+                          id={`note-${row.id}`}
+                          value={notes[row.id] ?? ""}
+                          onChange={(event) =>
+                            setNotes({ ...notes, [row.id]: event.target.value })
+                          }
+                        />
+                      </Field>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={busy === row.id}
+                          onClick={() =>
+                            run(
+                              row.id,
+                              () =>
+                                approveCompletion(row.enrollment, {
+                                  note: notes[row.id] ?? "",
+                                }),
+                              `Approved ${studentName}.`,
+                            )
+                          }
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={busy === row.id || !notes[row.id]}
+                          onClick={() =>
+                            run(
+                              row.id,
+                              () =>
+                                rejectCompletion(
+                                  row.enrollment,
+                                  notes[row.id] ?? "",
+                                ),
+                              `Declined ${studentName}.`,
+                            )
+                          }
+                        >
+                          Decline
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-wrap items-end gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={busy === row.id}
+                        onClick={() =>
+                          run(
+                            row.id,
+                            () => issueCertificate(row.enrollment),
+                            `Certificate issued for ${studentName}.`,
+                          )
+                        }
+                      >
+                        Issue the certificate
+                      </Button>
+                      <Field label="Note" htmlFor={`reopen-${row.id}`}>
+                        <Input
+                          id={`reopen-${row.id}`}
+                          value={notes[row.id] ?? ""}
+                          onChange={(event) =>
+                            setNotes({ ...notes, [row.id]: event.target.value })
+                          }
+                        />
+                      </Field>
+                      {/* People approve things by mistake. The API has always
                       allowed undoing it; withholding the button only meant an
                       administrator had to ask an engineer. Blocked while a
                       certificate is live, which the backend enforces. */}
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={busy === row.id || !notes[row.id]}
-                    onClick={() =>
-                      run(
-                        row.id,
-                        () => reopenCompletion(row.enrollment, notes[row.id] ?? ''),
-                        `Reopened ${row.student_name}.`,
-                      )
-                    }
-                  >
-                    Reopen
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={busy === row.id || !notes[row.id]}
+                        onClick={() =>
+                          run(
+                            row.id,
+                            () =>
+                              reopenCompletion(
+                                row.enrollment,
+                                notes[row.id] ?? "",
+                              ),
+                            `Reopened ${studentName}.`,
+                          )
+                        }
+                      >
+                        Reopen
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
     </div>
   );

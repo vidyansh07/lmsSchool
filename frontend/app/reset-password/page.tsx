@@ -4,10 +4,10 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
+import { AuthSplitShell } from '@/components/auth/auth-split-shell';
 import { LoadingState } from '@/components/states';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { fieldErrors } from '@/lib/api';
@@ -108,18 +108,14 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <div className="mx-auto max-w-md">
-      <Card>
-        <CardHeader>
-          <CardTitle>Choose a new password</CardTitle>
-          <CardDescription>This link can be used once.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Suspense fallback={<LoadingState label="Loading…" rows={3} />}>
-            <ResetPasswordForm />
-          </Suspense>
-        </CardContent>
-      </Card>
-    </div>
+    <AuthSplitShell heading="Choose a new password" tagline="Almost there — set a fresh password to continue.">
+      <div className="mb-6 space-y-1.5">
+        <h2 className="text-xl font-semibold tracking-tight">Choose a new password</h2>
+        <p className="text-sm text-muted-foreground">This link can be used once.</p>
+      </div>
+      <Suspense fallback={<LoadingState label="Loading…" rows={3} />}>
+        <ResetPasswordForm />
+      </Suspense>
+    </AuthSplitShell>
   );
 }

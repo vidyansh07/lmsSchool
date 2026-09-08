@@ -41,7 +41,7 @@ function TrainersTable() {
   const sortField = list.query.ordering?.replace(/^-/, '');
 
   return (
-    <div className="space-y-4">
+    <div className="animate-rise-in space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Trainers</h1>
@@ -114,7 +114,7 @@ function TrainersTable() {
         />
       ) : (
         <>
-          <TableWrapper>
+          <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
             <Table>
               <thead>
                 <tr>
@@ -123,27 +123,29 @@ function TrainersTable() {
                     active={sortField === 'trainer_id'}
                     direction={sortDirection}
                     onSort={() => list.toggleSort('trainer_id')}
+                    className="sticky top-0 z-10 bg-muted"
                   >
                     Trainer ID
                   </Th>
-                  <Th>Name</Th>
-                  <Th>Title</Th>
-                  <Th>Skills</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Name</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Title</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Skills</Th>
                   <Th
                     sortable
                     active={sortField === 'years_of_experience'}
                     direction={sortDirection}
                     onSort={() => list.toggleSort('years_of_experience')}
+                    className="sticky top-0 z-10 bg-muted"
                   >
                     Experience
                   </Th>
-                  <Th>Availability</Th>
-                  <Th>Account</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Availability</Th>
+                  <Th className="sticky top-0 z-10 bg-muted">Account</Th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="stagger">
                 {list.data?.results.map((row) => (
-                  <tr key={row.id}>
+                  <tr key={row.id} className="animate-fade-in transition-colors hover:bg-muted/40">
                     <Td className="font-mono text-xs">{row.trainer_id}</Td>
                     <Td className="font-medium">{row.full_name || '—'}</Td>
                     <Td>{row.professional_title || '—'}</Td>

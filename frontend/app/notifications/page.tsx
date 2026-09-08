@@ -99,8 +99,8 @@ function Notifications() {
   const unread = rows.filter((row) => !row.is_read).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
           <p className="text-sm text-muted-foreground">
@@ -127,12 +127,12 @@ function Notifications() {
           description="Deadlines, results and announcements appear here."
         />
       ) : (
-        <div className="space-y-2">
+        <div className="stagger space-y-2">
           {rows.map((row) => (
             <div
               key={row.id}
               data-testid="notification-row"
-              className={`rounded-md border p-3 ${
+              className={`animate-rise-in rounded-md border p-3 ${
                 row.is_read ? 'border-border' : 'border-primary/40 bg-primary/5'
               }`}
             >
@@ -171,7 +171,7 @@ function Notifications() {
       )}
 
       {preferences ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Email settings</CardTitle>
             <CardDescription>

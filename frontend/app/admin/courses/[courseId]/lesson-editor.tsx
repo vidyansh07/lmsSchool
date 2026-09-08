@@ -6,6 +6,7 @@ import { Trash2, Upload } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { ApiError, fieldErrors } from '@/lib/api';
@@ -177,7 +178,7 @@ export function LessonEditor({
   return (
     <form
       onSubmit={onSubmit}
-      className="space-y-4 rounded-[var(--radius-card)] border border-border p-4"
+      className="animate-rise-in space-y-4 rounded-[var(--radius-card)] border border-border p-4"
       noValidate
     >
       {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
@@ -272,22 +273,22 @@ export function LessonEditor({
             onChange={(event) => set('duration_minutes', event.target.value)}
           />
         </Field>
-        <label className="flex items-center gap-2 self-end pb-2 text-sm">
-          <input
-            type="checkbox"
+        <div className="flex items-center gap-2 self-end pb-2 text-sm">
+          <Checkbox
+            id="lesson-is-preview"
             checked={form.is_preview}
-            onChange={(event) => set('is_preview', event.target.checked)}
+            onCheckedChange={(value) => set('is_preview', value)}
           />
-          Free preview
-        </label>
-        <label className="flex items-center gap-2 self-end pb-2 text-sm">
-          <input
-            type="checkbox"
+          <label htmlFor="lesson-is-preview">Free preview</label>
+        </div>
+        <div className="flex items-center gap-2 self-end pb-2 text-sm">
+          <Checkbox
+            id="lesson-is-required"
             checked={form.is_required}
-            onChange={(event) => set('is_required', event.target.checked)}
+            onCheckedChange={(value) => set('is_required', value)}
           />
-          Required
-        </label>
+          <label htmlFor="lesson-is-required">Required</label>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -389,7 +390,10 @@ function ResourceManager({ lesson, onChanged }: { lesson: LessonContent; onChang
       {resources.length > 0 ? (
         <ul className="divide-y divide-border rounded-md border border-border">
           {resources.map((resource) => (
-            <li key={resource.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+            <li
+              key={resource.id}
+              className="flex items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-muted/40"
+            >
               <span className="min-w-0 flex-1 truncate">{resource.title}</span>
               <Badge>{resource.kind}</Badge>
               {resource.size_bytes ? (

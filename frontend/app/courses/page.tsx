@@ -33,8 +33,8 @@ function Catalog() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Course catalogue</h1>
         <p className="text-sm text-muted-foreground">
           Browse the courses available to you. Unpublished courses are not listed.
@@ -98,9 +98,11 @@ function Catalog() {
         />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {list.data?.results.map((course) => (
-              <CourseCard key={course.id} course={course} href={`/courses/${course.slug}`} />
+              <div key={course.id} className="animate-rise-in">
+                <CourseCard course={course} href={`/courses/${course.slug}`} />
+              </div>
             ))}
           </div>
           {list.data ? (

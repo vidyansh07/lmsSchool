@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
@@ -14,12 +15,14 @@ import { Input, Select, Textarea } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { ApiError, fieldErrors } from '@/lib/api';
 import { LIFECYCLE_LABEL, LIFECYCLE_VARIANT, PROJECT_KIND_LABEL } from '@/lib/academic-labels';
+import { formatDate, NO_DATA } from '@/lib/format';
 import { createProject, listProjects } from '@/lib/projects';
 import { listBatches } from '@/lib/batches';
 import type { BatchListRow, Project, ProjectKind } from '@/types/api';
 
 /** Projects a trainer has set. */
 function Projects() {
+  const router = useRouter();
   const [rows, setRows] = useState<Project[]>([]);
   const [batches, setBatches] = useState<BatchListRow[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
@@ -98,7 +101,7 @@ function Projects() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
@@ -230,22 +233,27 @@ function Projects() {
       {rows.length === 0 ? (
         <EmptyState title="No projects yet" description="Set one with the button above." />
       ) : (
-        <TableWrapper>
+        <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
           <Table>
             <thead>
               <tr>
-                <Th>Project</Th>
-                <Th>Course</Th>
-                <Th>Due</Th>
-                <Th>Status</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Project</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Course</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Due</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Status</Th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="stagger">
               {rows.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  onClick={() => router.push(`/teaching/projects/${row.id}`)}
+                  className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/60 active:bg-muted"
+                >
                   <Td>
                     <Link
                       href={`/teaching/projects/${row.id}`}
+                      onClick={(event) => event.stopPropagation()}
                       className="font-medium underline hover:text-foreground"
                     >
                       {row.title}
@@ -260,7 +268,7 @@ function Projects() {
                     {row.course_title}
                     {row.batch_code ? ` · ${row.batch_code}` : ''}
                   </Td>
-                  <Td>{row.end_date ?? '—'}</Td>
+                  <Td>{formatDate(row.end_date, NO_DATA)}</Td>
                   <Td>
                     <Badge variant={LIFECYCLE_VARIANT[row.status]}>
                       {LIFECYCLE_LABEL[row.status]}

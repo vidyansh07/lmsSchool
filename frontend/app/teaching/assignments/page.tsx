@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
@@ -20,6 +21,7 @@ import type { Assignment, BatchListRow } from '@/types/api';
 
 /** Set work, and see what has been set. */
 function Assignments() {
+  const router = useRouter();
   const [rows, setRows] = useState<Assignment[]>([]);
   // Work is set from a *batch*, and the course is derived from it. A trainer's
   // authority comes from the batches they teach, so offering them a course they
@@ -110,7 +112,7 @@ function Assignments() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Assignments</h1>
@@ -225,22 +227,27 @@ function Assignments() {
           description="Set your first piece of work with the button above."
         />
       ) : (
-        <TableWrapper>
+        <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
           <Table>
             <thead>
               <tr>
-                <Th>Assignment</Th>
-                <Th>Course</Th>
-                <Th>Due</Th>
-                <Th>Status</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Assignment</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Course</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Due</Th>
+                <Th className="sticky top-0 z-10 bg-muted">Status</Th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="stagger">
               {rows.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  onClick={() => router.push(`/teaching/assignments/${row.id}`)}
+                  className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/60 active:bg-muted"
+                >
                   <Td>
                     <Link
                       href={`/teaching/assignments/${row.id}`}
+                      onClick={(event) => event.stopPropagation()}
                       className="font-medium underline hover:text-foreground"
                     >
                       {row.title}

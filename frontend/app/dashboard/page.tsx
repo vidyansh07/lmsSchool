@@ -207,15 +207,15 @@ export function StudentView({ data }: { data: StudentDashboard }) {
   const showStatusLine = pendingLoaded && !pendingFailed && !performance.isLoading && !performance.error;
 
   return (
-    <div className="space-y-6">
+    <div className="stagger space-y-6">
       {showStatusLine ? (
-        <p aria-live="polite" className="text-sm text-muted-foreground">
+        <p aria-live="polite" className="animate-fade-in text-sm text-muted-foreground">
           {buildStatusLine(pendingTotal, riskCount)}
         </p>
       ) : null}
 
       {data.continue_learning?.last_lesson_id ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <PlayCircle className="size-5 text-primary" aria-hidden="true" />
@@ -240,10 +240,10 @@ export function StudentView({ data }: { data: StudentDashboard }) {
         </Card>
       ) : null}
 
-      <section className="space-y-3">
+      <section className="animate-rise-in space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">Next up</h2>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
+        <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card className="min-w-0 animate-rise-in">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ClipboardList className="size-5 text-primary" aria-hidden="true" />
@@ -265,7 +265,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="animate-rise-in">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CalendarClock className="size-5 text-primary" aria-hidden="true" />
@@ -283,7 +283,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
         </div>
       </section>
 
-      <section className="space-y-3">
+      <section className="animate-rise-in space-y-3">
         <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
           <TrendingUp className="size-5 text-primary" aria-hidden="true" />
           How you&apos;re doing
@@ -296,7 +296,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
         />
       </section>
 
-      <section className="space-y-3">
+      <section className="animate-rise-in space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">My courses</h2>
         {data.courses.length === 0 ? (
           <EmptyState
@@ -309,9 +309,9 @@ export function StudentView({ data }: { data: StudentDashboard }) {
             }
           />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2">
             {data.courses.map((course) => (
-              <Card key={course.enrollment_id}>
+              <Card key={course.enrollment_id} className="animate-rise-in">
                 <CardHeader className="gap-1">
                   <CardTitle>
                     <Link
@@ -350,10 +350,10 @@ export function StudentView({ data }: { data: StudentDashboard }) {
         )}
       </section>
 
-      <section className="space-y-3">
+      <section className="animate-rise-in space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">More for you</h2>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Card>
+        <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="animate-rise-in">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <GraduationCap className="size-5 text-primary" aria-hidden="true" />
@@ -383,7 +383,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="animate-rise-in">
             <CardHeader>
               <CardTitle>Certificates</CardTitle>
             </CardHeader>
@@ -397,7 +397,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="animate-rise-in">
             <CardHeader>
               <CardTitle>Feedback</CardTitle>
               <CardDescription>From your trainers and managers.</CardDescription>
@@ -412,7 +412,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="animate-rise-in">
             <CardHeader>
               <CardTitle>Notifications</CardTitle>
             </CardHeader>
@@ -435,7 +435,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
 function TrainerView({ data }: { data: TrainerDashboard }) {
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="gap-1">
             <CardDescription>Assigned batches</CardDescription>
@@ -456,7 +456,7 @@ function TrainerView({ data }: { data: TrainerDashboard }) {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -490,7 +490,7 @@ function TrainerView({ data }: { data: TrainerDashboard }) {
             description="An administrator assigns the batches you teach."
           />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {data.batches.map((batch) => (
               <Card key={batch.id}>
                 <CardHeader className="gap-1">
@@ -595,7 +595,7 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
+      <div className="animate-fade-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">
           Welcome back, {user?.first_name || user?.email}
         </h1>

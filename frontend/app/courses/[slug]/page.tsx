@@ -106,7 +106,7 @@ function CourseDetailContent({ slug }: { slug: string }) {
 
   return (
     <div className="space-y-8">
-      <header className="space-y-4">
+      <header className="animate-rise-in space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <Badge>{course.category_name}</Badge>
           <Badge>{DIFFICULTY_LABEL[course.difficulty]}</Badge>
@@ -153,7 +153,7 @@ function CourseDetailContent({ slug }: { slug: string }) {
         </div>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-6">
           {course.description ? (
             <section className="space-y-2">
@@ -172,9 +172,9 @@ function CourseDetailContent({ slug }: { slug: string }) {
                 description="This course has no published modules."
               />
             ) : (
-              <div className="space-y-3">
+              <div className="stagger space-y-3">
                 {course.modules.map((module) => (
-                  <Card key={module.id}>
+                  <Card key={module.id} className="animate-rise-in">
                     <CardHeader className="gap-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <CardTitle>{module.title}</CardTitle>
@@ -208,9 +208,9 @@ function CourseDetailContent({ slug }: { slug: string }) {
           </section>
         </div>
 
-        <aside className="space-y-4">
+        <aside className="stagger space-y-4">
           {course.learning_objectives.length > 0 ? (
-            <Card>
+            <Card className="animate-rise-in">
               <CardHeader>
                 <CardTitle>What you will learn</CardTitle>
               </CardHeader>
@@ -231,7 +231,7 @@ function CourseDetailContent({ slug }: { slug: string }) {
           ) : null}
 
           {course.prerequisites.length > 0 ? (
-            <Card>
+            <Card className="animate-rise-in">
               <CardHeader>
                 <CardTitle>Prerequisites</CardTitle>
               </CardHeader>
@@ -246,7 +246,7 @@ function CourseDetailContent({ slug }: { slug: string }) {
           ) : null}
 
           {course.instructors.length > 0 ? (
-            <Card>
+            <Card className="animate-rise-in">
               <CardHeader>
                 <CardTitle>Instructors</CardTitle>
               </CardHeader>

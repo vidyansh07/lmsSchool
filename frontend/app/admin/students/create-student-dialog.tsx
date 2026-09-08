@@ -54,7 +54,7 @@ export function CreateStudentDialog({
   }
 
   return (
-    <Card>
+    <Card className="animate-rise-in">
       <CardHeader>
         <CardTitle>Add a student</CardTitle>
         <CardDescription>

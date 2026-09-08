@@ -114,7 +114,7 @@ export function TrainerDetail({ trainerId }: { trainerId: string }) {
   const { trainer, batches, students, submission, completion, outcomes, pending, reviews, student_feedback } = overview;
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <Link href="/manage/trainers" className="inline-block text-sm text-muted-foreground hover:text-foreground">
         ← All trainers
       </Link>
@@ -209,9 +209,13 @@ export function TrainerDetail({ trainerId }: { trainerId: string }) {
           {reviews.length === 0 ? (
             <EmptyState title="No reviews yet" description="Nobody has recorded a review for this trainer." />
           ) : (
-            <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
+            <ul className="stagger divide-y divide-border rounded-[var(--radius-card)] border border-border">
               {reviews.map((review) => (
-                <li key={review.id} className="space-y-1 px-4 py-3" data-testid="trainer-review">
+                <li
+                  key={review.id}
+                  className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-muted/40"
+                  data-testid="trainer-review"
+                >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-medium">
                       {formatDate(review.period_start)} – {formatDate(review.period_end)}
@@ -239,9 +243,13 @@ export function TrainerDetail({ trainerId }: { trainerId: string }) {
           {student_feedback.length === 0 ? (
             <EmptyState title="No feedback yet" description="No student has left feedback for this trainer." />
           ) : (
-            <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
+            <ul className="stagger divide-y divide-border rounded-[var(--radius-card)] border border-border">
               {student_feedback.map((item) => (
-                <li key={item.id} className="space-y-1 px-4 py-3" data-testid="student-feedback">
+                <li
+                  key={item.id}
+                  className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-muted/40"
+                  data-testid="student-feedback"
+                >
                   <p className="text-sm">{fallback(item.body, NO_DATA)}</p>
                   <p className="text-xs text-muted-foreground">
                     {fallback(item.batch_code)} · {formatDate(item.created_at)}

@@ -4,10 +4,10 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 
+import { AuthSplitShell } from '@/components/auth/auth-split-shell';
 import { LoadingState } from '@/components/states';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiError } from '@/lib/api';
 import { confirmEmailVerification } from '@/lib/auth';
 
@@ -72,17 +72,13 @@ function VerifyEmail() {
 
 export default function VerifyEmailPage() {
   return (
-    <div className="mx-auto max-w-md">
-      <Card>
-        <CardHeader>
-          <CardTitle>Email verification</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Suspense fallback={<LoadingState label="Loading…" rows={2} />}>
-            <VerifyEmail />
-          </Suspense>
-        </CardContent>
-      </Card>
-    </div>
+    <AuthSplitShell heading="Verify your email" tagline="One more step to secure your account.">
+      <div className="mb-6 space-y-1.5">
+        <h2 className="text-xl font-semibold tracking-tight">Email verification</h2>
+      </div>
+      <Suspense fallback={<LoadingState label="Loading…" rows={2} />}>
+        <VerifyEmail />
+      </Suspense>
+    </AuthSplitShell>
   );
 }

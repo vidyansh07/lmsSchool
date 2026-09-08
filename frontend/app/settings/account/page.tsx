@@ -33,13 +33,13 @@ function AccountSettings() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
+    <div className="stagger space-y-6">
+      <div className="animate-rise-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
         <p className="text-sm text-muted-foreground">Your sign-in details and account status.</p>
       </div>
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Account details</CardTitle>
           <CardDescription>
@@ -79,7 +79,7 @@ function AccountSettings() {
       </Card>
 
       {!user?.is_email_verified ? (
-        <Card>
+        <Card className="animate-rise-in">
           <CardHeader>
             <CardTitle>Verify your email address</CardTitle>
             <CardDescription>
@@ -95,7 +95,7 @@ function AccountSettings() {
         </Card>
       ) : null}
 
-      <Card>
+      <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Security</CardTitle>
           <CardDescription>Password and active sessions.</CardDescription>

@@ -99,7 +99,7 @@ export function TrainerProfileForm() {
   if (!profile) return null;
 
   return (
-    <Card>
+    <Card className="animate-rise-in">
       <CardHeader>
         <CardTitle>Trainer profile</CardTitle>
         <CardDescription>
@@ -121,7 +121,7 @@ export function TrainerProfileForm() {
           {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
           {saved ? <Alert variant="success">Your profile was saved.</Alert> : null}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Professional title" htmlFor="title" error={errors.professional_title}>
               <Input value={title} onChange={(event) => setTitle(event.target.value)} />
             </Field>
@@ -178,7 +178,7 @@ export function TrainerProfileForm() {
             {errors.professional_links ? (
               <Alert variant="error">{errors.professional_links}</Alert>
             ) : null}
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {LINK_KEYS.map((key) => (
                 <Field
                   key={key}

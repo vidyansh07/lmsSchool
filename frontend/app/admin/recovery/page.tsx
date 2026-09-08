@@ -68,7 +68,7 @@ export function RecoveryBin() {
 
   if (selected) {
     return (
-      <div className="space-y-6">
+      <div className="animate-rise-in space-y-6">
         <Button type="button" variant="ghost" size="sm" className="-ml-3" onClick={() => setSelected(null)}>
           <Undo2 className="size-3.5" aria-hidden="true" />
           All kinds
@@ -89,7 +89,7 @@ export function RecoveryBin() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Deleted records</h1>
         <p className="text-sm text-muted-foreground">

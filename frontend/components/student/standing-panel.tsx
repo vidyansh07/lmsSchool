@@ -93,15 +93,20 @@ export function StandingPanel({
 
   return (
     <div className="space-y-4">
-      <DashboardGrid>
-        <KpiTile label="Course progress" value={progress} format={percentFormat} />
-        <KpiTile label="Attendance" value={attendance} format={percentFormat} />
-        <KpiTile label="Assessment average" value={assessment} format={percentFormat} />
-        <KpiTile label="Overall standing" value={overall} format={percentFormat} />
+      <DashboardGrid className="stagger">
+        <KpiTile className="animate-rise-in" label="Course progress" value={progress} format={percentFormat} />
+        <KpiTile className="animate-rise-in" label="Attendance" value={attendance} format={percentFormat} />
+        <KpiTile
+          className="animate-rise-in"
+          label="Assessment average"
+          value={assessment}
+          format={percentFormat}
+        />
+        <KpiTile className="animate-rise-in" label="Overall standing" value={overall} format={percentFormat} />
       </DashboardGrid>
 
       {riskItems.length === 0 ? (
-        <div className="flex items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
+        <div className="animate-fade-in flex items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
           <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
           <p>
             {performance.length === 0
@@ -110,7 +115,7 @@ export function StandingPanel({
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="animate-fade-in space-y-2">
           <p className="flex items-center gap-1.5 text-sm font-medium">
             <AlertTriangle className="size-4 text-warning" aria-hidden="true" />
             Worth a look

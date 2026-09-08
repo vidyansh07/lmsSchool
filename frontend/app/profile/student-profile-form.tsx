@@ -109,7 +109,7 @@ export function StudentProfileForm() {
   if (!profile) return null;
 
   return (
-    <Card>
+    <Card className="animate-rise-in">
       <CardHeader>
         <CardTitle>Student profile</CardTitle>
         <CardDescription>
@@ -133,7 +133,7 @@ export function StudentProfileForm() {
           {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
           {saved ? <Alert variant="success">Your profile was saved.</Alert> : null}
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Date of birth" htmlFor="dob" error={errors.date_of_birth}>
               <Input
                 type="date"
@@ -173,7 +173,7 @@ export function StudentProfileForm() {
 
           <fieldset className="space-y-4">
             <legend className="text-sm font-medium">Address</legend>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Address line 1" htmlFor="address1" error={errors.address_line1}>
                 <Input
                   value={values.address_line1 ?? ''}
@@ -209,7 +209,7 @@ export function StudentProfileForm() {
 
           <fieldset className="space-y-4">
             <legend className="text-sm font-medium">Emergency and guardian contact</legend>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label="Emergency contact name" htmlFor="ec-name" error={errors.emergency_contact_name}>
                 <Input
                   value={values.emergency_contact_name ?? ''}
