@@ -484,6 +484,39 @@ describe('CertificatesPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
     expect(onRetry).toHaveBeenCalledOnce();
   });
+
+  it('shows only the newest few and links to the rest', () => {
+    // A student on their third course can hold dozens of these. Rendering all
+    // of them stretched the dashboard into one six-thousand-pixel column.
+    const many = Array.from({ length: 9 }, (_, index) =>
+      certificate({ id: `cert-${index}`, course_title: `Course ${index}` }),
+    );
+
+    render(<CertificatesPanel certificates={many} />);
+
+    expect(screen.getByText('Course 0')).toBeInTheDocument();
+    expect(screen.queryByText('Course 8')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '5 more certificates' })).toHaveAttribute(
+      'href',
+      '/my-progress',
+    );
+  });
+
+  it('counts the one hidden certificate in the singular', () => {
+    const five = Array.from({ length: 5 }, (_, index) =>
+      certificate({ id: `cert-${index}`, course_title: `Course ${index}` }),
+    );
+
+    render(<CertificatesPanel certificates={five} />);
+
+    expect(screen.getByRole('link', { name: 'One more certificate' })).toBeInTheDocument();
+  });
+
+  it('links to nothing when they all fit', () => {
+    render(<CertificatesPanel certificates={[certificate()]} />);
+
+    expect(screen.queryByRole('link', { name: /more certificate/i })).not.toBeInTheDocument();
+  });
 });
 
 // --- FeedbackPanel -------------------------------------------------------
