@@ -6,10 +6,10 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   return (
     <div
       className={cn(
-        // `surface`, not `background`: a white card on a faintly grey page
-        // separates itself by its own lightness, so the border can stay quiet
-        // instead of doing the work of a box.
-        'rounded-[var(--radius-card)] border border-border bg-surface',
+        // A white card on a white page: the hairline draws the edge and the
+        // shadow lifts it. Neither is heavy on its own, and together they do
+        // the job a grey page used to.
+        'rounded-[var(--radius-card)] border border-border bg-surface shadow-[var(--shadow-card)]',
         className,
       )}
       {...props}

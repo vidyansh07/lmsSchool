@@ -7,19 +7,29 @@
  * Tailwind theme variables, so a brand change is a single edit rather than a
  * sweep through every component.
  *
- * The palette is Grras's own
- * --------------------------
- * Taken from grras.com rather than invented: the orange `#EF7220` that carries
- * the site's calls to action, on the slate ink `#1F2937` it uses for text, set
- * in Inter. Measured off the live site, so the ERP and the public site read as
- * one organisation.
+ * The palette
+ * -----------
+ * Measured off the admin reference the owner supplied, not invented: a white
+ * page, navy for everything a person acts on, ink-black text, and six tinted
+ * accents for the figures on a dashboard. The Grras orange (`#EF7220`, from
+ * grras.com) stays exactly where the owner asked for it — on the logo — as
+ * `--color-brand`. It is not an action colour here; navy is.
  *
- * The brand orange itself is 2.96:1 on white — below AA for anything but large
- * decorative blocks. So it lives in `--color-brand`, used for fills a person
- * looks *at*, and `--color-primary` is the same hue darkened until white text
- * on it clears 4.5:1. Two tokens because they do two jobs; using the bright one
- * for a button label would make the label unreadable, and using the dark one
- * for the logo would make it look like a different company.
+ * Every accent was checked before it was written down. Three of the six
+ * label colours in the reference — the amber, the rose and the green — sit
+ * between 3.4:1 and 4.2:1 on their own tints, which is below AA for the small
+ * text they carry. Each is darkened here until it clears 4.5:1 on the darker
+ * of its two backgrounds; the hue is untouched, so the card still reads as the
+ * same colour, it is simply legible.
+ *
+ * White on white, deliberately
+ * ----------------------------
+ * The page and its cards are both pure white, which the owner asked for. That
+ * means a card cannot separate itself by being lighter than the page, so it
+ * does it the other way: a hairline border and a soft shadow (`--shadow-card`),
+ * which is how the reference does it too. `tests/unit/theme-contrast.test.ts`
+ * checks the surface is never *darker* than the page, which is the version of
+ * the separation rule that still holds.
  *
  * Light only, deliberately
  * ------------------------
@@ -28,44 +38,84 @@
  * product looked like. It is light everywhere, regardless of the operating
  * system, so a demonstration is the same demonstration for everyone.
  *
- * Built as a light palette rather than an inverted dark one. The difference
- * shows in two places: `background` is a faint warm grey and `surface` is pure
- * white, so cards and tables lift off the page without needing a heavy border;
- * and the accent colours are darkened to carry text, because a colour that
- * reads well as a large block is usually illegible as small text on white.
- *
  * Every foreground/background pair used by the interface is measured against
  * WCAG AA in `tests/unit/theme-contrast.test.ts`. That test parses this file,
  * so a token changed here without checking it fails there.
  */
 @theme {
-  /* The page, and the surfaces that sit on it. Warmed a few degrees toward the
-     brand hue so white cards read as deliberate rather than as the default. */
-  --color-background: oklch(98.6% 0.004 60);
+  /* The page, and the surfaces that sit on it. */
+  --color-background: oklch(100% 0 0);
   --color-surface: oklch(100% 0 0);
-  --color-foreground: oklch(27.8% 0.03 256.8);
-  --color-muted: oklch(96.4% 0.007 60);
-  --color-muted-foreground: oklch(46.5% 0.021 258);
-  --color-border: oklch(89.5% 0.01 60);
+  --color-foreground: oklch(18.4% 0.028 267.6);
+  --color-muted: oklch(98% 0.004 236.5);
+  --color-muted-foreground: oklch(52% 0.036 260);
+  --color-border: oklch(92.5% 0.01 261.8);
 
-  /* The action colour: Grras orange, darkened until white text on it is legible.
-     Also the focus ring, which is why it is checked as a boundary colour too. */
-  --color-primary: oklch(57% 0.18 47.9);
-  --color-primary-foreground: oklch(99.5% 0.01 47.9);
-  --color-accent: oklch(96% 0.03 47.9);
+  /* The action colour: navy. Buttons, links, the focus ring, the selected row.
+     14.5:1 against white, so it is legible at any weight and any size. */
+  --color-primary: oklch(28.4% 0.086 255.4);
+  --color-primary-foreground: oklch(99.5% 0.005 255);
 
-  /* The brand orange exactly as grras.com uses it: #EF7220. Large fills, the
-     logo lockup, a chart series — never small text, and never a button label.
-     `--color-primary` above is the legible sibling for anything with words on it. */
+  /* The selected-state wash: the sidebar's active item, a chosen row. Pale
+     enough that navy and ink text stay AA on it, which the test checks. */
+  --color-accent: oklch(96.6% 0.017 250.8);
+
+  /* The brand orange exactly as grras.com uses it: #EF7220. The logo, and
+     nothing else in the shell — it is 2.96:1 on white, a fill to look at,
+     never small text and never a button label. */
   --color-brand: oklch(68.9% 0.176 47.9);
 
-  /* Semantic colours, darkened enough to carry small text on white. Hues are
-     kept apart from the brand so "orange" never has to mean both "this is the
-     action" and "this is a warning". */
+  /* Semantic colours, dark enough to carry small text on white. Kept apart
+     from every accent so "red" never has to mean both "this failed" and "this
+     card happens to be pink". */
   --color-destructive: oklch(50.5% 0.19 25);
   --color-destructive-foreground: oklch(99% 0.005 25);
   --color-warning: oklch(52% 0.13 75);
-  --color-success: oklch(48.5% 0.13 155);
+  --color-success: oklch(51.7% 0.123 158.4);
+
+  /* Six accents for the dashboard tiles and the coloured pills in a table.
+     Each is three tokens: the colour itself (legible as text), a `tint` for
+     a whole card, and a `soft` for the icon disc or pill that sits on it. */
+  --color-amber: oklch(54.9% 0.159 50.6);
+  --color-amber-tint: oklch(98.4% 0.027 95.3);
+  --color-amber-soft: oklch(95.5% 0.071 96.1);
+
+  --color-violet: oklch(48.7% 0.267 288.8);
+  --color-violet-tint: oklch(95.9% 0.022 294.6);
+  --color-violet-soft: oklch(92.6% 0.038 295.5);
+
+  --color-rose: oklch(53.1% 0.223 19.8);
+  --color-rose-tint: oklch(96.1% 0.02 9.8);
+  --color-rose-soft: oklch(92.6% 0.037 11.6);
+
+  --color-blue: oklch(52.7% 0.144 249.6);
+  --color-blue-tint: oklch(97% 0.016 239.1);
+  --color-blue-soft: oklch(94.1% 0.031 237.6);
+
+  --color-green: oklch(51.7% 0.123 158.4);
+  --color-green-tint: oklch(97.6% 0.026 163.2);
+  --color-green-soft: oklch(94.3% 0.063 161.3);
+
+  --color-pink: oklch(54.4% 0.221 3.8);
+  --color-pink-tint: oklch(96.2% 0.018 342);
+  --color-pink-soft: oklch(93.3% 0.036 341.4);
+
+  /* Three more for pills, where a table can need more distinct categories
+     than a dashboard needs tiles. */
+  --color-indigo: oklch(40.1% 0.227 275);
+  --color-indigo-soft: oklch(91.1% 0.043 275.4);
+
+  --color-cyan: oklch(46.1% 0.084 227.9);
+  --color-cyan-soft: oklch(94.9% 0.052 203.7);
+
+  --color-teal: oklch(45.5% 0.075 183.6);
+  --color-teal-soft: oklch(94.5% 0.061 178.2);
+
+  /* Chart series. The second is the reference's cyan — 2.8:1 on white, so it
+     is a bar to look at and never a label. */
+  --color-chart-1: oklch(31.7% 0.099 255.8);
+  --color-chart-2: oklch(67.8% 0.119 219.8);
+  --color-chart-3: oklch(48.7% 0.267 288.8);
 
   /* Type. Inter is what grras.com uses; the numeric face is separated out
      because data columns need tabular figures — proportional digits make a
@@ -84,7 +134,13 @@
   /* Dense by design: this is an operations tool somebody reads all day, not a
      marketing page. A 14px base with a tight scale fits a batch roster on one
      screen, which is the difference between scanning and scrolling. */
-  --radius-card: 0.625rem;
+  --radius-card: 0.875rem;
+
+  /* A white card on a white page exists because of this. Two layers: a
+     hairline that draws the edge, and a soft, low, wide shadow that lifts it
+     without the "floating panel" look of a hard drop shadow. */
+  --shadow-card: 0 1px 2px rgba(13, 18, 31, 0.04), 0 4px 16px -8px rgba(13, 18, 31, 0.08);
+  --shadow-card-hover: 0 1px 2px rgba(13, 18, 31, 0.05), 0 12px 32px -12px rgba(13, 18, 31, 0.16);
 
   /* Motion. One vocabulary, so everything in the product moves the same way.
      Exits are faster than entrances — an interface that lingers on the way out

@@ -11,7 +11,10 @@ import { cn } from '@/lib/utils';
 export function TableWrapper({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('w-full overflow-x-auto rounded-[var(--radius-card)] border border-border', className)}
+      className={cn(
+        'w-full overflow-x-auto rounded-[var(--radius-card)] border border-border bg-surface shadow-[var(--shadow-card)]',
+        className,
+      )}
       {...props}
     />
   );
@@ -40,7 +43,10 @@ export function Th({
       scope="col"
       aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : undefined}
       className={cn(
-        'border-b border-border bg-muted/60 px-3 py-2 text-left font-medium whitespace-nowrap',
+        // Small caps and tracking, as in the reference: a header that is
+        // visibly a different *kind* of text from the rows needs no heavy
+        // fill to separate itself.
+        'border-b border-border bg-surface px-4 py-3 text-left text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground whitespace-nowrap',
         className,
       )}
       {...props}
@@ -49,7 +55,11 @@ export function Th({
         <button
           type="button"
           onClick={onSort}
-          className="inline-flex items-center gap-1 hover:text-primary"
+          // `uppercase` again, on purpose: Tailwind's preflight resets
+          // `text-transform` on buttons, so the header's own small-caps do not
+          // reach a sortable heading and it came out in sentence case beside
+          // its uppercase neighbours.
+          className="inline-flex items-center gap-1 uppercase tracking-[0.08em] hover:text-primary"
         >
           {children}
           <span aria-hidden="true" className="text-xs">
@@ -63,6 +73,20 @@ export function Th({
   );
 }
 
+/** A row that lights on hover, with the transition the rest of the product
+ *  uses. Opt-in via the primitive so a static table stays static. */
+export function Tr({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
+  return (
+    <tr
+      className={cn(
+        'transition-colors duration-[var(--duration-quick)] hover:bg-muted',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 export function Td({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn('border-b border-border px-3 py-2 align-middle', className)} {...props} />;
+  return <td className={cn('border-b border-border px-4 py-3 align-middle', className)} {...props} />;
 }

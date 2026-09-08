@@ -61,6 +61,7 @@ export function ManagerAttentionStrip() {
   const figures = [
     {
       label: 'Active batches',
+      accent: 'blue' as const,
       value: data.batches.active,
       icon: Layers,
       hint: 'Running now',
@@ -68,6 +69,7 @@ export function ManagerAttentionStrip() {
     },
     {
       label: 'Batches behind schedule',
+      accent: 'amber' as const,
       value: data.batches.behind_schedule,
       icon: CalendarClock,
       hint: 'Behind their planned session',
@@ -75,6 +77,7 @@ export function ManagerAttentionStrip() {
     },
     {
       label: 'Students at risk',
+      accent: 'rose' as const,
       value: data.students.at_risk,
       icon: AlertTriangle,
       hint: 'Flagged by the risk engine',
@@ -82,6 +85,7 @@ export function ManagerAttentionStrip() {
     },
     {
       label: 'Trainers with overdue DSR',
+      accent: 'violet' as const,
       value: data.trainers.with_overdue_dsr,
       icon: ClipboardX,
       hint: 'No report filed for a past class',
@@ -100,6 +104,7 @@ export function ManagerAttentionStrip() {
               icon={figure.icon}
               hint={figure.hint}
               deltaIntent={figure.deltaIntent}
+              accent={figure.accent}
             />
           </BentoTile>
         ))}

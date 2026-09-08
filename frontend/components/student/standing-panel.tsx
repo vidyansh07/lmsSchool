@@ -93,10 +93,10 @@ export function StandingPanel({
   // still what the rest of the app uses for a bare figure; this screen is the
   // one a student looks at every day, and it earns the extra weight.
   const tiles = [
-    { label: 'Course progress', value: progress, icon: TrendingUp },
-    { label: 'Attendance', value: attendance, icon: CalendarCheck },
-    { label: 'Assessment average', value: assessment, icon: GaugeCircle },
-    { label: 'Overall standing', value: overall, icon: Trophy },
+    { label: 'Course progress', value: progress, icon: TrendingUp, accent: 'blue' as const },
+    { label: 'Attendance', value: attendance, icon: CalendarCheck, accent: 'green' as const },
+    { label: 'Assessment average', value: assessment, icon: GaugeCircle, accent: 'violet' as const },
+    { label: 'Overall standing', value: overall, icon: Trophy, accent: 'amber' as const },
   ] as const;
 
   return (
@@ -108,6 +108,7 @@ export function StandingPanel({
               label={tile.label}
               value={tile.value}
               icon={tile.icon}
+              accent={tile.accent}
               suffix="%"
             />
           </BentoTile>

@@ -69,6 +69,24 @@ const PAIRS: [string, string, number, string][] = [
   ['destructive', 'surface', 4.5, 'danger text'],
   ['warning', 'surface', 4.5, 'warning text'],
   ['success', 'surface', 4.5, 'success text'],
+  // The selected-state wash carries three kinds of text: the active nav item
+  // in navy, an ordinary label, and a secondary line.
+  ['primary', 'accent', 4.5, 'the active navigation item'],
+  ['foreground', 'accent', 4.5, 'text on a selected row'],
+  ['muted-foreground', 'accent', 4.5, 'secondary text on a selected row'],
+  // Each accent is small text on its own tint (a dashboard tile) and on its
+  // soft (a pill, an icon disc). The reference these came from fails three of
+  // these; the tokens were darkened until they pass.
+  ...(['amber', 'violet', 'rose', 'blue', 'green', 'pink'] as const).flatMap(
+    (accent): [string, string, number, string][] => [
+      [accent, `${accent}-tint`, 4.5, `${accent} label on its tile`],
+      [accent, `${accent}-soft`, 4.5, `${accent} label in its pill`],
+      [accent, 'surface', 4.5, `${accent} as small text on a card`],
+    ],
+  ),
+  ...(['indigo', 'cyan', 'teal'] as const).flatMap((accent): [string, string, number, string][] => [
+    [accent, `${accent}-soft`, 4.5, `${accent} label in its pill`],
+  ]),
 ];
 
 describe('theme contrast', () => {
@@ -76,11 +94,19 @@ describe('theme contrast', () => {
     expect(contrast(foreground, background)).toBeGreaterThanOrEqual(minimum);
   });
 
-  it('the page and its surfaces are distinguishable', () => {
-    // Not a legibility rule — a separation rule. If a card were the same colour
-    // as the page it would need a heavy border to exist at all, which is the
-    // look this palette was chosen to avoid.
-    expect(luminance('surface')).toBeGreaterThan(luminance('background'));
+  it('a surface is never darker than the page it sits on', () => {
+    // The page and its cards are both white, by request, so a card separates
+    // itself with a hairline border and `--shadow-card` rather than by being
+    // lighter. What must still never happen is the inverse: a card darker than
+    // the page reads as a hole in it.
+    expect(luminance('surface')).toBeGreaterThanOrEqual(luminance('background'));
+  });
+
+  it('the brand orange is kept off text', () => {
+    // 2.96:1 on white — a fill for the logo, and the reason `--color-primary`
+    // is a different token. Pinned so nobody promotes it to a button colour
+    // because it "looks more on-brand".
+    expect(contrast('brand', 'surface')).toBeLessThan(4.5);
   });
 
   it('is light only, with no operating-system switch', () => {

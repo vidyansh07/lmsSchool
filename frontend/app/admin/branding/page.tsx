@@ -3,12 +3,9 @@
 /**
  * Where an institution chooses how the product looks.
  *
- * One colour, not two. The interface needs a legible sibling for buttons and
- * links — the brand orange is 2.96:1 against white and would make a button
- * label unreadable — but asking for both would mean somebody has to understand
- * contrast ratios to fill in a form. It is derived instead, so the person picks
- * the colour their institution is known by and cannot produce an interface
- * nobody can read.
+ * One colour, and one job for it: the logo mark. Buttons and links keep the
+ * navy of the design whatever an institution picks here — see `lib/brand.ts`
+ * for why a colour chosen for a logo must not become a button colour.
  *
  * The preview applies the colour to the live document rather than to a swatch,
  * because a colour in a small square tells you almost nothing about what a
@@ -122,8 +119,8 @@ function BrandingSettings() {
         <CardHeader>
           <CardTitle>Brand colour</CardTitle>
           <CardDescription>
-            Used for buttons, links and highlights. A darker shade is worked out automatically for
-            anything with text on it, so whatever you pick stays readable.
+            Used for the logo mark in the corner of every screen. Buttons, links and highlights
+            keep the navy of the design, so whatever you pick here stays readable everywhere else.
           </CardDescription>
         </CardHeader>
         <CardContent>

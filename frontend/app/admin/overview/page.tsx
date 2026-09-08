@@ -77,6 +77,7 @@ function Overview() {
   const headline = [
     {
       label: 'Active students',
+      accent: 'blue' as const,
       value: data.active_students,
       icon: Users,
       href: '/admin/students',
@@ -84,6 +85,7 @@ function Overview() {
     },
     {
       label: 'Active trainers',
+      accent: 'violet' as const,
       value: data.active_trainers,
       icon: GraduationCap,
       href: '/admin/trainers',
@@ -91,6 +93,7 @@ function Overview() {
     },
     {
       label: 'Published courses',
+      accent: 'amber' as const,
       value: data.published_courses,
       icon: BookOpen,
       href: '/admin/courses',
@@ -98,6 +101,7 @@ function Overview() {
     },
     {
       label: 'Active batches',
+      accent: 'green' as const,
       value: data.active_batches,
       icon: Layers,
       href: '/admin/batches',
@@ -105,6 +109,7 @@ function Overview() {
     },
     {
       label: 'Awaiting approval',
+      accent: 'rose' as const,
       value: data.awaiting_completion_approval,
       icon: ClipboardCheck,
       href: '/admin/completions',
@@ -112,6 +117,7 @@ function Overview() {
     },
     {
       label: 'Certificates issued',
+      accent: 'pink' as const,
       value: data.certificates_issued,
       icon: Award,
       href: '/admin/certificates',
@@ -148,6 +154,7 @@ function Overview() {
                 icon={figure.icon}
                 hint={figure.hint}
                 href={figure.href}
+                accent={figure.accent}
                 trend={figure.label === 'Active students' ? attendanceSeries : undefined}
               />
             </div>

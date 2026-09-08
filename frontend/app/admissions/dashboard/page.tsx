@@ -41,7 +41,7 @@ import { BatchWatchlist } from '@/components/counsellor/batches-panel';
 import { NotYetEnrolledPanel } from '@/components/counsellor/not-yet-enrolled-panel';
 import { PendingConfirmationsPanel } from '@/components/counsellor/pending-confirmations-panel';
 import { RecentActivityPanel } from '@/components/counsellor/recent-activity-panel';
-import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
+import { BentoGrid, BentoTile, StatCard, type StatAccent } from '@/components/ui/motion';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { RequireAuth } from '@/components/require-auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -154,6 +154,7 @@ function KpiTileSection({
   icon,
   hint,
   href,
+  accent,
 }: {
   label: string;
   value: number;
@@ -165,6 +166,7 @@ function KpiTileSection({
   icon?: LucideIcon;
   hint?: string;
   href?: string;
+  accent?: StatAccent;
 }) {
   if (isLoading) {
     return (
@@ -184,6 +186,7 @@ function KpiTileSection({
       icon={icon}
       hint={hint}
       href={href}
+      accent={accent}
     />
   );
 }
@@ -257,6 +260,7 @@ export function AdmissionsDashboardContent() {
         <BentoTile span={3} index={0}>
           <KpiTileSection
             label="Registered today"
+            accent="blue"
             value={registeredToday}
             isLoading={recentStudents.isLoading}
             failed={Boolean(recentStudents.error)}
@@ -268,6 +272,7 @@ export function AdmissionsDashboardContent() {
         <BentoTile span={3} index={1}>
           <KpiTileSection
             label="Registered this week"
+            accent="violet"
             value={registeredThisWeek}
             isLoading={recentStudents.isLoading}
             failed={Boolean(recentStudents.error)}
@@ -279,6 +284,7 @@ export function AdmissionsDashboardContent() {
         <BentoTile span={3} index={2}>
           <KpiTileSection
             label="Pending confirmation"
+            accent="amber"
             value={pending.data.count}
             isLoading={pending.isLoading}
             failed={Boolean(pending.error)}
@@ -289,6 +295,7 @@ export function AdmissionsDashboardContent() {
         <BentoTile span={3} index={3}>
           <KpiTileSection
             label="Batches starting soon"
+            accent="green"
             value={startingSoonCount}
             isLoading={batches.isLoading}
             failed={Boolean(batches.error)}

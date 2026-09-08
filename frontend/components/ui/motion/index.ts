@@ -16,5 +16,5 @@ export { Reveal } from './reveal';
 export { Sparkline } from './sparkline';
 export { SpotlightCard } from './spotlight-card';
 export { StatCard } from './stat-card';
-export type { StatCardProps } from './stat-card';
+export type { StatAccent, StatCardProps } from './stat-card';
 export { useReducedMotion } from './use-reduced-motion';

@@ -1,5 +1,7 @@
 'use client';
 
+import { Eye } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
@@ -8,10 +10,12 @@ import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge, categoryVariant } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/input';
-import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
+import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
+import { Tooltip } from '@/components/ui/tooltip';
 import { useList } from '@/hooks/use-list';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
@@ -135,34 +139,56 @@ function StudentsTable() {
                     active={sortField === 'student_id'}
                     direction={sortDirection}
                     onSort={() => list.toggleSort('student_id')}
-                    className="sticky top-0 z-10 bg-muted"
+                    className="sticky top-0 z-10 bg-surface"
                   >
-                    Student ID
+                    ID
                   </Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Name</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Email</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">City</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Qualification</Th>
+                  <Th className="sticky top-0 z-10 bg-surface">Student</Th>
+                  <Th className="sticky top-0 z-10 bg-surface">City</Th>
+                  <Th className="sticky top-0 z-10 bg-surface">Qualification</Th>
                   <Th
                     sortable
                     active={sortField === 'fee_status'}
                     direction={sortDirection}
                     onSort={() => list.toggleSort('fee_status')}
-                    className="sticky top-0 z-10 bg-muted"
+                    className="sticky top-0 z-10 bg-surface"
                   >
                     Fee status
                   </Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Account</Th>
+                  <Th className="sticky top-0 z-10 bg-surface">Account</Th>
+                  <Th className="sticky top-0 z-10 bg-surface text-right">Actions</Th>
                 </tr>
               </thead>
               <tbody className="stagger">
                 {list.data?.results.map((row) => (
-                  <tr key={row.id} className="animate-fade-in transition-colors hover:bg-muted/40">
-                    <Td className="font-mono text-xs">{row.student_id}</Td>
-                    <Td className="font-medium">{row.full_name || '—'}</Td>
-                    <Td>{row.email}</Td>
+                  <Tr key={row.id} className="animate-fade-in">
+                    <Td className="font-mono text-xs font-semibold text-foreground">{row.student_id}</Td>
+                    {/* Name and email in one cell, as the reference does it: the
+                        two are one identity, and a column each spent a fifth of
+                        the table saying the same thing twice. */}
+                    <Td>
+                      <div className="flex items-center gap-3">
+                        <Avatar size="sm" className="bg-accent">
+                          <AvatarFallback className="text-primary">
+                            {(row.full_name || row.email).slice(0, 1)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 leading-tight">
+                          <p className="truncate font-semibold text-foreground">{row.full_name || '—'}</p>
+                          <p className="truncate text-xs text-muted-foreground">{row.email}</p>
+                        </div>
+                      </div>
+                    </Td>
                     <Td>{row.city || '—'}</Td>
-                    <Td>{row.qualification ? QUALIFICATION_LABEL[row.qualification] : '—'}</Td>
+                    <Td>
+                      {row.qualification ? (
+                        <Badge variant={categoryVariant(row.qualification)}>
+                          {QUALIFICATION_LABEL[row.qualification]}
+                        </Badge>
+                      ) : (
+                        '—'
+                      )}
+                    </Td>
                     <Td>
                       {can(Capability.studentSetFeeStatus) ? (
                         <Select
@@ -186,11 +212,20 @@ function StudentsTable() {
                       )}
                     </Td>
                     <Td>
-                      <Badge variant={row.is_active ? 'success' : 'error'}>
+                      <Badge variant={row.is_active ? 'success' : 'neutral'}>
                         {row.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </Td>
-                  </tr>
+                    <Td className="text-right">
+                      <Tooltip content="Open the student's record">
+                        <Button asChild variant="ghost" size="sm" className="size-8 p-0 text-muted-foreground">
+                          <Link href={`/admissions/${row.id}`} aria-label={`Open ${row.full_name || row.email}`}>
+                            <Eye className="size-4" aria-hidden="true" />
+                          </Link>
+                        </Button>
+                      </Tooltip>
+                    </Td>
+                  </Tr>
                 ))}
               </tbody>
             </Table>

@@ -1,3 +1,39 @@
+import type { LucideIcon } from 'lucide-react';
+import {
+  Award,
+  BarChart3,
+  Bell,
+  BookOpen,
+  BookOpenCheck,
+  CalendarCheck,
+  CalendarDays,
+  ClipboardCheck,
+  ClipboardList,
+  FileSpreadsheet,
+  FileText,
+  FolderKanban,
+  GraduationCap,
+  LayoutDashboard,
+  Layers,
+  LibraryBig,
+  ListChecks,
+  Megaphone,
+  MessagesSquare,
+  Palette,
+  PenLine,
+  Repeat,
+  ScrollText,
+  Settings2,
+  Sparkles,
+  Trash2,
+  TrendingUp,
+  UserCircle2,
+  UserPlus,
+  Users,
+  UsersRound,
+  Workflow,
+} from 'lucide-react';
+
 import { Capability } from '@/lib/capabilities';
 
 /**
@@ -16,6 +52,10 @@ import { Capability } from '@/lib/capabilities';
 export interface NavItem {
   href: string;
   label: string;
+  /** Drawn beside the label. Every item has one: a list where some links
+   *  have icons and some do not reads as half-finished, and the icon is what
+   *  a person scanning thirty links actually recognises. */
+  icon: LucideIcon;
   capability?: string;
   /** Show to these roles as well, whose rights come from assignment rather than
    *  from a platform-wide capability. */
@@ -38,37 +78,38 @@ export interface NavGroup {
  * them to sign in.
  */
 export const STUDENT_NAV: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', roles: ['student'] },
-  { href: '/my-learning', label: 'My learning', roles: ['student'] },
-  { href: '/courses', label: 'Courses' },
-  { href: '/my-batches', label: 'My batches', roles: ['student'] },
-  { href: '/my-assignments', label: 'My assignments', roles: ['student'] },
-  { href: '/my-projects', label: 'My projects', roles: ['student'] },
-  { href: '/exams', label: 'Examinations', roles: ['student'] },
-  { href: '/my-results', label: 'My results', roles: ['student'] },
-  { href: '/my-attendance', label: 'My attendance', roles: ['student'] },
-  { href: '/my-progress', label: 'My progress', roles: ['student'] },
-  { href: '/calendar', label: 'Calendar', roles: ['student'] },
-  { href: '/announcements', label: 'Announcements' },
-  { href: '/discussions', label: 'Discussions', roles: ['student'] },
-  { href: '/notifications', label: 'Notifications' },
-  { href: '/profile', label: 'My profile' },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['student'] },
+  { href: '/my-learning', label: 'My learning', icon: BookOpenCheck, roles: ['student'] },
+  { href: '/courses', label: 'Courses', icon: BookOpen },
+  { href: '/my-batches', label: 'My batches', icon: Layers, roles: ['student'] },
+  { href: '/my-assignments', label: 'My assignments', icon: ClipboardList, roles: ['student'] },
+  { href: '/my-projects', label: 'My projects', icon: FolderKanban, roles: ['student'] },
+  { href: '/exams', label: 'Examinations', icon: ScrollText, roles: ['student'] },
+  { href: '/my-results', label: 'My results', icon: Award, roles: ['student'] },
+  { href: '/my-attendance', label: 'My attendance', icon: CalendarCheck, roles: ['student'] },
+  { href: '/my-progress', label: 'My progress', icon: TrendingUp, roles: ['student'] },
+  { href: '/calendar', label: 'Calendar', icon: CalendarDays, roles: ['student'] },
+  { href: '/announcements', label: 'Announcements', icon: Megaphone },
+  { href: '/discussions', label: 'Discussions', icon: MessagesSquare, roles: ['student'] },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
+  { href: '/profile', label: 'My profile', icon: UserCircle2 },
 ];
 
 /** Everybody who runs the institution rather than studying at it. */
 export const STAFF_NAV: NavGroup[] = [
   {
     items: [
-      { href: '/dashboard', label: 'Dashboard', roles: ['trainer'] },
+      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['trainer'] },
       // A counsellor's landing page is their pipeline, not an institution
       // overview they hold no capability to read.
       {
         href: '/admissions/dashboard',
         label: 'Dashboard',
+        icon: LayoutDashboard,
         capability: Capability.enrolmentCreate,
         roles: ['counsellor'],
       },
-      { href: '/admin/overview', label: 'Overview', capability: Capability.reportViewAny },
+      { href: '/admin/overview', label: 'Overview', icon: BarChart3, capability: Capability.reportViewAny },
     ],
   },
   {
@@ -80,16 +121,19 @@ export const STAFF_NAV: NavGroup[] = [
       {
         href: '/manage/batches',
         label: 'Batch review',
+        icon: Layers,
         capability: Capability.performanceViewAny,
       },
       {
         href: '/manage/trainers',
         label: 'Trainer review',
+        icon: GraduationCap,
         capability: Capability.performanceViewAny,
       },
       {
         href: '/dsr',
         label: 'Daily reports',
+        icon: FileText,
         capability: Capability.dsrViewAny,
       },
     ],
@@ -102,21 +146,25 @@ export const STAFF_NAV: NavGroup[] = [
       {
         href: '/admissions',
         label: 'Registrations',
+        icon: ListChecks,
         capability: Capability.studentCreate,
       },
       {
         href: '/admissions/new',
         label: 'Register a student',
+        icon: UserPlus,
         capability: Capability.studentCreate,
       },
       {
         href: '/admissions/batches',
         label: 'Batch planning',
+        icon: CalendarDays,
         capability: Capability.batchCreate,
       },
       {
         href: '/admissions/transfer',
         label: 'Transfers',
+        icon: Repeat,
         capability: Capability.enrolmentUpdateAny,
       },
     ],
@@ -127,11 +175,13 @@ export const STAFF_NAV: NavGroup[] = [
       {
         href: '/teaching/today',
         label: 'Today',
+        icon: Sparkles,
         capability: Capability.sessionManageAny,
         roles: ['trainer'],
       },
       {
         href: '/teaching',
+        icon: CalendarCheck,
         // No apostrophe: a typographic one reads better and makes every locator
         // that names this link — a test, a screen reader script, a search box —
         // depend on which character was typed.
@@ -142,30 +192,35 @@ export const STAFF_NAV: NavGroup[] = [
       {
         href: '/teaching/assignments',
         label: 'Assignments',
+        icon: ClipboardList,
         capability: Capability.assignmentManageAny,
         roles: ['trainer'],
       },
       {
         href: '/teaching/assessments',
         label: 'Weekly tests',
+        icon: ClipboardCheck,
         capability: Capability.assessmentManageAny,
         roles: ['trainer'],
       },
       {
         href: '/teaching/projects',
         label: 'Projects',
+        icon: FolderKanban,
         capability: Capability.projectManageAny,
         roles: ['trainer'],
       },
       {
         href: '/teaching/exams',
         label: 'Examinations',
+        icon: ScrollText,
         capability: Capability.examManageAny,
         roles: ['trainer'],
       },
       {
         href: '/teaching/questions',
         label: 'Question bank',
+        icon: LibraryBig,
         capability: Capability.questionViewAny,
         roles: ['trainer'],
       },
@@ -174,9 +229,9 @@ export const STAFF_NAV: NavGroup[] = [
   {
     title: 'People',
     items: [
-      { href: '/admin/users', label: 'Users', capability: Capability.userViewAny },
-      { href: '/admin/students', label: 'Students', capability: Capability.studentViewAny },
-      { href: '/admin/trainers', label: 'Trainers', capability: Capability.trainerViewAny },
+      { href: '/admin/users', label: 'Users', icon: Users, capability: Capability.userViewAny },
+      { href: '/admin/students', label: 'Students', icon: UsersRound, capability: Capability.studentViewAny },
+      { href: '/admin/trainers', label: 'Trainers', icon: GraduationCap, capability: Capability.trainerViewAny },
     ],
   },
   {
@@ -185,16 +240,18 @@ export const STAFF_NAV: NavGroup[] = [
       {
         href: '/admin/courses',
         label: 'Authoring',
+        icon: PenLine,
         capability: Capability.courseViewAny,
         roles: ['trainer'],
       },
       {
         href: '/admin/batches',
         label: 'Batches',
+        icon: Layers,
         capability: Capability.batchViewAny,
         roles: ['trainer'],
       },
-      { href: '/courses', label: 'Catalogue' },
+      { href: '/courses', label: 'Catalogue', icon: BookOpen },
     ],
   },
   {
@@ -203,20 +260,23 @@ export const STAFF_NAV: NavGroup[] = [
       {
         href: '/admin/completions',
         label: 'Completions',
+        icon: ClipboardCheck,
         capability: Capability.completionApprove,
       },
       {
         href: '/admin/certificates',
         label: 'Certificates',
+        icon: Award,
         capability: Capability.certificateManage,
       },
       {
         href: '/admin/reports',
         label: 'Reports',
+        icon: FileSpreadsheet,
         capability: Capability.reportViewAny,
         roles: ['trainer'],
       },
-      { href: '/admin/imports', label: 'Bulk import', capability: Capability.dataImport },
+      { href: '/admin/imports', label: 'Bulk import', icon: Workflow, capability: Capability.dataImport },
     ],
   },
   {
@@ -225,28 +285,31 @@ export const STAFF_NAV: NavGroup[] = [
       {
         href: '/admin/academics',
         label: 'Academic rules',
+        icon: Settings2,
         capability: Capability.academicConfigure,
       },
       {
         href: '/admin/recovery',
         label: 'Deleted records',
+        icon: Trash2,
         capability: Capability.recordViewDeleted,
       },
       {
         href: '/admin/branding',
         label: 'Branding',
+        icon: Palette,
         capability: Capability.platformConfigure,
       },
-      { href: '/calendar', label: 'Calendar', roles: ['trainer'] },
+      { href: '/calendar', label: 'Calendar', icon: CalendarDays, roles: ['trainer'] },
     ],
   },
   {
     title: 'Everyday',
     items: [
-      { href: '/announcements', label: 'Announcements' },
-      { href: '/discussions', label: 'Discussions', roles: ['trainer'] },
-      { href: '/notifications', label: 'Notifications' },
-      { href: '/profile', label: 'My profile' },
+      { href: '/announcements', label: 'Announcements', icon: Megaphone },
+      { href: '/discussions', label: 'Discussions', icon: MessagesSquare, roles: ['trainer'] },
+      { href: '/notifications', label: 'Notifications', icon: Bell },
+      { href: '/profile', label: 'My profile', icon: UserCircle2 },
     ],
   },
 ];

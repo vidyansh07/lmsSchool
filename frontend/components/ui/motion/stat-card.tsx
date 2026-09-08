@@ -30,6 +30,28 @@ import { NumberTicker } from './number-ticker';
 import { Sparkline } from './sparkline';
 import { SpotlightCard } from './spotlight-card';
 
+/**
+ * The tinted tiles from the reference dashboard: a pale wash over the whole
+ * card, the icon in a deeper disc of the same hue, the label in the accent
+ * colour. Each accent is three theme tokens (`--color-<name>`, `-tint`,
+ * `-soft`) and every text-on-tint pair is measured in
+ * `tests/unit/theme-contrast.test.ts`.
+ *
+ * Only the label takes the accent colour; the figure itself stays ink. The
+ * number is the thing a person reads, and a big number in violet on lavender
+ * is a poster, not a metric.
+ */
+export type StatAccent = 'amber' | 'violet' | 'rose' | 'blue' | 'green' | 'pink';
+
+const ACCENT_CLASSES: Record<StatAccent, { card: string; disc: string; label: string }> = {
+  amber: { card: 'bg-amber-tint', disc: 'bg-amber-soft text-amber', label: 'text-amber' },
+  violet: { card: 'bg-violet-tint', disc: 'bg-violet-soft text-violet', label: 'text-violet' },
+  rose: { card: 'bg-rose-tint', disc: 'bg-rose-soft text-rose', label: 'text-rose' },
+  blue: { card: 'bg-blue-tint', disc: 'bg-blue-soft text-blue', label: 'text-blue' },
+  green: { card: 'bg-green-tint', disc: 'bg-green-soft text-green', label: 'text-green' },
+  pink: { card: 'bg-pink-tint', disc: 'bg-pink-soft text-pink', label: 'text-pink' },
+};
+
 export interface StatCardProps {
   label: string;
   value: number | string | null | undefined;
@@ -47,6 +69,8 @@ export interface StatCardProps {
   href?: string;
   emptyLabel?: FallbackLabel;
   className?: string;
+  /** Tints the whole card. Without one it is a plain white tile. */
+  accent?: StatAccent;
 }
 
 export function StatCard({
@@ -63,7 +87,9 @@ export function StatCard({
   href,
   emptyLabel = NOT_AVAILABLE,
   className,
+  accent,
 }: StatCardProps) {
+  const tone = accent ? ACCENT_CLASSES[accent] : null;
   const hasDelta = Number.isFinite(delta as number) && delta !== 0;
   const rising = (delta ?? 0) > 0;
   const good = deltaIntent === 'up-is-good' ? rising : !rising;
@@ -72,19 +98,35 @@ export function StatCard({
   const body = (
     <SpotlightCard
       className={cn(
-        'press flex h-full flex-col justify-between gap-3 rounded-[var(--radius-card)] border border-border bg-surface p-4',
-        'transition-shadow duration-[var(--duration-quick)] hover:shadow-[0_1px_2px_rgba(16,24,40,0.06),0_8px_24px_-12px_rgba(16,24,40,0.18)]',
+        'press flex h-full flex-col justify-between gap-3 rounded-[var(--radius-card)] border p-4',
+        'shadow-[var(--shadow-card)] transition-shadow duration-[var(--duration-quick)] hover:shadow-[var(--shadow-card-hover)]',
+        // A tinted card draws its edge with the tint itself; a border in
+        // grey on top of lavender reads as a mistake.
+        tone ? cn(tone.card, 'border-transparent') : 'border-border bg-surface',
         href && 'cursor-pointer',
         className,
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <span className={cn('text-xs font-semibold', tone ? tone.label : 'text-muted-foreground')}>
+          {label}
+        </span>
         {Icon ? (
-          <Icon
-            className="size-4 shrink-0 text-muted-foreground transition-colors duration-[var(--duration-quick)] group-hover:text-primary"
-            aria-hidden="true"
-          />
+          tone ? (
+            <span
+              className={cn(
+                'flex size-9 shrink-0 items-center justify-center rounded-xl',
+                tone.disc,
+              )}
+            >
+              <Icon className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
+            </span>
+          ) : (
+            <Icon
+              className="size-4 shrink-0 text-muted-foreground transition-colors duration-[var(--duration-quick)] group-hover:text-primary"
+              aria-hidden="true"
+            />
+          )
         ) : null}
       </div>
 
