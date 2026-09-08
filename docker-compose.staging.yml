@@ -56,8 +56,13 @@ services:
       - ./infra/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
       - staging_caddy_data:/data
       - staging_caddy_config:/config
+    environment:
+      # See infra/proxy/Caddyfile: the one address this stack answers on.
+      SITE_ADDRESS: ${SITE_ADDRESS:-https://localhost:8443}
     ports:
-      - "127.0.0.1:${PROXY_PORT:-8443}:8443"
+      # Loopback on a laptop; PROXY_BIND=0.0.0.0 on a server that should be
+      # reachable from outside. Nothing else in the stack is ever published.
+      - "${PROXY_BIND:-127.0.0.1}:${PROXY_PORT:-8443}:8443"
     depends_on:
       backend:
         condition: service_healthy

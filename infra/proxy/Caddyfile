@@ -7,17 +7,25 @@
 # is anonymous. The choice is a real certificate or a weakened setting, and
 # weakening the setting would mean staging no longer tests what production runs.
 #
-# Caddy issues its own certificate for localhost (`tls internal`). Browsers do
-# not trust that authority, so a human clicks through the warning once and
-# Playwright is told to ignore it — the certificate is not what is under test.
+# Caddy issues its own certificate (`tls internal`). Browsers do not trust that
+# authority, so a human clicks through the warning once and Playwright is told
+# to ignore it — the certificate is not what is under test.
+#
+# The site address is `SITE_ADDRESS` from the environment, so the same file
+# serves a laptop (`https://localhost:8443`, the default) and a server
+# (`https://ec2-….amazonaws.com:8443`) without being edited on the server —
+# which is how the deployed copy ended up as a permanently dirty file.
+# `amazonaws.com` hostnames are refused by Let's Encrypt, so a public
+# certificate needs a real domain (or `<ip>.sslip.io`) and ports 80/443 open;
+# until then `tls internal` is what a server gets too.
 
 {
-	# No public ACME: this certificate never leaves the laptop.
+	# No public ACME: this certificate never leaves the machine.
 	auto_https disable_redirects
 	admin off
 }
 
-https://localhost:8443 {
+{$SITE_ADDRESS:https://localhost:8443} {
 	tls internal
 	encode gzip
 
