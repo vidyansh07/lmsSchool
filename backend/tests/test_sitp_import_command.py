@@ -55,7 +55,7 @@ def test_one_workbook_becomes_one_batch_with_its_roster_classes_registers_report
     batch = Batch.objects.get(name__contains="Group A")
     assert batch.kind == "internship"
     assert batch.start_date == date(2026, 6, 10)
-    assert batch.end_date == date(2026, 6, 14)
+    assert batch.end_date == date(2026, 6, 11)
 
     # Three students had roll numbers; "No Roll" did not and was reported.
     rolls = set(StudentProfile.objects.exclude(roll_number="").values_list("roll_number", flat=True))
@@ -70,9 +70,10 @@ def test_one_workbook_becomes_one_batch_with_its_roster_classes_registers_report
     assert not placeholder.user.has_usable_password()
     assert placeholder.institution == "Arya College of Engineering"
 
-    # A class per dated column (the 1900 column was refused).
+    # A class per dated column somebody was marked on: the 1900 column was
+    # refused, and June 14 was a Sunday for everybody.
     assert set(ClassSession.objects.filter(batch=batch).values_list("session_date", flat=True)) == {
-        date(2026, 6, 10), date(2026, 6, 11), date(2026, 6, 14)
+        date(2026, 6, 10), date(2026, 6, 11)
     }
     # Registers as marked, with the vocabulary normalised.
     first_day = ClassSession.objects.get(batch=batch, session_date=date(2026, 6, 10))

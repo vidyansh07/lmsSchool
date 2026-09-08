@@ -182,7 +182,10 @@ export function BatchDetail({ batchId }: { batchId: string }) {
             <Stat label="Attendance" value={formatPercent(attendance.percentage, { fallbackLabel: NO_DATA })} />
             <Stat label="Present" value={formatNumber(attendance.present)} />
             <Stat label="Absent" value={formatNumber(attendance.absent)} />
-            <Stat label="Classes held" value={formatNumber(attendance.total_sessions)} />
+            {/* Student-class records, not classes: a batch of eleven with 28
+                registers has 308 of these. The Sessions card below is where
+                "classes held" lives. */}
+            <Stat label="Records counted" value={formatNumber(attendance.total_sessions)} />
           </StatGrid>
           <Link
             href={`/manage/batches/${batchId}/students`}

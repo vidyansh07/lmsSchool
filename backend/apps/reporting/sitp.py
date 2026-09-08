@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
@@ -160,6 +160,8 @@ class Workbook:
     problems: list[Problem] = field(default_factory=list)
     #: Sheets present but not imported, and why.
     not_imported: dict[str, str] = field(default_factory=dict)
+    #: DSR rows that said "Sunday" or "Holiday": not classes, not reported.
+    non_class_rows: int = 0
 
     def problem(self, sheet: str, row: int | None, reason: str) -> None:
         self.problems.append(Problem(sheet, row, reason))
@@ -238,6 +240,44 @@ def _days_of_month(days: list[int], *, start: date) -> list[date]:
         except ValueError:
             out.append(out[-1] if out else start)
     return out
+
+
+#: How far a report may sit from the first or last register and still be a
+#: class of the same batch. Reports often start a day or two before the first
+#: register, and finish a few days after the last.
+WINDOW_SLACK = timedelta(days=10)
+
+
+def _within_window(when: date, book: Workbook) -> tuple[date | None, bool]:
+    """``(date, corrected)``: the date if it belongs to this batch's run.
+
+    Trainers typed last year's year, or next year's, or ``0206``, into a
+    handful of rows. A date whose month and day fall inside the batch's window
+    once the year is set to the programme's is that date, and the correction
+    is reported; a date that fits under no year is refused.
+    """
+    if not book.class_dates:
+        return when, False
+    start, end = min(book.class_dates) - WINDOW_SLACK, max(book.class_dates) + WINDOW_SLACK
+    if start <= when <= end:
+        return when, False
+    candidates = []
+    try:
+        candidates.append(when.replace(year=book.programme_start.year))
+    except ValueError:
+        pass
+    if when.day <= 12:
+        # "12/07/2026" typed into a spreadsheet set to month-first became
+        # 7 December. Swapping the two lands it in July, inside the window.
+        for year in (when.year, book.programme_start.year):
+            try:
+                candidates.append(date(year, when.day, when.month))
+            except ValueError:
+                pass
+    for candidate in candidates:
+        if start <= candidate <= end:
+            return candidate, True
+    return None, False
 
 
 def _rows(sheet) -> list[tuple[Any, ...]]:
@@ -354,6 +394,22 @@ def _read_attendance(sheet, book: Workbook) -> None:
                 register[when] = status
         book.attendance[roll] = register
 
+    # A column where nobody has a mark — a Sunday, a holiday, a day nobody
+    # filled in — is not a class. Only dates with at least one mark remain.
+    marked = {when for register in book.attendance.values() for when in register}
+    unmarked = [when for when in book.class_dates if when not in marked]
+    if unmarked:
+        book.problem(
+            sheet.title,
+            date_row_index + 1,
+            f"{len(unmarked)} dated columns have no marks for anybody (Sundays, holidays); no class created for them.",
+        )
+    book.class_dates = [when for when in book.class_dates if when in marked]
+
+
+#: Topics that say the day was not a class at all.
+NON_CLASS_TOPICS = frozenset({"sunday", "sun", "holiday", "holi", "no class", "off", "-"})
+
 
 def _read_dsr(sheet, book: Workbook) -> None:
     rows = _rows(sheet)
@@ -376,6 +432,9 @@ def _read_dsr(sheet, book: Workbook) -> None:
         if not any(text(c) for c in row):
             continue
         topic = text(row[topic_col]) if topic_col is not None and topic_col < len(row) else ""
+        if topic.strip().lower() in NON_CLASS_TOPICS:
+            book.non_class_rows += 1
+            continue
         when = as_date(row[date_col]) if date_col < len(row) else None
         if when is None:
             # A numbered row with nothing in it is the sheet's padding, not a
@@ -384,6 +443,12 @@ def _read_dsr(sheet, book: Workbook) -> None:
             if topic or text(row[date_col] if date_col < len(row) else None):
                 book.problem(sheet.title, line, f"{text(row[date_col])!r} is not a date; skipped.")
             continue
+        when, corrected = _within_window(when, book)
+        if when is None:
+            book.problem(sheet.title, line, f"{text(row[date_col])!r} is outside the batch's dates; report skipped.")
+            continue
+        if corrected:
+            book.problem(sheet.title, line, f"{text(row[date_col])!r} read as {when}: the year, or the month and day, were typed the wrong way round.")
         if module_col is not None and module_col < len(row) and text(row[module_col]):
             topic = f"{text(row[module_col])}: {topic}" if topic else text(row[module_col])
         entry = DsrRow(row=line, on=when, topic=topic[:255])

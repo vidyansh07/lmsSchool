@@ -48,8 +48,8 @@ def build_workbook(path, *, with_email=True, dsr_style="classic"):
     else:
         dsr.append(["DAILY STATUS REPORT | SITP 2026"])
         dsr.append(["Day #", "Date", "Module / Topic Name", "Topics Covered Today", "Assignment\nGiven"])
-        dsr.append([1, "25-05-2026", "Cloud Intro", "Deployment types", "No"])
-        dsr.append([2, datetime(2026, 5, 26), "AWS Intro", "Account creation", "Yes"])
+        dsr.append([1, "10-06-2026", "Cloud Intro", "Deployment types", "No"])
+        dsr.append([2, datetime(2026, 6, 11), "AWS Intro", "Account creation", "Yes"])
 
     marks = wb.create_sheet("Assessment")
     marks.append([None, None, None, 1, 2, 3])
@@ -106,7 +106,8 @@ def test_an_unknown_mark_is_reported_with_its_row(classic):
 
 def test_an_impossible_date_column_is_ignored_and_reported(classic):
     assert date(1900, 1, 25) not in classic.class_dates
-    assert classic.class_dates == [date(2026, 6, 10), date(2026, 6, 11), date(2026, 6, 14)]
+    # June 14 was a Sunday for everybody, so it is not a class either.
+    assert classic.class_dates == [date(2026, 6, 10), date(2026, 6, 11)]
     assert any("dated 1900-01-25" in p.reason for p in classic.problems)
 
 
@@ -124,8 +125,8 @@ def test_the_other_dsr_layout_is_read_too(tmp_path):
     folder.mkdir()
     book = read_workbook(build_workbook(folder / "AWS.xlsx", with_email=False, dsr_style="modern"))
     assert [(row.on, row.topic, row.assignment_given) for row in book.dsr] == [
-        (date(2026, 5, 25), "Cloud Intro: Deployment types", False),
-        (date(2026, 5, 26), "AWS Intro: Account creation", True),
+        (date(2026, 6, 10), "Cloud Intro: Deployment types", False),
+        (date(2026, 6, 11), "AWS Intro: Account creation", True),
     ]
     assert book.students[0].email == ""
 
@@ -236,7 +237,7 @@ def fraction_book(tmp_path):
 
 def test_day_numbers_typed_as_dates_are_read_as_days_of_the_programme_month(fraction_book):
     # 30, 31, 1, 2 from a May start: 30 May, 31 May, 1 June, 2 June.
-    assert fraction_book.class_dates == [date(2026, 5, 30), date(2026, 5, 31), date(2026, 6, 1), date(2026, 6, 2)]
+    assert fraction_book.class_dates == [date(2026, 5, 30), date(2026, 6, 1), date(2026, 6, 2)]
     assert any("typed as day numbers" in p.reason for p in fraction_book.problems)
     assert fraction_book.attendance["24EACCS668"] == {
         date(2026, 5, 30): "present", date(2026, 6, 1): "present", date(2026, 6, 2): "absent"
@@ -302,3 +303,71 @@ def test_a_marks_row_that_slid_one_column_left_is_read_one_column_over(tmp_path)
     # Joined after the first test: no mark, not an absence.
     assert book.marks["25EACCS119"] == {1: None, 2: Decimal("20")}
     assert any("25EACCS119 is on the marks sheet but not the attendance sheet" in p.reason for p in book.problems)
+
+
+def build_window_workbook(path):
+    wb = openpyxl.Workbook()
+    att = wb.active
+    att.title = "Attendance"
+    head = ["S NO", "Student Email", "Student Name", "RTU Roll No.", "Total Present", "Total Absent", "Total Class", "Attendance Percent"]
+    att.append(head + [datetime(2026, 6, 1)])
+    att.append([None] * len(head) + [datetime(2026, 6, 10), datetime(2026, 6, 11), datetime(2026, 6, 14), datetime(2026, 6, 15)])
+    att.append([None] * len(head) + ["Wed", "Thu", "Sun", "Mon"])
+    att.append([1, "", "Arjit Kaushik", "25EACEE003", 2, 1, 3, 66.6, "P", "A", "SUNDAY", "P"])
+    dsr = wb.create_sheet("DSR")
+    dsr.append(["SNO", "Date", "Topic Cover", "Student Count Online Offline", "Trainer Name"])
+    dsr.append([1, datetime(2026, 6, 10), "INTRO", "Online 1, Offline 0", "Kapil Jangid"])
+    dsr.append([2, datetime(2025, 6, 11), "VARIABLES", "Online 1, Offline 0", "Kapil Jangid"])   # last year's year
+    dsr.append([3, datetime(2026, 6, 14), "SUNDAY", "", "Kapil Jangid"])                         # not a class
+    dsr.append([4, datetime(2028, 5, 27), "FAR AWAY", "Online 1, Offline 0", "Kapil Jangid"])   # fits no year
+    dsr.append([5, datetime(2026, 6, 16), "WRAP-UP", "Online 1, Offline 0", "Kapil Jangid"])    # just after the last register
+    wb.save(path)
+    return path
+
+
+@pytest.fixture
+def window_book(tmp_path):
+    folder = tmp_path / "SITP ACE 2026 1st Year"
+    folder.mkdir()
+    return read_workbook(build_window_workbook(folder / "Group A.xlsx"))
+
+
+def test_a_dated_column_with_no_marks_for_anybody_is_not_a_class(window_book):
+    # June 14 was a Sunday for everyone; June 10, 11 and 15 had marks.
+    assert window_book.class_dates == [date(2026, 6, 10), date(2026, 6, 11), date(2026, 6, 15)]
+    assert any("no marks for anybody" in p.reason for p in window_book.problems)
+
+
+def test_a_report_dated_with_the_wrong_year_is_read_as_this_years_date_and_reported(window_book):
+    dates = {row.topic: row.on for row in window_book.dsr}
+    assert dates["VARIABLES"] == date(2026, 6, 11)
+    assert any("typed the wrong way round" in p.reason for p in window_book.problems)
+
+
+def test_a_report_that_fits_no_year_is_refused(window_book):
+    assert "FAR AWAY" not in {row.topic for row in window_book.dsr}
+    assert any("outside the batch's dates" in p.reason for p in window_book.problems)
+
+
+def test_a_sunday_row_is_not_a_report(window_book):
+    assert "SUNDAY" not in {row.topic for row in window_book.dsr}
+    assert window_book.non_class_rows == 1
+
+
+def test_a_report_a_day_or_two_after_the_last_register_still_belongs(window_book):
+    assert date(2026, 6, 16) in {row.on for row in window_book.dsr}
+
+
+
+def test_a_report_with_month_and_day_swapped_is_read_the_right_way_round(tmp_path):
+    folder = tmp_path / "SITP ACE 2026 3rd Year"
+    folder.mkdir()
+    path = build_window_workbook(folder / "SOC.xlsx")
+    wb = openpyxl.load_workbook(path)
+    # 12 June typed month-first became 6 December.
+    wb["DSR"].append([6, datetime(2026, 12, 6), "SIEM", "Online 1, Offline 0", "Sachin"])
+    wb.save(path)
+
+    book = read_workbook(path)
+
+    assert {row.topic: row.on for row in book.dsr}["SIEM"] == date(2026, 6, 12)

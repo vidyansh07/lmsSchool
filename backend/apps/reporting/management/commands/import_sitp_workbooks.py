@@ -122,6 +122,8 @@ class Command(BaseCommand):
                     for problem in book.problems:
                         report.problem(problem.sheet, problem.row, problem.reason)
                     report.not_imported = dict(book.not_imported)
+                    if book.non_class_rows:
+                        report.counts["report rows that were Sundays or holidays"] += book.non_class_rows
                     Importer(actor=actor, book=book, report=report).run()
                 except Exception as exc:  # noqa: BLE001 — one bad file must not hide the rest
                     report.problem("workbook", None, f"Import stopped: {exc}")
