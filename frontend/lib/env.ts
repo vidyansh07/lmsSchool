@@ -36,3 +36,17 @@ export const env = {
 export function apiBaseUrl(): string {
   return env.isServer ? env.internalApiBaseUrl : env.publicApiBaseUrl;
 }
+
+/**
+ * Absolute URL for an API path the *browser* will resolve on its own.
+ *
+ * `apiFetch` prefixes the base itself, so it does not need this. An `<img
+ * src>`, an `<a href>` or a `window.open` does: the browser resolves a bare
+ * `/api/...` against the page's origin, which is the Next server, not the API.
+ * The serializers return relative paths deliberately — they do not know the
+ * public hostname — so composing the origin belongs here, on the client.
+ */
+export function apiUrl(path: string): string {
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path)) return path;
+  return `${apiBaseUrl()}${path.startsWith('/') ? path : `/${path}`}`;
+}

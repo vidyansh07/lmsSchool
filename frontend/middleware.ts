@@ -39,7 +39,11 @@ export function middleware(request: NextRequest) {
     "form-action 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    "img-src 'self' data: blob:",
+    // The API origin is listed because authenticated media — a profile photo —
+    // is served by the backend, not by Next, and is a different origin whenever
+    // the two are not behind one proxy. Only the configured origin is allowed;
+    // this is not `img-src *`.
+    `img-src 'self' data: blob: ${apiOrigin}`,
     "font-src 'self' data:",
     // Next inlines critical CSS, and there is no nonce path for it.
     "style-src 'self' 'unsafe-inline'",
@@ -48,8 +52,17 @@ export function middleware(request: NextRequest) {
         `script-src 'self' 'nonce-${nonce}' 'unsafe-inline' 'unsafe-eval'`
       : `script-src 'self' 'nonce-${nonce}'`,
     `connect-src 'self' ${apiOrigin}`,
-    'upgrade-insecure-requests',
-  ].join('; ');
+    // Production only. The directive rewrites every http subresource to https,
+    // which is right in front of a TLS terminator and wrong on a development
+    // machine served over plain http: the browser upgrades same-origin URLs
+    // like the authenticated profile-image route to a port with no TLS listener and
+    // the request dies as ERR_SSL_PROTOCOL_ERROR. Shipping it in development
+    // buys nothing — there is no downgrade to prevent on loopback — and breaks
+    // images that work in production.
+    isDevelopment ? null : 'upgrade-insecure-requests',
+  ]
+    .filter((directive): directive is string => directive !== null)
+    .join('; ');
 
   const headers = new Headers(request.headers);
   headers.set('x-nonce', nonce);

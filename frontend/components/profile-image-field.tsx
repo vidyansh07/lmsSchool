@@ -6,6 +6,7 @@ import { useAuth } from '@/components/auth-provider';
 import { Button } from '@/components/ui/button';
 import { ApiError } from '@/lib/api';
 import { removeProfileImage, uploadProfileImage } from '@/lib/auth';
+import { apiUrl } from '@/lib/env';
 
 /**
  * Profile image upload.
@@ -68,7 +69,7 @@ export function ProfileImageField() {
              optimiser cannot fetch it; a plain <img> is correct here. */
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={user.profile_image_url}
+            src={apiUrl(user.profile_image_url)}
             alt=""
             className="size-full object-cover"
             width={64}
