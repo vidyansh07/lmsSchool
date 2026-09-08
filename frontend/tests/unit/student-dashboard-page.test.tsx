@@ -204,8 +204,10 @@ describe('StudentView — full data', () => {
     expect(screen.getByText('Continue learning')).toBeInTheDocument();
     expect(screen.getAllByText('Linux Essentials').length).toBeGreaterThan(0);
     expect(await screen.findByText(/1 assignment/i)).toBeInTheDocument();
-    expect(screen.getByText('90%')).toBeInTheDocument();
-    expect(screen.getByText('75%')).toBeInTheDocument();
+    // The standing tiles count up from zero on mount, so the final value
+    // arrives a frame or two after render.
+    expect(await screen.findByText('90%')).toBeInTheDocument();
+    expect(await screen.findByText('75%')).toBeInTheDocument();
   });
 
   it('renders a partially-loaded course — attendance known, results not yet recorded', async () => {

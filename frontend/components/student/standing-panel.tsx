@@ -17,13 +17,11 @@
  * The brief this file answers to is explicit: a risk flag is information, not
  * a verdict.
  */
-import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, CalendarCheck, CheckCircle2, GaugeCircle, TrendingUp, Trophy } from 'lucide-react';
 
 import { AlertList, type AlertItem } from '@/components/alert-list';
-import { KpiTile } from '@/components/kpi-tile';
-import { DashboardGrid } from '@/components/dashboard-grid';
 import { ErrorState, LoadingState } from '@/components/states';
-import { formatPercent } from '@/lib/format';
+import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
 import type { StudentPerformanceEntry } from '@/lib/performance';
 
 /** The mean of `pick(entry)` over entries where it is not `null` — `null` if none are. */
@@ -89,21 +87,32 @@ export function StandingPanel({
   const assessment = averageMetric(performance, (entry) => entry.assessment.average_percent);
   const overall = averageMetric(performance, (entry) => entry.overall_score);
   const riskItems = collectRiskItems(performance);
-  const percentFormat = (value: number | string) => formatPercent(value);
+
+  // Each of these is a percentage the student is being measured on, so each
+  // one counts up and carries the icon for what it measures. `KpiTile` is
+  // still what the rest of the app uses for a bare figure; this screen is the
+  // one a student looks at every day, and it earns the extra weight.
+  const tiles = [
+    { label: 'Course progress', value: progress, icon: TrendingUp },
+    { label: 'Attendance', value: attendance, icon: CalendarCheck },
+    { label: 'Assessment average', value: assessment, icon: GaugeCircle },
+    { label: 'Overall standing', value: overall, icon: Trophy },
+  ] as const;
 
   return (
     <div className="space-y-4">
-      <DashboardGrid className="stagger">
-        <KpiTile className="animate-rise-in" label="Course progress" value={progress} format={percentFormat} />
-        <KpiTile className="animate-rise-in" label="Attendance" value={attendance} format={percentFormat} />
-        <KpiTile
-          className="animate-rise-in"
-          label="Assessment average"
-          value={assessment}
-          format={percentFormat}
-        />
-        <KpiTile className="animate-rise-in" label="Overall standing" value={overall} format={percentFormat} />
-      </DashboardGrid>
+      <BentoGrid>
+        {tiles.map((tile, index) => (
+          <BentoTile key={tile.label} span={3} index={index}>
+            <StatCard
+              label={tile.label}
+              value={tile.value}
+              icon={tile.icon}
+              suffix="%"
+            />
+          </BentoTile>
+        ))}
+      </BentoGrid>
 
       {riskItems.length === 0 ? (
         <div className="animate-fade-in flex items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">

@@ -351,7 +351,7 @@ describe('StandingPanel', () => {
     expect(screen.getByText(/on track/i)).toBeInTheDocument();
   });
 
-  it('renders a partial-data course (attendance known, assessment unknown) without a fabricated score', () => {
+  it('renders a partial-data course (attendance known, assessment unknown) without a fabricated score', async () => {
     render(
       <StandingPanel
         performance={[
@@ -362,7 +362,9 @@ describe('StandingPanel', () => {
         ]}
       />,
     );
-    expect(screen.getByText('88%')).toBeInTheDocument();
+    // Counts up from zero on mount, so wait for the value rather than
+    // catching a frame of the animation.
+    expect(await screen.findByText('88%')).toBeInTheDocument();
     // Assessment, progress and overall standing are all genuinely unmeasured
     // here — three tiles legitimately say "Not available" at once.
     expect(screen.getAllByText('Not available')).toHaveLength(3);

@@ -34,14 +34,14 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { PlusCircle, UploadCloud, UserPlus } from 'lucide-react';
+import { CalendarRange, Clock, PlusCircle, Rocket, UploadCloud, UserPlus } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 import { BatchWatchlist } from '@/components/counsellor/batches-panel';
 import { NotYetEnrolledPanel } from '@/components/counsellor/not-yet-enrolled-panel';
 import { PendingConfirmationsPanel } from '@/components/counsellor/pending-confirmations-panel';
 import { RecentActivityPanel } from '@/components/counsellor/recent-activity-panel';
-import { DashboardGrid } from '@/components/dashboard-grid';
-import { KpiTile } from '@/components/kpi-tile';
+import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { RequireAuth } from '@/components/require-auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -138,16 +138,22 @@ export function countRegisteredSince(students: StudentListRow[], sinceIso: strin
 }
 
 /**
- * `KpiTile` has no loading state of its own — it treats an absent value as
+ * `StatCard` has no loading state of its own — it treats an absent value as
  * "not available", which is the right reading for a report that genuinely
  * has nothing, but the wrong one for a number that simply has not arrived
  * yet. This renders a same-shaped skeleton in its place until it has.
+ *
+ * Same shape matters literally: the skeleton is the height of the card it
+ * replaces, so the grid does not resize when the numbers land.
  */
 function KpiTileSection({
   label,
   value,
   isLoading,
   failed,
+  icon,
+  hint,
+  href,
 }: {
   label: string;
   value: number;
@@ -156,18 +162,30 @@ function KpiTileSection({
    *  "Not available" rather than a possibly-misleading confirmed zero. The
    *  section below always carries the real error message and a retry. */
   failed?: boolean;
+  icon?: LucideIcon;
+  hint?: string;
+  href?: string;
 }) {
   if (isLoading) {
     return (
-      <Card className="animate-rise-in">
-        <CardContent className="flex flex-col gap-2 p-5">
+      <Card className="h-full">
+        <CardContent className="flex h-full flex-col justify-between gap-3 p-4">
           <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-7 w-16" />
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-3 w-32" />
         </CardContent>
       </Card>
     );
   }
-  return <KpiTile className="animate-rise-in" label={label} value={failed ? null : value} />;
+  return (
+    <StatCard
+      label={label}
+      value={failed ? null : value}
+      icon={icon}
+      hint={hint}
+      href={href}
+    />
+  );
 }
 
 export function AdmissionsDashboardContent() {
@@ -235,32 +253,51 @@ export function AdmissionsDashboardContent() {
 
       <QuickActions actions={quickActions} />
 
-      <DashboardGrid className="stagger">
-        <KpiTileSection
-          label="Registered today"
-          value={registeredToday}
-          isLoading={recentStudents.isLoading}
-          failed={Boolean(recentStudents.error)}
-        />
-        <KpiTileSection
-          label="Registered this week"
-          value={registeredThisWeek}
-          isLoading={recentStudents.isLoading}
-          failed={Boolean(recentStudents.error)}
-        />
-        <KpiTileSection
-          label="Pending confirmation"
-          value={pending.data.count}
-          isLoading={pending.isLoading}
-          failed={Boolean(pending.error)}
-        />
-        <KpiTileSection
-          label="Batches starting soon"
-          value={startingSoonCount}
-          isLoading={batches.isLoading}
-          failed={Boolean(batches.error)}
-        />
-      </DashboardGrid>
+      <BentoGrid>
+        <BentoTile span={3} index={0}>
+          <KpiTileSection
+            label="Registered today"
+            value={registeredToday}
+            isLoading={recentStudents.isLoading}
+            failed={Boolean(recentStudents.error)}
+            icon={UserPlus}
+            hint="New students on the books"
+            href="/admissions"
+          />
+        </BentoTile>
+        <BentoTile span={3} index={1}>
+          <KpiTileSection
+            label="Registered this week"
+            value={registeredThisWeek}
+            isLoading={recentStudents.isLoading}
+            failed={Boolean(recentStudents.error)}
+            icon={CalendarRange}
+            hint="Rolling seven days"
+            href="/admissions"
+          />
+        </BentoTile>
+        <BentoTile span={3} index={2}>
+          <KpiTileSection
+            label="Pending confirmation"
+            value={pending.data.count}
+            isLoading={pending.isLoading}
+            failed={Boolean(pending.error)}
+            icon={Clock}
+            hint="Waiting on a decision"
+          />
+        </BentoTile>
+        <BentoTile span={3} index={3}>
+          <KpiTileSection
+            label="Batches starting soon"
+            value={startingSoonCount}
+            isLoading={batches.isLoading}
+            failed={Boolean(batches.error)}
+            icon={Rocket}
+            hint="Seats still to fill"
+            href="/admissions/batches"
+          />
+        </BentoTile>
+      </BentoGrid>
 
       <Card className="animate-rise-in">
         <CardHeader>

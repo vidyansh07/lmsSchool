@@ -41,6 +41,7 @@
  * the screen, and a step that fails stops the sequence rather than
  * submitting a report describing an unsaved register.
  */
+import { CalendarDays, ClipboardCheck, ClipboardList } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -58,6 +59,7 @@ import { RegisterEditor } from '@/components/teaching/register-editor';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { getRegister, listTodaySessions, markAttendance } from '@/lib/academics';
@@ -618,6 +620,38 @@ export function TodayWorkspace() {
     return <ClassWorkspace key={sessionId} sessionId={sessionId} onChangeClass={changeClass} />;
   }
 
+  // Built entirely from the sessions already fetched for the picker below —
+  // no second request, and nothing here can disagree with the list it
+  // summarises. While that list is loading these read "No data" rather than a
+  // confident zero, which would be a different and wrong claim.
+  const registersTaken = todaySessions.filter((session) => session.attendance_taken_at).length;
+  const summary = isLoadingToday || todayError
+    ? [
+        { label: 'Classes today', value: null, icon: CalendarDays },
+        { label: 'Registers taken', value: null, icon: ClipboardCheck },
+        { label: 'Still to take', value: null, icon: ClipboardList },
+      ]
+    : [
+        {
+          label: 'Classes today',
+          value: todaySessions.length,
+          icon: CalendarDays,
+          hint: todaySessions.length === 1 ? 'One class scheduled' : 'Scheduled on your batches',
+        },
+        {
+          label: 'Registers taken',
+          value: registersTaken,
+          icon: ClipboardCheck,
+          hint: 'Attendance already filed',
+        },
+        {
+          label: 'Still to take',
+          value: todaySessions.length - registersTaken,
+          icon: ClipboardList,
+          hint: 'Waiting on you',
+        },
+      ];
+
   return (
     <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
@@ -626,6 +660,21 @@ export function TodayWorkspace() {
           Choose a class to take its register and file the day&rsquo;s report.
         </p>
       </div>
+
+      <BentoGrid>
+        {summary.map((figure, index) => (
+          <BentoTile key={figure.label} span={4} index={index}>
+            <StatCard
+              label={figure.label}
+              value={figure.value}
+              icon={figure.icon}
+              hint={'hint' in figure ? figure.hint : undefined}
+              deltaIntent={figure.label === 'Still to take' ? 'down-is-good' : 'up-is-good'}
+            />
+          </BentoTile>
+        ))}
+      </BentoGrid>
+
       <ClassPicker
         todayIso={today}
         todaySessions={todaySessions}

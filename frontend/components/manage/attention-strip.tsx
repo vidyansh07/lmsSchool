@@ -16,10 +16,11 @@
  * loading/error wiring for a summary the page below it doesn't otherwise
  * need.
  */
+import { AlertTriangle, CalendarClock, ClipboardX, Layers } from 'lucide-react';
+
 import { AlertList, type AlertItem, type AlertSeverity } from '@/components/alert-list';
-import { DashboardGrid } from '@/components/dashboard-grid';
 import { ErrorState, LoadingState } from '@/components/states';
-import { KpiTile } from '@/components/kpi-tile';
+import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
 import { useApi } from '@/hooks/use-api';
 import { formatDate } from '@/lib/format';
 import type { AttentionSeverity, ManagerDashboard } from '@/lib/manage';
@@ -54,14 +55,55 @@ export function ManagerAttentionStrip() {
     href: item.href,
   }));
 
+  // Three of these four are counts of a problem, so "up" is bad news. The
+  // delta intent says so, which is what stops a rising at-risk count being
+  // drawn in the same green as a rising batch count.
+  const figures = [
+    {
+      label: 'Active batches',
+      value: data.batches.active,
+      icon: Layers,
+      hint: 'Running now',
+      deltaIntent: 'up-is-good' as const,
+    },
+    {
+      label: 'Batches behind schedule',
+      value: data.batches.behind_schedule,
+      icon: CalendarClock,
+      hint: 'Behind their planned session',
+      deltaIntent: 'down-is-good' as const,
+    },
+    {
+      label: 'Students at risk',
+      value: data.students.at_risk,
+      icon: AlertTriangle,
+      hint: 'Flagged by the risk engine',
+      deltaIntent: 'down-is-good' as const,
+    },
+    {
+      label: 'Trainers with overdue DSR',
+      value: data.trainers.with_overdue_dsr,
+      icon: ClipboardX,
+      hint: 'No report filed for a past class',
+      deltaIntent: 'down-is-good' as const,
+    },
+  ];
+
   return (
     <div className="space-y-3">
-      <DashboardGrid>
-        <KpiTile label="Active batches" value={data.batches.active} />
-        <KpiTile label="Batches behind schedule" value={data.batches.behind_schedule} />
-        <KpiTile label="Students at risk" value={data.students.at_risk} />
-        <KpiTile label="Trainers with overdue DSR" value={data.trainers.with_overdue_dsr} />
-      </DashboardGrid>
+      <BentoGrid>
+        {figures.map((figure, index) => (
+          <BentoTile key={figure.label} span={3} index={index}>
+            <StatCard
+              label={figure.label}
+              value={figure.value}
+              icon={figure.icon}
+              hint={figure.hint}
+              deltaIntent={figure.deltaIntent}
+            />
+          </BentoTile>
+        ))}
+      </BentoGrid>
       <AlertList
         items={items}
         title="attention"

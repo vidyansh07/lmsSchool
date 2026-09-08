@@ -6,6 +6,7 @@ import { AppShell } from '@/components/app-shell';
 import { AuthProvider } from '@/components/auth-provider';
 
 import { BrandTheme } from '@/components/brand-theme';
+import { MotionProvider } from '@/components/ui/motion';
 import { Toaster, ToastProvider } from '@/components/ui/toast';
 
 import './globals.css';
@@ -68,7 +69,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             disappears with the screen that caused it has confirmed nothing. */}
         <ToastProvider>
           <AuthProvider>
-            <AppShell>{children}</AppShell>
+            {/* Loads the animation runtime once for the whole tree. Inside
+                `AuthProvider` because nothing on the sign-in screen animates
+                beyond what CSS already does, and outside `AppShell` so the
+                shell's own transitions can use it too. */}
+            <MotionProvider>
+              <AppShell>{children}</AppShell>
+            </MotionProvider>
           </AuthProvider>
           <Toaster />
         </ToastProvider>

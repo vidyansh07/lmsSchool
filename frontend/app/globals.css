@@ -279,6 +279,63 @@
     animation-delay: 280ms;
   }
 
+  /*
+   * The cursor spotlight.
+   *
+   * `components/ui/motion/spotlight-card.tsx` writes the pointer position into
+   * `--spotlight-x/y` on the element itself; this draws the wash. Kept in CSS
+   * rather than in the component's inline style so the gradient is one rule
+   * the browser can composite, not a new style object per frame.
+   *
+   * The overlay is a child pseudo-element with `pointer-events: none` — it sits
+   * over the card's own content and must never intercept a click meant for it.
+   */
+  .spotlight::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--spotlight-opacity, 0);
+    transition: opacity var(--duration-base) var(--ease-out-quick);
+    background: radial-gradient(
+      260px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      color-mix(in oklch, var(--color-primary) 9%, transparent),
+      transparent 70%
+    );
+  }
+
+  /* The card's own border warms under the cursor, which is what tells you the
+     whole tile is the target rather than the link inside it. */
+  .spotlight {
+    transition: border-color var(--duration-base) var(--ease-out-quick);
+  }
+
+  .spotlight:hover {
+    border-color: color-mix(in oklch, var(--color-primary) 35%, var(--color-border));
+  }
+
+  /*
+   * A sparkline drawing itself.
+   *
+   * `stroke-dasharray` is set to a length longer than any path this component
+   * produces, so one rule covers every series without measuring each path in
+   * JavaScript first. Overshooting is free; the dash simply starts fully
+   * offset and ends fully drawn.
+   */
+  @keyframes draw-line {
+    from {
+      stroke-dashoffset: 400;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .sparkline-draw {
+    stroke-dasharray: 400;
+    animation: draw-line var(--duration-slow) var(--ease-out-quick) both;
+  }
+
   /* A pressable surface dips very slightly. Enough to confirm the press
      happened, small enough that a person clicking through forty rows does not
      notice it at all. */

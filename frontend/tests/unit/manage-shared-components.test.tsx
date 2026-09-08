@@ -93,11 +93,14 @@ describe('ManagerAttentionStrip', () => {
     expect(screen.getByText('Nothing needs attention')).toBeInTheDocument();
   });
 
-  it('renders the headline KPI figures as plain, non-clickable numbers', () => {
+  it('renders the headline KPI figures as plain, non-clickable numbers', async () => {
     mockUseApi.mockReturnValue({ data: dashboard(), error: null, isLoading: false, reload: vi.fn() });
     render(<ManagerAttentionStrip />);
     expect(screen.getByText('Active batches')).toBeInTheDocument();
-    expect(screen.getByText('8')).toBeInTheDocument();
+    // The figure counts up from zero on mount, so it arrives a frame or two
+    // after render — `findByText` waits for the value rather than catching the
+    // animation mid-flight.
+    expect(await screen.findByText('8')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Active batches/ })).not.toBeInTheDocument();
   });
 

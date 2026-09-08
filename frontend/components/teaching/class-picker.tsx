@@ -22,15 +22,26 @@ import { ApiError } from '@/lib/api';
 import { SESSION_STATUS_LABEL, SESSION_STATUS_VARIANT } from '@/lib/academic-labels';
 import { formatClassTime } from '@/lib/dsr';
 import { fallback, NO_DATA } from '@/lib/format';
+import { Reveal, SpotlightCard } from '@/components/ui/motion';
 import type { ClassSession } from '@/types/api';
 
-function SessionOption({ session, onSelect }: { session: ClassSession; onSelect: () => void }) {
+function SessionOption({
+  session,
+  onSelect,
+  index = 0,
+}: {
+  session: ClassSession;
+  onSelect: () => void;
+  /** Position in the day's list, for the entrance stagger. */
+  index?: number;
+}) {
   return (
-    <li className="animate-fade-in">
+    <Reveal as="li" delay={Math.min(index, 6) * 0.045}>
+      <SpotlightCard className="rounded-[var(--radius-card)] border border-border bg-surface">
       <button
         type="button"
         onClick={onSelect}
-        className="w-full rounded-[var(--radius-card)] border border-border bg-surface p-4 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="press w-full p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={SESSION_STATUS_VARIANT[session.status]}>
@@ -45,7 +56,8 @@ function SessionOption({ session, onSelect }: { session: ClassSession; onSelect:
           {fallback(session.batch_name)}
         </p>
       </button>
-    </li>
+      </SpotlightCard>
+    </Reveal>
   );
 }
 
@@ -137,9 +149,14 @@ export function ClassPicker({
           description="Nothing is scheduled on the batches you teach for this day."
         />
       ) : (
-        <ul className="stagger space-y-2">
-          {sessions.map((session) => (
-            <SessionOption key={session.id} session={session} onSelect={() => onSelect(session)} />
+        <ul className="space-y-2">
+          {sessions.map((session, index) => (
+            <SessionOption
+              key={session.id}
+              session={session}
+              index={index}
+              onSelect={() => onSelect(session)}
+            />
           ))}
         </ul>
       )}

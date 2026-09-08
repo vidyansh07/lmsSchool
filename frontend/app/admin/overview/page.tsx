@@ -1,5 +1,13 @@
 'use client';
 
+import {
+  Award,
+  BookOpen,
+  ClipboardCheck,
+  GraduationCap,
+  Layers,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -8,6 +16,7 @@ import { ErrorState, LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { ApiError } from '@/lib/api';
 import { formatNumber, formatPercent, NO_DATA } from '@/lib/format';
@@ -59,13 +68,55 @@ function Overview() {
   }
   if (!data) return null;
 
+  // The attendance series doubles as the sparkline behind the headline tiles.
+  // It is the only trend the dashboard endpoint returns, so only the figures
+  // it genuinely describes get one — a sparkline under "Published courses"
+  // drawn from attendance data would be a decoration that lies.
+  const attendanceSeries = trend.map((point) => point.percent);
+
   const headline = [
-    ['Active students', data.active_students],
-    ['Active trainers', data.active_trainers],
-    ['Published courses', data.published_courses],
-    ['Active batches', data.active_batches],
-    ['Awaiting approval', data.awaiting_completion_approval],
-    ['Certificates issued', data.certificates_issued],
+    {
+      label: 'Active students',
+      value: data.active_students,
+      icon: Users,
+      href: '/admin/students',
+      hint: 'Enrolled and not suspended',
+    },
+    {
+      label: 'Active trainers',
+      value: data.active_trainers,
+      icon: GraduationCap,
+      href: '/admin/trainers',
+      hint: 'Assigned to at least one batch',
+    },
+    {
+      label: 'Published courses',
+      value: data.published_courses,
+      icon: BookOpen,
+      href: '/admin/courses',
+      hint: 'Visible in the catalogue',
+    },
+    {
+      label: 'Active batches',
+      value: data.active_batches,
+      icon: Layers,
+      href: '/admin/batches',
+      hint: 'Running now',
+    },
+    {
+      label: 'Awaiting approval',
+      value: data.awaiting_completion_approval,
+      icon: ClipboardCheck,
+      href: '/admin/completions',
+      hint: 'Completions needing a decision',
+    },
+    {
+      label: 'Certificates issued',
+      value: data.certificates_issued,
+      icon: Award,
+      href: '/admin/certificates',
+      hint: 'Live, not revoked',
+    },
   ] as const;
 
   return (
@@ -87,16 +138,22 @@ function Overview() {
         </div>
       </div>
 
-      <div className="stagger grid gap-3 sm:grid-cols-3">
-        {headline.map(([label, value]) => (
-          <Card key={label} data-testid="headline-figure" className="animate-rise-in">
-            <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">{label}</p>
-              <p className="text-3xl font-semibold tabular-nums">{formatNumber(value)}</p>
-            </CardContent>
-          </Card>
+      <BentoGrid>
+        {headline.map((figure, index) => (
+          <BentoTile key={figure.label} span={4} index={index}>
+            <div data-testid="headline-figure" className="h-full">
+              <StatCard
+                label={figure.label}
+                value={figure.value}
+                icon={figure.icon}
+                hint={figure.hint}
+                href={figure.href}
+                trend={figure.label === 'Active students' ? attendanceSeries : undefined}
+              />
+            </div>
+          </BentoTile>
         ))}
-      </div>
+      </BentoGrid>
 
       <Card>
         <CardHeader>
