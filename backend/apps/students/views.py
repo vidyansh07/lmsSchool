@@ -45,14 +45,20 @@ class StudentFilterSet(django_filters.FilterSet):
     is_active = django_filters.BooleanFilter(field_name="user__is_active")
     qualification = django_filters.CharFilter(field_name="qualification", lookup_expr="exact")
     city = django_filters.CharFilter(field_name="city", lookup_expr="iexact")
+    # "Everyone from Infosys" — the question a referral scheme starts with.
+    institution = django_filters.CharFilter(field_name="institution", lookup_expr="icontains")
+    institution_kind = django_filters.CharFilter(field_name="institution_kind", lookup_expr="exact")
+    referred_by = django_filters.UUIDFilter(field_name="referred_by_id")
 
     class Meta:
         model = StudentProfile
-        fields = ("fee_status", "qualification", "city")
+        fields = ("fee_status", "qualification", "city", "institution", "institution_kind", "referred_by")
 
 
 def _base_queryset():
-    return StudentProfile.objects.select_related("user", "fee_status_updated_by")
+    return StudentProfile.objects.select_related(
+        "user", "fee_status_updated_by", "fee_amount_updated_by", "referred_by__user"
+    )
 
 
 class StudentListCreateView(ListCreateAPIView):

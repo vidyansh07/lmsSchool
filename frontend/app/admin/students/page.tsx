@@ -13,7 +13,7 @@ import { Alert } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge, categoryVariant } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Select } from '@/components/ui/input';
+import { Input, Select } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useList } from '@/hooks/use-list';
@@ -80,6 +80,17 @@ function StudentsTable() {
         onSearchChange={(value) => list.setQuery({ search: value })}
         placeholder="Student ID, name, email or institution"
       >
+        <div>
+          <label htmlFor="filter-institution" className="mb-1.5 block text-sm font-medium">
+            College or employer
+          </label>
+          <Input
+            id="filter-institution"
+            placeholder="e.g. Infosys"
+            value={String(list.query.institution ?? '')}
+            onChange={(event) => list.setQuery({ institution: event.target.value })}
+          />
+        </div>
         <div>
           <label htmlFor="filter-fee" className="mb-1.5 block text-sm font-medium">
             Fee status
@@ -178,6 +189,11 @@ function StudentsTable() {
                         <div className="min-w-0 leading-tight">
                           <p className="truncate font-semibold text-foreground">{row.full_name || '—'}</p>
                           <p className="truncate text-xs text-muted-foreground">{row.email}</p>
+                          {row.institution ? (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {row.institution_kind === 'employer' ? 'Works at' : 'Studies at'} {row.institution}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                     </Td>

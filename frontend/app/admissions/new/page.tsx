@@ -96,6 +96,12 @@ export function RegistrationWizard() {
   const [institutionKind, setInstitutionKind] = useState<InstitutionKind | ''>('');
   const [institution, setInstitution] = useState('');
   const [feeAmount, setFeeAmount] = useState('');
+  // Who sent them. Optional, and only ever an existing student picked from a
+  // search — a free-text name would be a referral nobody could credit.
+  const [referrerQuery, setReferrerQuery] = useState('');
+  const [referrerOptions, setReferrerOptions] = useState<StudentListRow[]>([]);
+  const [referrerLoading, setReferrerLoading] = useState(false);
+  const [referrer, setReferrer] = useState<StudentListRow | null>(null);
   const [studentErrors, setStudentErrors] = useState<Record<string, string>>({});
   const [duplicates, setDuplicates] = useState<StudentListRow[]>([]);
   const [duplicateChecking, setDuplicateChecking] = useState(false);
@@ -330,6 +336,40 @@ export function RegistrationWizard() {
     advanceTo('confirm', 'trainer');
   }
 
+  // Referrer search. Two characters before asking, and a short pause after the
+  // last keystroke, so a name typed at speed is one request rather than six.
+  useEffect(() => {
+    const query = referrerQuery.trim();
+    if (query.length < 2) {
+      const timer = setTimeout(() => setReferrerOptions([]), 0);
+      return () => clearTimeout(timer);
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setReferrerLoading(true);
+      listStudents({ search: query, page_size: 8 })
+        .then((page) => {
+          if (!cancelled) setReferrerOptions(page.results);
+        })
+        .catch(() => {
+          if (!cancelled) setReferrerOptions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setReferrerLoading(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [referrerQuery]);
+
+  const referrerOptionList: PickerOption[] = referrerOptions.map((row) => ({
+    value: row.id,
+    label: row.full_name || row.email,
+    detail: row.student_id,
+  }));
+
   // --- Final submission ------------------------------------------------
 
   async function ensureStudent(): Promise<StudentProfile> {
@@ -344,6 +384,7 @@ export function RegistrationWizard() {
         qualification,
         institution: institution.trim(),
         institution_kind: institutionKind,
+        referred_by: referrer?.id ?? null,
       },
       // Sent only when a figure was typed: an empty field means "not decided",
       // which the API stores as null, not as a fee of nothing.
@@ -608,6 +649,37 @@ export function RegistrationWizard() {
                 </Field>
               </div>
 
+              <div className="space-y-2 rounded-[var(--radius-card)] border border-dashed border-border p-4">
+                <p className="text-sm font-medium">Referred by</p>
+                <p className="text-xs text-muted-foreground">
+                  If an existing student sent them, pick that student so the referral can be credited later.
+                </p>
+                {referrer ? (
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <Badge variant="blue">{referrer.student_id}</Badge>
+                    <span className="font-medium">{referrer.full_name || referrer.email}</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setReferrer(null)}>
+                      Clear
+                    </Button>
+                  </div>
+                ) : (
+                  <SearchPicker
+                    label="Search students to credit"
+                    query={referrerQuery}
+                    onQueryChange={setReferrerQuery}
+                    options={referrerOptionList}
+                    selected=""
+                    onSelect={(option) => {
+                      setReferrer(referrerOptions.find((row) => row.id === option.value) ?? null);
+                      setReferrerQuery('');
+                    }}
+                    isLoading={referrerLoading}
+                    placeholder="Name, email or student ID"
+                    emptyMessage="No student matches."
+                  />
+                )}
+              </div>
+
               {duplicateChecking ? (
                 <p className="text-xs text-muted-foreground">Checking for existing students…</p>
               ) : null}
@@ -824,6 +896,12 @@ export function RegistrationWizard() {
                       {institutionKind === 'employer' ? 'Employer' : 'College'}
                     </dt>
                     <dd className="font-medium">{institution.trim() || 'Not specified'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Referred by</dt>
+                    <dd className="font-medium">
+                      {referrer ? `${referrer.full_name || referrer.email} (${referrer.student_id})` : 'Nobody'}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs text-muted-foreground">Agreed fee</dt>

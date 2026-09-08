@@ -73,6 +73,7 @@ def create_student(
             "student_id": profile.student_id,
             "user_id": str(user.pk),
             "fee_amount": str(fee_amount) if fee_amount is not None else None,
+            "referred_by": str(profile.referred_by_id) if profile.referred_by_id else None,
         },
     )
     return profile

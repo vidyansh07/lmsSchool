@@ -22,7 +22,11 @@ from .models import MIN_FEE_AMOUNT, FeeStatus, InstitutionKind, Qualification, S
 
 #: Fields an administrator may set or change. Identifiers, the linked account
 #: and timestamps are absent: they are system-owned.
-ADMIN_EDITABLE_FIELDS = (*StudentProfile.SELF_EDITABLE_FIELDS, "notes")
+# What a counsellor or administrator may set that a student may not: internal
+# notes, and who referred them. The referral is here and not in the
+# self-editable set on purpose — a student naming their own referrer is how a
+# referral scheme gets gamed.
+ADMIN_EDITABLE_FIELDS = (*StudentProfile.SELF_EDITABLE_FIELDS, "notes", "referred_by")
 
 
 class StudentProfileSerializer(StrictModelSerializer):
@@ -35,6 +39,17 @@ class StudentProfileSerializer(StrictModelSerializer):
     user = UserSerializer(read_only=True)
     completion_percent = serializers.IntegerField(read_only=True)
     is_profile_complete = serializers.BooleanField(read_only=True)
+    referred_by_label = serializers.SerializerMethodField()
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_referred_by_label(self, obj: StudentProfile) -> str | None:
+        """"Priya Shah (GRS-S-00012)" — name first, because that is what a
+        counsellor remembers; the id second, because names repeat."""
+        referrer = obj.referred_by
+        if referrer is None:
+            return None
+        name = referrer.user.full_name or referrer.user.email
+        return f"{name} ({referrer.student_id})"
 
     class Meta:
         model = StudentProfile
@@ -62,6 +77,8 @@ class StudentProfileSerializer(StrictModelSerializer):
             "fee_status_updated_at",
             "fee_amount",
             "fee_amount_updated_at",
+            "referred_by",
+            "referred_by_label",
             "completion_percent",
             "is_profile_complete",
             "created_at",
@@ -75,6 +92,7 @@ class AdminStudentProfileSerializer(StudentProfileSerializer):
 
     fee_status_updated_by = serializers.SerializerMethodField()
     fee_amount_updated_by = serializers.SerializerMethodField()
+    referrals_count = serializers.SerializerMethodField()
 
     class Meta(StudentProfileSerializer.Meta):
         fields = (
@@ -82,8 +100,14 @@ class AdminStudentProfileSerializer(StudentProfileSerializer):
             "notes",
             "fee_status_updated_by",
             "fee_amount_updated_by",
+            "referrals_count",
         )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_referrals_count(self, obj: StudentProfile) -> int:
+        annotated = getattr(obj, "referrals_count", None)
+        return annotated if annotated is not None else obj.referrals.count()
 
     @extend_schema_field(serializers.EmailField(allow_null=True))
     def get_fee_status_updated_by(self, obj: StudentProfile) -> str | None:
@@ -120,6 +144,9 @@ class StudentListSerializer(serializers.ModelSerializer):
             "qualification",
             "fee_status",
             "fee_amount",
+            "institution",
+            "institution_kind",
+            "referred_by",
             "is_active",
             "is_email_verified",
             "created_at",
@@ -130,6 +157,9 @@ class StudentListSerializer(serializers.ModelSerializer):
 class StudentProfileFieldsSerializer(StrictModelSerializer):
     """Profile fields accepted when an administrator creates a student."""
 
+    referred_by = serializers.PrimaryKeyRelatedField(
+        queryset=StudentProfile.objects.all(), required=False, allow_null=True
+    )
     institution = SafeCharField(max_length=200, required=False, allow_blank=True)
     institution_kind = serializers.ChoiceField(
         choices=InstitutionKind.choices, required=False, allow_blank=True
@@ -201,6 +231,9 @@ class StudentSelfUpdateSerializer(StrictModelSerializer):
 class AdminStudentUpdateSerializer(StrictModelSerializer):
     """What an administrator may change. Fee status has its own endpoint."""
 
+    referred_by = serializers.PrimaryKeyRelatedField(
+        queryset=StudentProfile.objects.all(), required=False, allow_null=True
+    )
     institution = SafeCharField(max_length=200, required=False, allow_blank=True)
     institution_kind = serializers.ChoiceField(
         choices=InstitutionKind.choices, required=False, allow_blank=True

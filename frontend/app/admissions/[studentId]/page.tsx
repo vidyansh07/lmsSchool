@@ -487,6 +487,31 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               <dd>{student.institution || 'Not provided'}</dd>
             </div>
             <div>
+              <dt className="text-xs text-muted-foreground">Referred by</dt>
+              <dd>
+                {student.referred_by && student.referred_by_label ? (
+                  <Link href={`/admissions/${student.referred_by}`} className="text-primary hover:underline">
+                    {student.referred_by_label}
+                  </Link>
+                ) : (
+                  'Nobody'
+                )}
+              </dd>
+            </div>
+            {typeof student.referrals_count === 'number' && student.referrals_count > 0 ? (
+              <div>
+                <dt className="text-xs text-muted-foreground">Has referred</dt>
+                <dd>
+                  <Link
+                    href={`/admin/students?referred_by=${student.id}`}
+                    className="text-primary hover:underline"
+                  >
+                    {student.referrals_count === 1 ? '1 student' : `${student.referrals_count} students`}
+                  </Link>
+                </dd>
+              </div>
+            ) : null}
+            <div>
               <dt className="text-xs text-muted-foreground">Guardian</dt>
               <dd>
                 {student.guardian_name

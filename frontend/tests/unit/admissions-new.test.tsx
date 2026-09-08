@@ -121,6 +121,8 @@ function student(overrides: Partial<StudentProfile> = {}): StudentProfile {
     fee_status: 'pending',
     fee_amount: null,
     fee_amount_updated_at: null,
+    referred_by: null,
+    referred_by_label: null,
     fee_status_updated_at: null,
     completion_percent: 0,
     is_profile_complete: false,
@@ -167,6 +169,26 @@ beforeEach(() => {
   assignBatchTrainer.mockReset();
   enrolStudent.mockReset();
 });
+
+function referrerRow(): StudentListRow {
+  return {
+    id: 'referrer-1',
+    student_id: 'GRS-S-00012',
+    user_id: 'u-referrer',
+    email: 'priya@example.com',
+    full_name: 'Priya Shah',
+    city: 'Jaipur',
+    qualification: 'bachelors',
+    fee_status: 'paid',
+    fee_amount: '20000.00',
+    institution: 'Infosys',
+    institution_kind: 'employer',
+    referred_by: null,
+    is_active: true,
+    is_email_verified: true,
+    created_at: '2026-01-01T00:00:00Z',
+  };
+}
 
 async function fillStudentStep(user: ReturnType<typeof userEvent.setup>, overrides: { email?: string } = {}) {
   await user.type(screen.getByLabelText('Email', { exact: false }), overrides.email ?? 'jane@example.com');
@@ -396,6 +418,46 @@ describe('RegistrationWizard — confirming', () => {
         fee_amount: '25000',
         profile: expect.objectContaining({ institution: 'Infosys', institution_kind: 'employer' }),
       }),
+    );
+  });
+
+  it('credits the existing student who sent them', async () => {
+    createStudent.mockResolvedValue(student());
+    assignBatchTrainer.mockResolvedValue({});
+    enrolStudent.mockResolvedValue(enrollment());
+    // The referrer search and the duplicate check share `listStudents`; the
+    // duplicate check searches by the *new* email, which matches nothing here.
+    listStudents.mockImplementation(async ({ search }: { search?: string } = {}) =>
+      search === 'Priya'
+        ? { ...emptyPage<StudentListRow>(), count: 1, results: [referrerRow()] }
+        : { ...emptyPage<StudentListRow>(), results: [] },
+    );
+
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+    await user.type(screen.getByLabelText('Search students to credit'), 'Priya');
+    await waitFor(() => expect(screen.getByText(/Priya Shah/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search students to credit results'), 'referrer-1');
+    // Picked: the picker gives way to the chosen student and a way to undo it.
+    expect(screen.getByText('GRS-S-00012')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+    await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
+    await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search trainers results'), 'trainer-1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
+    expect(screen.getByText('Priya Shah (GRS-S-00012)')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
+
+    await waitFor(() => expect(createStudent).toHaveBeenCalledOnce());
+    expect(createStudent).toHaveBeenCalledWith(
+      expect.objectContaining({ profile: expect.objectContaining({ referred_by: 'referrer-1' }) }),
     );
   });
 

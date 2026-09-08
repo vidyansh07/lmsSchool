@@ -106,6 +106,10 @@ export interface StudentProfile {
    *  `null` is "not decided" — never zero. */
   fee_amount: string | null;
   fee_amount_updated_at: string | null;
+  /** The student who referred this one — an id, and a printable label
+   *  ("Priya Shah (GRS-S-00012)") so no screen has to fetch the referrer. */
+  referred_by: string | null;
+  referred_by_label: string | null;
   completion_percent: number;
   is_profile_complete: boolean;
   created_at: string;
@@ -114,6 +118,8 @@ export interface StudentProfile {
   notes?: string;
   fee_status_updated_by?: string | null;
   fee_amount_updated_by?: string | null;
+  /** How many students this one has referred. Admin view only. */
+  referrals_count?: number;
 }
 
 export interface StudentListRow {
@@ -126,6 +132,9 @@ export interface StudentListRow {
   qualification: Qualification | '';
   fee_status: FeeStatus;
   fee_amount: string | null;
+  institution: string;
+  institution_kind: InstitutionKind | '';
+  referred_by: string | null;
   is_active: boolean;
   is_email_verified: boolean;
   created_at: string;

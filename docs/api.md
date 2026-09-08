@@ -135,7 +135,8 @@ name, email, student ID and trainer ID.
 | `POST` | `<id>/fee-amount/` | `student.set_fee_status` — set or clear (`null`) the agreed fee |
 
 Filters: `?fee_status=`, `?qualification=`, `?city=`, `?is_active=`, `?search=`
-(student ID, name, email, institution), `?ordering=`.
+(student ID, name, email, institution), `?institution=` (contains),
+`?institution_kind=`, `?referred_by=<student id>`, `?ordering=`.
 
 **The agreed fee.** `POST /students/` accepts a top-level `fee_amount` (rupees,
 minimum 1000, two decimals) alongside `profile`; it is checked against
@@ -148,6 +149,14 @@ the field rather than ignoring it. Every change is audited with both values
 
 **College or employer.** `profile.institution` is the name; `profile.institution_kind`
 says which it is (`college` | `employer` | empty). Both are self-editable.
+
+**Referrals.** A working professional who joins to learn a new skill is also a
+channel, so a counsellor may record `profile.referred_by` — the id of the
+existing student who sent them — at registration or later via `PATCH <id>/`.
+Not self-editable (a student naming their own referrer is how a scheme gets
+gamed), never the student themselves, and it survives the referrer's record
+being removed. Reads carry `referred_by_label` ("Priya Shah (GRS-S-00012)");
+the admin view adds `referrals_count`, and `?referred_by=` lists them.
 
 ### Trainers — `/api/v1/trainers/`
 

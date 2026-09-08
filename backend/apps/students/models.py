@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -208,6 +209,25 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         blank=True,
         help_text=_("Administrator-only. Never returned to the student."),
     )
+
+    # Who brought this student in. A working professional who joins to learn a
+    # new skill is also a channel — colleagues follow — and the institute wants
+    # to be able to credit that later. Recorded by the counsellor, never by the
+    # student, and kept if the referrer's record is later removed: the fact of
+    # the referral does not stop being true.
+    referred_by = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="referrals",
+        help_text=_("The existing student who referred this one, if any."),
+    )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.referred_by_id is not None and self.referred_by_id == self.pk:
+            raise ValidationError({"referred_by": _("A student cannot refer themselves.")})
 
     class Meta:
         verbose_name = _("student profile")
