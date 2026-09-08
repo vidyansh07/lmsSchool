@@ -86,11 +86,12 @@ if [ -n "$IMPORT_DIR" ]; then
   rsync -a --include='*/' --include='*.xlsx' --exclude='*' "$IMPORT_DIR/" "$STAGE/"
   rsync -az -e "ssh ${SSH_OPTS[*]}" "$STAGE/" "$TARGET:/tmp/sitp-import/"
   rm -rf "$STAGE"
-  # The production image mounts no source tree, so the files are copied into
-  # the running container for the duration of the import.
-  remote "$COMPOSE exec -T backend mkdir -p /app/var && $COMPOSE cp /tmp/sitp-import backend:/app/var/sitp-import >/dev/null"
-  remote "$COMPOSE exec -T backend python manage.py import_sitp_workbooks /app/var/sitp-import --actor '$ACTOR' --report /app/var/sitp-import-report.json 2>&1 | grep -v 'grras.audit\|UserWarning\|warn(msg)' | tail -4"
-  remote "$COMPOSE cp backend:/app/var/sitp-import-report.json ./backups/sitp-import-report-\$(date +%Y%m%dT%H%M%SZ).json >/dev/null && echo '  report kept under backups/ on the host'"
+  # The production image mounts no source tree and runs as an unprivileged
+  # user for whom /app is read-only, so the files go to /tmp inside the
+  # running container for the duration of the import.
+  remote "$COMPOSE cp /tmp/sitp-import backend:/tmp/sitp-import >/dev/null"
+  remote "$COMPOSE exec -T backend python manage.py import_sitp_workbooks /tmp/sitp-import --actor '$ACTOR' --report /tmp/sitp-import-report.json 2>&1 | grep -v 'grras.audit\|UserWarning\|warn(msg)' | tail -4"
+  remote "$COMPOSE cp backend:/tmp/sitp-import-report.json ./backups/sitp-import-report-\$(date +%Y%m%dT%H%M%SZ).json >/dev/null && echo '  report kept under backups/ on the host'"
 fi
 
 echo "▶ done"
