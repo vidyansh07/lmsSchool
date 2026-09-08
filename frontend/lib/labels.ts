@@ -1,6 +1,6 @@
 /** Display labels for API enumerations, kept in one place. */
 
-import type { FeeStatus, Qualification, UserRole } from '@/types/api';
+import type { FeeStatus, InstitutionKind, Qualification, UserRole } from '@/types/api';
 
 export const FEE_STATUS_LABEL: Record<FeeStatus, string> = {
   pending: 'Pending',
@@ -47,3 +47,12 @@ export const ROLE_LABEL: Record<UserRole, string> = {
 export const ROLE_OPTIONS: { value: UserRole; label: string }[] = (
   Object.keys(ROLE_LABEL) as UserRole[]
 ).map((value) => ({ value, label: ROLE_LABEL[value] }));
+
+export const INSTITUTION_KIND_LABEL: Record<InstitutionKind, string> = {
+  college: 'College',
+  employer: 'Employer',
+};
+
+export const INSTITUTION_KIND_OPTIONS: { value: InstitutionKind; label: string }[] = (
+  Object.keys(INSTITUTION_KIND_LABEL) as InstitutionKind[]
+).map((value) => ({ value, label: INSTITUTION_KIND_LABEL[value] }));

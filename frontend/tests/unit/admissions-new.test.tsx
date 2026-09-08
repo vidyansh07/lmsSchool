@@ -111,6 +111,7 @@ function student(overrides: Partial<StudentProfile> = {}): StudentProfile {
     postal_code: '',
     qualification: '',
     institution: '',
+    institution_kind: '',
     graduation_year: null,
     emergency_contact_name: '',
     emergency_contact_phone: '',
@@ -118,6 +119,8 @@ function student(overrides: Partial<StudentProfile> = {}): StudentProfile {
     guardian_name: '',
     guardian_phone: '',
     fee_status: 'pending',
+    fee_amount: null,
+    fee_amount_updated_at: null,
     fee_status_updated_at: null,
     completion_percent: 0,
     is_profile_complete: false,
@@ -356,6 +359,62 @@ describe('RegistrationWizard — confirming', () => {
     expect(assignBatchTrainer).toHaveBeenCalledWith('batch-1', 'trainer-1');
     expect(enrolStudent).toHaveBeenCalledWith({ student_id: 'student-1', batch_id: 'batch-1' });
     await waitFor(() => expect(screen.getByText(/is enrolled on Morning batch/)).toBeInTheDocument());
+  });
+
+  it('sends the agreed fee and where the student works, decided at the desk', async () => {
+    createStudent.mockResolvedValue(student());
+    assignBatchTrainer.mockResolvedValue({});
+    enrolStudent.mockResolvedValue(enrollment());
+
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+    await user.selectOptions(screen.getByLabelText('Studying or working at'), 'employer');
+    // The name field relabels itself for an employer, so the counsellor is
+    // never asked for a "college" from somebody who has a job.
+    await user.type(screen.getByLabelText('Company name'), 'Infosys');
+    await user.type(screen.getByLabelText(/Agreed fee/), '25000');
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+    await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
+    await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search trainers results'), 'trainer-1');
+
+    // The confirm step repeats both back before anything is created.
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
+    expect(screen.getByText('Infosys')).toBeInTheDocument();
+    expect(screen.getByText('₹25,000')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
+
+    await waitFor(() => expect(createStudent).toHaveBeenCalledOnce());
+    expect(createStudent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fee_amount: '25000',
+        profile: expect.objectContaining({ institution: 'Infosys', institution_kind: 'employer' }),
+      }),
+    );
+  });
+
+  it('sends no fee at all when none was decided, rather than a fee of nothing', async () => {
+    createStudent.mockResolvedValue(student());
+    assignBatchTrainer.mockResolvedValue({});
+    enrolStudent.mockResolvedValue(enrollment());
+
+    const user = userEvent.setup();
+    await goToConfirmWithExistingBatch(user);
+    await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search trainers results'), 'trainer-1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
+    expect(screen.getByText('Not decided yet')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
+
+    await waitFor(() => expect(createStudent).toHaveBeenCalledOnce());
+    expect(createStudent).toHaveBeenCalledWith(expect.objectContaining({ fee_amount: null }));
   });
 
   it('does not assign a trainer when the batch already has one', async () => {

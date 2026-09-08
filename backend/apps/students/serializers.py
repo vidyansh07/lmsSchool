@@ -12,12 +12,13 @@ student ends up able to set their own fee status.
 
 from __future__ import annotations
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserSerializer
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
-from .models import FeeStatus, Qualification, StudentProfile
+from .models import MIN_FEE_AMOUNT, FeeStatus, InstitutionKind, Qualification, StudentProfile
 
 #: Fields an administrator may set or change. Identifiers, the linked account
 #: and timestamps are absent: they are system-owned.
@@ -50,6 +51,7 @@ class StudentProfileSerializer(StrictModelSerializer):
             "postal_code",
             "qualification",
             "institution",
+            "institution_kind",
             "graduation_year",
             "emergency_contact_name",
             "emergency_contact_phone",
@@ -58,6 +60,8 @@ class StudentProfileSerializer(StrictModelSerializer):
             "guardian_phone",
             "fee_status",
             "fee_status_updated_at",
+            "fee_amount",
+            "fee_amount_updated_at",
             "completion_percent",
             "is_profile_complete",
             "created_at",
@@ -70,13 +74,24 @@ class AdminStudentProfileSerializer(StudentProfileSerializer):
     """Administrator read view: adds internal notes and fee attribution."""
 
     fee_status_updated_by = serializers.SerializerMethodField()
+    fee_amount_updated_by = serializers.SerializerMethodField()
 
     class Meta(StudentProfileSerializer.Meta):
-        fields = (*StudentProfileSerializer.Meta.fields, "notes", "fee_status_updated_by")
+        fields = (
+            *StudentProfileSerializer.Meta.fields,
+            "notes",
+            "fee_status_updated_by",
+            "fee_amount_updated_by",
+        )
         read_only_fields = fields
 
+    @extend_schema_field(serializers.EmailField(allow_null=True))
     def get_fee_status_updated_by(self, obj: StudentProfile) -> str | None:
         return obj.fee_status_updated_by.email if obj.fee_status_updated_by else None
+
+    @extend_schema_field(serializers.EmailField(allow_null=True))
+    def get_fee_amount_updated_by(self, obj: StudentProfile) -> str | None:
+        return obj.fee_amount_updated_by.email if obj.fee_amount_updated_by else None
 
 
 class StudentListSerializer(serializers.ModelSerializer):
@@ -104,6 +119,7 @@ class StudentListSerializer(serializers.ModelSerializer):
             "city",
             "qualification",
             "fee_status",
+            "fee_amount",
             "is_active",
             "is_email_verified",
             "created_at",
@@ -115,6 +131,9 @@ class StudentProfileFieldsSerializer(StrictModelSerializer):
     """Profile fields accepted when an administrator creates a student."""
 
     institution = SafeCharField(max_length=200, required=False, allow_blank=True)
+    institution_kind = serializers.ChoiceField(
+        choices=InstitutionKind.choices, required=False, allow_blank=True
+    )
     qualification = serializers.ChoiceField(
         choices=Qualification.choices, required=False, allow_blank=True
     )
@@ -132,6 +151,16 @@ class StudentCreateSerializer(StrictSerializer):
     last_name = SafeCharField(max_length=100, required=False, allow_blank=True, default="")
     phone = SafeCharField(max_length=20, required=False, allow_blank=True, default="")
     profile = StudentProfileFieldsSerializer(required=False)
+    # Top-level, not inside ``profile``: that sub-object is the self-editable
+    # set plus notes, and the fee is neither. Keeping it out of that list is
+    # what stops it becoming self-editable by accident when the list grows.
+    fee_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=MIN_FEE_AMOUNT,
+        required=False,
+        allow_null=True,
+    )
 
     def validate_email(self, value: str) -> str:
         from apps.accounts.models import User
@@ -140,6 +169,15 @@ class StudentCreateSerializer(StrictSerializer):
         if User.objects.filter(email__iexact=normalised).exists():
             raise serializers.ValidationError("An account with this email already exists.")
         return normalised
+
+
+class FeeAmountUpdateSerializer(StrictSerializer):
+    """Set or clear the agreed fee. ``null`` means "not decided", never zero."""
+
+    fee_amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=MIN_FEE_AMOUNT, allow_null=True
+    )
+    note = SafeCharField(max_length=500, required=False, allow_blank=True, default="")
 
 
 class StudentSelfUpdateSerializer(StrictModelSerializer):
@@ -151,6 +189,9 @@ class StudentSelfUpdateSerializer(StrictModelSerializer):
     """
 
     institution = SafeCharField(max_length=200, required=False, allow_blank=True)
+    institution_kind = serializers.ChoiceField(
+        choices=InstitutionKind.choices, required=False, allow_blank=True
+    )
 
     class Meta:
         model = StudentProfile
@@ -161,6 +202,9 @@ class AdminStudentUpdateSerializer(StrictModelSerializer):
     """What an administrator may change. Fee status has its own endpoint."""
 
     institution = SafeCharField(max_length=200, required=False, allow_blank=True)
+    institution_kind = serializers.ChoiceField(
+        choices=InstitutionKind.choices, required=False, allow_blank=True
+    )
 
     class Meta:
         model = StudentProfile

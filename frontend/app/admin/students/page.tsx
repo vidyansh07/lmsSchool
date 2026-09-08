@@ -18,6 +18,7 @@ import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useList } from '@/hooks/use-list';
 import { ApiError } from '@/lib/api';
+import { formatCurrency } from '@/lib/format';
 import { Capability } from '@/lib/capabilities';
 import {
   FEE_STATUS_LABEL,
@@ -146,6 +147,7 @@ function StudentsTable() {
                   <Th className="sticky top-0 z-10 bg-surface">Student</Th>
                   <Th className="sticky top-0 z-10 bg-surface">City</Th>
                   <Th className="sticky top-0 z-10 bg-surface">Qualification</Th>
+                  <Th className="sticky top-0 z-10 bg-surface text-right">Agreed fee</Th>
                   <Th
                     sortable
                     active={sortField === 'fee_status'}
@@ -187,6 +189,16 @@ function StudentsTable() {
                         </Badge>
                       ) : (
                         '—'
+                      )}
+                    </Td>
+                    <Td className="text-right tabular-nums">
+                      {/* Whole rupees: the paise are noise in a column. "Not
+                          decided" rather than a dash, because a blank here is
+                          a question the counsellor still has to answer. */}
+                      {row.fee_amount === null ? (
+                        <span className="text-xs text-muted-foreground">Not decided</span>
+                      ) : (
+                        <span className="font-medium">{formatCurrency(row.fee_amount)}</span>
                       )}
                     </Td>
                     <Td>

@@ -18,8 +18,10 @@ Explicitly out of scope unless separately requested: payments, accounting,
 payroll, HR, CRM, sales, procurement, inventory, placement ERP.
 
 One deliberate exception already shipped: `StudentProfile.fee_status` is a
-*status flag* (pending / partial / paid / waived / overdue). It carries no
-amounts, no transactions and no gateway — see `docs/DECISIONS.md` D-011.
+*status flag* (pending / partial / paid / waived / overdue), and beside it the
+fee *agreed* at registration (`fee_amount`, quoted by the counsellor or
+manager, minimum ₹1,000). No transactions, no receipts and no gateway — see
+`docs/DECISIONS.md` D-011 and its 2026-09-08 amendment.
 
 ---
 

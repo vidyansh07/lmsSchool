@@ -132,9 +132,22 @@ name, email, student ID and trainer ID.
 | `GET` | `<id>/` | `student.view_any`, or the owner |
 | `PATCH` | `<id>/` | `student.update_any`, or the owner (restricted fields) |
 | `POST` | `<id>/fee-status/` | `student.set_fee_status` |
+| `POST` | `<id>/fee-amount/` | `student.set_fee_status` — set or clear (`null`) the agreed fee |
 
 Filters: `?fee_status=`, `?qualification=`, `?city=`, `?is_active=`, `?search=`
 (student ID, name, email, institution), `?ordering=`.
+
+**The agreed fee.** `POST /students/` accepts a top-level `fee_amount` (rupees,
+minimum 1000, two decimals) alongside `profile`; it is checked against
+`student.set_fee_status` in the service, so creating a student and quoting a
+fee are two permissions even though they arrive in one request. `null` means
+"not decided"; zero is refused. Students read `fee_amount` on `me/` and cannot
+change it — it is not in the self-editable set, and the strict serializer names
+the field rather than ignoring it. Every change is audited with both values
+(`student.fee_amount.changed`).
+
+**College or employer.** `profile.institution` is the name; `profile.institution_kind`
+says which it is (`college` | `employer` | empty). Both are self-editable.
 
 ### Trainers — `/api/v1/trainers/`
 

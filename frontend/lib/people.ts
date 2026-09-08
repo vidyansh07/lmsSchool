@@ -113,8 +113,22 @@ export async function createStudent(payload: {
   last_name?: string;
   phone?: string;
   profile?: Record<string, unknown>;
+  /** Rupees, minimum 1000. Omit or `null` when no fee was agreed yet. */
+  fee_amount?: string | number | null;
 }): Promise<StudentProfile> {
   return apiMutate<StudentProfile>('/api/v1/students/', { method: 'POST', body: payload });
+}
+
+/** Set or clear (`null`) the fee agreed with a student. */
+export async function setFeeAmount(
+  id: string,
+  feeAmount: string | number | null,
+  note = '',
+): Promise<StudentProfile> {
+  return apiMutate<StudentProfile>(`/api/v1/students/${id}/fee-amount/`, {
+    method: 'POST',
+    body: { fee_amount: feeAmount, note },
+  });
 }
 
 export async function setFeeStatus(

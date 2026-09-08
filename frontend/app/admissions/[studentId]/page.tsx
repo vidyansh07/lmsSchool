@@ -16,12 +16,15 @@ import { use, useCallback, useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 
 import { SearchPicker, type PickerOption } from '@/components/admissions/search-picker';
+import { useAuth } from '@/components/auth-provider';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { ApiError, errorMessage } from '@/lib/api';
 import {
@@ -33,8 +36,9 @@ import {
 import { ENROLLMENT_STATUS_LABEL, ENROLLMENT_STATUS_VARIANT, formatDate } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
 import { listCourses } from '@/lib/courses';
-import { FEE_STATUS_LABEL, FEE_STATUS_VARIANT, QUALIFICATION_LABEL } from '@/lib/labels';
-import { getStudent } from '@/lib/people';
+import { formatCurrency } from '@/lib/format';
+import { FEE_STATUS_LABEL, FEE_STATUS_VARIANT, INSTITUTION_KIND_LABEL, QUALIFICATION_LABEL } from '@/lib/labels';
+import { getStudent, setFeeAmount } from '@/lib/people';
 import type { BatchListRow, CourseListRow, Enrollment, StudentProfile } from '@/types/api';
 
 function EnrolPanel({ student, onEnrolled }: { student: StudentProfile; onEnrolled: () => void }) {
@@ -273,6 +277,118 @@ function EnrolmentHistory({
   );
 }
 
+/**
+ * The fee agreed with this student.
+ *
+ * Shown to everybody who can open the record; editable only by those holding
+ * `student.set_fee_status`, which the server checks again on the request.
+ * The edit is inline rather than a dialog: it is one number, and the person
+ * changing it is usually looking at the rest of the record while they do.
+ */
+function FeeCard({ student, onChanged }: { student: StudentProfile; onChanged: () => void }) {
+  const { can } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const mayEdit = can(Capability.studentSetFeeStatus);
+
+  function startEditing() {
+    setDraft(student.fee_amount ?? '');
+    setNote('');
+    setSaveError('');
+    setEditing(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    setSaveError('');
+    try {
+      // Blank clears it — "not decided" — which the API stores as null. Zero is
+      // refused there, so it is refused here in the same words.
+      await setFeeAmount(student.id, draft.trim() === '' ? null : draft.trim(), note.trim());
+      setEditing(false);
+      onChanged();
+    } catch (cause) {
+      setSaveError(errorMessage(cause, 'The fee could not be saved.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="animate-rise-in">
+      <CardHeader className="flex-row items-start justify-between gap-3">
+        <div className="space-y-1">
+          <CardTitle>Agreed fee</CardTitle>
+          <CardDescription>
+            {student.fee_amount_updated_at
+              ? `Set ${formatDate(student.fee_amount_updated_at)}${
+                  student.fee_amount_updated_by ? ` by ${student.fee_amount_updated_by}` : ''
+                }.`
+              : 'Not decided yet.'}
+          </CardDescription>
+        </div>
+        {mayEdit && !editing ? (
+          <Button type="button" variant="outline" size="sm" onClick={startEditing}>
+            {student.fee_amount === null ? 'Set the fee' : 'Change'}
+          </Button>
+        ) : null}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {editing ? (
+          <form
+            className="grid grid-cols-1 gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto] sm:items-end"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save();
+            }}
+            noValidate
+          >
+            <Field label="Fee (₹)" htmlFor="fee-amount" hint="Minimum ₹1,000. Blank clears it.">
+              <Input
+                id="fee-amount"
+                type="number"
+                inputMode="decimal"
+                min={1000}
+                step="1"
+                autoFocus
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+              />
+            </Field>
+            <Field label="Note" htmlFor="fee-note" hint="Why it changed — kept in the audit trail.">
+              <Input id="fee-note" value={note} onChange={(event) => setNote(event.target.value)} />
+            </Field>
+            <div className="flex gap-2">
+              <Button type="submit" size="sm" disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </Button>
+              <Button type="button" size="sm" variant="ghost" disabled={saving} onClick={() => setEditing(false)}>
+                Cancel
+              </Button>
+            </div>
+            {saveError ? (
+              <div className="sm:col-span-3">
+                <Alert variant="error">{saveError}</Alert>
+              </div>
+            ) : null}
+          </form>
+        ) : (
+          <p className="text-3xl font-semibold tabular-nums">
+            {student.fee_amount === null ? (
+              <span className="text-lg font-medium text-muted-foreground">Not decided</span>
+            ) : (
+              formatCurrency(student.fee_amount)
+            )}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function StudentDetail({ studentId }: { studentId: string }) {
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
@@ -340,6 +456,8 @@ export function StudentDetail({ studentId }: { studentId: string }) {
         </Badge>
       </div>
 
+      <FeeCard student={student} onChanged={() => setReloadToken((value) => value + 1)} />
+
       <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Contact and background</CardTitle>
@@ -363,7 +481,9 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               <dd>{student.qualification ? QUALIFICATION_LABEL[student.qualification] : 'Not provided'}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Institution</dt>
+              <dt className="text-xs text-muted-foreground">
+                {student.institution_kind ? INSTITUTION_KIND_LABEL[student.institution_kind] : 'College or employer'}
+              </dt>
               <dd>{student.institution || 'Not provided'}</dd>
             </div>
             <div>

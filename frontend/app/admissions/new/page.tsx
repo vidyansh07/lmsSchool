@@ -43,16 +43,10 @@ import { formatDate, isoDaysFromNow, isoToday } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
 import { listCourses } from '@/lib/courses';
 import { QUALIFICATION_OPTIONS } from '@/lib/labels';
+import { formatCurrency } from '@/lib/format';
+import { INSTITUTION_KIND_OPTIONS } from '@/lib/labels';
 import { createStudent, listStudents, listTrainers } from '@/lib/people';
-import type {
-  BatchDetail,
-  BatchListRow,
-  CourseListRow,
-  Enrollment,
-  StudentListRow,
-  StudentProfile,
-  TrainerListRow,
-} from '@/types/api';
+import type { BatchDetail, BatchListRow, CourseListRow, Enrollment, InstitutionKind, StudentListRow, StudentProfile, TrainerListRow } from '@/types/api';
 
 type StepKey = 'student' | 'course' | 'batch' | 'trainer' | 'confirm';
 
@@ -70,6 +64,9 @@ interface DraftBatch {
   endDate: string;
   capacity: string;
 }
+
+/** The least a fee can be. The API enforces it; this is the input's `min`. */
+const MIN_FEE_AMOUNT = 1000;
 
 function freshDraftBatch(): DraftBatch {
   return { name: '', startDate: isoToday(), endDate: isoDaysFromNow(90), capacity: '20' };
@@ -93,6 +90,12 @@ export function RegistrationWizard() {
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
   const [qualification, setQualification] = useState('');
+  // Where the student is coming from — a college or an employer — and what
+  // was agreed for the course. Both decided at the desk, both optional: a
+  // walk-in may not know the fee yet, and the record should not wait on it.
+  const [institutionKind, setInstitutionKind] = useState<InstitutionKind | ''>('');
+  const [institution, setInstitution] = useState('');
+  const [feeAmount, setFeeAmount] = useState('');
   const [studentErrors, setStudentErrors] = useState<Record<string, string>>({});
   const [duplicates, setDuplicates] = useState<StudentListRow[]>([]);
   const [duplicateChecking, setDuplicateChecking] = useState(false);
@@ -336,7 +339,15 @@ export function RegistrationWizard() {
       first_name: firstName.trim(),
       last_name: lastName.trim(),
       phone: phone.trim(),
-      profile: { city: city.trim(), qualification },
+      profile: {
+        city: city.trim(),
+        qualification,
+        institution: institution.trim(),
+        institution_kind: institutionKind,
+      },
+      // Sent only when a figure was typed: an empty field means "not decided",
+      // which the API stores as null, not as a fee of nothing.
+      fee_amount: feeAmount.trim() === '' ? null : feeAmount.trim(),
     });
     setCreatedStudent(created);
     return created;
@@ -550,6 +561,51 @@ export function RegistrationWizard() {
                     ))}
                   </Select>
                 </Field>
+                <Field
+                  label="Studying or working at"
+                  htmlFor="reg-institution-kind"
+                  error={studentErrors.institution_kind}
+                >
+                  <Select
+                    value={institutionKind}
+                    onChange={(event) => setInstitutionKind(event.target.value as InstitutionKind | '')}
+                  >
+                    <option value="">Not specified</option>
+                    {INSTITUTION_KIND_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field
+                  label={institutionKind === 'employer' ? 'Company name' : 'College name'}
+                  htmlFor="reg-institution"
+                  error={studentErrors.institution}
+                  hint="Where the student studies or works, for the record."
+                >
+                  <Input
+                    value={institution}
+                    onChange={(event) => setInstitution(event.target.value)}
+                    placeholder={institutionKind === 'employer' ? 'e.g. Infosys' : 'e.g. JECRC University'}
+                  />
+                </Field>
+                <Field
+                  label="Agreed fee (₹)"
+                  htmlFor="reg-fee"
+                  error={studentErrors.fee_amount}
+                  hint="Decided with the student. Minimum ₹1,000; leave blank if not decided yet."
+                >
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min={MIN_FEE_AMOUNT}
+                    step="1"
+                    value={feeAmount}
+                    onChange={(event) => setFeeAmount(event.target.value)}
+                    placeholder="e.g. 25000"
+                  />
+                </Field>
               </div>
 
               {duplicateChecking ? (
@@ -761,6 +817,18 @@ export function RegistrationWizard() {
                       <span className="block text-sm font-normal text-muted-foreground">
                         {email || 'No email yet'}
                       </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">
+                      {institutionKind === 'employer' ? 'Employer' : 'College'}
+                    </dt>
+                    <dd className="font-medium">{institution.trim() || 'Not specified'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Agreed fee</dt>
+                    <dd className="font-medium tabular-nums">
+                      {feeAmount.trim() === '' ? 'Not decided yet' : formatCurrency(feeAmount)}
                     </dd>
                   </div>
                   <div>

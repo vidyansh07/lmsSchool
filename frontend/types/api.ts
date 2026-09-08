@@ -25,6 +25,8 @@ export type Qualification =
   | 'masters'
   | 'other';
 
+export type InstitutionKind = 'college' | 'employer';
+
 export interface User {
   id: string;
   email: string;
@@ -91,6 +93,7 @@ export interface StudentProfile {
   postal_code: string;
   qualification: Qualification | '';
   institution: string;
+  institution_kind: InstitutionKind | '';
   graduation_year: number | null;
   emergency_contact_name: string;
   emergency_contact_phone: string;
@@ -99,6 +102,10 @@ export interface StudentProfile {
   guardian_phone: string;
   fee_status: FeeStatus;
   fee_status_updated_at: string | null;
+  /** The fee agreed at registration, in rupees, as the API's decimal string.
+   *  `null` is "not decided" — never zero. */
+  fee_amount: string | null;
+  fee_amount_updated_at: string | null;
   completion_percent: number;
   is_profile_complete: boolean;
   created_at: string;
@@ -106,6 +113,7 @@ export interface StudentProfile {
   /** Administrator-only fields, absent from a student's own view. */
   notes?: string;
   fee_status_updated_by?: string | null;
+  fee_amount_updated_by?: string | null;
 }
 
 export interface StudentListRow {
@@ -117,6 +125,7 @@ export interface StudentListRow {
   city: string;
   qualification: Qualification | '';
   fee_status: FeeStatus;
+  fee_amount: string | null;
   is_active: boolean;
   is_email_verified: boolean;
   created_at: string;

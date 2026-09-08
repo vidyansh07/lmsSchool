@@ -29,6 +29,7 @@ from .models import StudentProfile
 from .serializers import (
     AdminStudentProfileSerializer,
     AdminStudentUpdateSerializer,
+    FeeAmountUpdateSerializer,
     FeeStatusUpdateSerializer,
     StudentCreateSerializer,
     StudentListSerializer,
@@ -98,6 +99,8 @@ class StudentListCreateView(ListCreateAPIView):
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
         profile_fields = data.pop("profile", None) or {}
+        # The service re-checks that this actor may quote a fee; the view's
+        # capability is `student.create`, which is not the same permission.
         profile = services.create_student(actor=request.user, profile_fields=profile_fields, **data)
         return Response(AdminStudentProfileSerializer(profile).data, status=status.HTTP_201_CREATED)
 
@@ -207,6 +210,35 @@ class StudentMeView(APIView):
             **serializer.validated_data,
         )
         return Response(StudentProfileSerializer(updated).data)
+
+
+class StudentFeeAmountView(APIView):
+    """Set or clear the fee agreed with a student.
+
+    The same capability as the status — a counsellor or manager who may say a
+    fee is paid may say what it was — and, like the status, always audited.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.STUDENT_SET_FEE_STATUS
+
+    @extend_schema(
+        summary="Set a student's agreed fee",
+        request=FeeAmountUpdateSerializer,
+        responses={200: AdminStudentProfileSerializer},
+        tags=STUDENTS_TAG,
+    )
+    def post(self, request, student_id):
+        profile = get_object_or_404(_base_queryset(), pk=student_id)
+        serializer = FeeAmountUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated = services.set_fee_amount(
+            profile=profile,
+            fee_amount=serializer.validated_data["fee_amount"],
+            actor=request.user,
+            note=serializer.validated_data.get("note", ""),
+        )
+        return Response(AdminStudentProfileSerializer(updated).data)
 
 
 class StudentFeeStatusView(APIView):

@@ -86,6 +86,28 @@ export function formatNumber(
 }
 
 /** `value` treated as a plain number already scaled to 0–100, e.g. 82 → "82%". */
+/**
+ * A rupee amount: `"12500.00"` → `"₹12,500"`. The API sends decimals as
+ * strings, so this takes the string, the number, or nothing, and only ever
+ * produces a currency or the fallback — never `₹NaN`.
+ *
+ * Whole rupees by default: a fee is agreed in round figures and the paise
+ * are noise in a table. Pass `decimals: 2` on a screen that needs them.
+ */
+export function formatCurrency(
+  value: unknown,
+  { label = NOT_AVAILABLE, decimals = 0 }: { label?: FallbackLabel; decimals?: number } = {},
+): string {
+  const number = toFiniteNumber(value);
+  if (number === null) return label;
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(number);
+}
+
 export function formatPercent(
   value: unknown,
   options: { fallbackLabel?: FallbackLabel; maximumFractionDigits?: number } = {},

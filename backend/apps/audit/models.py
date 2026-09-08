@@ -60,6 +60,7 @@ class AuditAction(models.TextChoices):
     STUDENT_CREATED = "student.created", _("Student created")
     STUDENT_UPDATED = "student.updated", _("Student profile updated")
     STUDENT_FEE_STATUS_CHANGED = "student.fee_status.changed", _("Student fee status changed")
+    STUDENT_FEE_AMOUNT_CHANGED = "student.fee_amount.changed", _("Student fee amount changed")
     TRAINER_CREATED = "trainer.created", _("Trainer created")
     TRAINER_UPDATED = "trainer.updated", _("Trainer profile updated")
 

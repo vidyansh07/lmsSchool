@@ -61,6 +61,14 @@ Adding it later is one migration.
 audited. No amounts, transactions, receipts or gateway. Half an accounting
 system would create a second source of truth about money.
 
+**Amended 2026-09-08, at the owner's request.** The fee *agreed* with a student
+at registration is now recorded: `StudentProfile.fee_amount`, in rupees,
+minimum 1,000, quoted by the counsellor or manager (`student.set_fee_status`),
+nullable meaning "not decided", and audited with both values on every change.
+It is a quoted figure, not a balance — what was agreed, not what has been
+paid — so the rest of D-011 stands: still no transactions, receipts, ledger or
+gateway, and `tests/test_data_and_audit_security.py` still asserts that.
+
 ### D-012 · `courses` is one app, not three
 **Phase 2.** Category, Course, Module, Lesson, Resource and VideoAsset are one
 aggregate. The boundary that matters is not structural but a question — "who may

@@ -334,13 +334,22 @@ def test_an_external_link_must_be_https():
 
 
 def test_no_payment_gateway_is_present():
-    """§14.11: "No payment gateway in this project", and fees are a status only."""
+    """§14.11: "No payment gateway in this project".
+
+    The guard used to forbid any field with "amount" in its name as well, on
+    the reading that fees were a status only. The owner has since decided
+    that the fee *agreed* at registration is recorded (``fee_amount``, quoted
+    by the counsellor or manager, minimum 1,000) — see ``docs/api.md``. That is
+    a number, not a ledger: still no transactions, invoices, payments or
+    gateway, which is what this test now checks.
+    """
     from apps.students.models import StudentProfile
 
     fields = {field.name for field in StudentProfile._meta.get_fields()}
-    for forbidden in ("amount", "transaction", "invoice", "payment", "gateway", "razorpay"):
+    for forbidden in ("transaction", "invoice", "payment", "gateway", "razorpay", "balance", "paid_"):
         assert not any(forbidden in name for name in fields), forbidden
     assert "fee_status" in fields
+    assert "fee_amount" in fields
 
 
 def test_email_credentials_come_from_the_environment(settings):

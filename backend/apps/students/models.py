@@ -13,6 +13,9 @@ the LMS makes a decision from them, and data not collected cannot leak.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -24,9 +27,15 @@ class FeeStatus(models.TextChoices):
     """Coarse fee state, maintained by administrators.
 
     Scope note: this is a *status flag*, not an accounting system. There are no
-    amounts, transactions or receipts here by design — a fee ledger belongs with
-    the payments module in a later phase, and putting half of one here would
-    create a second source of truth about money.
+    transactions or receipts here by design — a fee ledger belongs with the
+    payments module in a later phase, and putting half of one here would create
+    a second source of truth about money.
+
+    The one figure that does live here is ``fee_amount``: the fee agreed with
+    the student at registration, which the counsellor or manager decides case
+    by case. It is a *quoted* amount, not a balance — what was agreed, not what
+    has been paid — and it exists so that the status above has a number to be
+    a status *of*.
     """
 
     PENDING = "pending", _("Pending")
@@ -34,6 +43,21 @@ class FeeStatus(models.TextChoices):
     PAID = "paid", _("Paid")
     WAIVED = "waived", _("Waived")
     OVERDUE = "overdue", _("Overdue")
+
+
+class InstitutionKind(models.TextChoices):
+    """What the ``institution`` field names: where the student studies, or
+    where they work. Most people registering are one or the other, and the
+    label a counsellor sees ("College" / "Employer") is the same fact from the
+    other side."""
+
+    COLLEGE = "college", _("College")
+    EMPLOYER = "employer", _("Employer")
+
+
+#: The least a course fee can be, in rupees. A quoted fee below this is a typo
+#: or a test, not a decision, so the service refuses it rather than storing it.
+MIN_FEE_AMOUNT = Decimal("1000")
 
 
 class Qualification(models.TextChoices):
@@ -59,6 +83,7 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         "postal_code",
         "qualification",
         "institution",
+        "institution_kind",
         "graduation_year",
         "emergency_contact_name",
         "emergency_contact_phone",
@@ -111,10 +136,17 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         _("highest qualification"), max_length=32, choices=Qualification.choices, blank=True
     )
     institution = models.CharField(
-        _("college or institution"),
+        _("college or employer"),
         max_length=200,
         blank=True,
         validators=[validate_no_control_characters],
+    )
+    institution_kind = models.CharField(
+        _("institution kind"),
+        max_length=16,
+        choices=InstitutionKind.choices,
+        blank=True,
+        help_text=_("Whether the institution named is where the student studies or works."),
     )
     graduation_year = models.PositiveSmallIntegerField(_("graduation year"), null=True, blank=True)
 
@@ -147,6 +179,28 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         on_delete=models.SET_NULL,
         related_name="fee_status_updates",
         help_text=_("Administrator who last changed the fee status."),
+    )
+
+    # The fee agreed at registration. Null means "not yet decided" — every
+    # student registered before this field existed, and any registered without
+    # a counsellor quoting one. Never zero: zero would be a claim.
+    fee_amount = models.DecimalField(
+        _("agreed fee"),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(MIN_FEE_AMOUNT)],
+        help_text=_("In rupees. Decided by the counsellor or manager; students see it but cannot change it."),
+    )
+    fee_amount_updated_at = models.DateTimeField(_("fee amount updated at"), null=True, blank=True)
+    fee_amount_updated_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="fee_amount_updates",
+        help_text=_("Who last set the agreed fee."),
     )
 
     notes = models.TextField(

@@ -8,8 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
 import { fieldErrors } from '@/lib/api';
-import { QUALIFICATION_OPTIONS } from '@/lib/labels';
+import { INSTITUTION_KIND_OPTIONS, QUALIFICATION_OPTIONS } from '@/lib/labels';
 import { createStudent } from '@/lib/people';
+import type { InstitutionKind } from '@/types/api';
 
 /**
  * Create a student account and profile in one step.
@@ -30,6 +31,9 @@ export function CreateStudentDialog({
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
   const [qualification, setQualification] = useState('');
+  const [institutionKind, setInstitutionKind] = useState<InstitutionKind | ''>('');
+  const [institution, setInstitution] = useState('');
+  const [feeAmount, setFeeAmount] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -43,7 +47,8 @@ export function CreateStudentDialog({
         first_name: firstName,
         last_name: lastName,
         phone,
-        profile: { city, qualification },
+        profile: { city, qualification, institution: institution.trim(), institution_kind: institutionKind },
+        fee_amount: feeAmount.trim() === '' ? null : feeAmount.trim(),
       });
       onCreated();
     } catch (cause) {
@@ -97,6 +102,41 @@ export function CreateStudentDialog({
                   </option>
                 ))}
               </Select>
+            </Field>
+            <Field label="Studying or working at" htmlFor="new-institution-kind" error={errors.institution_kind}>
+              <Select
+                value={institutionKind}
+                onChange={(event) => setInstitutionKind(event.target.value as InstitutionKind | '')}
+              >
+                <option value="">Not specified</option>
+                {INSTITUTION_KIND_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field
+              label={institutionKind === 'employer' ? 'Company name' : 'College name'}
+              htmlFor="new-institution"
+              error={errors.institution}
+            >
+              <Input value={institution} onChange={(event) => setInstitution(event.target.value)} />
+            </Field>
+            <Field
+              label="Agreed fee (₹)"
+              htmlFor="new-fee"
+              error={errors.fee_amount}
+              hint="Minimum ₹1,000. Leave blank if not decided yet."
+            >
+              <Input
+                type="number"
+                inputMode="decimal"
+                min={1000}
+                step="1"
+                value={feeAmount}
+                onChange={(event) => setFeeAmount(event.target.value)}
+              />
             </Field>
           </div>
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fallback,
   formatCount,
+  formatCurrency,
   formatDate,
   formatDateTime,
   formatDuration,
@@ -213,5 +214,27 @@ describe('formatCount', () => {
 
   it('falls back for a negative count', () => {
     expect(formatCount(-1, 'seat')).toBe(NO_DATA);
+  });
+});
+
+describe('formatCurrency', () => {
+  it('formats rupees in Indian grouping, whole by default', () => {
+    // The API sends decimals as strings; a fee of ₹12,500.00 reads as ₹12,500.
+    expect(formatCurrency('12500.00')).toBe('₹12,500');
+    expect(formatCurrency(1234567)).toBe('₹12,34,567');
+  });
+
+  it('keeps the paise only when asked', () => {
+    expect(formatCurrency('999.50', { decimals: 2 })).toBe('₹999.50');
+  });
+
+  it.each(HOSTILE_VALUES)('never renders ₹NaN for %p', (value) => {
+    const result = formatCurrency(value);
+    expect(result).toBe(NOT_AVAILABLE);
+    expect(result).not.toMatch(/NaN|undefined|Infinity/);
+  });
+
+  it('takes a different fallback label when the screen has one', () => {
+    expect(formatCurrency(null, { label: NO_DATA })).toBe(NO_DATA);
   });
 });

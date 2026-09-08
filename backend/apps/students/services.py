@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.models import User, UserRole
+from apps.accounts.roles import Capability, has_capability
 from apps.accounts.services import create_user
 from apps.audit.services import AuditAction, record
-from apps.common.exceptions import ApplicationError, ConflictError
+from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
 from apps.common.identifiers import next_student_id
 
-from .models import StudentProfile
+from .models import MIN_FEE_AMOUNT, StudentProfile
 
 
 @transaction.atomic
@@ -27,13 +29,22 @@ def create_student(
     profile_fields: dict[str, Any] | None = None,
     password: str | None = None,
     send_invitation: bool = True,
+    fee_amount: Decimal | None = None,
 ) -> StudentProfile:
     """Create the user account and the student profile as one unit.
 
     Both happen in a single transaction: an account without a profile would be a
     student who cannot be found by student ID, and a profile without an account
     would be unreachable. Neither half is allowed to exist alone.
+
+    ``fee_amount`` is the fee agreed at registration. Quoting one is a separate
+    permission from creating the record — ``student.set_fee_status`` rather
+    than ``student.create`` — and it is checked here, not only in the view, so
+    a caller that reaches this function some other way is held to the same
+    rule.
     """
+    if fee_amount is not None:
+        _check_fee_amount(fee_amount, actor=actor)
     user = create_user(
         email=email,
         password=password,
@@ -46,6 +57,10 @@ def create_student(
     )
 
     profile = StudentProfile(user=user, student_id=next_student_id(), **(profile_fields or {}))
+    if fee_amount is not None:
+        profile.fee_amount = fee_amount
+        profile.fee_amount_updated_at = timezone.now()
+        profile.fee_amount_updated_by = actor
     profile.full_clean(exclude=["user", "student_id"])
     profile.save()
 
@@ -54,9 +69,23 @@ def create_student(
         actor=actor,
         resource_type="student",
         resource_id=profile.pk,
-        context={"student_id": profile.student_id, "user_id": str(user.pk)},
+        context={
+            "student_id": profile.student_id,
+            "user_id": str(user.pk),
+            "fee_amount": str(fee_amount) if fee_amount is not None else None,
+        },
     )
     return profile
+
+
+def _check_fee_amount(fee_amount: Decimal, *, actor: User) -> None:
+    """The two rules a quoted fee is held to, wherever it is quoted from."""
+    if not has_capability(actor, Capability.STUDENT_SET_FEE_STATUS):
+        raise AuthorityError("You do not have permission to set a student's fee.")
+    if fee_amount < MIN_FEE_AMOUNT:
+        raise ApplicationError(
+            {"fee_amount": [f"The fee must be at least \u20b9{MIN_FEE_AMOUNT:,.0f}."]}
+        )
 
 
 @transaction.atomic
@@ -94,6 +123,48 @@ def update_student_profile(
         resource_type="student",
         resource_id=profile.pk,
         context={"student_id": profile.student_id, "changed_fields": sorted(changed)},
+    )
+    return profile
+
+
+@transaction.atomic
+def set_fee_amount(
+    *, profile: StudentProfile, fee_amount: Decimal | None, actor: User, note: str = ""
+) -> StudentProfile:
+    """Set, change or clear the fee agreed with a student.
+
+    ``None`` clears it — "not decided" — and is the only way to get back to
+    that state; zero is refused, because a fee of nothing is a claim and a
+    missing fee is not. Every change is audited with both values, since this
+    is a number somebody will one day ask about.
+    """
+    if fee_amount is not None:
+        _check_fee_amount(fee_amount, actor=actor)
+    elif not has_capability(actor, Capability.STUDENT_SET_FEE_STATUS):
+        raise AuthorityError("You do not have permission to set a student's fee.")
+
+    previous = profile.fee_amount
+    if previous == fee_amount:
+        return profile
+
+    profile.fee_amount = fee_amount
+    profile.fee_amount_updated_at = timezone.now()
+    profile.fee_amount_updated_by = actor
+    profile.save(
+        update_fields=["fee_amount", "fee_amount_updated_at", "fee_amount_updated_by", "updated_at"]
+    )
+
+    record(
+        action=AuditAction.STUDENT_FEE_AMOUNT_CHANGED,
+        actor=actor,
+        resource_type="student",
+        resource_id=profile.pk,
+        context={
+            "student_id": profile.student_id,
+            "from": str(previous) if previous is not None else None,
+            "to": str(fee_amount) if fee_amount is not None else None,
+            "note": note,
+        },
     )
     return profile
 

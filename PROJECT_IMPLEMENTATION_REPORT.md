@@ -84,7 +84,7 @@ defaults live in `base`; relaxations live only in the development modules.
 | `accounts` | User, roles/capabilities, auth, user administration | **IMPLEMENTED** — `COUNSELLOR` added in phase 12.1 |
 | `audit` | Append-only audit log | **IMPLEMENTED** |
 | `health` | Liveness/readiness with a check registry | **IMPLEMENTED** |
-| `students` | `StudentProfile`, human ids (`GRS-S-00042`), fee status flag | **IMPLEMENTED** |
+| `students` | `StudentProfile`, human ids (`GRS-S-00042`), fee status flag, agreed fee amount (min ₹1,000, counsellor/manager, audited), college-or-employer | **IMPLEMENTED** |
 | `trainers` | `TrainerProfile`, human ids | **IMPLEMENTED** |
 | `courses` | Category, Course, Module, Lesson, LessonResource, VideoAsset, CourseAssignment (authorship) | **IMPLEMENTED** (see §11 on "Topic") |
 | `batches` | Batch, BatchSchedule, delivery mode, schedule-conflict detection | **IMPLEMENTED** |

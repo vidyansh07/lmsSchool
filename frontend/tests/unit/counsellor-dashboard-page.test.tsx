@@ -39,6 +39,7 @@ function student(overrides: Partial<StudentListRow> = {}): StudentListRow {
     city: 'Jaipur',
     qualification: 'bachelors',
     fee_status: 'pending',
+    fee_amount: null,
     is_active: true,
     is_email_verified: false,
     created_at: new Date().toISOString(),
