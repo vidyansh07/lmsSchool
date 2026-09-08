@@ -29,6 +29,21 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
+  /**
+   * Development only. The dev server refuses `/_next/*` requests carrying an
+   * `Origin` it does not recognise, and it recognises `localhost` but not
+   * `127.0.0.1` — the same machine, spelled the other way. Open the app at
+   * `http://127.0.0.1:3100` and every chunk comes back 403, so React never
+   * hydrates: the page renders, no handler is attached, and signing in does
+   * nothing but reload the form. It looks exactly like the backend being
+   * unreachable, which is the wrong place to go looking.
+   *
+   * Listed here rather than worked around because the check is right — it
+   * stops a hostile page on another origin reading dev assets — it just has to
+   * know which spellings mean this machine. It has no effect on a production
+   * build.
+   */
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
   async headers() {
     return [
       {

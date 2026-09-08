@@ -28,10 +28,51 @@ import { NextResponse, type NextRequest } from 'next/server';
  * The nonce reaches the renderer through the `x-nonce` request header, which is
  * where Next looks for it.
  */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1', '0.0.0.0']);
+
+/**
+ * The API origins this page is allowed to talk to.
+ *
+ * Normally one: whatever `NEXT_PUBLIC_API_BASE_URL` says. But that value is
+ * baked in at build time, and locally it names a loopback host — so a visitor
+ * who reached this dev server as `127.0.0.1`, by LAN address, or from a phone
+ * is served a page whose scripts call the API on the *host they used*, because
+ * `lib/env.ts` rewrites it to keep cookies working. The policy has to allow
+ * the origin those scripts will actually reach, or the browser blocks the call
+ * and the interface looks like it cannot see the backend at all.
+ *
+ * Only ever the request's own host with the API's port, and only when the
+ * configured host is a loopback name. A deployment whose API is a real
+ * hostname gets exactly the one origin it was configured with.
+ */
+function apiOrigins(request: NextRequest, configured: string): string[] {
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    return [];
+  }
+  if (!LOOPBACK_HOSTS.has(url.hostname)) return [configured];
+
+  const origins = new Set([url.origin]);
+  const requestHost = request.nextUrl.hostname;
+  if (requestHost && requestHost !== url.hostname) {
+    origins.add(`${request.nextUrl.protocol}//${requestHost}:${url.port}`);
+  }
+  // The pair is interchangeable to a person and not to a browser, so allowing
+  // both spares everyone the version of this bug that depends on which one
+  // they happened to type.
+  for (const host of ['localhost', '127.0.0.1']) {
+    origins.add(`${url.protocol}//${host}:${url.port}`);
+  }
+  return [...origins];
+}
+
 export function middleware(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-  const apiOrigin = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
+  const configuredApiOrigin = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
   const isDevelopment = process.env.NODE_ENV === 'development';
+  const apiOrigin = apiOrigins(request, configuredApiOrigin).join(' ');
 
   const policy = [
     "default-src 'self'",

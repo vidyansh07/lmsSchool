@@ -32,9 +32,56 @@ export const env = {
   isServer: typeof window === 'undefined',
 } as const;
 
+/** Names that mean "the machine this code is running on", which is the whole
+ *  problem: on the server that is the developer's laptop, and in a browser it
+ *  is whatever machine is holding the browser. */
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1', '0.0.0.0']);
+
+/**
+ * The API origin as the browser should reach it.
+ *
+ * `NEXT_PUBLIC_API_BASE_URL` is baked in at build time, and locally it says
+ * `http://localhost:8000`. That is correct for exactly one visitor: someone
+ * whose browser is on the same machine *and* who typed `localhost`. Reach the
+ * same dev server as `127.0.0.1:3100`, by LAN address, or from a phone, and
+ * the page tells that browser to call its own localhost — which is a different
+ * machine, or at best a different site.
+ *
+ * Two things break there, and the second is the one that wastes an afternoon:
+ * the API rejects the unlisted origin with no CORS header, and even once that
+ * is allowed, a session cookie set on `localhost` is not sent from a page on
+ * `127.0.0.1`, because those are separate sites as far as SameSite is
+ * concerned. Sign-in appears to succeed and the next request is anonymous.
+ *
+ * So when the configured host is a loopback name and the page is being served
+ * from somewhere else, keep the configured scheme and port and follow the
+ * host the visitor actually used. A deployment whose API is a real hostname
+ * never matches the loopback test, so this cannot fire in production.
+ */
+function browserApiBaseUrl(): string {
+  const configured = env.publicApiBaseUrl;
+  if (typeof window === 'undefined') return configured;
+
+  let url: URL;
+  try {
+    url = new URL(configured);
+  } catch {
+    // A relative or malformed base means the API is same-origin. Leave it.
+    return configured;
+  }
+
+  const pageHost = window.location.hostname;
+  if (!LOOPBACK_HOSTS.has(url.hostname)) return configured;
+  if (!pageHost || pageHost === url.hostname) return configured;
+
+  url.hostname = pageHost;
+  url.protocol = window.location.protocol;
+  return trimTrailingSlash(url.toString());
+}
+
 /** Base URL to use from the current execution context. */
 export function apiBaseUrl(): string {
-  return env.isServer ? env.internalApiBaseUrl : env.publicApiBaseUrl;
+  return env.isServer ? env.internalApiBaseUrl : browserApiBaseUrl();
 }
 
 /**
