@@ -7,7 +7,7 @@ django-cors-headers==4.9.0
 # Declarative query-parameter filtering for the admin list endpoints.
 django-filter==26.1
 drf-spectacular==0.30.0
-psycopg[binary]==3.3.4
+psycopg[binary]==3.3.5
 # Required by ImageField, and used to verify that an uploaded file really
 # is an image before it is stored.
 Pillow==12.3.0
@@ -38,7 +38,7 @@ qrcode==8.2
 # prod because the backend is selected by configuration and a developer must be
 # able to run against MinIO or a mock without a second requirements file.
 django-storages==1.14.6
-boto3==1.43.85
+boto3==1.43.89
 
 # Background work. Redis is already the cache; Celery turns it into a broker so
 # that sending mail and other slow work happens outside the request that
