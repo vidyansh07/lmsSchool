@@ -61,6 +61,11 @@ class AuditAction(models.TextChoices):
     STUDENT_UPDATED = "student.updated", _("Student profile updated")
     STUDENT_FEE_STATUS_CHANGED = "student.fee_status.changed", _("Student fee status changed")
     STUDENT_FEE_AMOUNT_CHANGED = "student.fee_amount.changed", _("Student fee amount changed")
+    FEE_PLAN_SET = "fee.plan.set", _("Fee agreed")
+    FEE_PLAN_UPDATED = "fee.plan.updated", _("Fee changed")
+    FEE_NEXT_DUE_SET = "fee.next_due.set", _("Next payment expected")
+    FEE_PAYMENT_RECORDED = "fee.payment.recorded", _("Payment recorded")
+    FEE_PAYMENT_VOIDED = "fee.payment.voided", _("Payment voided")
     TRAINER_CREATED = "trainer.created", _("Trainer created")
     TRAINER_UPDATED = "trainer.updated", _("Trainer profile updated")
 

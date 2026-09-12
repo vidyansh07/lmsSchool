@@ -544,8 +544,9 @@ def test_timeline_progress_on_a_course_with_no_lessons_returns_none_and_not_star
     course_services.create_module(
         course=empty_course, actor=admin_user, title="Module", status=PublishStatus.DRAFT
     )
-    # A batch may only run a published course, or one in review — a course
-    # with no published lessons cannot itself be published.
+    # Kept in review, not published: a course with no published lessons cannot
+    # be published, and the point of this fixture is to have no published
+    # content at all. (A batch may run any course that is not archived.)
     course_services.set_course_status(
         course=empty_course, target=PublishStatus.IN_REVIEW, actor=admin_user, may_publish=False
     )

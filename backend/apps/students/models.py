@@ -215,7 +215,9 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         null=True,
         blank=True,
         validators=[MinValueValidator(MIN_FEE_AMOUNT)],
-        help_text=_("In rupees. Decided by the counsellor or manager; students see it but cannot change it."),
+        help_text=_(
+            "In rupees. Decided by the counsellor or manager; students see it but cannot change it."
+        ),
     )
     fee_amount_updated_at = models.DateTimeField(_("fee amount updated at"), null=True, blank=True)
     fee_amount_updated_by = models.ForeignKey(

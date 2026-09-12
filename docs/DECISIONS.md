@@ -69,6 +69,19 @@ It is a quoted figure, not a balance — what was agreed, not what has been
 paid — so the rest of D-011 stands: still no transactions, receipts, ledger or
 gateway, and `tests/test_data_and_audit_security.py` still asserts that.
 
+**Amended again 2026-09-12, at the owner's request, before client delivery.**
+There is now a ledger — `apps.fees` — but a deliberately small one. One
+`FeePlan` per **enrolment** (the fee is for a course, not a person), holding
+the agreed amount, an optional discount with its reason, and one optional
+"next ₹N expected by <date>". `FeePayment` rows underneath it: ad hoc amounts
+on any past date by any method, each with a receipt number from a sequence.
+No instalment schedule, no invoices, no gateway. Payments are voided, never
+deleted; every change is audited with old and new values; `fee_status` on the
+student is derived from the ledger rather than set beside it. Counsellors and
+managers write to it without approval (`fee.manage_any`); administrators
+inherit it. The registration payment (₹1,000) is the floor for a first
+payment. The remaining line of D-011 that still holds: no payment gateway.
+
 ### D-012 · `courses` is one app, not three
 **Phase 2.** Category, Course, Module, Lesson, Resource and VideoAsset are one
 aggregate. The boundary that matters is not structural but a question — "who may

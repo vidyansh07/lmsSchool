@@ -63,6 +63,18 @@ class AdminEnrollmentSerializer(EnrollmentSerializer):
     student_code = serializers.CharField(source="student.student_id", read_only=True)
     student_name = serializers.CharField(source="student.user.full_name", read_only=True)
     student_email = serializers.EmailField(source="student.user.email", read_only=True)
+    # Fee figures are annotated by ``apps.fees.queries.annotate_enrollment_fee``
+    # on the list; a detail fetched without them reports null, never a guess.
+    fee_payable = serializers.DecimalField(
+        max_digits=12, decimal_places=2, read_only=True, allow_null=True, default=None
+    )
+    fee_paid = serializers.DecimalField(
+        max_digits=12, decimal_places=2, read_only=True, allow_null=True, default=None
+    )
+    fee_balance = serializers.DecimalField(
+        max_digits=12, decimal_places=2, read_only=True, allow_null=True, default=None
+    )
+    fee_next_due_on = serializers.DateField(read_only=True, allow_null=True, default=None)
 
     class Meta(EnrollmentSerializer.Meta):
         fields = (
@@ -73,6 +85,10 @@ class AdminEnrollmentSerializer(EnrollmentSerializer):
             "student_email",
             "status_note",
             "status_changed_at",
+            "fee_payable",
+            "fee_paid",
+            "fee_balance",
+            "fee_next_due_on",
         )
         read_only_fields = fields
 

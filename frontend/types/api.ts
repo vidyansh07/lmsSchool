@@ -137,6 +137,12 @@ export interface StudentListRow {
   qualification: Qualification | '';
   fee_status: FeeStatus;
   fee_amount: string | null;
+  /** From the fee ledger, summed across the student's courses: agreed after
+   *  discount, received, still owed, and the nearest "expected by" date. */
+  fee_payable: string;
+  fee_paid: string;
+  fee_balance: string;
+  fee_next_due_on: string | null;
   institution: string;
   roll_number: string;
   institution_kind: InstitutionKind | '';
@@ -450,6 +456,12 @@ export interface Enrollment {
   student_email?: string;
   status_note?: string;
   status_changed_at?: string | null;
+  /** Staff lists only (`fee.view_any`): this enrolment's fee, null when none
+   *  has been agreed yet. */
+  fee_payable?: string | null;
+  fee_paid?: string | null;
+  fee_balance?: string | null;
+  fee_next_due_on?: string | null;
 }
 
 export interface LessonProgress {
@@ -1665,4 +1677,97 @@ export interface AcademicEvent {
 export interface GradeBand {
   label: string;
   min_percent: string;
+}
+
+// --- Fees --------------------------------------------------------------------
+
+export type PaymentMethod = 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'other';
+
+/** Derived by the server from the numbers; never stored, never set by hand. */
+export type FeePlanStatus = 'unpaid' | 'partial' | 'paid' | 'waived';
+
+export interface FeePayment {
+  id: string;
+  receipt_number: string;
+  amount: string;
+  paid_on: string;
+  method: PaymentMethod;
+  reference: string;
+  note: string;
+  recorded_by: string | null;
+  created_at: string;
+  is_voided: boolean;
+  voided_at: string | null;
+  voided_by: string | null;
+  void_reason: string;
+}
+
+/**
+ * The fee agreed for one enrolment, with everything paid against it.
+ *
+ * `payable`, `paid`, `balance`, `status` and `is_overdue` are computed by the
+ * server from the same rows, so a screen never does its own arithmetic.
+ */
+export interface FeePlan {
+  id: string;
+  enrollment_id: string;
+  enrollment_code: string;
+  enrollment_status: EnrollmentStatus;
+  course_title: string;
+  batch_code: string;
+  batch_name: string;
+  agreed_amount: string;
+  discount_amount: string;
+  discount_reason: string;
+  payable: string;
+  paid: string;
+  balance: string;
+  status: FeePlanStatus;
+  next_due_amount: string | null;
+  next_due_on: string | null;
+  is_overdue: boolean;
+  notes: string;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  payments: FeePayment[];
+}
+
+/** A plan as it appears in lists: the same figures without the payments. */
+export type FeePlanBrief = Omit<FeePlan, 'payments'> & {
+  student_id?: string;
+  student_name?: string;
+};
+
+export interface FeeHistoryEntry {
+  id: string;
+  action: string;
+  action_label: string;
+  actor_label: string;
+  created_at: string;
+  context: Record<string, unknown>;
+}
+
+export interface StudentFeeSummary {
+  payable_total: string;
+  paid_total: string;
+  balance_total: string;
+  next_due_amount: string | null;
+  next_due_on: string | null;
+  is_overdue: boolean;
+  enrollments_without_plan: number;
+  plans: FeePlan[];
+}
+
+export interface FeesOverview {
+  collected_today: string;
+  collected_this_week: string;
+  collected_this_month: string;
+  outstanding_total: string;
+  overdue_count: number;
+  unpaid_count: number;
+  enrollments_without_plan: number;
+  overdue: FeePlanBrief[];
+  due_soon: FeePlanBrief[];
 }

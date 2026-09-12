@@ -62,6 +62,8 @@ class Capability(models.TextChoices):
     STUDENT_CREATE = "student.create", _("Create students")
     STUDENT_UPDATE_ANY = "student.update_any", _("Update any student")
     STUDENT_SET_FEE_STATUS = "student.set_fee_status", _("Change a student's fee status")
+    FEE_VIEW_ANY = "fee.view_any", _("See any student's fees and payments")
+    FEE_MANAGE_ANY = "fee.manage_any", _("Set fees, discounts and record payments")
 
     # --- Trainer records
     TRAINER_VIEW_ANY = "trainer.view_any", _("View any trainer")
@@ -239,6 +241,8 @@ _MANAGER_CAPABILITIES = frozenset(
         Capability.STUDENT_CREATE,
         Capability.STUDENT_UPDATE_ANY,
         Capability.STUDENT_SET_FEE_STATUS,
+        Capability.FEE_VIEW_ANY,
+        Capability.FEE_MANAGE_ANY,
         Capability.TRAINER_VIEW_ANY,
         Capability.CATEGORY_MANAGE,
         Capability.COURSE_VIEW_ANY,
@@ -333,6 +337,8 @@ _COUNSELLOR_CAPABILITIES = frozenset(
         Capability.STUDENT_CREATE,
         Capability.STUDENT_UPDATE_ANY,
         Capability.STUDENT_SET_FEE_STATUS,
+        Capability.FEE_VIEW_ANY,
+        Capability.FEE_MANAGE_ANY,
         # Reading the catalogue, to choose what somebody is enrolling on.
         Capability.COURSE_VIEW_ANY,
         # Reading trainers, to put one on a batch. Not creating or editing them.

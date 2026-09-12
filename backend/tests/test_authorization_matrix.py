@@ -216,6 +216,9 @@ STUDENT_REACHABLE = frozenset(
         # trainer" rather than refusing — see the test below.
         "/api/v1/dashboard/student/",
         "/api/v1/dashboard/trainer/",
+        # Their own fees; every other fee route needs `fee.view_any` or a
+        # record that is theirs, and both are covered in `test_fees.py`.
+        "/api/v1/fees/me/",
     }
 )
 

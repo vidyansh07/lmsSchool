@@ -102,8 +102,10 @@ export function PublishPanel({
         </div>
         <CardDescription>
           {course.can_publish
-            ? 'You can change this course’s status.'
-            : 'You can edit this course and submit it for review. An owner or administrator publishes it.'}
+            ? 'You can change this course’s status. '
+            : 'You can edit this course and submit it for review. An owner or administrator publishes it. '}
+          Publishing only decides whether the course shows in the public catalogue — batches can be
+          created and students enrolled at any stage.
         </CardDescription>
       </CardHeader>
 

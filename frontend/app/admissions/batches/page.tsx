@@ -54,9 +54,9 @@ function CreateBatchInline({ onCreated }: { onCreated: () => void }) {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    listCourses({ status: 'published', page_size: 100, ordering: 'title' })
+    listCourses({ page_size: 100, ordering: 'title' })
       .then((page) => {
-        setCourses(page.results);
+        setCourses(page.results.filter((course) => course.status !== 'archived'));
         if (page.results.length > 0) setCourse((current) => current || page.results[0]!.id);
       })
       .catch(() => setErrors({ __all__: 'Could not load courses.' }));
@@ -98,7 +98,7 @@ function CreateBatchInline({ onCreated }: { onCreated: () => void }) {
             </Field>
             <Field label="Course" htmlFor="ab-course" error={errors.course} required>
               <Select value={course} onChange={(event) => setCourse(event.target.value)}>
-                {courses.length === 0 ? <option value="">No published courses</option> : null}
+                {courses.length === 0 ? <option value="">No courses yet</option> : null}
                 {courses.map((option) => (
                   <option key={option.id} value={option.id}>
                     {option.title}
@@ -177,7 +177,7 @@ export function BatchBrowser() {
 
   const loadCourses = useCallback(() => {
     listCourses({ page_size: 100, ordering: 'title' })
-      .then((page) => setCourses(page.results))
+      .then((page) => setCourses(page.results.filter((course) => course.status !== 'archived')))
       .catch(() => setCourses([]));
   }, []);
 

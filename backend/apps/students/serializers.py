@@ -43,7 +43,7 @@ class StudentProfileSerializer(StrictModelSerializer):
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_referred_by_label(self, obj: StudentProfile) -> str | None:
-        """"Priya Shah (GRS-S-00012)" — name first, because that is what a
+        """ "Priya Shah (GRS-S-00012)" — name first, because that is what a
         counsellor remembers; the id second, because names repeat."""
         referrer = obj.referred_by
         if referrer is None:
@@ -133,6 +133,13 @@ class StudentListSerializer(serializers.ModelSerializer):
     is_active = serializers.BooleanField(source="user.is_active", read_only=True)
     is_email_verified = serializers.BooleanField(source="user.is_email_verified", read_only=True)
     user_id = serializers.UUIDField(source="user.id", read_only=True)
+    # From the fee ledger (``apps.fees.queries``): what was agreed across the
+    # student's courses, what has come in, what is still owed, and the nearest
+    # date somebody wrote down for the next payment.
+    fee_payable = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    fee_paid = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    fee_balance = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
+    fee_next_due_on = serializers.DateField(read_only=True, allow_null=True)
 
     class Meta:
         model = StudentProfile
@@ -146,6 +153,10 @@ class StudentListSerializer(serializers.ModelSerializer):
             "qualification",
             "fee_status",
             "fee_amount",
+            "fee_payable",
+            "fee_paid",
+            "fee_balance",
+            "fee_next_due_on",
             "institution",
             "roll_number",
             "institution_kind",

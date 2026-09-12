@@ -38,6 +38,7 @@ import { CalendarRange, Clock, PlusCircle, Rocket, UploadCloud, UserPlus } from 
 import type { LucideIcon } from 'lucide-react';
 
 import { BatchWatchlist } from '@/components/counsellor/batches-panel';
+import { FeesPanel } from '@/components/counsellor/fees-panel';
 import { NotYetEnrolledPanel } from '@/components/counsellor/not-yet-enrolled-panel';
 import { PendingConfirmationsPanel } from '@/components/counsellor/pending-confirmations-panel';
 import { RecentActivityPanel } from '@/components/counsellor/recent-activity-panel';
@@ -49,8 +50,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api';
 import { listBatches, listEnrollments } from '@/lib/batches';
 import { Capability } from '@/lib/capabilities';
+import { getFeesOverview } from '@/lib/fees';
 import { listStudents } from '@/lib/people';
-import type { BatchListRow, Enrollment, StudentListRow } from '@/types/api';
+import type { BatchListRow, Enrollment, FeesOverview, StudentListRow } from '@/types/api';
 
 /**
  * One dashboard section's load state, independent of every other section's —
@@ -230,6 +232,8 @@ export function AdmissionsDashboardContent() {
     [] as BatchListRow[],
   );
 
+  const fees = useDashboardSection<FeesOverview | null>(() => getFeesOverview(), null);
+
   const enrolledStudentCodes = new Set(
     recentEnrollments.data.map((entry) => entry.student_code).filter((code): code is string => Boolean(code)),
   );
@@ -326,6 +330,18 @@ export function AdmissionsDashboardContent() {
           />
         </CardContent>
       </Card>
+
+      <section aria-labelledby="fees-heading" className="space-y-3">
+        <div className="space-y-0.5">
+          <h2 id="fees-heading" className="text-lg font-semibold tracking-tight">
+            Fees
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Collections and what is still owed. Record a payment from the student&apos;s record.
+          </p>
+        </div>
+        <FeesPanel overview={fees.data} isLoading={fees.isLoading} error={fees.error} onRetry={fees.reload} />
+      </section>
 
       <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="animate-rise-in">

@@ -99,22 +99,36 @@ def test_capacity_must_be_positive(api_client_no_csrf, admin_user, published_cou
 
 
 @pytest.mark.django_db
-def test_a_batch_cannot_run_an_unpublished_course(api_client_no_csrf, admin_user, draft_course):
+def test_a_batch_can_run_a_draft_course_but_not_an_archived_one(
+    api_client_no_csrf, admin_user, draft_course, published_course
+):
+    """Publishing gates the catalogue, not teaching: a batch is planned while
+    the lessons are still being written. Only an archived course is refused."""
+    from apps.courses import services as course_services
+    from apps.courses.models import PublishStatus
+
     api_client_no_csrf.force_login(admin_user)
     today = timezone.localdate()
-    response = api_client_no_csrf.post(
+    payload = {
+        "name": "Planned ahead",
+        "course": str(draft_course.id),
+        "start_date": today.isoformat(),
+        "end_date": (today + timedelta(days=30)).isoformat(),
+        "capacity": 10,
+    }
+    created = api_client_no_csrf.post(BATCHES_URL, payload, format="json")
+    assert created.status_code == 201, created.json()
+
+    course_services.set_course_status(
+        course=published_course, target=PublishStatus.ARCHIVED, actor=admin_user, may_publish=True
+    )
+    refused = api_client_no_csrf.post(
         BATCHES_URL,
-        {
-            "name": "Too early",
-            "course": str(draft_course.id),
-            "start_date": today.isoformat(),
-            "end_date": (today + timedelta(days=30)).isoformat(),
-            "capacity": 10,
-        },
+        {**payload, "name": "Too late", "course": str(published_course.id)},
         format="json",
     )
-    assert response.status_code == 400
-    assert "course" in response.json()["error"]["details"]
+    assert refused.status_code == 400
+    assert "course" in refused.json()["error"]["details"]
 
 
 @pytest.mark.django_db

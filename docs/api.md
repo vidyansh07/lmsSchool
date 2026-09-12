@@ -132,7 +132,7 @@ name, email, student ID and trainer ID.
 | `GET` | `<id>/` | `student.view_any`, or the owner |
 | `PATCH` | `<id>/` | `student.update_any`, or the owner (restricted fields) |
 | `POST` | `<id>/fee-status/` | `student.set_fee_status` |
-| `POST` | `<id>/fee-amount/` | `student.set_fee_status` — set or clear (`null`) the agreed fee |
+| `POST` | `<id>/fee-amount/` | `student.set_fee_status` — set or clear (`null`) the fee quoted at registration |
 
 Filters: `?fee_status=`, `?qualification=`, `?city=`, `?is_active=`, `?search=`
 (student ID, name, email, institution), `?institution=` (contains),
@@ -146,6 +146,11 @@ fee are two permissions even though they arrive in one request. `null` means
 change it — it is not in the self-editable set, and the strict serializer names
 the field rather than ignoring it. Every change is audited with both values
 (`student.fee_amount.changed`).
+
+Every list row also carries the ledger's totals across the student's courses —
+`fee_payable`, `fee_paid`, `fee_balance` and `fee_next_due_on` — computed as
+subqueries in `apps/fees/queries.py`. `fee_status` is derived from the same
+ledger after every change (see Fees below).
 
 **College or employer.** `profile.institution` is the name; `profile.institution_kind`
 says which it is (`college` | `employer` | empty). Both are self-editable, as are
@@ -287,6 +292,10 @@ Publishing is refused unless the course has a title, a description, at least one
 published module and at least one published lesson inside it.
 `GET /courses/<id>/publish-checklist/` returns the outstanding blockers.
 
+Publishing gates the **public catalogue only**. A batch may run a course in
+any state except `archived`, so a course can be created, a batch planned and
+students enrolled while the lesson content is still being written.
+
 Editing a published course is allowed but recorded: the audit entry carries
 `published_course_edited` and the previous values of the changed fields.
 
@@ -342,6 +351,47 @@ Filters: `?status=`, `?course=<slug>`, `?trainer=<uuid>`, `?starts_after=`,
 | `GET` | `<id>/progress/` | the owner, the batch's trainer, or `enrolment.view_any` |
 
 Filters: `?status=`, `?batch=<uuid>`, `?course=<slug>`, `?search=`.
+
+For callers holding `fee.view_any`, list rows carry `fee_payable`, `fee_paid`,
+`fee_balance` and `fee_next_due_on` for that enrolment (`null` when no fee has
+been agreed yet); students never receive them.
+
+### Fees — `/api/v1/fees/`
+
+A fee belongs to an **enrolment**, not a student: a student on two courses has
+two fees, agreed at different times, possibly discounted differently, paid
+down on their own timetables. Payments are **ad hoc** — any amount, any past
+date, any method — with no instalment schedule; the plan may carry one
+optional "next ₹N expected by <date>", which is what gives an expected date
+and the overdue flag.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `enrollments/<id>/` | `fee.view_any`, or the enrolment's own student — the plan with its payments |
+| `PUT` | `enrollments/<id>/` | `fee.manage_any` — set or change `agreed_amount`, `discount_amount` (+ `discount_reason`), `notes` |
+| `POST` | `enrollments/<id>/next-due/` | `fee.manage_any` — `next_due_amount` + `next_due_on`, both `null` to clear |
+| `POST` | `enrollments/<id>/payments/` | `fee.manage_any` — `amount`, `paid_on`, `method` (`cash/upi/card/bank_transfer/cheque/other`), `reference`, `note` |
+| `POST` | `payments/<id>/void/` | `fee.manage_any` — `reason` required; the row stays, crossed out |
+| `GET` | `enrollments/<id>/history/` | `fee.view_any`, or the student — every audit row for this fee, newest first |
+| `GET` | `students/<id>/` | `fee.view_any`, or the student — totals across every course, with the plans |
+| `GET` | `me/` | the signed-in student |
+| `GET` | `overview/` | `fee.view_any` — collected today/week/month, outstanding, overdue and due-soon lists |
+
+Rules, all enforced in `apps/fees/services.py` regardless of the route in:
+
+- the first payment on a plan is at least ₹1,000 (the registration fee) unless
+  the whole fee is smaller; a payment may not exceed the balance or be dated
+  ahead; a discount needs a reason and cannot exceed the fee; the fee cannot
+  be lowered below what has already been paid;
+- `payable`, `paid`, `balance`, `status` (`unpaid/partial/paid/waived`) and
+  `is_overdue` are computed server-side; voided payments do not count;
+- every payment gets a receipt number (`GRS-R-00001`, a database sequence);
+- nothing is deleted — payments are voided, plans are edited with old and new
+  values in the audit log (`fee.plan.set`, `fee.plan.updated`,
+  `fee.next_due.set`, `fee.payment.recorded`, `fee.payment.voided`);
+- the student's coarse `fee_status` is re-derived after every change.
+
+Counsellors and managers hold `fee.manage_any` outright: no approval step.
 
 ### Progress — `/api/v1/progress/`
 
@@ -450,6 +500,7 @@ re-checks each one on every request.
 | `user.set_active`, `user.change_role` | ✅ | — | — |
 | `student.view_any`, `student.create`, `student.update_any` | ✅ | — | — |
 | `student.set_fee_status` | ✅ | — | — |
+| `fee.view_any`, `fee.manage_any` (counsellor and manager too) | ✅ | — | — |
 | `trainer.view_any`, `trainer.create`, `trainer.update_any` | ✅ | — | — |
 | `category.manage` | ✅ | — | — |
 | `course.view_any`, `course.create`, `course.update_any` | ✅ | — | — |

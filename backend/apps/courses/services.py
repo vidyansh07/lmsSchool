@@ -89,12 +89,19 @@ def publishing_blockers(course: Course) -> list[str]:
         problems.append("The course needs a description.")
 
     published_modules = course.modules.filter(status=PublishStatus.PUBLISHED)
+    # These gate the public catalogue only. A batch can run a course in any
+    # state but archived (see ``Batch.clean``), so nothing about teaching
+    # waits on them.
     if not published_modules.exists():
-        problems.append("The course needs at least one published module.")
+        problems.append(
+            "To appear in the catalogue, the course needs at least one published module."
+        )
     elif not Lesson.objects.filter(
         module__in=published_modules, status=PublishStatus.PUBLISHED
     ).exists():
-        problems.append("At least one published module needs a published lesson.")
+        problems.append(
+            "To appear in the catalogue, a published module needs at least one published lesson."
+        )
     return problems
 
 

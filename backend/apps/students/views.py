@@ -23,6 +23,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.roles import UserRole, has_capability
 from apps.common.permissions import Capability, HasCapability, IsActiveUser, IsOwnerOrHasCapability
+from apps.fees.queries import annotate_student_fee_totals
 
 from . import services
 from .models import StudentProfile
@@ -52,12 +53,21 @@ class StudentFilterSet(django_filters.FilterSet):
 
     class Meta:
         model = StudentProfile
-        fields = ("fee_status", "qualification", "city", "institution", "institution_kind", "referred_by")
+        fields = (
+            "fee_status",
+            "qualification",
+            "city",
+            "institution",
+            "institution_kind",
+            "referred_by",
+        )
 
 
 def _base_queryset():
-    return StudentProfile.objects.select_related(
-        "user", "fee_status_updated_by", "fee_amount_updated_by", "referred_by__user"
+    return annotate_student_fee_totals(
+        StudentProfile.objects.select_related(
+            "user", "fee_status_updated_by", "fee_amount_updated_by", "referred_by__user"
+        )
     )
 
 

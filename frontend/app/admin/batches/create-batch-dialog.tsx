@@ -40,11 +40,12 @@ export function CreateBatchDialog({
 
   useEffect(() => {
     let cancelled = false;
-    // Only published courses can run a batch, so that is what is offered.
-    listCourses({ status: 'published', page_size: 100 })
+    // Any course that is not archived can run a batch; publishing only decides
+    // whether it shows in the catalogue.
+    listCourses({ page_size: 100 })
       .then((page) => {
         if (cancelled) return;
-        setCourses(page.results);
+        setCourses(page.results.filter((course) => course.status !== 'archived'));
         if (page.results.length > 0) setCourse(page.results[0]!.id);
       })
       .catch(() => {
@@ -95,7 +96,7 @@ export function CreateBatchDialog({
             </Field>
             <Field label="Course" htmlFor="batch-course" error={errors.course} required>
               <Select value={course} onChange={(event) => setCourse(event.target.value)}>
-                {courses.length === 0 ? <option value="">No published courses</option> : null}
+                {courses.length === 0 ? <option value="">No courses yet</option> : null}
                 {courses.map((option) => (
                   <option key={option.id} value={option.id}>
                     {option.title}

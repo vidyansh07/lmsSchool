@@ -18,7 +18,7 @@ import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
 import { Tooltip } from '@/components/ui/tooltip';
 import { useList } from '@/hooks/use-list';
 import { ApiError } from '@/lib/api';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDate } from '@/lib/format';
 import { Capability } from '@/lib/capabilities';
 import {
   FEE_STATUS_LABEL,
@@ -158,7 +158,9 @@ function StudentsTable() {
                   <Th className="sticky top-0 z-10 bg-surface">Student</Th>
                   <Th className="sticky top-0 z-10 bg-surface">City</Th>
                   <Th className="sticky top-0 z-10 bg-surface">Qualification</Th>
-                  <Th className="sticky top-0 z-10 bg-surface text-right">Agreed fee</Th>
+                  <Th className="sticky top-0 z-10 bg-surface text-right">Fee</Th>
+                  <Th className="sticky top-0 z-10 bg-surface text-right">Paid</Th>
+                  <Th className="sticky top-0 z-10 bg-surface text-right">Balance</Th>
                   <Th
                     sortable
                     active={sortField === 'fee_status'}
@@ -212,14 +214,34 @@ function StudentsTable() {
                         '—'
                       )}
                     </Td>
-                    <Td className="text-right tabular-nums">
-                      {/* Whole rupees: the paise are noise in a column. "Not
-                          decided" rather than a dash, because a blank here is
-                          a question the counsellor still has to answer. */}
-                      {row.fee_amount === null ? (
-                        <span className="text-xs text-muted-foreground">Not decided</span>
-                      ) : (
+                    {/* From the ledger, summed over the student's courses. "Not
+                        decided" rather than a dash when nothing has been agreed
+                        on any course yet — that blank is a question the
+                        counsellor still has to answer. */}
+                    <Td className="whitespace-nowrap text-right tabular-nums">
+                      {Number(row.fee_payable) > 0 ? (
+                        <span className="font-medium">{formatCurrency(row.fee_payable)}</span>
+                      ) : row.fee_amount !== null ? (
                         <span className="font-medium">{formatCurrency(row.fee_amount)}</span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Not decided</span>
+                      )}
+                    </Td>
+                    <Td className="whitespace-nowrap text-right tabular-nums text-green">
+                      {Number(row.fee_paid) > 0 ? formatCurrency(row.fee_paid) : <span className="text-muted-foreground">—</span>}
+                    </Td>
+                    <Td className="whitespace-nowrap text-right tabular-nums">
+                      {Number(row.fee_balance) > 0 ? (
+                        <>
+                          <span className="font-medium text-amber">{formatCurrency(row.fee_balance)}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {row.fee_next_due_on ? `Expected ${formatDate(row.fee_next_due_on)}` : 'No date set'}
+                          </span>
+                        </>
+                      ) : Number(row.fee_payable) > 0 ? (
+                        <span className="text-xs font-medium text-green">Settled</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </Td>
                     <Td>

@@ -22,6 +22,7 @@ from apps.batches import access
 from apps.batches.models import Batch
 from apps.common.permissions import IsActiveUser
 from apps.courses.models import Lesson
+from apps.fees.queries import annotate_enrollment_fee
 from apps.students.models import StudentProfile
 
 from . import services
@@ -78,7 +79,10 @@ class EnrollmentListCreateView(ListCreateAPIView):
     ordering = ("-enrolled_at",)
 
     def get_queryset(self):
-        return access.visible_enrollments(self.request.user)
+        queryset = access.visible_enrollments(self.request.user)
+        if has_capability(self.request.user, Capability.FEE_VIEW_ANY):
+            queryset = annotate_enrollment_fee(queryset)
+        return queryset
 
     def get_serializer_class(self):
         # A student never receives the administrative status note.

@@ -30,6 +30,7 @@ import {
   UserCircle2,
   UserPlus,
   Users,
+  Wallet,
   UsersRound,
   Workflow,
 } from 'lucide-react';
@@ -82,6 +83,7 @@ export const STUDENT_NAV: NavItem[] = [
   { href: '/my-learning', label: 'My learning', icon: BookOpenCheck, roles: ['student'] },
   { href: '/courses', label: 'Courses', icon: BookOpen },
   { href: '/my-batches', label: 'My batches', icon: Layers, roles: ['student'] },
+  { href: '/my-fees', label: 'My fees', icon: Wallet, roles: ['student'] },
   { href: '/my-assignments', label: 'My assignments', icon: ClipboardList, roles: ['student'] },
   { href: '/my-projects', label: 'My projects', icon: FolderKanban, roles: ['student'] },
   { href: '/exams', label: 'Examinations', icon: ScrollText, roles: ['student'] },

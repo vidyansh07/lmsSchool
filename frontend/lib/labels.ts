@@ -1,6 +1,13 @@
 /** Display labels for API enumerations, kept in one place. */
 
-import type { FeeStatus, InstitutionKind, Qualification, UserRole } from '@/types/api';
+import type {
+  FeePlanStatus,
+  FeeStatus,
+  InstitutionKind,
+  PaymentMethod,
+  Qualification,
+  UserRole,
+} from '@/types/api';
 
 export const FEE_STATUS_LABEL: Record<FeeStatus, string> = {
   pending: 'Pending',
@@ -56,3 +63,30 @@ export const INSTITUTION_KIND_LABEL: Record<InstitutionKind, string> = {
 export const INSTITUTION_KIND_OPTIONS: { value: InstitutionKind; label: string }[] = (
   Object.keys(INSTITUTION_KIND_LABEL) as InstitutionKind[]
 ).map((value) => ({ value, label: INSTITUTION_KIND_LABEL[value] }));
+
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  cash: 'Cash',
+  upi: 'UPI',
+  card: 'Card',
+  bank_transfer: 'Bank transfer',
+  cheque: 'Cheque',
+  other: 'Other',
+};
+
+export const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] = (
+  Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]
+).map((value) => ({ value, label: PAYMENT_METHOD_LABEL[value] }));
+
+export const FEE_PLAN_STATUS_LABEL: Record<FeePlanStatus, string> = {
+  unpaid: 'Nothing paid yet',
+  partial: 'Partly paid',
+  paid: 'Paid in full',
+  waived: 'Waived',
+};
+
+export const FEE_PLAN_STATUS_VARIANT: Record<FeePlanStatus, 'neutral' | 'success' | 'warning' | 'error'> = {
+  unpaid: 'error',
+  partial: 'warning',
+  paid: 'success',
+  waived: 'neutral',
+};

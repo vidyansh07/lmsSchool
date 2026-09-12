@@ -23,6 +23,7 @@ ASSESSMENT_CODE_SEQUENCE = "assessment_public_code_seq"
 PROJECT_CODE_SEQUENCE = "project_public_code_seq"
 EXAM_CODE_SEQUENCE = "exam_public_code_seq"
 CERTIFICATE_NUMBER_SEQUENCE = "certificate_number_seq"
+RECEIPT_NUMBER_SEQUENCE = "fee_receipt_number_seq"
 
 STUDENT_ID_PREFIX = "GRS-S"
 TRAINER_ID_PREFIX = "GRS-T"
@@ -63,6 +64,11 @@ def next_course_code() -> str:
 def next_batch_code() -> str:
     """e.g. ``GRS-B-00021``."""
     return f"{BATCH_CODE_PREFIX}-{_next_value(BATCH_CODE_SEQUENCE):0{_NUMBER_WIDTH}d}"
+
+
+def next_receipt_number() -> str:
+    """e.g. ``GRS-R-00042`` — printed on the receipt a student is handed."""
+    return f"GRS-R-{_next_value(RECEIPT_NUMBER_SEQUENCE):0{_NUMBER_WIDTH}d}"
 
 
 def next_enrolment_code() -> str:

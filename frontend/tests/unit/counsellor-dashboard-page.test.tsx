@@ -19,6 +19,20 @@ const useAuthMock = vi.hoisted(() => ({ value: {} as Record<string, unknown> }))
 
 vi.mock('@/lib/people', () => ({ listStudents }));
 vi.mock('@/lib/batches', () => ({ listBatches, listEnrollments }));
+vi.mock('@/lib/fees', () => ({
+  getFeesOverview: () =>
+    Promise.resolve({
+      collected_today: '0.00',
+      collected_this_week: '0.00',
+      collected_this_month: '0.00',
+      outstanding_total: '0.00',
+      overdue_count: 0,
+      unpaid_count: 0,
+      enrollments_without_plan: 0,
+      overdue: [],
+      due_soon: [],
+    }),
+}));
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => useAuthMock.value }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -40,6 +54,10 @@ function student(overrides: Partial<StudentListRow> = {}): StudentListRow {
     qualification: 'bachelors',
     fee_status: 'pending',
     fee_amount: null,
+    fee_payable: '0.00',
+    fee_paid: '0.00',
+    fee_balance: '0.00',
+    fee_next_due_on: null,
     institution: '',
     roll_number: '',
     institution_kind: '',

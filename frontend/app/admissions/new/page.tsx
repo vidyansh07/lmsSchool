@@ -49,10 +49,20 @@ import { assignBatchTrainer, createBatch, enrolStudent, listBatches } from '@/li
 import { formatDate, isoDaysFromNow, isoToday } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
 import { listCourses } from '@/lib/courses';
-import { QUALIFICATION_OPTIONS } from '@/lib/labels';
+import { recordPayment, setEnrollmentFee } from '@/lib/fees';
+import { PAYMENT_METHOD_LABEL, PAYMENT_METHOD_OPTIONS, QUALIFICATION_OPTIONS } from '@/lib/labels';
 import { formatCurrency } from '@/lib/format';
 import { createStudent, listStudents, listTrainers } from '@/lib/people';
-import type { BatchDetail, BatchListRow, CourseListRow, Enrollment, StudentListRow, StudentProfile, TrainerListRow } from '@/types/api';
+import type {
+  BatchDetail,
+  BatchListRow,
+  CourseListRow,
+  Enrollment,
+  PaymentMethod,
+  StudentListRow,
+  StudentProfile,
+  TrainerListRow,
+} from '@/types/api';
 
 type StepKey = 'student' | 'course' | 'batch' | 'trainer' | 'confirm';
 
@@ -83,6 +93,9 @@ interface Result {
   batchName: string;
   batchCode: string;
   enrollment: Enrollment;
+  /** What happened to the fee after the enrolment: the receipt issued, or why
+   *  it could not be recorded. Empty when no fee was quoted. */
+  feeNote: string;
 }
 
 export function RegistrationWizard() {
@@ -101,6 +114,11 @@ export function RegistrationWizard() {
   // walk-in may not know the fee yet, and the record should not wait on it.
   const [background, setBackground] = useState<StudentBackground>(EMPTY_BACKGROUND);
   const [feeAmount, setFeeAmount] = useState('');
+  // The registration payment, taken at the desk. ₹1,000 is the usual amount
+  // and the minimum the ledger accepts for a first payment; blank if nothing
+  // changed hands today.
+  const [paidNow, setPaidNow] = useState('1000');
+  const [paidMethod, setPaidMethod] = useState<PaymentMethod>('cash');
   // Who sent them. Optional, and only ever an existing student picked from a
   // search — a free-text name would be a referral nobody could credit.
   const [referrerQuery, setReferrerQuery] = useState('');
@@ -192,8 +210,8 @@ export function RegistrationWizard() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setCourseLoading(true);
-      listCourses({ status: 'published', search: courseQuery, page_size: 50, ordering: 'title' })
-        .then((page) => setCourseOptions(page.results))
+      listCourses({ search: courseQuery, page_size: 50, ordering: 'title' })
+        .then((page) => setCourseOptions(page.results.filter((course) => course.status !== 'archived')))
         .catch(() => setCourseOptions([]))
         .finally(() => setCourseLoading(false));
     }, 250);
@@ -460,14 +478,36 @@ export function RegistrationWizard() {
       }
     }
 
+    let enrollment: Enrollment;
     try {
-      const enrollment = await enrolStudent({ student_id: student.id, batch_id: batchInfo.id });
-      setResult({ student, batchName: batchInfo.name, batchCode: batchInfo.code, enrollment });
+      enrollment = await enrolStudent({ student_id: student.id, batch_id: batchInfo.id });
     } catch (cause) {
       setConfirmError(errorMessage(cause, 'Could not enrol this student.'));
-    } finally {
       setIsSubmitting(false);
+      return;
     }
+
+    // The fee is agreed per course, so it is written against the enrolment
+    // just created — and the registration payment against that. A failure
+    // here must not read as a failed enrolment: the student *is* enrolled,
+    // and the note says what still needs doing on their record.
+    let feeNote = '';
+    if (feeAmount.trim() !== '') {
+      try {
+        await setEnrollmentFee(enrollment.id, { agreed_amount: feeAmount.trim() });
+        if (paidNow.trim() !== '' && Number(paidNow) > 0) {
+          const payment = await recordPayment(enrollment.id, { amount: paidNow.trim(), method: paidMethod });
+          feeNote = `${formatCurrency(payment.amount)} received today — receipt ${payment.receipt_number}.`;
+        } else {
+          feeNote = `Fee of ${formatCurrency(feeAmount)} recorded; nothing paid yet.`;
+        }
+      } catch (cause) {
+        feeNote = `Enrolled, but the fee could not be recorded (${errorMessage(cause, 'unknown error')}). Record it from the student's page.`;
+      }
+    }
+
+    setResult({ student, batchName: batchInfo.name, batchCode: batchInfo.code, enrollment, feeNote });
+    setIsSubmitting(false);
   }
 
   function onSaveAndStartAnother() {
@@ -513,6 +553,8 @@ export function RegistrationWizard() {
     setDuplicates([]);
     setAcknowledgedDuplicate(false);
     setCreatedStudent(null);
+    setPaidNow('1000');
+    setPaidMethod('cash');
     setTrainerId('');
     setTrainerName('');
     setTrainerAssigned(false);
@@ -622,6 +664,36 @@ export function RegistrationWizard() {
                     placeholder="e.g. 25000"
                   />
                 </Field>
+                <Field
+                  label="Paid today (₹)"
+                  htmlFor="reg-paid-now"
+                  hint="The registration payment, usually ₹1,000. Blank if nothing was paid."
+                >
+                  <Input
+                    id="reg-paid-now"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="1"
+                    value={paidNow}
+                    onChange={(event) => setPaidNow(event.target.value)}
+                    disabled={feeAmount.trim() === ''}
+                  />
+                </Field>
+                <Field label="Paid by" htmlFor="reg-paid-method">
+                  <Select
+                    id="reg-paid-method"
+                    value={paidMethod}
+                    onChange={(event) => setPaidMethod(event.target.value as PaymentMethod)}
+                    disabled={feeAmount.trim() === '' || paidNow.trim() === ''}
+                  >
+                    {PAYMENT_METHOD_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
               </div>
 
               <StudentBackgroundFields
@@ -691,7 +763,7 @@ export function RegistrationWizard() {
               onSelect={onCourseSelect}
               isLoading={courseLoading}
               placeholder="Course title or code"
-              emptyMessage="No published courses match."
+              emptyMessage="No courses match."
               autoFocus
             />
           </CardContent>
@@ -851,7 +923,9 @@ export function RegistrationWizard() {
                   {result.student.user.full_name || result.student.user.email} is enrolled on{' '}
                   {result.batchName} ({result.batchCode}).
                 </p>
-                <p className="text-sm">Enrolment {result.enrollment.code}.</p>
+                <p className="text-sm">
+                  Enrolment {result.enrollment.code}.{result.feeNote ? ` ${result.feeNote}` : ''}
+                </p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Button size="sm" onClick={onSaveAndStartAnother}>
                     Save and register another
@@ -893,6 +967,14 @@ export function RegistrationWizard() {
                     <dt className="text-xs text-muted-foreground">Agreed fee</dt>
                     <dd className="font-medium tabular-nums">
                       {feeAmount.trim() === '' ? 'Not decided yet' : formatCurrency(feeAmount)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Paid today</dt>
+                    <dd className="font-medium tabular-nums">
+                      {feeAmount.trim() === '' || paidNow.trim() === '' || Number(paidNow) <= 0
+                        ? 'Nothing'
+                        : `${formatCurrency(paidNow)} by ${PAYMENT_METHOD_LABEL[paidMethod].toLowerCase()}`}
                     </dd>
                   </div>
                   <div>

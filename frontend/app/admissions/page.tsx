@@ -22,6 +22,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
+import { money } from '@/components/fees/fee-ledger';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -215,6 +216,7 @@ export function AdmissionsList() {
                     <Th>Course</Th>
                     <Th>Batch</Th>
                     <Th>Trainer</Th>
+                    <Th className="text-right">Fee</Th>
                     <Th
                       sortable
                       active={sortField === 'enrolled_at'}
@@ -256,6 +258,24 @@ export function AdmissionsList() {
                         </span>
                       </Td>
                       <Td>{row.trainer_name || 'Not assigned'}</Td>
+                      <Td className="whitespace-nowrap text-right tabular-nums">
+                        {row.fee_payable === null || row.fee_payable === undefined ? (
+                          <span className="text-xs text-muted-foreground">Not set</span>
+                        ) : Number(row.fee_balance) > 0 ? (
+                          <>
+                            <span className="font-medium text-amber">{money(row.fee_balance)} due</span>
+                            <span className="block text-xs text-muted-foreground">
+                              {money(row.fee_paid)} of {money(row.fee_payable)}
+                              {row.fee_next_due_on ? ` · by ${formatDate(row.fee_next_due_on)}` : ''}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-medium text-green">Paid</span>
+                            <span className="block text-xs text-muted-foreground">{money(row.fee_payable)}</span>
+                          </>
+                        )}
+                      </Td>
                       <Td className="whitespace-nowrap text-muted-foreground">
                         {formatDate(row.enrolled_at)}
                       </Td>

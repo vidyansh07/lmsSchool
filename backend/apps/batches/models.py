@@ -251,8 +251,13 @@ class Batch(SoftDeleteBaseModel):
         if self.course_id and self.course:
             from apps.courses.models import PublishStatus
 
-            if self.course.status not in (PublishStatus.PUBLISHED, PublishStatus.IN_REVIEW):
-                errors["course"] = _("A batch can only run a published course, or one in review.")
+            # Any course that has not been archived. Publishing controls whether
+            # students can see a course in the catalogue; it is not a gate on
+            # teaching it — a batch is often planned while the lesson content is
+            # still being written, and requiring a published lesson first made
+            # batch creation wait on authoring for no reason anybody could name.
+            if self.course.status == PublishStatus.ARCHIVED:
+                errors["course"] = _("An archived course cannot run a new batch.")
 
         if errors:
             raise ValidationError(errors)

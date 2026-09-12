@@ -17,6 +17,8 @@ export const Capability = {
   studentCreate: 'student.create',
   studentUpdateAny: 'student.update_any',
   studentSetFeeStatus: 'student.set_fee_status',
+  feeViewAny: 'fee.view_any',
+  feeManageAny: 'fee.manage_any',
   trainerViewAny: 'trainer.view_any',
   trainerCreate: 'trainer.create',
   trainerUpdateAny: 'trainer.update_any',
