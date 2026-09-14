@@ -27,8 +27,13 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MARK="# grras-lms backups"
 LOG="$REPO/backups/cron.log"
 
+# `grep -v` exits 1 when nothing is left (a host with no crontab yet), which
+# under `pipefail` would abort the subshell before the new entries are echoed
+# and install an *empty* crontab. Hence the `|| true`.
+existing() { crontab -l 2>/dev/null | grep -v "$MARK" || true; }
+
 if [[ "${1:-}" == "--remove" ]]; then
-  (crontab -l 2>/dev/null | grep -v "$MARK") | crontab -
+  existing | crontab -
   echo "backup cron entries removed"
   exit 0
 fi
@@ -44,6 +49,6 @@ ENTRIES=$(cat <<CRON
 CRON
 )
 
-(crontab -l 2>/dev/null | grep -v "$MARK"; echo "$ENTRIES") | crontab -
+(existing; echo "$ENTRIES") | crontab -
 echo "backup cron entries installed for $(whoami):"
 crontab -l | grep "$MARK" | sed 's/ #.*//' | sed 's/^/  /'
