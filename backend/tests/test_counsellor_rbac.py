@@ -19,6 +19,7 @@ import pytest
 
 from apps.accounts.models import User, UserRole
 from apps.accounts.roles import (
+    _MANAGER_CAPABILITIES,
     BASE_CAPABILITIES,
     ROLE_CAPABILITIES,
     Capability,
@@ -54,72 +55,46 @@ def test_a_counsellor_holds_strictly_less_than_a_manager():
 
 @pytest.mark.parametrize(
     "capability",
-    [
-        Capability.STUDENT_CREATE,
-        Capability.STUDENT_VIEW_ANY,
-        Capability.STUDENT_UPDATE_ANY,
-        Capability.COURSE_VIEW_ANY,
-        Capability.TRAINER_VIEW_ANY,
-        Capability.BATCH_CREATE,
-        Capability.BATCH_UPDATE_ANY,
-        Capability.BATCH_MANAGE_SCHEDULE,
-        Capability.ENROLMENT_CREATE,
-        Capability.ENROLMENT_UPDATE_ANY,
-        Capability.DATA_IMPORT,
-        Capability.DATA_EXPORT,
-    ],
+    sorted(
+        _MANAGER_CAPABILITIES
+        - frozenset({Capability.TRAINER_CREATE, Capability.TRAINER_UPDATE_ANY})
+    ),
 )
-def test_the_admissions_workflow_is_held(counsellor_user, capability):
-    """Every step of registration to enrolment, one capability at a time."""
+def test_a_counsellor_holds_everything_a_manager_does(counsellor_user, capability):
+    """D-130: manager and counsellor are equals under the administrator.
+
+    "Both can do both, only the sidebar differs." A counsellor's day is still
+    admissions and fees, but nothing academic is refused to them any more.
+    """
     assert has_capability(counsellor_user, capability)
 
 
 @pytest.mark.parametrize(
     "capability",
     [
-        # Accounts. A counsellor creates students through the student service,
-        # which is a different act from administering an account.
-        Capability.USER_VIEW_ANY,
+        # The one difference between the rungs: trainers are the manager's
+        # people to bring in and keep current (2a).
+        Capability.TRAINER_CREATE,
+        Capability.TRAINER_UPDATE_ANY,
+        # Everything above the manager rung stays above it.
         Capability.USER_CREATE,
         Capability.USER_UPDATE_ANY,
         Capability.USER_SET_ACTIVE,
         Capability.USER_CHANGE_ROLE,
-        # Staff records.
-        Capability.TRAINER_CREATE,
-        Capability.TRAINER_UPDATE_ANY,
-        # Running the training, as opposed to setting it up.
-        Capability.SESSION_MANAGE_ANY,
-        Capability.ATTENDANCE_CORRECT_ANY,
-        Capability.ATTENDANCE_VIEW_ANY,
-        Capability.DSR_VIEW_ANY,
-        Capability.DSR_MANAGE_ANY,
-        Capability.DSR_REVIEW,
-        Capability.ASSIGNMENT_MANAGE_ANY,
-        Capability.ASSESSMENT_MANAGE_ANY,
-        Capability.RESULT_MANAGE_ANY,
-        Capability.PROJECT_MANAGE_ANY,
-        Capability.EXAM_MANAGE_ANY,
-        Capability.QUESTION_VIEW_ANY,
-        # Judging people.
-        Capability.PERFORMANCE_VIEW_ANY,
-        Capability.REVIEW_MANAGE_ANY,
-        Capability.COMPLETION_APPROVE,
-        Capability.CERTIFICATE_MANAGE,
-        # The institution's own levers.
+        Capability.ORGANISATION_MANAGE,
+        Capability.ORGANISATION_ASSIGN_USERS,
         Capability.ACADEMIC_CONFIGURE,
+        Capability.SETTINGS_MANAGE,
         Capability.PLATFORM_CONFIGURE,
         Capability.AUDIT_VIEW,
-        Capability.COURSE_CREATE,
-        Capability.COURSE_PUBLISH_ANY,
-        Capability.CATEGORY_MANAGE,
-        Capability.ANNOUNCEMENT_MANAGE_ANY,
-        # Reading the institution in aggregate, and reading other people's
-        # extractions of it.
-        Capability.REPORT_VIEW_ANY,
+        Capability.COMPLETION_APPROVE,
+        Capability.CERTIFICATE_MANAGE,
         Capability.EXPORT_VIEW_ANY,
+        Capability.RECORD_VIEW_DELETED,
+        Capability.RECORD_RESTORE,
     ],
 )
-def test_the_rest_of_the_institution_is_not(counsellor_user, capability):
+def test_what_a_counsellor_still_does_not_hold(counsellor_user, capability):
     assert not has_capability(counsellor_user, capability)
 
 
@@ -229,14 +204,14 @@ def test_a_counsellor_sees_the_lists_the_job_needs(
     "path",
     [
         "/api/v1/users/",
-        "/api/v1/academics/policy/",
         "/api/v1/reports/",
         "/api/v1/dashboards/admin/",
     ],
 )
-def test_a_counsellor_is_refused_the_institution(api_client_no_csrf, counsellor_user, path):
+def test_a_counsellor_reads_what_a_manager_reads(api_client_no_csrf, counsellor_user, path):
+    """D-130. The lists a manager opens, a counsellor opens too."""
     api_client_no_csrf.force_login(counsellor_user)
-    assert api_client_no_csrf.get(path).status_code in (403, 404), path
+    assert api_client_no_csrf.get(path).status_code == 200, path
 
 
 @pytest.mark.django_db
@@ -333,14 +308,9 @@ def test_a_counsellor_cannot_touch_an_account_even_where_the_ladder_allows_it(
 
 
 @pytest.mark.django_db
-def test_a_counsellor_cannot_mark_or_correct_a_register(
-    api_client_no_csrf, counsellor_user, enrollment, batch
-):
-    """Admissions ends where teaching begins.
-
-    A counsellor can see the batch — they opened it — and that visibility must
-    not turn into authority over what happens inside it.
-    """
+def test_a_counsellor_can_mark_a_register(api_client_no_csrf, counsellor_user, enrollment, batch):
+    """D-130 again: a counsellor covering the desk marks the register when
+    asked to. Every mark is audited under their name, which is the control."""
     from apps.sessions.models import ClassSession, SessionStatus
 
     session = ClassSession.objects.create(
@@ -358,8 +328,8 @@ def test_a_counsellor_cannot_mark_or_correct_a_register(
         {"entries": [{"enrollment_id": str(enrollment.pk), "status": "present"}]},
         format="json",
     )
-    assert response.status_code in (403, 404)
-    assert not enrollment.attendance.exists()
+    assert response.status_code == 200, response.data
+    assert enrollment.attendance.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -368,22 +338,16 @@ def test_a_counsellor_cannot_mark_or_correct_a_register(
 
 
 @pytest.mark.django_db
-def test_a_counsellor_cannot_export_an_institution_report(api_client_no_csrf, counsellor_user):
-    """A file is not a weaker way to read something.
-
-    The export endpoint used to check only `data.export`. A counsellor holds
-    that capability — admissions arrive and leave as spreadsheets — and did not
-    hold `report.view_any`, which would have let them stream a report they
-    cannot open on screen. The export now applies the same read rule as the
-    on-screen view.
-    """
+def test_a_counsellor_exports_what_they_can_read(api_client_no_csrf, counsellor_user):
+    """The export applies the same read rule as the on-screen view (D-107).
+    Since D-130 a counsellor reads reports, so they export them too."""
     api_client_no_csrf.force_login(counsellor_user)
 
     assert has_capability(counsellor_user, Capability.DATA_EXPORT)
-    assert not has_capability(counsellor_user, Capability.REPORT_VIEW_ANY)
+    assert has_capability(counsellor_user, Capability.REPORT_VIEW_ANY)
 
     response = api_client_no_csrf.get("/api/v1/reports/student_progress/export/")
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
 @pytest.mark.django_db

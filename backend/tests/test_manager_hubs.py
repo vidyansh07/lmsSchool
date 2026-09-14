@@ -271,12 +271,11 @@ def test_a_student_is_refused_every_manager_hub_endpoint(
 
 
 @pytest.mark.django_db
-def test_a_counsellor_is_refused_every_manager_hub_endpoint(
+def test_a_counsellor_reads_every_manager_hub_endpoint(
     api_client_no_csrf, counsellor_user, batch, trainer_profile, enrollment
 ):
-    """A counsellor holds `batch.view_any` but not `report.view_any` — the
-    hubs are staff-facing reporting, not the admissions screens counsellors
-    already have."""
+    """D-130: the counsellor holds `report.view_any` like a manager, so the
+    hubs open for them; the sidebar, not the API, is where the roles differ."""
     api_client_no_csrf.force_login(counsellor_user)
     for url in (
         MANAGER_URL,
@@ -284,7 +283,7 @@ def test_a_counsellor_is_refused_every_manager_hub_endpoint(
         _students_url(batch),
         _trainer_url(trainer_profile),
     ):
-        assert api_client_no_csrf.get(url).status_code == 403, url
+        assert api_client_no_csrf.get(url).status_code == 200, url
 
 
 @pytest.mark.django_db

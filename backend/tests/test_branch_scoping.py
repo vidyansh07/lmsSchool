@@ -817,14 +817,15 @@ def test_visible_batches_shows_a_manager_with_no_centre_nothing(
 
 
 @pytest.mark.django_db
-def test_visible_batches_shows_an_administrator_with_no_centre_nothing(
+def test_visible_batches_shows_an_administrator_with_no_centre_everything(
     branchless_admin, batch, other_branch_batch
 ):
-    """An admin is bounded exactly like a manager (D-127); a null branch on one
-    is a mis-filed account, never a licence."""
+    """An administrator is unbounded (D-129 as amended), with or without a home
+    centre. The mis-filed-account worry moves one rung down, to the manager —
+    see the branchless-manager tests."""
     from apps.batches.access import visible_batches
 
-    assert _ids(visible_batches(branchless_admin)) == set()
+    assert _ids(visible_batches(branchless_admin)) == {str(batch.id), str(other_branch_batch.id)}
 
 
 @pytest.mark.django_db
@@ -2098,30 +2099,25 @@ def test_a_student_cannot_be_transferred_to_a_class_at_another_centre(
 
 
 @pytest.mark.django_db
-def test_a_bounded_administrator_has_no_authority_over_an_account_at_another_centre(
-    admin_user, other_branch_manager
-):
-    """Authority and reach are different questions: an administrator in Jaipur
-    is neither senior nor junior to one in Pune, they are not in each other's
-    world at all."""
-    from apps.accounts.services import AuthorityError, update_user
+def test_an_administrator_has_authority_across_centres(admin_user, other_branch_manager):
+    """D-129 as amended: an administrator sees every centre, so an
+    administrator in Jaipur administers a manager in Pune."""
+    from apps.accounts.services import update_user
 
-    with pytest.raises(AuthorityError):
-        update_user(user=other_branch_manager, actor=admin_user, first_name="Renamed")
+    update_user(user=other_branch_manager, actor=admin_user, first_name="Renamed")
 
     other_branch_manager.refresh_from_db()
-    assert other_branch_manager.first_name == "Priya"
+    assert other_branch_manager.first_name == "Renamed"
 
 
 @pytest.mark.django_db
-def test_an_administrator_with_no_centre_has_authority_over_nobody(branchless_admin, manager_user):
-    """The Django-admin-created account. Reading its null branch as "no branch
-    check applies" would have made it the most powerful account in the system.
-    """
+def test_a_manager_with_no_centre_has_authority_over_nobody(branchless_manager, student_profile):
+    """The Django-admin-created account, one rung down. A null branch on a
+    bounded role is the absence of reach, not all of it."""
     from apps.accounts.services import AuthorityError, update_user
 
     with pytest.raises(AuthorityError):
-        update_user(user=manager_user, actor=branchless_admin, first_name="Renamed")
+        update_user(user=student_profile.user, actor=branchless_manager, first_name="Renamed")
 
 
 @pytest.mark.django_db

@@ -318,14 +318,15 @@ def test_a_student_cannot_reach_the_session_dsr_endpoint(
 
 
 @pytest.mark.django_db
-def test_a_counsellor_cannot_reach_the_session_dsr_endpoint(
+def test_a_counsellor_reaches_the_session_dsr_endpoint(
     api_client_no_csrf, counsellor_user, past_session
 ):
+    """D-130: a counsellor holds `dsr.manage_any` like a manager."""
     api_client_no_csrf.force_login(counsellor_user)
-    assert api_client_no_csrf.get(_session_dsr_url(past_session)).status_code == 403
+    assert api_client_no_csrf.get(_session_dsr_url(past_session)).status_code == 200
     assert (
         api_client_no_csrf.post(_session_dsr_url(past_session), {}, format="json").status_code
-        == 403
+        == 201
     )
 
 
@@ -372,10 +373,12 @@ def test_a_student_is_refused_the_list_endpoint(
 
 
 @pytest.mark.django_db
-def test_a_counsellor_is_refused_the_list_endpoint(api_client_no_csrf, counsellor_user, draft_dsr):
-    """Admissions ends where teaching begins, and this is on the far side."""
+def test_a_counsellor_reads_the_list_endpoint(api_client_no_csrf, counsellor_user, draft_dsr):
+    """D-130: the list a manager reads, a counsellor reads."""
     api_client_no_csrf.force_login(counsellor_user)
-    assert api_client_no_csrf.get(_list_url()).status_code == 403
+    response = api_client_no_csrf.get(_list_url())
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
 
 
 @pytest.mark.django_db
@@ -866,15 +869,17 @@ def test_a_trainer_cannot_review_reports_at_all(api_client_no_csrf, trainer_prof
 
 
 @pytest.mark.django_db
-def test_a_counsellor_cannot_review_reports(api_client_no_csrf, counsellor_user, submitted_dsr):
-    """A counsellor holds no DSR capability at all, so `visible_dsrs` returns
-    nothing for them — the report is not merely unreviewable, it does not
-    exist as far as this login is concerned."""
+def test_a_counsellor_reviews_reports_like_a_manager(
+    api_client_no_csrf, counsellor_user, submitted_dsr
+):
+    """D-130: `dsr.review` is held by both rungs; the act is audited under the
+    counsellor's name, which is the control."""
     api_client_no_csrf.force_login(counsellor_user)
     response = api_client_no_csrf.post(
         _review_url(submitted_dsr), {"decision": DSRStatus.APPROVED}, format="json"
     )
-    assert response.status_code == 404
+    assert response.status_code == 200, response.data
+    assert response.json()["status"] == DSRStatus.APPROVED
 
 
 # ---------------------------------------------------------------------------

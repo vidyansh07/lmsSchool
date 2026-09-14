@@ -806,12 +806,11 @@ class TestPerformanceAccess:
         response = api_client_no_csrf.get(f"/api/v1/batches/{batch.id}/performance/")
         assert response.status_code == 404
 
-    def test_a_counsellor_is_refused_batch_performance(
-        self, api_client_no_csrf, counsellor_user, batch
-    ):
+    def test_a_counsellor_reads_batch_performance(self, api_client_no_csrf, counsellor_user, batch):
+        """D-130: `performance.view_any` is held by both rungs."""
         api_client_no_csrf.force_login(counsellor_user)
         response = api_client_no_csrf.get(f"/api/v1/batches/{batch.id}/performance/")
-        assert response.status_code == 403
+        assert response.status_code == 200
 
     def test_a_manager_may_view_any_batch(
         self, api_client_no_csrf, manager_user, batch, enrollment
@@ -850,16 +849,17 @@ def _review_payload(**overrides) -> dict:
 
 @pytest.mark.django_db
 class TestReviewWriting:
-    def test_a_counsellor_cannot_write_a_review(
+    def test_a_counsellor_writes_a_review_like_a_manager(
         self, api_client_no_csrf, counsellor_user, student_profile
     ):
+        """D-130: `review.manage_any` is held by both rungs."""
         api_client_no_csrf.force_login(counsellor_user)
         response = api_client_no_csrf.post(
             "/api/v1/performance/reviews/",
             _review_payload(student=str(student_profile.pk)),
             format="json",
         )
-        assert response.status_code == 403
+        assert response.status_code == 201, response.data
 
     def test_nobody_may_review_themselves_at_the_service_layer(self, manager_user, student_profile):
         from apps.common.exceptions import AuthorityError
@@ -1025,7 +1025,7 @@ class TestReviewWriting:
 
 @pytest.mark.django_db
 class TestFeedback:
-    def test_a_counsellor_cannot_leave_feedback(
+    def test_a_counsellor_leaves_feedback_like_a_manager(
         self, api_client_no_csrf, counsellor_user, student_profile
     ):
         api_client_no_csrf.force_login(counsellor_user)
@@ -1034,7 +1034,7 @@ class TestFeedback:
             {"student": str(student_profile.pk), "body": "Doing well."},
             format="json",
         )
-        assert response.status_code == 403
+        assert response.status_code == 201, response.data
 
     def test_leaving_feedback_is_audited(self, api_client_no_csrf, manager_user, student_profile):
         api_client_no_csrf.force_login(manager_user)

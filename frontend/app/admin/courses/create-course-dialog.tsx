@@ -32,6 +32,7 @@ export function CreateCourseDialog({
   const [category, setCategory] = useState('');
   const [shortDescription, setShortDescription] = useState('');
   const [difficulty, setDifficulty] = useState('beginner');
+  const [defaultFee, setDefaultFee] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -61,6 +62,7 @@ export function CreateCourseDialog({
         category,
         short_description: shortDescription,
         difficulty,
+        default_fee: defaultFee.trim() === '' ? null : defaultFee.trim(),
       });
       onCreated();
       router.push(`/admin/courses/${course.id}`);
@@ -105,6 +107,23 @@ export function CreateCourseDialog({
                   </option>
                 ))}
               </Select>
+            </Field>
+            <Field
+              label="Usual fee (₹)"
+              htmlFor="course-fee"
+              error={errors.default_fee}
+              hint="Offered as the default when a student registers. The counsellor can change it per student."
+            >
+              <Input
+                id="course-fee"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="1"
+                value={defaultFee}
+                onChange={(event) => setDefaultFee(event.target.value)}
+                placeholder="e.g. 25000"
+              />
             </Field>
           </div>
 

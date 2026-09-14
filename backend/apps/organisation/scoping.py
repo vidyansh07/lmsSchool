@@ -51,7 +51,13 @@ def is_unbounded(user) -> bool:
     """
     if user is None or not getattr(user, "is_authenticated", False) or not user.is_active:
         return False
-    return bool(getattr(user, "is_superuser", False)) or user.role == UserRole.SUPERADMIN
+    # An administrator sees every centre (owner's call, 14 September 2026,
+    # amending D-129): "admin sees every centre". Managers and counsellors
+    # stay bounded to theirs.
+    return bool(getattr(user, "is_superuser", False)) or user.role in (
+        UserRole.SUPERADMIN,
+        UserRole.ADMIN,
+    )
 
 
 def actor_branch_id(user) -> Any | None:

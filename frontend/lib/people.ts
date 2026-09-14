@@ -22,6 +22,17 @@ export interface ListQuery {
 
 // --- Users -----------------------------------------------------------------
 
+/**
+ * Give a manager a trainer profile so they can be put on a batch. One login,
+ * the profile created the first time; a second call returns the same one.
+ */
+export async function ensureTeachingProfile(userId: string): Promise<TrainerProfile> {
+  return apiMutate<TrainerProfile>('/api/v1/trainers/teaching-profile/', {
+    method: 'POST',
+    body: { user_id: userId },
+  });
+}
+
 export async function listUsers(query: ListQuery = {}): Promise<Paginated<AdminUser>> {
   return apiFetch<Paginated<AdminUser>>(`/api/v1/users/${queryString(query)}`);
 }

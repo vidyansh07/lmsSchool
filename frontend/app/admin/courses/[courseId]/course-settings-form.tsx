@@ -35,6 +35,7 @@ export function CourseSettingsForm({
   const [duration, setDuration] = useState(
     course.estimated_duration_minutes ? String(course.estimated_duration_minutes) : '',
   );
+  const [defaultFee, setDefaultFee] = useState(course.default_fee ?? '');
   const [objectives, setObjectives] = useState(course.learning_objectives.join('\n'));
   const [prerequisites, setPrerequisites] = useState(course.prerequisites.join('\n'));
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -72,6 +73,7 @@ export function CourseSettingsForm({
         difficulty,
         visibility,
         estimated_duration_minutes: duration === '' ? null : Number(duration),
+        default_fee: defaultFee.trim() === '' ? null : defaultFee.trim(),
         learning_objectives: objectives
           .split('\n')
           .map((line) => line.trim())
@@ -150,6 +152,22 @@ export function CourseSettingsForm({
                 min={0}
                 value={duration}
                 onChange={(event) => setDuration(event.target.value)}
+              />
+            </Field>
+            <Field
+              label="Usual fee (₹)"
+              htmlFor="edit-fee"
+              error={errors.default_fee}
+              hint="Prefilled at registration; the counsellor agrees the real figure per student."
+            >
+              <Input
+                id="edit-fee"
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step="1"
+                value={defaultFee}
+                onChange={(event) => setDefaultFee(event.target.value)}
               />
             </Field>
           </div>

@@ -53,8 +53,9 @@ import { listCourses } from '@/lib/courses';
 import { recordPayment, setEnrollmentFee } from '@/lib/fees';
 import { PAYMENT_METHOD_LABEL, PAYMENT_METHOD_OPTIONS, QUALIFICATION_OPTIONS } from '@/lib/labels';
 import { formatCurrency } from '@/lib/format';
-import { createStudent, listStudents, listTrainers } from '@/lib/people';
+import { createStudent, ensureTeachingProfile, listStudents, listTrainers, listUsers } from '@/lib/people';
 import type {
+  AdminUser,
   BatchDetail,
   BatchListRow,
   CourseListRow,
@@ -159,6 +160,11 @@ export function RegistrationWizard() {
   const [trainerName, setTrainerName] = useState('');
   const [trainerErrors, setTrainerErrors] = useState<Record<string, string>>({});
   const [trainerAssigned, setTrainerAssigned] = useState(false);
+  // A manager can teach a batch too. Searched separately from trainers so the
+  // two lists never blur; picking one creates their teaching profile.
+  const [managerQuery, setManagerQuery] = useState('');
+  const [managerOptions, setManagerOptions] = useState<AdminUser[]>([]);
+  const [managerLoading, setManagerLoading] = useState(false);
 
   // --- Step 5: confirm -------------------------------------------------
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -255,6 +261,23 @@ export function RegistrationWizard() {
     return () => clearTimeout(timer);
   }, [trainerQuery]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // Two characters before asking: "m" alone matches every manager, and the
+      // list is meant to be a search, not a directory.
+      if (managerQuery.trim().length < 2) {
+        setManagerOptions([]);
+        return;
+      }
+      setManagerLoading(true);
+      listUsers({ role: 'manager', is_active: 'true', search: managerQuery, page_size: 20 })
+        .then((page) => setManagerOptions(page.results))
+        .catch(() => setManagerOptions([]))
+        .finally(() => setManagerLoading(false));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [managerQuery]);
+
   // --- Step 1 handlers -----------------------------------------------------
 
   // After "save and start another", the course and batch are already known —
@@ -304,6 +327,9 @@ export function RegistrationWizard() {
     const found = courseOptions.find((row) => row.id === option.value);
     if (!found) return;
     setCourse(found);
+    // The course's usual fee is the starting point; the counsellor may have
+    // typed something already, and that wins.
+    if (feeAmount.trim() === '' && found.default_fee) setFeeAmount(String(Math.round(Number(found.default_fee))));
     setPickedBatch(null);
     setBatchQuery('');
     advanceTo('batch', 'course');
@@ -355,6 +381,27 @@ export function RegistrationWizard() {
     setTrainerId(option.value);
     setTrainerName(option.label);
     advanceTo('confirm', 'trainer');
+  }
+
+  const managerOptionList: PickerOption[] = managerOptions.map((row) => ({
+    value: row.id,
+    label: row.full_name || row.email,
+    hint: 'Manager',
+  }));
+
+  async function onManagerSelect(option: PickerOption) {
+    setManagerLoading(true);
+    setTrainerErrors({});
+    try {
+      const profile = await ensureTeachingProfile(option.value);
+      setTrainerId(profile.id);
+      setTrainerName(option.label);
+      advanceTo('confirm', 'trainer');
+    } catch (cause) {
+      setTrainerErrors(fieldErrors(cause));
+    } finally {
+      setManagerLoading(false);
+    }
   }
 
   function onSkipTrainer() {
@@ -899,6 +946,17 @@ export function RegistrationWizard() {
                   isLoading={trainerLoading}
                   placeholder="Trainer name"
                   emptyMessage="No active trainers found."
+                />
+                <SearchPicker
+                  label="Or a manager who will teach it"
+                  query={managerQuery}
+                  onQueryChange={setManagerQuery}
+                  options={managerOptionList}
+                  selected=""
+                  onSelect={(option) => void onManagerSelect(option)}
+                  isLoading={managerLoading}
+                  placeholder="Manager name"
+                  emptyMessage="No managers match."
                 />
                 <Button type="button" variant="ghost" size="sm" onClick={onSkipTrainer}>
                   Assign a trainer later

@@ -9,7 +9,7 @@ from django.db import transaction
 from apps.accounts.models import User, UserRole
 from apps.accounts.services import create_user, resolve_branch_for_new_record
 from apps.audit.services import AuditAction, record
-from apps.common.exceptions import ApplicationError, ConflictError
+from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
 from apps.common.identifiers import next_trainer_id
 
 from .models import TrainerProfile
@@ -102,10 +102,16 @@ def update_trainer_profile(
     return profile
 
 
+#: Roles whose account may carry a trainer profile. A manager teaches some
+#: batches (owner's call, 14 September 2026): one login, the profile created
+#: the first time they are picked as a batch's trainer.
+TEACHING_ROLES = (UserRole.TRAINER, UserRole.MANAGER)
+
+
 def get_or_create_profile_for(user: User, *, actor: User | None = None) -> TrainerProfile:
-    """Fetch the profile for a trainer account, creating it if it is missing."""
-    if user.role != UserRole.TRAINER:
-        raise ConflictError("This account does not have the trainer role.")
+    """Fetch the profile for a teaching account, creating it if it is missing."""
+    if user.role not in TEACHING_ROLES:
+        raise ConflictError("This account does not have a teaching role.")
     profile = TrainerProfile.objects.filter(user=user).first()
     if profile is not None:
         return profile
@@ -120,4 +126,37 @@ def get_or_create_profile_for(user: User, *, actor: User | None = None) -> Train
             resource_id=profile.pk,
             context={"trainer_id": profile.trainer_id, "backfilled": True},
         )
+    return profile
+
+
+@transaction.atomic
+def ensure_teaching_profile(*, user: User, actor: User) -> TrainerProfile:
+    """Give a manager a trainer profile so they can be put on a batch.
+
+    Idempotent: a second call returns the existing profile. Refused for any
+    role outside ``TEACHING_ROLES`` — a counsellor or a student is not made a
+    trainer by being picked in a search box. Audited as a trainer creation,
+    because that is what it is; the account keeps its manager role.
+    """
+    from apps.accounts.roles import Capability, has_capability
+
+    if not has_capability(actor, Capability.TRAINER_CREATE):
+        raise AuthorityError("You do not have permission to add trainers.")
+    if user.role not in TEACHING_ROLES:
+        raise ApplicationError({"user_id": ["Only a trainer or a manager can teach a batch."]})
+    if not user.is_active:
+        raise ApplicationError({"user_id": ["That account is not active."]})
+    existing = TrainerProfile.objects.filter(user=user).first()
+    if existing is not None:
+        return existing
+    profile = TrainerProfile.objects.create(
+        user=user, trainer_id=next_trainer_id(), branch=user.branch, is_accepting_assignments=True
+    )
+    record(
+        action=AuditAction.TRAINER_CREATED,
+        actor=actor,
+        resource_type="trainer",
+        resource_id=profile.pk,
+        context={"trainer_id": profile.trainer_id, "user_id": str(user.pk), "role": user.role},
+    )
     return profile

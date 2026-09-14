@@ -14,6 +14,7 @@ const course: CourseListRow = {
   category_slug: 'linux',
   difficulty: 'beginner',
   estimated_duration_minutes: 150,
+  default_fee: null,
   status: 'draft',
   visibility: 'public',
   thumbnail_url: null,

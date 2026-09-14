@@ -337,6 +337,20 @@ def reopen_dsr(*, dsr: DSR, actor: User) -> DSR:
     return dsr
 
 
+def _trusted_to_self_review(actor: User) -> bool:
+    """A manager who also teaches a batch reviews her own report.
+
+    The owner's call (14 September 2026): "manager is always a trusted one by
+    company". The refusal stays for a trainer-role account, which is the case
+    the rule was written for; a manager, administrator or superadmin who took
+    the class signs it off themselves, and the audit row still names them as
+    both author and reviewer.
+    """
+    from apps.accounts.roles import UserRole
+
+    return actor.role in (UserRole.MANAGER, UserRole.ADMIN, UserRole.SUPERADMIN)
+
+
 @transaction.atomic
 def review_dsr(*, dsr: DSR, actor: User, decision: str, comments: str = "") -> DSR:
     """Take a submitted report under review, or rule on it.
@@ -352,7 +366,7 @@ def review_dsr(*, dsr: DSR, actor: User, decision: str, comments: str = "") -> D
         raise ConflictError({"status": [f"A report cannot move from {dsr.status} to {decision}."]})
 
     trainer = batch_access.trainer_profile(actor)
-    if trainer is not None and trainer.pk == dsr.trainer_id:
+    if trainer is not None and trainer.pk == dsr.trainer_id and not _trusted_to_self_review(actor):
         raise AuthorityError({"dsr": ["You cannot review your own daily status report."]})
 
     if decision in _DECISIONS_REQUIRING_COMMENTS and not comments.strip():

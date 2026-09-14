@@ -1047,3 +1047,45 @@ Deliberately **not** scoped: `apps.courses` and the question bank, which are the
 shared catalogue and would be wrong to bound; and `apps.progress` and
 `apps.discussions`, which inherit their scope through `apps.batches.access` and
 would only gain a second, drifting answer by filtering again.
+
+### D-130 · The manager and the counsellor stand side by side under the administrator
+**ERP §Roles, the owner's decision of 14 September 2026.** "Both can do both,
+only the sidebar differs." Until now the counsellor held nothing academic
+(D-106): a counsellor set training up and did not run it. The owner's picture
+of the institute is different — a counsellor covering the desk marks a register
+when asked, a manager registers a walk-in — and the control is not a refusal
+but the record: every act is audited under the person's name and shows on the
+administrator's activity review.
+
+So the counsellor holds the manager's set. The one difference is the trainer
+record itself: bringing trainers in and editing their details is the manager's
+(`trainer.create`, `trainer.update_any`), so the counsellor's set is the
+manager's less those two. That keeps `manager ⊃ counsellor` true by exactly two
+members, which is what `can_administer` and the hierarchy test depend on; the
+roles are equals in practice and one rung apart on paper.
+
+Two consequences the owner also decided:
+
+* **A manager teaches.** A manager can be picked as a batch's trainer; the
+  first time, the system creates a trainer profile for their account
+  (`POST /trainers/teaching-profile/`), one login, role unchanged. The
+  frontend offers "managers who can teach" beside the trainer list.
+* **A manager reviews their own daily report.** "The manager is always a
+  trusted one by the company." The self-review refusal stays for a
+  trainer-role account, which is the case it was written for; a manager,
+  administrator or superadmin who took the class signs it off, and the audit
+  row names them as both author and reviewer.
+
+Also from the same session: a course carries a **usual fee** (`default_fee`)
+so a counsellor can open a course shell — title, category, syllabus line, fee —
+in a minute, trainers fill the lessons later, and the registration wizard
+starts from that figure. D-106 is superseded.
+
+### D-129 · Amended 14 September 2026: an administrator sees every centre
+The owner chose "admin sees every centre" over "admin is bounded like a
+manager". `is_unbounded` now answers yes for the ADMIN role as well as
+SUPERADMIN. An administrator still carries a home centre, and a record they
+create without naming one lands there; only a superadmin with no home centre
+must choose. Managers and counsellors stay bounded, and the fail-closed rule
+for a bounded account with no centre stands. The cross-centre sweeps in
+`test_branch_scoping_api.py` now use a manager as the widest bounded caller.

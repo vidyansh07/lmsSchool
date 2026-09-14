@@ -259,6 +259,17 @@ class Course(BaseModel):
         blank=True,
         validators=[MaxValueValidator(60 * 24 * 365)],
     )
+    #: The fee this course is usually sold at, in rupees. What the registration
+    #: wizard offers as the default; the counsellor agrees the actual figure per
+    #: enrolment in the fee ledger. Null means "not set", never free.
+    default_fee = models.DecimalField(
+        _("default fee"),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
     learning_objectives = ArrayField(
         models.CharField(max_length=MAX_OBJECTIVE_LENGTH),
         verbose_name=_("learning objectives"),

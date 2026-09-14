@@ -125,10 +125,14 @@ needs a per-request nonce. Start at `docs/RELEASE_READINESS.md`.
 
 `SUPERADMIN` ⊃ `ADMIN` ⊃ `MANAGER` ⊃ `COUNSELLOR` on a proven-monotonic ladder;
 `TRAINER` and `STUDENT` hold the base set and are scoped by assignment.
-Every staff account except a superadmin is bounded to one **centre** and sees
-only that centre's people and classes (`apps/organisation/scoping.py`).
-A counsellor registers students, quotes and collects fees, plans batches and
-enrols; they hold nothing academic and nothing about accounts.
+Since D-130 the manager and the counsellor are equals in practice: the
+counsellor holds everything the manager does except bringing trainers in and
+editing their details. A counsellor's day is admissions and fees, a manager's
+is trainers and classes, and the sidebar ranks each accordingly; the activity
+feed says who did what. A manager can also teach a batch (a trainer profile on
+the same login) and signs off their own daily report.
+Managers and counsellors are bounded to one **centre**; administrators and
+superadmins see every centre (`apps/organisation/scoping.py`, D-129 amended).
 
 Scoping that is not expressible as a global capability is resolved per record:
 

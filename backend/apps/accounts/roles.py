@@ -269,6 +269,11 @@ _MANAGER_CAPABILITIES = frozenset(
         Capability.FEE_VIEW_ANY,
         Capability.FEE_MANAGE_ANY,
         Capability.TRAINER_VIEW_ANY,
+        # Trainers are the manager's people to bring in and keep current
+        # (owner's call, 14 September 2026). The counsellor does not hold
+        # these two — see `_COUNSELLOR_CAPABILITIES`.
+        Capability.TRAINER_CREATE,
+        Capability.TRAINER_UPDATE_ANY,
         Capability.CATEGORY_MANAGE,
         Capability.COURSE_VIEW_ANY,
         Capability.COURSE_CREATE,
@@ -322,8 +327,6 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.USER_CHANGE_ROLE,
         Capability.ORGANISATION_MANAGE,
         Capability.ORGANISATION_ASSIGN_USERS,
-        Capability.TRAINER_CREATE,
-        Capability.TRAINER_UPDATE_ANY,
         Capability.ACADEMIC_CONFIGURE,
         Capability.SETTINGS_MANAGE,
         Capability.AUDIT_VIEW,
@@ -335,59 +338,23 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
     }
 )
 
-#: What a counsellor may do: bring students in, and stop there.
+#: What a counsellor may do: everything a manager may, except bring in and
+#: edit trainers.
 #:
-#: The workflow this serves is one line — register a student, choose the course,
-#: open or pick the batch, put a trainer on it, enrol them — and every
-#: capability here exists to serve one step of it. Bulk import and export are
-#: included because admissions arrive as spreadsheets.
+#: The owner's decision of 14 September 2026 (D-130) put the manager and the
+#: counsellor side by side under the administrator: "both can do both, only
+#: the sidebar differs". A counsellor's day is still admissions and fees, a
+#: manager's is still trainers and classes, but neither is *refused* the other's
+#: work — the sidebar ranks it differently, and the activity feed says who did
+#: what. The one exception is the trainer record itself: creating a trainer and
+#: editing their details is the manager's (2a), so those two capabilities are
+#: the whole difference between the rungs. That keeps the ladder a ladder —
+#: manager ⊃ counsellor still holds, by exactly two members — which
+#: `can_administer` and the hierarchy test depend on.
 #:
-#: Note what is absent, and why:
-#:
-#: * **Nothing academic.** No attendance, assessment, assignment, project, exam,
-#:   DSR or completion right. A counsellor sets the training up; they do not run
-#:   it or mark it.
-#: * **No `REPORT_VIEW_ANY`.** The report catalogue aggregates the whole
-#:   institution and is a management tool. `DATA_EXPORT` is still held, because
-#:   exporting the student and batch lists they already work with is part of the
-#:   job — and those lists come back through the same scoped querysets, so the
-#:   capability cannot widen what they see.
-#: * **Nothing about accounts.** No `USER_*` capability, so a counsellor cannot
-#:   edit, deactivate or re-role anybody, including the students they created.
-#:
-#: Every member of this set is also in `_MANAGER_CAPABILITIES`, which is what
-#: keeps the ladder a ladder rather than two roles standing side by side. The
-#: ladder test asserts it, so the property cannot be lost by accident.
-_COUNSELLOR_CAPABILITIES = frozenset(
-    {
-        # Naming the centre a student is being admitted to. Read-only: a
-        # counsellor never creates a branch or moves anybody between two.
-        Capability.ORGANISATION_VIEW_ANY,
-        # The student record itself, from registration onwards.
-        Capability.STUDENT_VIEW_ANY,
-        Capability.STUDENT_CREATE,
-        Capability.STUDENT_UPDATE_ANY,
-        Capability.STUDENT_SET_FEE_STATUS,
-        Capability.FEE_VIEW_ANY,
-        Capability.FEE_MANAGE_ANY,
-        # Reading the catalogue, to choose what somebody is enrolling on.
-        Capability.COURSE_VIEW_ANY,
-        # Reading trainers, to put one on a batch. Not creating or editing them.
-        Capability.TRAINER_VIEW_ANY,
-        # Batches: create, choose, timetable, and assign the trainer. Assigning
-        # a trainer goes through `batch.update_any` in `batches.access`.
-        Capability.BATCH_VIEW_ANY,
-        Capability.BATCH_CREATE,
-        Capability.BATCH_UPDATE_ANY,
-        Capability.BATCH_MANAGE_SCHEDULE,
-        # Enrolment, including transfers and status changes.
-        Capability.ENROLMENT_VIEW_ANY,
-        Capability.ENROLMENT_CREATE,
-        Capability.ENROLMENT_UPDATE_ANY,
-        # Admissions arrive as spreadsheets and leave as spreadsheets.
-        Capability.DATA_IMPORT,
-        Capability.DATA_EXPORT,
-    }
+#: Superseded: D-106, under which the counsellor held nothing academic.
+_COUNSELLOR_CAPABILITIES = _MANAGER_CAPABILITIES - frozenset(
+    {Capability.TRAINER_CREATE, Capability.TRAINER_UPDATE_ANY}
 )
 
 ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
@@ -399,8 +366,8 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
     # no account creation, no role changes, no platform settings. That keeps
     # "can run the school" and "can grant themselves power" separate.
     UserRole.MANAGER: BASE_CAPABILITIES | _MANAGER_CAPABILITIES,
-    # A counsellor sets training up and does not run it. Strictly inside the
-    # manager rung.
+    # A counsellor holds the manager's set less the two trainer-record
+    # capabilities: an equal in practice, strictly inside the rung on paper.
     UserRole.COUNSELLOR: BASE_CAPABILITIES | _COUNSELLOR_CAPABILITIES,
     # Trainers and students hold no global management capability. What they may
     # touch comes from per-record assignment, which is the whole point of

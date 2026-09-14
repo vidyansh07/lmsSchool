@@ -83,17 +83,23 @@ def test_a_django_superuser_is_unbounded_whatever_its_role_says():
     assert is_unbounded(_actor(role=UserRole.ADMIN, is_superuser=True)) is True
 
 
+def test_an_administrator_is_unbounded():
+    """D-129 as amended on 14 September 2026: "admin sees every centre"."""
+    assert is_unbounded(_actor(role=UserRole.ADMIN)) is True
+    assert is_unbounded(_actor(role=UserRole.ADMIN, branch_id=None)) is True
+
+
 @pytest.mark.parametrize(
     "role",
-    [UserRole.ADMIN, UserRole.MANAGER, UserRole.COUNSELLOR, UserRole.TRAINER, UserRole.STUDENT],
+    [UserRole.MANAGER, UserRole.COUNSELLOR, UserRole.TRAINER, UserRole.STUDENT],
 )
-def test_every_role_below_superadmin_is_bounded(role):
+def test_every_role_below_administrator_is_bounded(role):
     assert is_unbounded(_actor(role=role)) is False, role
 
 
 def test_a_bounded_role_with_no_branch_at_all_is_still_not_unbounded():
     """The whole point. A missing branch is the *absence* of reach, not all of it."""
-    assert is_unbounded(_actor(role=UserRole.ADMIN, branch_id=None)) is False
+    assert is_unbounded(_actor(role=UserRole.MANAGER, branch_id=None)) is False
 
 
 def test_an_inactive_superadmin_is_not_unbounded():

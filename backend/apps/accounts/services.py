@@ -68,15 +68,21 @@ def resolve_branch_for_new_record(*, actor, branch, required: bool = True):
     city by sending an id; forcing it means the worst a wrong id can do is be
     silently right.
 
-    An **unbounded** actor names the centre, and must — a branchless record is
-    one that, under the fail-closed rule, nobody can see, and a branchless staff
-    account is one that can see nothing.
+    An **unbounded** actor names the centre. If they name none, their own home
+    centre is used — an administrator sees every centre (D-129, amended) but
+    still belongs to one, and "the student I registered at my desk" is at my
+    centre unless I said otherwise. Only an unbounded actor with no home centre
+    at all (a superadmin) must choose, because a branchless record is one that,
+    under the fail-closed rule, no bounded person can see.
     """
     from apps.organisation.scoping import actor_branch_id, is_unbounded
 
     if actor is not None and not is_unbounded(actor) and actor_branch_id(actor) is not None:
         # The instance, not the id: it is written straight onto the new record
         # and, for a student or a trainer, onto both halves of it.
+        return actor.branch
+
+    if branch is None and actor is not None and actor_branch_id(actor) is not None:
         return actor.branch
 
     if branch is None and required:

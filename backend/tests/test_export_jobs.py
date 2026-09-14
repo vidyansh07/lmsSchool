@@ -305,11 +305,11 @@ def test_a_batch_id_that_does_not_exist_404s_at_queue_time(api_client_no_csrf, a
 
 
 @pytest.mark.django_db
-def test_a_counsellor_is_refused_at_queue_time(api_client_no_csrf, counsellor_user):
-    """Holds `data.export` but not `report.view_any` — the export view's own gate."""
+def test_a_counsellor_may_queue_an_export(api_client_no_csrf, counsellor_user):
+    """D-130: holds `report.view_any` like a manager, so the gate opens."""
     response = _queue(api_client_no_csrf, counsellor_user)
-    assert response.status_code == 403
-    assert not ExportJob.objects.exists()
+    assert response.status_code == 202, response.data
+    assert ExportJob.objects.filter(requested_by=counsellor_user).exists()
 
 
 @pytest.mark.django_db

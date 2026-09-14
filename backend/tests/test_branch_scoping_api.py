@@ -965,17 +965,23 @@ def test_the_detail_route_sweep_covers_every_id_taking_endpoint():
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(("label", "url_for", "theirs"), _CROSS_BRANCH_DETAIL_ROUTES)
-def test_an_administrator_cannot_fetch_another_centres_record_by_its_real_id(
-    label, url_for, theirs, api_client_no_csrf, admin_user, request
+def test_a_manager_cannot_fetch_another_centres_record_by_its_real_id(
+    label, url_for, theirs, api_client_no_csrf, manager_user, request
 ):
-    """An administrator, because they hold the widest capability set that is
-    still bounded — if anybody reaches across, it is them."""
+    """A manager, because they hold the widest capability set that is still
+    bounded (an administrator sees every centre since D-129 was amended) —
+    if anybody reaches across, it is them."""
     row = request.getfixturevalue(theirs)
 
-    api_client_no_csrf.force_login(admin_user)
+    api_client_no_csrf.force_login(manager_user)
     response = api_client_no_csrf.get(url_for(row))
 
-    assert response.status_code == 404, (label, response.status_code, response.data)
+    if label == "user audit":
+        # Gated on `audit.view`, which a manager does not hold: refused before
+        # any id is looked at, for every id alike, so nothing is confirmed.
+        assert response.status_code == 403, (label, response.status_code, response.data)
+    else:
+        assert response.status_code == 404, (label, response.status_code, response.data)
 
 
 @pytest.mark.django_db
@@ -1021,13 +1027,13 @@ def test_the_sub_resource_sweep_covers_the_drill_downs():
 @pytest.mark.django_db
 @pytest.mark.parametrize(("label", "template", "theirs"), _CROSS_BRANCH_SUBRESOURCE_ROUTES)
 def test_a_drill_down_through_another_centres_id_finds_nothing(
-    label, template, theirs, api_client_no_csrf, admin_user, request
+    label, template, theirs, api_client_no_csrf, manager_user, request
 ):
     """The parent id is the one being guessed here, so a 200 does not leak one
     record — it leaks a register, a mark sheet or a batch's reports."""
     row = request.getfixturevalue(theirs)
 
-    api_client_no_csrf.force_login(admin_user)
+    api_client_no_csrf.force_login(manager_user)
     response = api_client_no_csrf.get(template.format(id=row.id))
 
     assert response.status_code == 404, (label, response.status_code, response.data)
@@ -1068,14 +1074,14 @@ def test_the_create_sweep_covers_the_writes_onto_another_centres_batch():
     ("label", "template", "payload", "model_label"), _CROSS_BRANCH_CREATE_ROUTES
 )
 def test_a_record_cannot_be_created_on_another_centres_batch(
-    label, template, payload, model_label, api_client_no_csrf, admin_user, other_branch_batch
+    label, template, payload, model_label, api_client_no_csrf, manager_user, other_branch_batch
 ):
     from django.apps import apps as django_apps
 
     model = django_apps.get_model(model_label)
     before = model.objects.filter(batch=other_branch_batch).count()
 
-    api_client_no_csrf.force_login(admin_user)
+    api_client_no_csrf.force_login(manager_user)
     response = api_client_no_csrf.post(
         template.format(id=other_branch_batch.id), payload, format="json"
     )
@@ -1115,12 +1121,12 @@ def test_setting_a_fee_status_on_another_centres_student_is_a_404_and_writes_not
 
 
 @pytest.mark.django_db
-def test_deactivating_an_account_at_another_centre_is_a_404_and_writes_nothing(
+def test_an_administrator_deactivates_an_account_at_another_centre(
     api_client_no_csrf, admin_user, other_branch_manager
 ):
-    """A 403 here would tell an administrator in Jaipur that a uuid they
-    guessed names a real account in Pune — the enumeration oracle the 404
-    discipline exists to close."""
+    """D-129 as amended: the administrator sees every centre. A *manager*
+    from another centre still gets the 404 (tested below), so the enumeration
+    oracle stays closed where it matters."""
     api_client_no_csrf.force_login(admin_user)
     response = api_client_no_csrf.post(
         _user_set_active_url(other_branch_manager),
@@ -1128,13 +1134,16 @@ def test_deactivating_an_account_at_another_centre_is_a_404_and_writes_nothing(
         format="json",
     )
 
-    assert response.status_code == 404, response.data
+    assert response.status_code == 200, response.data
     other_branch_manager.refresh_from_db()
+    assert other_branch_manager.is_active is False
+    other_branch_manager.is_active = True
+    other_branch_manager.save(update_fields=["is_active"])
     assert other_branch_manager.is_active is True
 
 
 @pytest.mark.django_db
-def test_moving_an_account_to_a_centre_the_caller_cannot_see_is_a_404(
+def test_an_administrator_moves_an_account_to_any_centre(
     api_client_no_csrf, admin_user, manager_user, other_branch
 ):
     api_client_no_csrf.force_login(admin_user)
@@ -1144,18 +1153,18 @@ def test_moving_an_account_to_a_centre_the_caller_cannot_see_is_a_404(
         format="json",
     )
 
-    assert response.status_code == 404, response.data
+    assert response.status_code == 200, response.data
     manager_user.refresh_from_db()
-    assert manager_user.branch_id != other_branch.id
+    assert manager_user.branch_id == other_branch.id
 
 
 @pytest.mark.django_db
 def test_staffing_a_class_with_a_trainer_from_another_centre_is_a_404(
-    api_client_no_csrf, admin_user, batch, other_branch_trainer, trainer_profile
+    api_client_no_csrf, manager_user, batch, other_branch_trainer, trainer_profile
 ):
     """The trainer is resolved out of the caller's own visible trainers, so an
     id they cannot see is not found rather than refused after the fetch."""
-    api_client_no_csrf.force_login(admin_user)
+    api_client_no_csrf.force_login(manager_user)
     response = api_client_no_csrf.post(
         _batch_trainer_url(batch), {"trainer_id": str(other_branch_trainer.id)}, format="json"
     )
@@ -1254,13 +1263,13 @@ def test_a_performance_review_cannot_be_written_about_another_centres_student(
 
 @pytest.mark.django_db
 def test_withdrawing_another_centres_feedback_is_a_404_and_leaves_it_in_place(
-    api_client_no_csrf, admin_user, feedback_b
+    api_client_no_csrf, manager_user, feedback_b
 ):
     """`FeedbackDetailView` takes only DELETE, so it sits outside the GET sweep
     above and needs its own assertion — including that nothing was written."""
     from apps.performance.models import Feedback
 
-    api_client_no_csrf.force_login(admin_user)
+    api_client_no_csrf.force_login(manager_user)
     response = api_client_no_csrf.delete(
         _feedback_url(feedback_b), {"reason": "Withdrawn."}, format="json"
     )
@@ -1746,19 +1755,18 @@ def test_a_platform_operator_can_create_a_batch_at_a_named_centre(
 
 @pytest.mark.django_db
 def test_a_manager_naming_another_centre_on_a_new_record_still_gets_their_own(
-    api_client_no_csrf, admin_user, branch, other_branch
+    api_client_no_csrf, manager_user, branch, other_branch
 ):
     """Forced, not validated. A bounded caller who sends a branch id is not
     refused — the worst a wrong id can do is be silently right — because
     refusing would leak which ids name a real centre."""
-    api_client_no_csrf.force_login(admin_user)
+    api_client_no_csrf.force_login(manager_user)
     response = api_client_no_csrf.post(
-        _users_url(),
+        "/api/v1/students/",
         {
             "email": "planted@example.test",
             "first_name": "Priya",
             "last_name": "Planted",
-            "role": UserRole.MANAGER,
             "branch": str(other_branch.id),
         },
         format="json",
@@ -1939,20 +1947,19 @@ def test_a_report_filtered_to_another_centres_batch_is_a_404(
 
 
 @pytest.mark.django_db
-def test_the_export_job_list_shows_only_the_callers_own_centres_jobs(
+def test_the_export_job_list_shows_every_centre_to_an_administrator(
     api_client_no_csrf, admin_user, export_job_a, export_job_b
 ):
-    """`export.view_any` is an administrator capability, and an administrator is
-    bounded to a centre. Without a branch narrowing here it means "every job in
-    the institution", which is a list of what every other centre has exported.
-    """
+    """`export.view_any` is an administrator capability, and since D-129 was
+    amended an administrator sees every centre — so the list is the
+    institution's. A manager's own jobs stay their own (tested elsewhere)."""
     api_client_no_csrf.force_login(admin_user)
     response = api_client_no_csrf.get(_export_jobs_url())
 
     assert response.status_code == 200, response.data
     ids = _row_ids(response)
     assert str(export_job_a.id) in ids
-    assert str(export_job_b.id) not in ids
+    assert str(export_job_b.id) in ids
 
 
 @pytest.mark.django_db
@@ -1968,7 +1975,7 @@ def test_a_platform_operator_sees_export_jobs_from_both_centres(
 
 @pytest.mark.django_db
 def test_an_export_job_whose_requester_is_gone_belongs_to_no_centre(
-    api_client_no_csrf, admin_user, unbounded_superadmin, export_job_a
+    api_client_no_csrf, admin_user, manager_user, unbounded_superadmin, export_job_a
 ):
     """A job's centre is its requester's, so clearing the requester leaves a
     file that belongs to nobody — and whose rows were rendered from an access
@@ -1978,28 +1985,33 @@ def test_an_export_job_whose_requester_is_gone_belongs_to_no_centre(
     export_job_a.requested_by = None
     export_job_a.save(update_fields=["requested_by"])
 
-    api_client_no_csrf.force_login(admin_user)
+    # A bounded caller stops reaching it.
+    api_client_no_csrf.force_login(manager_user)
     assert api_client_no_csrf.get(_export_job_url(export_job_a)).status_code == 404
-    assert str(export_job_a.id) not in _row_ids(api_client_no_csrf.get(_export_jobs_url()))
 
+    # An unbounded one — administrator or platform operator — still can.
+    api_client_no_csrf.force_login(admin_user)
+    assert api_client_no_csrf.get(_export_job_url(export_job_a)).status_code == 200
     api_client_no_csrf.force_login(unbounded_superadmin)
     assert api_client_no_csrf.get(_export_job_url(export_job_a)).status_code == 200
 
 
 @pytest.mark.django_db
-def test_downloading_another_centres_finished_export_is_a_404(
-    api_client_no_csrf, admin_user, export_job_b
+def test_downloading_another_centres_finished_export_is_a_404_for_a_manager(
+    api_client_no_csrf, manager_user, admin_user, export_job_b
 ):
     """The file is already rendered and sitting in storage; this route is the
-    one that would hand it over."""
+    one that would hand it over. A bounded manager never reaches it; an
+    administrator, who sees every centre, does."""
+    api_client_no_csrf.force_login(manager_user)
+    assert api_client_no_csrf.get(_export_job_download_url(export_job_b)).status_code == 404
     api_client_no_csrf.force_login(admin_user)
-    response = api_client_no_csrf.get(_export_job_download_url(export_job_b))
-    assert response.status_code == 404, response.status_code
+    assert api_client_no_csrf.get(_export_job_download_url(export_job_b)).status_code == 200
 
 
 @pytest.mark.django_db
 def test_cancelling_another_centres_export_is_a_404_and_leaves_it_alone(
-    api_client_no_csrf, admin_user, other_branch_manager
+    api_client_no_csrf, manager_user, other_branch_manager
 ):
     from apps.reporting.models import ExportFormat, ExportJob, ExportStatus
 
@@ -2011,7 +2023,7 @@ def test_cancelling_another_centres_export_is_a_404_and_leaves_it_alone(
         queued_at=timezone.now(),
     )
 
-    api_client_no_csrf.force_login(admin_user)
+    api_client_no_csrf.force_login(manager_user)
     response = api_client_no_csrf.post(_export_job_cancel_url(job), {}, format="json")
 
     assert response.status_code == 404, response.data
@@ -2182,7 +2194,7 @@ def test_the_manager_dashboard_of_an_account_with_no_centre_counts_nothing(
 
 
 @pytest.mark.django_db
-def test_the_admin_dashboard_counts_only_the_callers_own_centre(
+def test_the_admin_dashboard_counts_every_centre_for_an_administrator(
     api_client_no_csrf,
     admin_user,
     batch,
@@ -2192,14 +2204,15 @@ def test_the_admin_dashboard_counts_only_the_callers_own_centre(
     trainer_profile,
     other_branch_trainer,
 ):
+    """D-129 as amended: the administrator's tiles are the institution's."""
     api_client_no_csrf.force_login(admin_user)
     response = api_client_no_csrf.get(_admin_dashboard_url())
 
     assert response.status_code == 200, response.data
     body = response.json()
-    assert body["active_batches"] == 1, body
-    assert body["active_students"] == 1, body
-    assert body["active_trainers"] == 1, body
+    assert body["active_batches"] == 2, body
+    assert body["active_students"] == 2, body
+    assert body["active_trainers"] == 2, body
 
 
 @pytest.mark.django_db
@@ -2274,7 +2287,7 @@ def test_the_trainer_workload_dashboard_counts_only_the_callers_own_centre(
 
 
 @pytest.mark.django_db
-def test_restoring_another_centres_batch_is_refused_and_leaves_it_deleted(
+def test_an_administrator_restores_another_centres_batch(
     api_client_no_csrf, admin_user, unbounded_superadmin, other_branch_batch
 ):
     from apps.batches.models import Batch
@@ -2287,15 +2300,12 @@ def test_restoring_another_centres_batch_is_refused_and_leaves_it_deleted(
         _restore_url("batches.batch", other_branch_batch.id), {}, format="json"
     )
 
-    assert response.status_code == 403, response.data
-    assert response.json()["error"]["code"] == "permission_denied"
-    # And it says nothing about which centre, which would confirm one exists.
-    assert "centre" not in response.json()["error"]["message"].lower()
-    assert not Batch.objects.filter(pk=other_branch_batch.pk).exists()
+    assert response.status_code == 200, response.data
+    assert Batch.objects.filter(pk=other_branch_batch.pk).exists()
 
 
 @pytest.mark.django_db
-def test_restoring_another_centres_batch_is_audited_as_a_refusal(
+def test_restoring_another_centres_batch_writes_no_refusal(
     api_client_no_csrf, admin_user, unbounded_superadmin, other_branch_batch
 ):
     from apps.audit.models import AuditAction, AuditLog, AuditResult
@@ -2306,10 +2316,12 @@ def test_restoring_another_centres_batch_is_audited_as_a_refusal(
     api_client_no_csrf.force_login(admin_user)
     api_client_no_csrf.post(_restore_url("batches.batch", other_branch_batch.id), {}, format="json")
 
-    entry = AuditLog.objects.filter(action=AuditAction.PERMISSION_DENIED).latest("created_at")
-    assert entry.result == AuditResult.DENIED
-    assert entry.context["refused"] == "outside_branch"
-    assert entry.context["label"] == "batches.batch"
+    # No refusal is written, because none happened: the administrator sees
+    # every centre. The restore itself is audited under their name.
+    assert not AuditLog.objects.filter(
+        action=AuditAction.PERMISSION_DENIED, context__refused="outside_branch"
+    ).exists()
+    assert AuditLog.objects.filter(actor=admin_user, result=AuditResult.SUCCESS).exists()
 
 
 @pytest.mark.django_db
@@ -2328,7 +2340,7 @@ def test_restoring_the_callers_own_centres_batch_still_works(api_client_no_csrf,
 
 
 @pytest.mark.django_db
-def test_restoring_another_centres_export_job_is_refused(
+def test_restoring_another_centres_export_job_is_restored_by_an_administrator(
     api_client_no_csrf, admin_user, unbounded_superadmin, export_job_b
 ):
     """An export job's centre is its requester's, since that is whose access the
@@ -2343,12 +2355,12 @@ def test_restoring_another_centres_export_job_is_refused(
         _restore_url("reporting.exportjob", export_job_b.id), {}, format="json"
     )
 
-    assert response.status_code == 403, response.data
-    assert not ExportJob.objects.filter(pk=export_job_b.pk).exists()
+    assert response.status_code == 200, response.data
+    assert ExportJob.objects.filter(pk=export_job_b.pk).exists()
 
 
 @pytest.mark.django_db
-def test_restoring_another_centres_dsr_is_refused(
+def test_restoring_another_centres_dsr_is_restored_by_an_administrator(
     api_client_no_csrf, admin_user, unbounded_superadmin, dsr_b
 ):
     from apps.common.deletion import soft_delete
@@ -2359,12 +2371,12 @@ def test_restoring_another_centres_dsr_is_refused(
     api_client_no_csrf.force_login(admin_user)
     response = api_client_no_csrf.post(_restore_url("dsr.dsr", dsr_b.id), {}, format="json")
 
-    assert response.status_code == 403, response.data
-    assert not DSR.objects.filter(pk=dsr_b.pk).exists()
+    assert response.status_code == 200, response.data
+    assert DSR.objects.filter(pk=dsr_b.pk).exists()
 
 
 @pytest.mark.django_db
-def test_restoring_another_centres_enrolment_is_refused(
+def test_restoring_another_centres_enrolment_is_restored_by_an_administrator(
     api_client_no_csrf, admin_user, unbounded_superadmin, other_branch_enrollment
 ):
     from apps.common.deletion import soft_delete
@@ -2377,12 +2389,12 @@ def test_restoring_another_centres_enrolment_is_refused(
         _restore_url("enrollments.enrollment", other_branch_enrollment.id), {}, format="json"
     )
 
-    assert response.status_code == 403, response.data
-    assert not Enrollment.objects.filter(pk=other_branch_enrollment.pk).exists()
+    assert response.status_code == 200, response.data
+    assert Enrollment.objects.filter(pk=other_branch_enrollment.pk).exists()
 
 
 @pytest.mark.django_db
-def test_restoring_another_centres_performance_review_is_refused(
+def test_restoring_another_centres_performance_review_is_restored_by_an_administrator(
     api_client_no_csrf, admin_user, unbounded_superadmin, review_b
 ):
     """A review hangs off a person, not a batch, so its centre is reached
@@ -2398,14 +2410,15 @@ def test_restoring_another_centres_performance_review_is_refused(
         _restore_url("performance.performancereview", review_b.id), {}, format="json"
     )
 
-    assert response.status_code == 403, response.data
-    assert not PerformanceReview.objects.filter(pk=review_b.pk).exists()
+    assert response.status_code == 200, response.data
+    assert PerformanceReview.objects.filter(pk=review_b.pk).exists()
 
 
 @pytest.mark.django_db
-def test_an_administrator_with_no_centre_may_restore_nothing(
+def test_an_administrator_with_no_centre_may_still_restore(
     api_client_no_csrf, branchless_admin, admin_user, batch
 ):
+    """An administrator is unbounded whether or not they carry a home centre."""
     from apps.batches.models import Batch
     from apps.common.deletion import soft_delete
 
@@ -2414,8 +2427,8 @@ def test_an_administrator_with_no_centre_may_restore_nothing(
     api_client_no_csrf.force_login(branchless_admin)
     response = api_client_no_csrf.post(_restore_url("batches.batch", batch.id), {}, format="json")
 
-    assert response.status_code == 403, response.data
-    assert not Batch.objects.filter(pk=batch.pk).exists()
+    assert response.status_code == 200, response.data
+    assert Batch.objects.filter(pk=batch.pk).exists()
 
 
 @pytest.mark.django_db

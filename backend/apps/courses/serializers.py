@@ -360,6 +360,7 @@ class CourseListSerializer(serializers.ModelSerializer):
             "category_slug",
             "difficulty",
             "estimated_duration_minutes",
+            "default_fee",
             "status",
             "visibility",
             "thumbnail_url",
@@ -463,6 +464,9 @@ class CourseWriteSerializer(StrictModelSerializer):
     visibility = serializers.ChoiceField(choices=CourseVisibility.choices, required=False)
     learning_objectives = StringListField(max_items=MAX_OBJECTIVES)
     prerequisites = StringListField(max_items=MAX_PREREQUISITES)
+    default_fee = serializers.DecimalField(
+        max_digits=10, decimal_places=2, min_value=0, required=False, allow_null=True
+    )
 
     class Meta:
         model = Course
@@ -475,6 +479,7 @@ class CourseWriteSerializer(StrictModelSerializer):
             "difficulty",
             "visibility",
             "estimated_duration_minutes",
+            "default_fee",
             "learning_objectives",
             "prerequisites",
         )

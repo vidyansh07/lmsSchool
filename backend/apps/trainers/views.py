@@ -17,7 +17,7 @@ from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView, ge
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.roles import UserRole, has_capability
+from apps.accounts.roles import has_capability
 from apps.common.permissions import Capability, HasCapability, IsActiveUser, IsOwnerOrHasCapability
 from apps.organisation.access import resolve_submitted_branch
 
@@ -25,6 +25,7 @@ from . import access, services
 from .models import TrainerProfile
 from .serializers import (
     AdminTrainerUpdateSerializer,
+    TeachingProfileSerializer,
     TrainerCreateSerializer,
     TrainerListSerializer,
     TrainerProfileSerializer,
@@ -172,14 +173,42 @@ class TrainerDetailView(RetrieveUpdateAPIView):
         return Response(TrainerProfileSerializer(updated).data)
 
 
+class TeachingProfileView(APIView):
+    """Make a manager available as a batch's trainer.
+
+    `POST {user_id}` returns the trainer profile for that account, creating
+    it the first time. The account keeps its role; it simply also teaches.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.TRAINER_CREATE
+
+    @extend_schema(
+        summary="Give a manager a trainer profile so they can teach",
+        request=TeachingProfileSerializer,
+        responses={200: TrainerProfileSerializer},
+        tags=TRAINERS_TAG,
+    )
+    def post(self, request):
+        from apps.accounts import access as accounts_access
+
+        serializer = TeachingProfileSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = get_object_or_404(
+            accounts_access.visible_accounts(request.user), pk=serializer.validated_data["user_id"]
+        )
+        profile = services.ensure_teaching_profile(user=user, actor=request.user)
+        return Response(TrainerProfileSerializer(profile).data)
+
+
 class TrainerMeView(APIView):
     """The signed-in trainer's own profile."""
 
     permission_classes = (IsActiveUser,)
 
     def _profile(self, request) -> TrainerProfile:
-        if request.user.role != UserRole.TRAINER:
-            raise PermissionDenied("This endpoint is only available to trainer accounts.")
+        if request.user.role not in services.TEACHING_ROLES:
+            raise PermissionDenied("This endpoint is only available to teaching accounts.")
         return services.get_or_create_profile_for(request.user)
 
     @extend_schema(

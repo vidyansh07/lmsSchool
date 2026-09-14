@@ -37,7 +37,7 @@ import {
   formatDate,
 } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
-import { listStudents, listTrainers } from '@/lib/people';
+import { ensureTeachingProfile, listStudents, listTrainers, listUsers } from '@/lib/people';
 import type {
   BatchDetail,
   BatchStatus,
@@ -45,6 +45,7 @@ import type {
   StudentListRow,
   TrainerListRow,
   Weekday,
+  AdminUser,
 } from '@/types/api';
 
 /** Which transitions to offer. The server owns the real table. */
@@ -69,6 +70,10 @@ function transitionsFor(status: BatchStatus): { target: BatchStatus; label: stri
 
 function TrainerPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () => void }) {
   const [trainers, setTrainers] = useState<TrainerListRow[]>([]);
+  // Managers can teach too. Listed under their own heading; picking one
+  // creates their teaching profile on assign, so the batch stores a trainer
+  // id like any other. The `user:` prefix keeps the two id spaces apart.
+  const [managers, setManagers] = useState<AdminUser[]>([]);
   const [selected, setSelected] = useState(batch.trainer_id ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
@@ -83,6 +88,13 @@ function TrainerPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () 
       .catch(() => {
         if (!cancelled) setTrainers([]);
       });
+    listUsers({ role: 'manager', is_active: 'true', page_size: 100 })
+      .then((page) => {
+        if (!cancelled) setManagers(page.results);
+      })
+      .catch(() => {
+        if (!cancelled) setManagers([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -93,7 +105,12 @@ function TrainerPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () 
     setErrors({});
     setMessage('');
     try {
-      await assignBatchTrainer(batch.id, selected || null);
+      let trainerId: string | null = selected || null;
+      if (selected.startsWith('user:')) {
+        const profile = await ensureTeachingProfile(selected.slice('user:'.length));
+        trainerId = profile.id;
+      }
+      await assignBatchTrainer(batch.id, trainerId);
       // Said out loud. Reassigning a trainer is a change somebody else feels —
       // a different person turns up to teach — and a control that answers
       // silently leaves the administrator wondering whether it took.
@@ -135,6 +152,21 @@ function TrainerPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () 
                   {trainer.full_name || trainer.email} ({trainer.trainer_id})
                 </option>
               ))}
+              {managers.filter(
+                (manager) => !trainers.some((trainer) => trainer.user_id === manager.id),
+              ).length > 0 ? (
+                <optgroup label="Managers who can teach">
+                  {managers
+                    .filter(
+                      (manager) => !trainers.some((trainer) => trainer.user_id === manager.id),
+                    )
+                    .map((manager) => (
+                      <option key={manager.id} value={`user:${manager.id}`}>
+                        {manager.full_name || manager.email} (manager)
+                      </option>
+                    ))}
+                </optgroup>
+              ) : null}
             </Select>
           </Field>
           <Button onClick={() => void onAssign()} disabled={isSaving}>
@@ -167,7 +199,11 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
     setErrors({});
     setGenerated('');
     try {
-      const result = await setUpBatchTimetable(batch.id, { start_time: start, end_time: end, location });
+      const result = await setUpBatchTimetable(batch.id, {
+        start_time: start,
+        end_time: end,
+        location,
+      });
       const said: string[] = [];
       said.push(
         result.schedules_created
@@ -178,12 +214,17 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
         said.push(`${result.schedules_already_present} already there`);
       }
       if (result.sessions) {
-        said.push(`${result.sessions.created} class${result.sessions.created === 1 ? '' : 'es'} created`);
+        said.push(
+          `${result.sessions.created} class${result.sessions.created === 1 ? '' : 'es'} created`,
+        );
         if (result.sessions.skipped) said.push(`${result.sessions.skipped} already existed`);
-        if (result.sessions.on_holiday) said.push(`${result.sessions.on_holiday} skipped as holidays`);
+        if (result.sessions.on_holiday)
+          said.push(`${result.sessions.on_holiday} skipped as holidays`);
       }
       if (result.curriculum) {
-        said.push(`${result.curriculum.planned} lesson${result.curriculum.planned === 1 ? '' : 's'} planned`);
+        said.push(
+          `${result.curriculum.planned} lesson${result.curriculum.planned === 1 ? '' : 's'} planned`,
+        );
       }
       setGenerated(`${said.join(', ')}.`);
       onChanged();
@@ -313,16 +354,11 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
         <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
           <p className="text-sm font-medium">Set this batch up for teaching</p>
           <p className="text-sm text-muted-foreground">
-            Writes a Monday to Saturday timetable at the times above, turns it into dated
-            classes, and puts the course&rsquo;s published lessons on them in order. Days already
-            in the timetable are left as they are, and running it again creates nothing.
+            Writes a Monday to Saturday timetable at the times above, turns it into dated classes,
+            and puts the course&rsquo;s published lessons on them in order. Days already in the
+            timetable are left as they are, and running it again creates nothing.
           </p>
-          <Button
-            type="button"
-            size="sm"
-            disabled={isSettingUp}
-            onClick={() => void onSetUp()}
-          >
+          <Button type="button" size="sm" disabled={isSettingUp} onClick={() => void onSetUp()}>
             <CalendarPlus className="size-4" aria-hidden="true" />
             {isSettingUp ? 'Setting up…' : 'Set up six-day teaching week'}
           </Button>
@@ -465,7 +501,10 @@ function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () =
               </thead>
               <tbody className="stagger">
                 {roster.map((entry) => (
-                  <tr key={entry.id} className="animate-fade-in transition-colors hover:bg-muted/40">
+                  <tr
+                    key={entry.id}
+                    className="animate-fade-in transition-colors hover:bg-muted/40"
+                  >
                     <Td className="font-mono text-xs">{entry.student_code}</Td>
                     <Td className="font-medium">{entry.full_name || entry.email}</Td>
                     <Td>
@@ -619,7 +658,10 @@ function BatchDetailView({ batchId }: { batchId: string }) {
           </div>
           <p className="text-sm text-muted-foreground">
             <span className="font-mono text-xs">{batch.code}</span> ·{' '}
-            <Link href={`/courses/${batch.course_slug}`} className="underline hover:text-foreground">
+            <Link
+              href={`/courses/${batch.course_slug}`}
+              className="underline hover:text-foreground"
+            >
               {batch.course_title}
             </Link>{' '}
             · {formatDate(batch.start_date)} – {formatDate(batch.end_date)}

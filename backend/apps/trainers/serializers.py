@@ -167,3 +167,9 @@ class AdminTrainerUpdateSerializer(StrictModelSerializer):
     class Meta:
         model = TrainerProfile
         fields = ADMIN_EDITABLE_FIELDS
+
+
+class TeachingProfileSerializer(StrictSerializer):
+    """Which account should be able to teach. Resolved in the view."""
+
+    user_id = serializers.UUIDField()

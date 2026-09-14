@@ -58,6 +58,8 @@ export async function createCourse(payload: {
   short_description?: string;
   description?: string;
   difficulty?: string;
+  /** The fee this course is usually sold at, prefilled at registration. */
+  default_fee?: string | null;
   visibility?: string;
   estimated_duration_minutes?: number | null;
   learning_objectives?: string[];

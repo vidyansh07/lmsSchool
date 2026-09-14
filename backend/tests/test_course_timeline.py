@@ -263,25 +263,20 @@ def test_a_student_is_refused_recording_a_topic(
     assert response.status_code == 403
 
 
-def test_batch_manage_schedule_does_not_imply_topic_management(
+def test_a_counsellor_records_a_topic_like_a_manager(
     api_client_no_csrf, admin_user, counsellor_user, batch, paid_lesson
 ):
-    """A counsellor may manage a batch's timetable but not its curriculum record.
-
-    `SESSION_MANAGE_ANY` is deliberately a different capability from
-    `BATCH_MANAGE_SCHEDULE` — see `apps.sessions.access.can_manage_topic`.
-    A counsellor holds the latter and not the former.
-    """
+    """`SESSION_MANAGE_ANY` is still a different capability from
+    `BATCH_MANAGE_SCHEDULE` (see `apps.sessions.access.can_manage_topic`); since
+    D-130 the counsellor holds both, so recording a topic is allowed and audited."""
     session = _add_session(batch, admin_user, batch.start_date)
     api_client_no_csrf.force_login(counsellor_user)
 
-    # The counsellor can see the session (BATCH_VIEW_ANY)...
     assert api_client_no_csrf.get(f"{SESSIONS_URL}{session.id}/").status_code == 200
-    # ...but not record its topic.
     response = api_client_no_csrf.post(
         _topic_url(session), {"lesson_id": str(paid_lesson.pk)}, format="json"
     )
-    assert response.status_code == 403
+    assert response.status_code in (200, 201), response.data
 
 
 def test_anonymous_callers_are_refused_recording_a_topic(api_client_no_csrf, admin_user, batch):
