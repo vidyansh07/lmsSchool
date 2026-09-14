@@ -119,9 +119,16 @@ this project has no bucket provisioned, so nothing here has been exercised
 against a real one. It is a named gap in `docs/RELEASE_READINESS.md` rather than
 a solved problem.
 
-### Schedule and retention (to be set at deployment)
+### Schedule and retention
 
-Nothing is scheduled by this repository. What a deployment needs to decide:
+`scripts/install-backup-timer.sh` (run by `scripts/deploy.sh` on every deploy,
+idempotent) puts three entries in the deploying user's crontab on the host:
+a dump at 02:00 every night, a dump *with `--verify`* — restored into a
+scratch database and checked — at 03:00 every Sunday, and a 04:00 sweep that
+deletes dumps older than `BACKUP_KEEP_DAYS` (default 14) and, when
+`BACKUP_S3_BUCKET` is set in `.env.staging` and the aws CLI is installed,
+copies the newest dump to `s3://$BACKUP_S3_BUCKET/db/`. Output lands in
+`backups/cron.log`. What a deployment still needs to decide:
 
 | | Suggested | Why |
 | --- | --- | --- |

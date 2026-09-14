@@ -178,8 +178,10 @@ def delete_assignment(*, assignment: Assignment, actor: User) -> None:
         raise ConflictError(
             {"assignment": ["Work has already been submitted. Archive it instead of deleting."]}
         )
+    from apps.common.deletion import soft_delete
+
     code, pk = assignment.code, assignment.pk
-    assignment.delete()
+    soft_delete(instance=assignment, actor=actor, reason="Deleted before any work was submitted.")
     record(
         action=AuditAction.ASSIGNMENT_DELETED,
         actor=actor,

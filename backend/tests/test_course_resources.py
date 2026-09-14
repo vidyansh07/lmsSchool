@@ -315,17 +315,31 @@ def test_upload_and_deletion_are_audited(api_client_no_csrf, admin_user, preview
 
 
 @pytest.mark.django_db
-def test_deleting_a_resource_removes_the_stored_file(
+def test_deleting_a_resource_keeps_the_stored_file_until_it_is_purged(
     api_client_no_csrf, admin_user, preview_lesson, pdf_bytes
 ):
+    """A soft-deleted resource must be restorable, downloads included; only the
+    purge — a superadmin's second, deliberate decision — removes the file."""
     import os
+
+    from apps.common.deletion import purge
+    from apps.courses.models import LessonResource
 
     api_client_no_csrf.force_login(admin_user)
     _upload(api_client_no_csrf, preview_lesson.id, pdf_bytes, "handout.pdf")
-    path = preview_lesson.resources.first().file.path
+    resource = preview_lesson.resources.first()
+    path = resource.file.path
     assert os.path.exists(path)
 
-    api_client_no_csrf.delete(f"/api/v1/resources/{preview_lesson.resources.first().id}/")
+    response = api_client_no_csrf.delete(f"/api/v1/resources/{resource.id}/")
+    assert response.status_code == 204
+    assert not LessonResource.objects.filter(pk=resource.pk).exists()
+    resource = LessonResource.all_objects.get(pk=resource.pk)
+    assert resource.deleted_at is not None
+    assert os.path.exists(path)
+
+    purge(instance=resource, actor=admin_user, reason="test")
+    assert not LessonResource.all_objects.filter(pk=resource.pk).exists()
     assert not os.path.exists(path)
 
 

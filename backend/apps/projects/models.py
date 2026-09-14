@@ -41,7 +41,12 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import BaseModel
+from apps.common.models import (
+    BaseModel,
+    SoftDeleteBaseModel,
+    SoftDeleteQuerySet,
+    soft_delete_managers,
+)
 from apps.common.uploads import submission_upload_to
 from apps.common.validators import validate_no_control_characters
 
@@ -83,7 +88,7 @@ FINISHED_STATUSES = frozenset({WorkStatus.APPROVED, WorkStatus.COMPLETED})
 OPEN_TO_STUDENT = frozenset({WorkStatus.ASSIGNED, WorkStatus.IN_PROGRESS, WorkStatus.REWORK})
 
 
-class ProjectQuerySet(models.QuerySet):
+class ProjectQuerySet(SoftDeleteQuerySet):
     def with_related(self):
         return self.select_related("course", "module", "batch", "reviewer", "created_by")
 
@@ -91,7 +96,7 @@ class ProjectQuerySet(models.QuerySet):
         return self.filter(status__in=list(STUDENT_VISIBLE_STATUSES))
 
 
-class Project(BaseModel):
+class Project(SoftDeleteBaseModel):
     """A project set on a course."""
 
     code = models.CharField(_("code"), max_length=20, unique=True, editable=False)
@@ -166,9 +171,9 @@ class Project(BaseModel):
         related_name="projects_created",
     )
 
-    objects = ProjectQuerySet.as_manager()
+    objects, all_objects = soft_delete_managers(ProjectQuerySet)
 
-    class Meta:
+    class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("project")
         verbose_name_plural = _("projects")
         ordering = ("-created_at",)

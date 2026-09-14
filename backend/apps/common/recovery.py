@@ -121,6 +121,36 @@ BRANCH_PATHS: dict[str, str | Callable[[QuerySet, Any], QuerySet]] = {
     "performance.feedback": _scoped_by_performance_subject,
     "performance.performancereview": _scoped_by_performance_subject,
     "reporting.exportjob": "requested_by__branch",
+    # Course content and the question bank are institution-wide (D-129): no
+    # entry, so any holder of the recovery rights sees them. Work set on a batch
+    # belongs to that batch's centre.
+    "assignments.assignment": "batch__branch",
+    "projects.project": "batch__branch",
+    "assessments.assessment": "batch__branch",
+}
+
+
+def _module_children(instance):
+    from apps.courses.models import Lesson, LessonResource
+
+    lessons = Lesson.all_objects.filter(module=instance)
+    return (lessons, LessonResource.all_objects.filter(lesson__in=lessons))
+
+
+def _lesson_children(instance):
+    from apps.courses.models import LessonResource
+
+    return (LessonResource.all_objects.filter(lesson=instance),)
+
+
+#: What comes back with a record when it is restored from the bin. A deleted
+#: module took its lessons with it (`courses.services.delete_module`); the same
+#: list, read from `all_objects`, runs in reverse here so the module does not
+#: return hollow. Only rows stamped at the same moment are revived — see
+#: `apps.common.deletion.restore`.
+CASCADES: dict[str, Callable[[Any], tuple[QuerySet, ...]]] = {
+    "courses.module": _module_children,
+    "courses.lesson": _lesson_children,
 }
 
 
@@ -320,7 +350,12 @@ class RestoreRecordView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        restore(instance=instance, actor=request.user)
+        children = CASCADES.get(model._meta.label_lower)
+        restore(
+            instance=instance,
+            actor=request.user,
+            cascade=children(instance) if children else (),
+        )
         instance.refresh_from_db()
         return Response(DeletedRecordSerializer(_row(instance)).data)
 

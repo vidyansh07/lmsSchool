@@ -36,6 +36,9 @@ def update_branding(*, actor: User, **fields: Any) -> BrandingSetting:
     branding.full_clean(exclude=["updated_by"])
     branding.save(update_fields=[*changed, "updated_by", "updated_at"])
 
+    from apps.common.caching import forget
+
+    forget("branding")
     record(
         action=AuditAction.BRANDING_UPDATED,
         actor=actor,

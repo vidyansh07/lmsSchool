@@ -20,6 +20,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 import pytest
+from django.core.cache import cache
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
@@ -124,6 +125,9 @@ def loaded_batch(admin_user, batch, enrollment):
 
 
 def _count_queries(client, url: str) -> tuple[int, int]:
+    # The dashboards are cached for a minute; a hit would report zero work
+    # and hide an N+1, so every measurement here is a cold one.
+    cache.clear()
     with CaptureQueriesContext(connection) as captured:
         response = client.get(url)
     assert response.status_code == 200, f"{url} -> {response.status_code}"

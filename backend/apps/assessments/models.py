@@ -40,7 +40,12 @@ from decimal import Decimal
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import BaseModel
+from apps.common.models import (
+    BaseModel,
+    SoftDeleteBaseModel,
+    SoftDeleteQuerySet,
+    soft_delete_managers,
+)
 from apps.common.validators import validate_no_control_characters
 
 
@@ -83,7 +88,7 @@ class ResultSource(models.TextChoices):
     GRADED = "graded", _("Graded in the LMS")
 
 
-class AssessmentQuerySet(models.QuerySet):
+class AssessmentQuerySet(SoftDeleteQuerySet):
     def with_related(self):
         return self.select_related("course", "batch", "module", "created_by", "backing_assignment")
 
@@ -91,7 +96,7 @@ class AssessmentQuerySet(models.QuerySet):
         return self.filter(status__in=list(STUDENT_VISIBLE_STATUSES))
 
 
-class Assessment(BaseModel):
+class Assessment(SoftDeleteBaseModel):
     """A test set for one batch."""
 
     code = models.CharField(_("code"), max_length=20, unique=True, editable=False)
@@ -173,9 +178,9 @@ class Assessment(BaseModel):
         related_name="assessments_created",
     )
 
-    objects = AssessmentQuerySet.as_manager()
+    objects, all_objects = soft_delete_managers(AssessmentQuerySet)
 
-    class Meta:
+    class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("assessment")
         verbose_name_plural = _("assessments")
         ordering = ("-scheduled_for", "-created_at")

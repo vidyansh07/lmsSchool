@@ -148,6 +148,14 @@ DATABASES["default"]["CONN_MAX_AGE"] = env.int("DATABASE_CONN_MAX_AGE", default=
 DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 DATABASES["default"]["ATOMIC_REQUESTS"] = True  # transaction-safe by default
 DATABASES["default"].setdefault("OPTIONS", {})
+# A statement that runs longer than this is cancelled by PostgreSQL rather
+# than holding a worker (22a: 15 s). Set per connection through libpq's
+# `options`, so it applies to every query without touching the server config.
+DATABASE_STATEMENT_TIMEOUT_MS = env.int("DATABASE_STATEMENT_TIMEOUT_MS", default=15_000)
+if DATABASE_STATEMENT_TIMEOUT_MS > 0:
+    DATABASES["default"]["OPTIONS"]["options"] = (
+        f"-c statement_timeout={DATABASE_STATEMENT_TIMEOUT_MS}"
+    )
 if env.bool("DATABASE_SSL_REQUIRE", default=False):
     DATABASES["default"]["OPTIONS"]["sslmode"] = "require"
 forbid_sqlite(DATABASES)

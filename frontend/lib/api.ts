@@ -62,7 +62,9 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, formData, timeoutMs = 15_000, headers, ...rest } = options;
+  // 20 s (22a). A slow report or export is cut off with a message and a Retry
+  // rather than a spinner that never resolves.
+  const { body, formData, timeoutMs = 20_000, headers, ...rest } = options;
   const method = (rest.method ?? 'GET').toUpperCase();
 
   const requestHeaders = new Headers(headers);

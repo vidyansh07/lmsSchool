@@ -35,8 +35,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db import transaction
-from django.db.models import Model, QuerySet
+from django.db import IntegrityError, transaction
+from django.db.models import FileField, Model, QuerySet
 from django.utils import timezone
 
 from apps.audit.services import AuditAction, record
@@ -140,7 +140,18 @@ def restore(*, instance: Model, actor, cascade: tuple[QuerySet, ...] = ()) -> Mo
     instance.deleted_at = None
     instance.deleted_by = None
     instance.delete_reason = ""
-    instance.save(update_fields=["deleted_at", "deleted_by", "delete_reason"])
+    try:
+        with transaction.atomic():
+            instance.save(update_fields=["deleted_at", "deleted_by", "delete_reason"])
+    except IntegrityError as exc:
+        # The slot this record held — a position, a slug, a seat in a batch —
+        # has been taken by a live record since. Restoring would silently
+        # collide; say so, and leave both untouched.
+        instance.deleted_at = stamp
+        raise ConflictError(
+            "That record cannot be restored: a live record now holds the place "
+            "it had. Remove or rename the newer one first."
+        ) from exc
 
     record(
         action=AuditAction.RECORD_RESTORED,
@@ -193,7 +204,16 @@ def purge(*, instance: Model, actor, reason: str = "") -> None:
         },
         durable=False,
     )
+    stored = [
+        getattr(instance, field.name)
+        for field in instance._meta.get_fields()
+        if isinstance(field, FileField) and getattr(instance, field.name)
+    ]
     instance.delete()
+    # A soft-deleted upload keeps its file so a restore can serve it again.
+    # The purge is what finally removes it from storage.
+    for field_file in stored:
+        field_file.delete(save=False)
 
 
 __all__ = ["purge", "restore", "soft_delete"]

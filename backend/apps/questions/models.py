@@ -30,7 +30,12 @@ from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import BaseModel
+from apps.common.models import (
+    BaseModel,
+    SoftDeleteBaseModel,
+    SoftDeleteQuerySet,
+    soft_delete_managers,
+)
 from apps.common.validators import validate_no_control_characters
 
 
@@ -66,7 +71,7 @@ class Difficulty(models.TextChoices):
     HARD = "hard", _("Hard")
 
 
-class QuestionQuerySet(models.QuerySet):
+class QuestionQuerySet(SoftDeleteQuerySet):
     def with_related(self):
         return self.select_related("course", "created_by").prefetch_related("options")
 
@@ -75,7 +80,7 @@ class QuestionQuerySet(models.QuerySet):
         return self.filter(is_active=True)
 
 
-class Question(BaseModel):
+class Question(SoftDeleteBaseModel):
     """One reusable question."""
 
     course = models.ForeignKey(
@@ -136,9 +141,9 @@ class Question(BaseModel):
         related_name="questions_created",
     )
 
-    objects = QuestionQuerySet.as_manager()
+    objects, all_objects = soft_delete_managers(QuestionQuerySet)
 
-    class Meta:
+    class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("question")
         verbose_name_plural = _("questions")
         ordering = ("-created_at",)

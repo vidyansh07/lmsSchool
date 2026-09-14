@@ -253,7 +253,7 @@ URLs that modern AWS regions reject.
 | No multi-factor authentication | Rate limiting and session controls only |
 | No account lockout | Throttling only |
 | No malware scanning | The hook exists, fails closed, and no scanner is configured |
-| Object storage not backed up | Needs bucket versioning on a real bucket |
+| Object storage not backed up | Needs bucket versioning on a real bucket. Database dumps run nightly on the host with a Sunday restore check (`scripts/install-backup-timer.sh`) and copy to S3 once `BACKUP_S3_BUCKET` is set |
 | Fees are a ledger, not a gateway | Agreed amounts, payments and receipts are recorded by hand at the desk; nothing moves money |
 | XLSX export not built | Exports are CSV |
 | Certificates render one layout | Templates are configuration, not a designer |

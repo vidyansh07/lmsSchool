@@ -244,8 +244,10 @@ def delete_assessment(*, assessment: Assessment, actor: User) -> None:
         raise ConflictError(
             {"assessment": ["Results have been recorded. Archive it instead of deleting."]}
         )
+    from apps.common.deletion import soft_delete
+
     code, pk = assessment.code, assessment.pk
-    assessment.delete()
+    soft_delete(instance=assessment, actor=actor, reason="Deleted before any result was recorded.")
     record(
         action=AuditAction.ASSESSMENT_DELETED,
         actor=actor,

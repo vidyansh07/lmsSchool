@@ -177,8 +177,10 @@ def delete_project(*, project: Project, actor: User) -> None:
         raise ConflictError(
             {"project": ["Work has been submitted. Archive it instead of deleting."]}
         )
+    from apps.common.deletion import soft_delete
+
     code, pk = project.code, project.pk
-    project.delete()
+    soft_delete(instance=project, actor=actor, reason="Deleted before any work was submitted.")
     record(
         action=AuditAction.PROJECT_DELETED,
         actor=actor,

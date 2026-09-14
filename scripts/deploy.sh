@@ -65,6 +65,9 @@ remote 'echo "  now at $(git rev-parse --short HEAD): $(git log -1 --format=%s |
 echo "▶ 3/5 build and start"
 remote "$COMPOSE up -d --build --remove-orphans 2>&1 | grep -E 'Built|Started|Created|Recreated|rror' | tail -12"
 
+echo "▶ 3b/5 backup schedule"
+remote './scripts/install-backup-timer.sh 2>&1 | tail -4'
+
 echo "▶ 4/5 ready?"
 remote "for i in \$(seq 1 60); do
   if $COMPOSE exec -T backend curl -fsS http://localhost:8000/health/ready/ >/dev/null 2>&1; then echo '  backend ready'; break; fi

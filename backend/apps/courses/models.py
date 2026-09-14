@@ -28,7 +28,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import BaseModel
+from apps.common.models import BaseModel, SoftDeleteBaseModel
 from apps.common.uploads import course_thumbnail_upload_to, resource_upload_to
 from apps.common.validators import validate_no_control_characters, validate_slug_value
 
@@ -398,7 +398,7 @@ class CourseAssignment(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class Module(BaseModel):
+class Module(SoftDeleteBaseModel):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name="modules")
     title = models.CharField(
         _("title"), max_length=200, validators=[validate_no_control_characters]
@@ -420,17 +420,21 @@ class Module(BaseModel):
         help_text=_("Hide a finished module without unpublishing it."),
     )
 
-    class Meta:
+    class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("module")
         verbose_name_plural = _("modules")
         ordering = ("position", "created_at")
         constraints = [
             # Deferred so a reorder can shuffle several rows in one transaction
             # without colliding halfway through.
+            # Partial, so a deleted module stops reserving its slot — which also
+            # means it cannot be deferred (Postgres implements a partial unique
+            # constraint as an index). `services.reorder` therefore moves rows
+            # out of the way before writing the final order.
             models.UniqueConstraint(
                 fields=["course", "position"],
                 name="module_position_unique",
-                deferrable=models.Deferrable.DEFERRED,
+                condition=models.Q(deleted_at__isnull=True),
             ),
         ]
         indexes = [
@@ -493,7 +497,7 @@ class VideoAsset(BaseModel):
         return self.status == VideoStatus.READY and bool(self.source_url or self.asset_identifier)
 
 
-class Lesson(BaseModel):
+class Lesson(SoftDeleteBaseModel):
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name="lessons")
     title = models.CharField(
         _("title"), max_length=200, validators=[validate_no_control_characters]
@@ -553,7 +557,7 @@ class Lesson(BaseModel):
         _("required"), default=True, help_text=_("Optional lessons are supplementary material.")
     )
 
-    class Meta:
+    class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("lesson")
         verbose_name_plural = _("lessons")
         ordering = ("position", "created_at")
@@ -561,9 +565,13 @@ class Lesson(BaseModel):
             models.UniqueConstraint(
                 fields=["module", "position"],
                 name="lesson_position_unique",
-                deferrable=models.Deferrable.DEFERRED,
+                condition=models.Q(deleted_at__isnull=True),
             ),
-            models.UniqueConstraint(fields=["module", "slug"], name="lesson_slug_unique"),
+            models.UniqueConstraint(
+                fields=["module", "slug"],
+                name="lesson_slug_unique",
+                condition=models.Q(deleted_at__isnull=True),
+            ),
         ]
         indexes = [
             models.Index(fields=["module", "position"], name="lesson_module_position_idx"),
@@ -597,7 +605,7 @@ class Lesson(BaseModel):
             )
 
 
-class LessonResource(BaseModel):
+class LessonResource(SoftDeleteBaseModel):
     """A downloadable file or an external link attached to a lesson.
 
     Files are stored under ``MEDIA_ROOT``, which is never web-served, and are
@@ -642,7 +650,7 @@ class LessonResource(BaseModel):
         related_name="lesson_resources_uploaded",
     )
 
-    class Meta:
+    class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("lesson resource")
         verbose_name_plural = _("lesson resources")
         ordering = ("position", "created_at")

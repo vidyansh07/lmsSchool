@@ -6,6 +6,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.caching import DAY, remember
 from apps.common.permissions import Capability, HasCapability, IsActiveUser
 
 from . import services
@@ -45,7 +46,11 @@ class BrandingView(APIView):
         tags=BRANDING_TAG,
     )
     def get(self, request):
-        return Response(BrandingSerializer(BrandingSetting.current()).data)
+        return Response(
+            remember(
+                "branding", (), DAY, lambda: BrandingSerializer(BrandingSetting.current()).data
+            )
+        )
 
     @extend_schema(
         summary="Change the institution's branding",

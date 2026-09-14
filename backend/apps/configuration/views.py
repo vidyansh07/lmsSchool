@@ -19,6 +19,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.roles import Capability
+from apps.common.caching import DAY, remember
 from apps.common.permissions import HasCapability, IsActiveUser
 
 from . import services
@@ -115,17 +116,18 @@ class PublicSettingsView(APIView):
         tags=SETTINGS_TAG,
     )
     def get(self, request):
-        resolved = effective_settings()
-        # Built key by key rather than handed `as_dict()`: `StrictSerializer` is
-        # strict on input and silent on output, so passing the whole thing would
-        # drop the administrative keys with no error and leave this class doing
-        # nothing visible the day somebody widened it.
-        return Response(
-            PublicSettingsSerializer(
+        def build():
+            resolved = effective_settings()
+            # Built key by key rather than handed `as_dict()`: `StrictSerializer` is
+            # strict on input and silent on output, so passing the whole thing would
+            # drop the administrative keys with no error and leave this class doing
+            # nothing visible the day somebody widened it.
+            return PublicSettingsSerializer(
                 {
                     "institution_name": resolved.institution_name,
                     "support_email": resolved.support_email,
                     "support_phone": resolved.support_phone,
                 }
             ).data
-        )
+
+        return Response(remember("settings:public", (), DAY, build))

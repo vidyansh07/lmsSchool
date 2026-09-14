@@ -1089,3 +1089,38 @@ create without naming one lands there; only a superadmin with no home centre
 must choose. Managers and counsellors stay bounded, and the fail-closed rule
 for a bounded account with no centre stands. The cross-centre sweeps in
 `test_branch_scoping_api.py` now use a manager as the widest bounded caller.
+
+### D-131 · Hardening choices for delivery (14 September 2026)
+**The owner's answers to the engineering questions**, recorded so nobody
+re-litigates them:
+
+* **Soft delete everywhere a person can delete.** Course modules, lessons and
+  resources, assignments, projects, questions and tests join batches,
+  enrolments, reports, reviews and exports on `SoftDeleteBaseModel`. A delete
+  is a stamp with a reason; the bin lists it; an administrator restores it (a
+  module brings its lessons back, a lesson its resources). **Nothing is ever
+  purged by a schedule** (21b): only a superadmin destroys a record, by hand,
+  with a reason. A resource's file stays in storage with its row so a restore
+  is complete; purging the row is what finally removes the file.
+  A deleted row does not keep the slot it held: every uniqueness on a
+  soft-deletable model is partial (`deleted_at IS NULL`), so a module's or
+  lesson's position and a lesson's slug can be used again. Two consequences:
+  a partial unique index cannot be deferred, so `courses.services.reorder`
+  parks rows above every position in use before writing the final order; and
+  restoring a record whose slot a live one has since taken is refused with a
+  409, never a crash.
+* **Caching, in one module** (20a). `apps.common.caching.remember` holds a
+  computed value under a versioned prefix; `forget(prefix)` bumps the version.
+  Dashboards, the collections overview and the activity scorecards are held a
+  minute per person; branding and the public settings until changed. Every
+  ledger write forgets the overview; the branding and settings services forget
+  theirs. Redis where it runs, local memory where it does not.
+* **Three timeouts** (22a): gunicorn cuts a request at 30 s, PostgreSQL cancels
+  a statement at 15 s (`DATABASE_STATEMENT_TIMEOUT_MS`, per connection), and
+  the browser gives up at 20 s and offers Retry.
+* **Backups on the host** (23a): a dump every night at 02:00, a dump that is
+  restored into a scratch database and checked every Sunday, fourteen days
+  kept, and a copy to S3 once `BACKUP_S3_BUCKET` names a bucket.
+  `scripts/install-backup-timer.sh`, run by every deploy.
+* **No link-crawl in CI** (24b), by the owner's call; the routes are walked by
+  hand before a release instead.

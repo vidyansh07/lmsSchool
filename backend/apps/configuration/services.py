@@ -41,6 +41,9 @@ def get_or_create_settings() -> SystemSetting:
 
 @transaction.atomic
 def update_settings(*, settings_row: SystemSetting, actor: User, **fields: Any) -> SystemSetting:
+    from apps.common.caching import forget
+
+    forget("settings:public")
     """Change the institution's settings. Records which of them moved."""
     unknown = sorted(set(fields) - WRITABLE_FIELDS)
     if unknown:

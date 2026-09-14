@@ -40,7 +40,12 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import BaseModel
+from apps.common.models import (
+    BaseModel,
+    SoftDeleteBaseModel,
+    SoftDeleteQuerySet,
+    soft_delete_managers,
+)
 from apps.common.uploads import assignment_attachment_upload_to, submission_upload_to
 from apps.common.validators import validate_no_control_characters
 
@@ -72,7 +77,7 @@ class SubmissionStatus(models.TextChoices):
     RETURNED = "returned", _("Returned for rework")
 
 
-class AssignmentQuerySet(models.QuerySet):
+class AssignmentQuerySet(SoftDeleteQuerySet):
     def with_related(self):
         return self.select_related("course", "module", "lesson", "batch", "created_by")
 
@@ -80,7 +85,7 @@ class AssignmentQuerySet(models.QuerySet):
         return self.filter(status__in=list(STUDENT_VISIBLE_STATUSES))
 
 
-class Assignment(BaseModel):
+class Assignment(SoftDeleteBaseModel):
     """A piece of work set on a course."""
 
     code = models.CharField(_("code"), max_length=20, unique=True, editable=False)
@@ -168,9 +173,9 @@ class Assignment(BaseModel):
         related_name="assignments_created",
     )
 
-    objects = AssignmentQuerySet.as_manager()
+    objects, all_objects = soft_delete_managers(AssignmentQuerySet)
 
-    class Meta:
+    class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("assignment")
         verbose_name_plural = _("assignments")
         ordering = ("-created_at",)

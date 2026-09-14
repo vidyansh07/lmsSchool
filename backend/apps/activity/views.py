@@ -6,6 +6,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.caching import MINUTE, remember
 from apps.common.pagination import DefaultPagination
 from apps.common.permissions import Capability, HasCapability
 
@@ -110,9 +111,23 @@ class ActivityScorecardsView(APIView):
             since, until = params["since"], params["until"]
         else:
             since, until = services.period_bounds(params["period"])
-        cards = services.scorecards(
-            since=since, until=until, branch_id=params.get("branch"), role=params.get("role")
+        data = remember(
+            "activity:scorecards",
+            (since, until, params.get("branch"), params.get("role")),
+            MINUTE,
+            lambda: (
+                ScorecardsResponseSerializer(
+                    {
+                        "since": since,
+                        "until": until,
+                        "cards": services.scorecards(
+                            since=since,
+                            until=until,
+                            branch_id=params.get("branch"),
+                            role=params.get("role"),
+                        ),
+                    }
+                ).data
+            ),
         )
-        return Response(
-            ScorecardsResponseSerializer({"since": since, "until": until, "cards": cards}).data
-        )
+        return Response(data)

@@ -393,7 +393,7 @@ is the source of truth):
 | Trainers | `/teaching/today`, `/teaching/sessions/*`, `/teaching/assignments/*`, `/teaching/assessments/*`, `/teaching/projects/*`, `/teaching/questions`, `/teaching/exams/*`, `/dsr` |
 | Counsellors | `/admissions` (working list), `/admissions/dashboard`, `/admissions/new` (registration wizard with fee and first payment), `/admissions/[studentId]` (record with the fee ledger), `/admissions/batches`, `/admissions/transfer`, `/admissions/import` |
 | Managers | `/manage`, `/manage/batches/*`, `/manage/students/*`, `/manage/trainers/*` |
-| Administrators | `/admin/overview`, `/admin/users/*`, `/admin/students`, `/admin/trainers`, `/admin/courses/*`, `/admin/categories`, `/admin/batches/*`, `/admin/academics`, `/admin/completions`, `/admin/certificates`, `/admin/reports`, `/admin/imports`, `/admin/recovery`, `/admin/branding`, `/admin/branches`, `/admin/settings` |
+| Administrators | `/admin/activity`, `/admin/overview`, `/admin/users/*`, `/admin/students`, `/admin/trainers`, `/admin/courses/*`, `/admin/categories`, `/admin/batches/*`, `/admin/academics`, `/admin/completions`, `/admin/certificates`, `/admin/reports`, `/admin/imports`, `/admin/recovery`, `/admin/branding`, `/admin/branches`, `/admin/settings` |
 
 ## Branches
 

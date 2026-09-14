@@ -110,8 +110,10 @@ def delete_question(*, question: Question, actor: User) -> None:
         raise ConflictError(
             {"question": ["This question has been answered. Deactivate it instead."]}
         )
+    from apps.common.deletion import soft_delete
+
     pk = question.pk
-    question.delete()
+    soft_delete(instance=question, actor=actor, reason="Deleted before it was ever sat.")
     record(
         action=AuditAction.QUESTION_DELETED,
         actor=actor,

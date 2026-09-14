@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -352,8 +353,10 @@ def reorder(*, parent, related_name: str, ordered_ids: list[str], actor: User, r
 
     The whole set must be supplied — a partial list would leave gaps and make
     "what is third?" ambiguous. Positions are rewritten densely from zero inside
-    one transaction; the deferred unique constraint permits the intermediate
-    states that any reshuffle necessarily passes through.
+    one transaction. The uniqueness of (parent, position) is a partial index
+    that ignores deleted rows, and a partial index cannot be deferred, so the
+    rows are first parked above every position in use — slots nothing live
+    holds — and then written in their final order.
     """
     children = list(getattr(parent, related_name).all())
     existing_ids = {str(child.pk) for child in children}
@@ -372,11 +375,14 @@ def reorder(*, parent, related_name: str, ordered_ids: list[str], actor: User, r
         raise ApplicationError({"ordered_ids": ["Duplicate identifiers in the ordering."]})
 
     by_id = {str(child.pk): child for child in children}
+    parking = max((child.position for child in children), default=0) + 1
     for position, child_id in enumerate(supplied_ids):
         by_id[child_id].position = position
 
     if children:
-        type(children[0]).objects.bulk_update(children, ["position"])
+        model = type(children[0])
+        model.objects.filter(pk__in=by_id).update(position=F("position") + parking)
+        model.objects.bulk_update(children, ["position"])
 
     record(
         action=AuditAction.COURSE_CONTENT_REORDERED,
@@ -435,9 +441,18 @@ def update_module(*, module: Module, actor: User, **fields: Any) -> Module:
 
 
 @transaction.atomic
-def delete_module(*, module: Module, actor: User) -> None:
+def delete_module(*, module: Module, actor: User, reason: str = "") -> None:
+    """Removed from the course, kept in the bin (D-131). Its lessons go with it
+    and come back with it."""
+    from apps.common.deletion import soft_delete
+
     course, title, module_id = module.course, module.title, module.pk
-    module.delete()
+    soft_delete(
+        instance=module,
+        actor=actor,
+        reason=reason or "Removed from the course editor.",
+        cascade=(module.lessons.all(),),
+    )
     _touch_course(course, actor)
     record(
         action=AuditAction.MODULE_DELETED,
@@ -528,9 +543,16 @@ def update_lesson(
 
 
 @transaction.atomic
-def delete_lesson(*, lesson: Lesson, actor: User) -> None:
+def delete_lesson(*, lesson: Lesson, actor: User, reason: str = "") -> None:
+    from apps.common.deletion import soft_delete
+
     course, title, lesson_id = lesson.module.course, lesson.title, lesson.pk
-    lesson.delete()
+    soft_delete(
+        instance=lesson,
+        actor=actor,
+        reason=reason or "Removed from the course editor.",
+        cascade=(lesson.resources.all(),),
+    )
     _touch_course(course, actor)
     record(
         action=AuditAction.LESSON_DELETED,
@@ -647,12 +669,14 @@ def create_link_resource(
 
 
 @transaction.atomic
-def delete_resource(*, resource: LessonResource, actor: User) -> None:
+def delete_resource(*, resource: LessonResource, actor: User, reason: str = "") -> None:
+    """The file stays in storage with the row: a restored resource has to be
+    downloadable again. Purging the row is what finally removes the file."""
+    from apps.common.deletion import soft_delete
+
     course = resource.lesson.module.course
     resource_id, title = resource.pk, resource.title
-    if resource.file:
-        resource.file.delete(save=False)
-    resource.delete()
+    soft_delete(instance=resource, actor=actor, reason=reason or "Removed from the lesson.")
     _touch_course(course, actor)
     record(
         action=AuditAction.RESOURCE_DELETED,
