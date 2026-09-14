@@ -73,7 +73,7 @@ KINDS: dict[str, tuple[str, ...]] = {
     "courses": ("course.", "module.", "lesson.", "resource.", "category."),
     "outcomes": ("completion.", "certificate."),
     "accounts": ("user.", "trainer.", "profile.", "branch.", "password.", "email."),
-    "communication": ("announcement.", "thread.", "reply."),
+    "communication": ("announcement.", "requirement.", "thread.", "reply."),
     "institution": ("branding.", "academic.", "system.", "record.", "export.", "data.", "report."),
 }
 
@@ -194,6 +194,13 @@ def describe(entry: AuditLog) -> str:
         changes = c.get("changes") or {}
         parts = [f"{field} {v.get('from')} → {v.get('to')}" for field, v in changes.items()]
         return "Changed fee: " + "; ".join(parts) if parts else "Changed fee"
+    if a == AuditAction.REQUIREMENT_RAISED:
+        return f"Asked the trainers: {c.get('title', '')}".strip()
+    if a == AuditAction.REQUIREMENT_REPLIED:
+        return f"Answered on: {c.get('title', '')}".strip()
+    if a == AuditAction.REQUIREMENT_CLOSED:
+        who = c.get("fulfilled_by") or ""
+        return f"Closed: {c.get('title', '')}" + (f" (fulfilled by {who})" if who else "")
     if a == AuditAction.BATCH_CREATED:
         return f"Opened batch {c.get('code', '')} {c.get('name', '')}".strip()
     if a == AuditAction.BATCH_TRAINER_ASSIGNED:
@@ -252,6 +259,8 @@ def link_for(entry: AuditLog) -> str | None:
         return f"/admin/courses/{rid}"
     if t == "dsr":
         return "/dsr"
+    if t == "trainer_requirement":
+        return f"/requirements?open={rid}"
     if t == "branch":
         return "/admin/branches"
     return None

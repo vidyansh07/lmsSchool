@@ -117,6 +117,7 @@ BRANCH_PATHS: dict[str, str | Callable[[QuerySet, Any], QuerySet]] = {
     "batches.batch": "branch",
     "batches.batchschedule": "batch__branch",
     "dsr.dsr": "session__batch__branch",
+    "requirements.trainerrequirement": "branch",
     "enrollments.enrollment": "batch__branch",
     "performance.feedback": _scoped_by_performance_subject,
     "performance.performancereview": _scoped_by_performance_subject,

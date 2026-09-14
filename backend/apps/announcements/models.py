@@ -24,6 +24,10 @@ class Audience(models.TextChoices):
     COURSE = "course", _("A course")
     BATCH = "batch", _("A batch")
     SELECTED = "selected", _("Selected people")
+    # The teaching staff of the writer's centre — a manager telling the
+    # trainers something, without naming each one (owner's call, 14 September
+    # 2026). Resolved at publication like the others, see `audience_for`.
+    TRAINERS = "trainers", _("Trainers at my centre")
 
 
 class AnnouncementStatus(models.TextChoices):
@@ -121,6 +125,7 @@ class Announcement(BaseModel):
                     | models.Q(audience="course", course__isnull=False, batch__isnull=True)
                     | models.Q(audience="batch", batch__isnull=False)
                     | models.Q(audience="selected", course__isnull=True, batch__isnull=True)
+                    | models.Q(audience="trainers", course__isnull=True, batch__isnull=True)
                 ),
                 name="announcement_audience_matches_target",
             ),

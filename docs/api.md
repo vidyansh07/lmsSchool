@@ -422,6 +422,29 @@ and cached for a minute per person. Kinds: `fees_overdue`, `fees_missing`,
 (Monday 08:00) sends every staff member their open warnings as a
 notification, by email when their preferences allow.
 
+### Trainer requirements — `/api/v1/requirements/`
+
+A manager's ask of the teaching staff (D-132). Raising one tells every
+trainer of the centre — and every manager holding a teaching profile — with a
+`requirement.raised` notification linking to `/requirements?open=<id>`.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `` | `requirement.manage` for the caller's centre (every centre when unbounded), or any trainer for their own centre; a student is refused. Filters `status`, `batch`, `search` |
+| `POST` | `` | `requirement.manage` — `title`, `details`, `batch` (through the caller's visible batches), `needed_by` (not in the past); the centre is the batch's, else the caller's |
+| `GET` | `<id>/` | as the list; another centre's is a 404 |
+| `DELETE` | `<id>/` | `requirement.manage`; `reason` required; reversible from the recycle bin |
+| `POST` | `<id>/replies/` | anyone who can see it, while it is `open`; `message`. A trainer's reply tells the raiser, the raiser's tells the trainers who answered |
+| `POST` | `<id>/close/` | `requirement.manage`; `fulfilled_by` (a trainer within reach) makes it `fulfilled`, none makes it `closed`; optional `note`. Everyone who answered is told |
+
+Statuses: `open`, `fulfilled`, `closed`. A closed one takes no replies (409).
+The three events (`requirement.raised`, `.replied`, `.closed`) are audited and
+appear in the activity review under Communication.
+
+Announcements gained the audience `trainers` alongside it: a
+`announcement.manage_any` holder addresses the teaching staff of their own
+centre without naming each one; a trainer may not address the trainers.
+
 ### Exports — every list, in Excel, PDF or CSV
 
 Six list screens are reports too (`students`, `enrollments`, `fee_payments`,

@@ -123,7 +123,27 @@ def audience_for(announcement: Announcement) -> list:
         return [person for person in told if person.branch_id == branch_id]
     if announcement.audience == Audience.SELECTED:
         return list(announcement.recipients.filter(is_active=True))
+    if announcement.audience == Audience.TRAINERS:
+        from .access import announcement_branch_id
+
+        return list(teaching_staff_of(announcement_branch_id(announcement)))
     return []
+
+
+def teaching_staff_of(branch_id):
+    """Everyone who teaches at a centre: trainer accounts, and the managers who
+    hold a teaching profile (D-130). ``None`` means every centre."""
+    from django.db.models import Q
+
+    from apps.accounts.models import User as UserModel
+    from apps.accounts.models import UserRole
+
+    people = UserModel.objects.filter(is_active=True).filter(
+        Q(role=UserRole.TRAINER) | Q(trainer_profile__isnull=False)
+    )
+    if branch_id is not None:
+        people = people.filter(branch_id=branch_id)
+    return people.distinct()
 
 
 @transaction.atomic
@@ -185,7 +205,7 @@ def _validate(announcement: Announcement) -> None:
         errors["course"] = ["Choose the course this is for."]
     if announcement.audience == Audience.BATCH and not announcement.batch_id:
         errors["batch"] = ["Choose the batch this is for."]
-    if announcement.audience in (Audience.EVERYONE, Audience.SELECTED) and (
+    if announcement.audience in (Audience.EVERYONE, Audience.SELECTED, Audience.TRAINERS) and (
         announcement.course_id or announcement.batch_id
     ):
         errors["audience"] = ["This audience does not take a course or a batch."]

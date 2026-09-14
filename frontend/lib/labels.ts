@@ -7,8 +7,24 @@ import type {
   InstitutionKind,
   PaymentMethod,
   Qualification,
+  RequirementStatus,
   UserRole,
 } from '@/types/api';
+
+export const REQUIREMENT_STATUS_LABEL: Record<RequirementStatus, string> = {
+  open: 'Open',
+  fulfilled: 'Fulfilled',
+  closed: 'Closed',
+};
+
+export const REQUIREMENT_STATUS_VARIANT: Record<
+  RequirementStatus,
+  'neutral' | 'success' | 'warning' | 'error'
+> = {
+  open: 'warning',
+  fulfilled: 'success',
+  closed: 'neutral',
+};
 
 export const FEE_STATUS_LABEL: Record<FeeStatus, string> = {
   pending: 'Pending',

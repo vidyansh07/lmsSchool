@@ -146,6 +146,15 @@ export const STAFF_NAV: NavGroup[] = [
         icon: FileText,
         capability: Capability.dsrViewAny,
       },
+      {
+        // A manager's ask of the teaching staff. Trainers see it too: they
+        // are the people being asked, and answer on it (D-132).
+        href: '/requirements',
+        label: 'Trainer requirements',
+        icon: Megaphone,
+        capability: Capability.requirementManage,
+        roles: ['trainer'],
+      },
     ],
   },
   {
@@ -399,6 +408,12 @@ export const ADMIN_NAV: NavGroup[] = [
         label: 'Batch review',
         icon: Layers,
         capability: Capability.performanceViewAny,
+      },
+      {
+        href: '/requirements',
+        label: 'Trainer requirements',
+        icon: Megaphone,
+        capability: Capability.requirementManage,
       },
     ],
   },

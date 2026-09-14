@@ -100,6 +100,20 @@ def _authored_course_notices(user) -> Q:
     return Q(course_id__in=authored) & _one_centres_notices(branch_id)
 
 
+def _notices_to_teaching_staff(user) -> Q:
+    """Notices addressed to the trainers of this person's centre.
+
+    One written by an unbounded operator belongs to no centre and reaches the
+    teaching staff everywhere — the same reading `audience_for` gives it.
+    """
+    branch_id = actor_branch_id(user)
+    if branch_id is None:
+        return Q(pk__isnull=True)
+    return Q(audience=Audience.TRAINERS) & (
+        Q(created_by__branch_id=branch_id) | Q(created_by__branch__isnull=True)
+    )
+
+
 def announcement_branch_id(announcement: Announcement):
     """The centre a notice belongs to, or ``None`` for an institution-wide one.
 
@@ -131,6 +145,7 @@ def visible_announcements(user) -> QuerySet[Announcement]:
         # A trainer sees what they may write, plus what is addressed to them.
         scope |= Q(batch__trainer=trainer) | Q(created_by=user)
         scope |= _authored_course_notices(user)
+        scope |= _notices_to_teaching_staff(user)
         return base.filter(scope).distinct()
 
     student = batch_access.student_profile(user)

@@ -212,6 +212,11 @@ class AuditAction(models.TextChoices):
     DSR_REJECTED = "dsr.rejected", _("Daily status report rejected")
     DSR_REVISION_REQUESTED = "dsr.revision_requested", _("Daily status report returned")
 
+    # --- Trainer requirements
+    REQUIREMENT_RAISED = "requirement.raised", _("Trainer requirement raised")
+    REQUIREMENT_REPLIED = "requirement.replied", _("Trainer requirement answered")
+    REQUIREMENT_CLOSED = "requirement.closed", _("Trainer requirement closed")
+
     # --- Course timeline
     SESSION_TOPIC_PLANNED = "session.topic.planned", _("Class topic planned")
     SESSION_TOPIC_RECORDED = "session.topic.recorded", _("Class topic recorded as taught")

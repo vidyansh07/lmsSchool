@@ -1449,7 +1449,7 @@ export interface NotificationPreference {
   updated_at: string;
 }
 
-export type Audience = 'everyone' | 'course' | 'batch' | 'selected';
+export type Audience = 'everyone' | 'course' | 'batch' | 'selected' | 'trainers';
 export type AnnouncementStatus = 'draft' | 'published' | 'archived';
 
 export interface Announcement {
@@ -1852,6 +1852,43 @@ export interface ActivityScorecards {
 }
 
 // --- Warnings ----------------------------------------------------------------
+
+// --- Trainer requirements (D-132) -------------------------------------------
+
+export type RequirementStatus = 'open' | 'fulfilled' | 'closed';
+
+export interface RequirementReply {
+  id: string;
+  author: string;
+  author_name: string;
+  author_role: UserRole;
+  message: string;
+  created_at: string;
+}
+
+export interface TrainerRequirement {
+  id: string;
+  title: string;
+  details: string;
+  status: RequirementStatus;
+  branch: string;
+  branch_code: string;
+  raised_by: string;
+  raised_by_name: string;
+  batch: string | null;
+  batch_code: string | null;
+  batch_name: string | null;
+  needed_by: string | null;
+  fulfilled_by: string | null;
+  fulfilled_by_name: string | null;
+  closed_at: string | null;
+  closed_by_name: string | null;
+  closing_note: string;
+  reply_count: number;
+  replies: RequirementReply[];
+  created_at: string;
+  updated_at: string;
+}
 
 export type WarningSeverity = 'error' | 'warning' | 'info';
 

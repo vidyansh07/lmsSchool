@@ -380,19 +380,19 @@ The table above is the Phase 0–3 core. Later phases added, among others:
 `/academics/`, `/projects/`, `/questions/`, `/exams/`, `/progress/`,
 `/completions/`, `/certificates/`, `/notifications/`, `/announcements/`,
 `/discussions/`, `/learning/`, `/reports/`, `/exports/`, `/imports/`, `/dsr/`,
-`/performance/`, `/reviews/`, `/recovery/`, `/branding/`, `/branches/`, `/settings/` and `/fees/`. Every
+`/performance/`, `/reviews/`, `/recovery/`, `/branding/`, `/branches/`, `/settings/`, `/fees/`, `/activity/`, `/warnings/` and `/requirements/`. Every
 one is in [`docs/api.md`](docs/api.md) with its capability.
 
-Frontend screens by audience (74 routes; `find frontend/app -name page.tsx`
+Frontend screens by audience (78 routes; `find frontend/app -name page.tsx`
 is the source of truth):
 
 | Audience | Routes |
 | --- | --- |
 | Everyone | `/login`, `/forgot-password`, `/reset-password`, `/verify-email`, `/verify/[code]`, `/status`, `/profile`, `/settings/*`, `/notifications`, `/announcements`, `/discussions/*`, `/calendar` |
 | Students | `/dashboard`, `/my-learning`, `/courses/*` (catalogue and player), `/my-batches`, `/my-fees`, `/my-assignments`, `/my-projects`, `/exams/*`, `/attempts/*`, `/my-results`, `/my-attendance`, `/my-progress` |
-| Trainers | `/teaching/today`, `/teaching/sessions/*`, `/teaching/assignments/*`, `/teaching/assessments/*`, `/teaching/projects/*`, `/teaching/questions`, `/teaching/exams/*`, `/dsr` |
+| Trainers | `/teaching/today`, `/teaching/sessions/*`, `/teaching/assignments/*`, `/teaching/assessments/*`, `/teaching/projects/*`, `/teaching/questions`, `/teaching/exams/*`, `/dsr`, `/requirements` |
 | Counsellors | `/admissions` (working list), `/admissions/dashboard`, `/admissions/new` (registration wizard with fee and first payment), `/admissions/[studentId]` (record with the fee ledger), `/admissions/batches`, `/admissions/transfer`, `/admissions/import` |
-| Managers | `/manage`, `/manage/batches/*`, `/manage/students/*`, `/manage/trainers/*` |
+| Managers | `/manage`, `/manage/batches/*`, `/manage/students/*`, `/manage/trainers/*`, `/requirements` |
 | Administrators | `/admin/activity`, `/admin/overview`, `/admin/users/*`, `/admin/students`, `/admin/trainers`, `/admin/courses/*`, `/admin/categories`, `/admin/batches/*`, `/admin/academics`, `/admin/completions`, `/admin/certificates`, `/admin/reports`, `/admin/imports`, `/admin/recovery`, `/admin/branding`, `/admin/branches`, `/admin/settings` |
 
 ## Branches

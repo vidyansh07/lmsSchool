@@ -71,6 +71,7 @@ export const Capability = {
   completionApprove: 'completion.approve',
   certificateManage: 'certificate.manage',
   announcementManageAny: 'announcement.manage_any',
+  requirementManage: 'requirement.manage',
   discussionModerateAny: 'discussion.moderate_any',
   reportViewAny: 'report.view_any',
   dataExport: 'data.export',

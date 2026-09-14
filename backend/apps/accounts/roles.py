@@ -219,6 +219,9 @@ class Capability(models.TextChoices):
     # resolved per record in `apps.announcements.access`. Addressing everybody is
     # a different act and needs the capability.
     ANNOUNCEMENT_MANAGE_ANY = "announcement.manage_any", _("Announce to any audience")
+    # A manager's ask of the teaching staff — raise it, close it. Trainers
+    # answer on one without holding anything: they are its audience.
+    REQUIREMENT_MANAGE = "requirement.manage", _("Raise and close trainer requirements")
     DISCUSSION_MODERATE_ANY = "discussion.moderate_any", _("Moderate any discussion")
 
     # --- Reporting and data tools
@@ -274,6 +277,7 @@ _MANAGER_CAPABILITIES = frozenset(
         # these two — see `_COUNSELLOR_CAPABILITIES`.
         Capability.TRAINER_CREATE,
         Capability.TRAINER_UPDATE_ANY,
+        Capability.REQUIREMENT_MANAGE,
         Capability.CATEGORY_MANAGE,
         Capability.COURSE_VIEW_ANY,
         Capability.COURSE_CREATE,
@@ -349,12 +353,12 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
 #: what. The one exception is the trainer record itself: creating a trainer and
 #: editing their details is the manager's (2a), so those two capabilities are
 #: the whole difference between the rungs. That keeps the ladder a ladder —
-#: manager ⊃ counsellor still holds, by exactly two members — which
+#: manager ⊃ counsellor still holds, by exactly three members — which
 #: `can_administer` and the hierarchy test depend on.
 #:
 #: Superseded: D-106, under which the counsellor held nothing academic.
 _COUNSELLOR_CAPABILITIES = _MANAGER_CAPABILITIES - frozenset(
-    {Capability.TRAINER_CREATE, Capability.TRAINER_UPDATE_ANY}
+    {Capability.TRAINER_CREATE, Capability.TRAINER_UPDATE_ANY, Capability.REQUIREMENT_MANAGE}
 )
 
 ROLE_CAPABILITIES: dict[str, frozenset[str]] = {

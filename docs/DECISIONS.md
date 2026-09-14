@@ -1124,3 +1124,18 @@ re-litigates them:
   `scripts/install-backup-timer.sh`, run by every deploy.
 * **No link-crawl in CI** (24b), by the owner's call; the routes are walked by
   hand before a release instead.
+
+### D-132 · A requirement is a record, not only a notice (14 September 2026)
+The owner asked for a manager to be able to "announce for trainers if there's
+any requirement", and chose both halves when offered them: a plain
+announcement to the trainers of the centre (`Audience.TRAINERS`, no names
+needed) **and** a requirement record — raised by a manager, answered on by
+trainers, closed naming who took it. The second exists because "who did we
+ask, who answered, who took it" is a question a notice cannot answer a week
+later. Trainers hold no capability for it: they are its audience, so their
+own centre's requirements are visible to them the way their batches' reports
+are. The counsellor holds neither the raise nor the close (`requirement.manage`
+is the third capability the counsellor's set lacks; D-130 amended). Nothing
+here is a workflow — no approval, no assignment made by the system; the
+manager still assigns the trainer on the batch as before.
+

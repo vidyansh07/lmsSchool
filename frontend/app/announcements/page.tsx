@@ -184,6 +184,7 @@ function Announcements() {
                   }
                 >
                   <option value="batch">A batch</option>
+                  {mayAnnounceToAll ? <option value="trainers">Trainers at my centre</option> : null}
                   {mayAnnounceToAll ? <option value="everyone">Everyone</option> : null}
                 </Select>
               </Field>

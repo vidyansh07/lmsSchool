@@ -98,6 +98,7 @@ LOCAL_APPS = [
     "apps.fees",
     "apps.activity",
     "apps.warnings",
+    "apps.requirements",
     "apps.dashboards",
     "apps.audit",
     "apps.health",

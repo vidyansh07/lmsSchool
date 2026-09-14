@@ -44,6 +44,8 @@ class NotificationKind(models.TextChoices):
     COURSE_UPDATED = "course.updated", _("Course updated")
     BATCH_UPDATED = "batch.updated", _("Batch updated")
     ANNOUNCEMENT = "announcement", _("Announcement")
+    REQUIREMENT_RAISED = "requirement.raised", _("Trainer requirement raised")
+    REQUIREMENT_REPLIED = "requirement.replied", _("Reply on a trainer requirement")
     ASSIGNMENT_DUE = "assignment.due", _("Assignment deadline")
     ASSIGNMENT_GRADED = "assignment.graded", _("Assignment graded")
     TEST_SCHEDULED = "test.scheduled", _("Weekly test scheduled")
@@ -70,6 +72,8 @@ KIND_CATEGORY: dict[str, str] = {
     NotificationKind.COURSE_UPDATED: NotificationCategory.ACADEMIC,
     NotificationKind.BATCH_UPDATED: NotificationCategory.SCHEDULE,
     NotificationKind.ANNOUNCEMENT: NotificationCategory.ANNOUNCEMENTS,
+    NotificationKind.REQUIREMENT_RAISED: NotificationCategory.ANNOUNCEMENTS,
+    NotificationKind.REQUIREMENT_REPLIED: NotificationCategory.ANNOUNCEMENTS,
     NotificationKind.ASSIGNMENT_DUE: NotificationCategory.SCHEDULE,
     NotificationKind.ASSIGNMENT_GRADED: NotificationCategory.ACADEMIC,
     NotificationKind.TEST_SCHEDULED: NotificationCategory.SCHEDULE,

@@ -57,7 +57,13 @@ def test_a_counsellor_holds_strictly_less_than_a_manager():
     "capability",
     sorted(
         _MANAGER_CAPABILITIES
-        - frozenset({Capability.TRAINER_CREATE, Capability.TRAINER_UPDATE_ANY})
+        - frozenset(
+            {
+                Capability.TRAINER_CREATE,
+                Capability.TRAINER_UPDATE_ANY,
+                Capability.REQUIREMENT_MANAGE,
+            }
+        )
     ),
 )
 def test_a_counsellor_holds_everything_a_manager_does(counsellor_user, capability):
