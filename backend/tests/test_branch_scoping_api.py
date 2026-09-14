@@ -2516,3 +2516,17 @@ def test_a_platform_operator_is_told_they_are_in_no_particular_centre(
     assert body["branch_id"] is None
     assert body["branch_code"] is None
     assert body["branch_name"] is None
+
+
+@pytest.mark.django_db
+def test_an_administrators_view_of_a_user_names_their_centre(
+    api_client_no_csrf, admin_user, manager_user, branch
+):
+    """The user record shows the centre — the Centre card on that screen is
+    built from it — not only the signed-in user's own ``me`` payload."""
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.get(f"/api/v1/users/{manager_user.pk}/")
+    assert response.status_code == 200
+    assert response.json()["branch_id"] == str(branch.pk)
+    assert response.json()["branch_code"] == branch.code
+    assert response.json()["branch_name"] == branch.name

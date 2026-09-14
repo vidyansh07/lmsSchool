@@ -38,6 +38,15 @@ class UserSerializer(serializers.ModelSerializer):
 
     full_name = serializers.CharField(read_only=True)
     profile_image_url = serializers.SerializerMethodField()
+    # The centre this account is bounded to — on every representation of a
+    # user, because the administrator's record needs it as much as the
+    # signed-in user's own does.
+    # `default=None` on all three is load-bearing, not decoration: `branch` is
+    # nullable, and `source="branch.id"` on a null relation raises
+    # `AttributeError` — a 500 on the very first superadmin login.
+    branch_id = serializers.CharField(source="branch.id", read_only=True, default=None)
+    branch_code = serializers.CharField(source="branch.code", read_only=True, default=None)
+    branch_name = serializers.CharField(source="branch.name", read_only=True, default=None)
 
     class Meta:
         model = User
@@ -53,6 +62,9 @@ class UserSerializer(serializers.ModelSerializer):
             "is_email_verified",
             "profile_image_url",
             "date_joined",
+            "branch_id",
+            "branch_code",
+            "branch_name",
         )
         read_only_fields = fields
 
@@ -74,12 +86,6 @@ class CurrentUserSerializer(UserSerializer):
     capabilities = serializers.SerializerMethodField()
     profile_type = serializers.SerializerMethodField()
     profile_id = serializers.SerializerMethodField()
-    # `default=None` on all three is load-bearing, not decoration: `branch` is
-    # nullable, and `source="branch.id"` on a null relation raises
-    # `AttributeError` — a 500 on the very first superadmin login.
-    branch_id = serializers.CharField(source="branch.id", read_only=True, default=None)
-    branch_code = serializers.CharField(source="branch.code", read_only=True, default=None)
-    branch_name = serializers.CharField(source="branch.name", read_only=True, default=None)
 
     class Meta(UserSerializer.Meta):
         fields = (
@@ -89,9 +95,6 @@ class CurrentUserSerializer(UserSerializer):
             "capabilities",
             "profile_type",
             "profile_id",
-            "branch_id",
-            "branch_code",
-            "branch_name",
         )
         read_only_fields = fields
 
