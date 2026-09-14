@@ -259,9 +259,12 @@ class Importer:
                 title=title,
                 # "AI_ML" would slugify with an underscore, which the course
                 # slug refuses; spell the slug out from words only.
-                slug=slugify(re.sub(r"[_—–]+", " ", title))[:60].strip("-"),
+                slug=slugify(re.sub(r"[_—–]+", " ", title))[:60].strip("-"),  # noqa: RUF001
                 category=category,
-                short_description=f"{self.book.batch_name} — summer industrial training for {COLLEGE}, {self.book.year_label or 'B.Tech'}.",
+                short_description=(
+                    f"{self.book.batch_name} — summer industrial training for {COLLEGE}, "
+                    f"{self.book.year_label or 'B.Tech'}."
+                ),
                 difficulty=CourseDifficulty.BEGINNER
                 if "1st" in self.book.year_label
                 else CourseDifficulty.INTERMEDIATE,
@@ -334,7 +337,8 @@ class Importer:
         self.report.problem(
             "DSR",
             None,
-            f"Trainer {name!r} has no account; created {email} with no way to sign in until a real address is set.",
+            f"Trainer {name!r} has no account; created {email} with no way to sign in "
+            "until a real address is set.",
         )
         self.report.trainer = profile.trainer_id
         return profile
@@ -377,7 +381,9 @@ class Importer:
                 end_date=max(dates),
                 capacity=max(len(self.book.students) + 10, 20),
                 status=BatchStatus.ACTIVE,
-                description=f"Imported from {self.book.path.name}. {COLLEGE}, {self.book.year_label}.",
+                description=(
+                    f"Imported from {self.book.path.name}. {COLLEGE}, {self.book.year_label}."
+                ),
             )
             self.report.counts["batches created"] += 1
         self.report.batch = batch.code
@@ -435,8 +441,10 @@ class Importer:
                                 for part in (
                                     ""
                                     if student.email
-                                    else "No email in the SITP sheet; placeholder address, cannot sign in until one is set.",
-                                    f"Name not in the SITP sheet; known only by roll number {student.roll_number}."
+                                    else "No email in the SITP sheet; placeholder address, "
+                                    "cannot sign in until one is set.",
+                                    "Name not in the SITP sheet; known only by roll number "
+                                    f"{student.roll_number}."
                                     if nameless
                                     else "",
                                 )

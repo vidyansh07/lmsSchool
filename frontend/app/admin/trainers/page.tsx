@@ -3,6 +3,7 @@
 import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
+import { ExportMenu } from '@/components/export-menu';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -31,9 +32,7 @@ function TrainersTable() {
       await updateTrainer(row.id, { is_accepting_assignments: !row.is_accepting_assignments });
       list.reload();
     } catch (cause) {
-      setActionError(
-        cause instanceof ApiError ? cause.message : 'Could not update availability.',
-      );
+      setActionError(cause instanceof ApiError ? cause.message : 'Could not update availability.');
     }
   }
 
@@ -49,9 +48,12 @@ function TrainersTable() {
             Trainer records, skills and availability for future assignments.
           </p>
         </div>
-        {can(Capability.trainerCreate) ? (
-          <Button onClick={() => setShowCreate(true)}>Add trainer</Button>
-        ) : null}
+        <div className="flex gap-2">
+          <ExportMenu reportKey="trainer_activity" count={list.data?.count ?? null} size="md" />
+          {can(Capability.trainerCreate) ? (
+            <Button onClick={() => setShowCreate(true)}>Add trainer</Button>
+          ) : null}
+        </div>
       </div>
 
       {showCreate ? (
@@ -153,9 +155,9 @@ function TrainersTable() {
                       <div className="flex flex-wrap gap-1">
                         {row.skills.length === 0
                           ? '—'
-                          : row.skills.slice(0, 3).map((skill) => (
-                              <Badge key={skill}>{skill}</Badge>
-                            ))}
+                          : row.skills
+                              .slice(0, 3)
+                              .map((skill) => <Badge key={skill}>{skill}</Badge>)}
                         {row.skills.length > 3 ? (
                           <span className="text-xs text-muted-foreground">
                             +{row.skills.length - 3}

@@ -50,6 +50,7 @@ import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { DateRangePicker, type DateRange } from '@/components/date-range-picker';
 import { Pagination } from '@/components/pagination';
+import { ExportMenu } from '@/components/export-menu';
 import { RequireAuth } from '@/components/require-auth';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -61,11 +62,19 @@ import { listBatches } from '@/lib/batches';
 import { Capability } from '@/lib/capabilities';
 import { listDsr, type DSRListItem } from '@/lib/dsr';
 import { fallback, formatDate, formatNumber, NO_DATA, UNKNOWN } from '@/lib/format';
-import { DSR_STATUS_LABEL, DSR_STATUS_VARIANT, reviewDsr, type DsrReviewDecision } from '@/lib/manage';
+import {
+  DSR_STATUS_LABEL,
+  DSR_STATUS_VARIANT,
+  reviewDsr,
+  type DsrReviewDecision,
+} from '@/lib/manage';
 import { listTrainers } from '@/lib/people';
 import type { BatchListRow, TrainerListRow } from '@/types/api';
 
-const DSR_STATUS_OPTIONS = Object.entries(DSR_STATUS_LABEL).map(([value, label]) => ({ value, label }));
+const DSR_STATUS_OPTIONS = Object.entries(DSR_STATUS_LABEL).map(([value, label]) => ({
+  value,
+  label,
+}));
 
 /** A row's in-progress reject/revision comment. Approve carries none, so it
  *  never needs this — it fires straight from `decide`. */
@@ -79,7 +88,11 @@ const REVIEWABLE_STATUSES = new Set<DSRListItem['status']>(['submitted', 'under_
 
 export function DsrQueue() {
   const { can } = useAuth();
-  const list = useList<DSRListItem>(listDsr, { status: 'submitted', ordering: '-report_date', page_size: 20 });
+  const list = useList<DSRListItem>(listDsr, {
+    status: 'submitted',
+    ordering: '-report_date',
+    page_size: 20,
+  });
 
   const [batchOptions, setBatchOptions] = useState<BatchListRow[]>([]);
   const [trainerOptions, setTrainerOptions] = useState<TrainerListRow[]>([]);
@@ -136,7 +149,10 @@ export function DsrQueue() {
       });
       setRowErrors((current) => ({
         ...current,
-        [row.id]: cause instanceof ApiError ? cause.message : 'Could not save this decision. Please try again.',
+        [row.id]:
+          cause instanceof ApiError
+            ? cause.message
+            : 'Could not save this decision. Please try again.',
       }));
     } finally {
       setBusyId(null);
@@ -149,7 +165,12 @@ export function DsrQueue() {
   }
 
   const columns: DataTableColumn<DSRListItem>[] = [
-    { key: 'report_date', header: 'Date', width: '7rem', render: (row) => formatDate(row.report_date) },
+    {
+      key: 'report_date',
+      header: 'Date',
+      width: '7rem',
+      render: (row) => formatDate(row.report_date),
+    },
     {
       key: 'batch_code',
       header: 'Batch',
@@ -162,7 +183,11 @@ export function DsrQueue() {
         </Link>
       ),
     },
-    { key: 'trainer_name', header: 'Trainer', render: (row) => fallback(row.trainer_name, UNKNOWN) },
+    {
+      key: 'trainer_name',
+      header: 'Trainer',
+      render: (row) => fallback(row.trainer_name, UNKNOWN),
+    },
     {
       key: 'actual_topic',
       header: 'Topic',
@@ -185,7 +210,9 @@ export function DsrQueue() {
     {
       key: 'status',
       header: 'Status',
-      render: (row) => <Badge variant={DSR_STATUS_VARIANT[row.status]}>{DSR_STATUS_LABEL[row.status]}</Badge>,
+      render: (row) => (
+        <Badge variant={DSR_STATUS_VARIANT[row.status]}>{DSR_STATUS_LABEL[row.status]}</Badge>
+      ),
     },
     {
       key: 'review',
@@ -198,7 +225,9 @@ export function DsrQueue() {
           return (
             <div className="w-56 space-y-1.5">
               <label htmlFor={commentId} className="block text-xs font-medium">
-                {pending.kind === 'rejected' ? 'Why is this being rejected?' : 'What needs to change?'}
+                {pending.kind === 'rejected'
+                  ? 'Why is this being rejected?'
+                  : 'What needs to change?'}
               </label>
               <Textarea
                 id={commentId}
@@ -207,7 +236,9 @@ export function DsrQueue() {
                 autoFocus
                 value={pending.comment}
                 onChange={(event) =>
-                  setPending((current) => (current ? { ...current, comment: event.target.value } : current))
+                  setPending((current) =>
+                    current ? { ...current, comment: event.target.value } : current,
+                  )
                 }
               />
               <div className="flex gap-1.5">
@@ -218,7 +249,11 @@ export function DsrQueue() {
                   disabled={!pending.comment.trim() || busyId === row.id}
                   onClick={() => void decide(row, pending.kind, pending.comment.trim())}
                 >
-                  {busyId === row.id ? 'Saving…' : pending.kind === 'rejected' ? 'Reject' : 'Request revision'}
+                  {busyId === row.id
+                    ? 'Saving…'
+                    : pending.kind === 'rejected'
+                      ? 'Reject'
+                      : 'Request revision'}
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => setPending(null)}>
                   Cancel
@@ -236,7 +271,12 @@ export function DsrQueue() {
         return (
           <div className="space-y-1">
             <div className="flex flex-wrap gap-1.5">
-              <Button type="button" size="sm" disabled={busyId === row.id} onClick={() => void decide(row, 'approved', '')}>
+              <Button
+                type="button"
+                size="sm"
+                disabled={busyId === row.id}
+                onClick={() => void decide(row, 'approved', '')}
+              >
                 {busyId === row.id ? 'Approving…' : 'Approve'}
               </Button>
               <Button
@@ -272,12 +312,16 @@ export function DsrQueue() {
 
   return (
     <div className="animate-rise-in space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Daily reports</h1>
-        <p className="text-sm text-muted-foreground">
-          Opens on what is waiting for your review, newest first. Approve inline; rejecting or asking for a
-          revision needs a word about why. Change the filters below to browse the rest as history.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Daily reports</h1>
+          <p className="text-sm text-muted-foreground">
+            Opens on what is waiting for your review, newest first. Approve inline; rejecting or
+            asking for a revision needs a word about why. Change the filters below to browse the
+            rest as history.
+          </p>
+        </div>
+        <ExportMenu reportKey="daily_reports" count={list.data?.count ?? null} size="md" />
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
@@ -348,7 +392,9 @@ export function DsrQueue() {
         isLoading={list.isLoading}
         error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}
         onRetry={list.reload}
-        emptyTitle={isAwaitingReviewView ? 'Nothing awaiting review' : 'No reports match these filters'}
+        emptyTitle={
+          isAwaitingReviewView ? 'Nothing awaiting review' : 'No reports match these filters'
+        }
         emptyDescription={
           isAwaitingReviewView
             ? 'Every submitted daily status report has been reviewed.'

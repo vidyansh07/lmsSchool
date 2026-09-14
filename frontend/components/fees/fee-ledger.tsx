@@ -31,6 +31,7 @@ import {
   Wallet,
 } from 'lucide-react';
 
+import { ExportMenu } from '@/components/export-menu';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -63,6 +64,7 @@ import {
   PAYMENT_METHOD_LABEL,
   PAYMENT_METHOD_OPTIONS,
 } from '@/lib/labels';
+import { apiBaseUrl } from '@/lib/env';
 import { cn } from '@/lib/utils';
 import type {
   Enrollment,
@@ -78,6 +80,11 @@ export function money(value: string | number | null | undefined): string {
   const number = typeof value === 'string' ? Number(value) : value;
   const hasPaise = typeof number === 'number' && Number.isFinite(number) && number % 1 !== 0;
   return formatCurrency(value, { decimals: hasPaise ? 2 : 0 });
+}
+
+/** The receipt PDF for one payment; the server re-checks who may see it. */
+export function receiptUrl(paymentId: string): string {
+  return `${apiBaseUrl()}/api/v1/fees/payments/${paymentId}/receipt/`;
 }
 
 function isoToday(): string {
@@ -697,7 +704,13 @@ function PaymentsTable({
                 className={payment.is_voided ? 'text-muted-foreground' : undefined}
               >
                 <Td className="font-mono text-xs">
-                  {payment.receipt_number}
+                  <a
+                    href={receiptUrl(payment.id)}
+                    className="hover:text-primary hover:underline"
+                    title="Download the receipt (PDF)"
+                  >
+                    {payment.receipt_number}
+                  </a>
                   {payment.is_voided ? (
                     <Badge variant="error" className="ml-2">
                       Voided
@@ -1026,7 +1039,10 @@ export function FeeLedger({
   onChanged,
   title = 'Fees',
   description = 'What was agreed for each course, what has been paid, and what is still owed.',
+  studentId,
 }: {
+  /** When given, the header offers an export of this student's ledger. */
+  studentId?: string;
   summary: StudentFeeSummary | null;
   /** The student's enrolments, so the ones without a fee can be listed. */
   enrollments: Enrollment[] | null;
@@ -1054,6 +1070,9 @@ export function FeeLedger({
           </CardTitle>
           <CardDescription>{description}</CardDescription>
         </div>
+        {studentId ? (
+          <ExportMenu reportKey="fee_payments" filters={{ student: studentId }} count={0} />
+        ) : null}
       </CardHeader>
       <CardContent className="space-y-4">
         {error ? (

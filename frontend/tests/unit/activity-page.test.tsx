@@ -12,6 +12,8 @@ const getActivityFeed = vi.hoisted(() => vi.fn());
 const getActivityScorecards = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/activity', () => ({ getActivityFeed, getActivityScorecards }));
+// The export menu has its own test; here it needs a toast provider the page does not.
+vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
 vi.mock('@/components/auth-provider', () => ({
   useAuth: () => ({ user: { role: 'admin', capabilities: ['audit.view'] }, can: () => true }),
 }));

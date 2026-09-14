@@ -364,6 +364,13 @@ class ExportJobRequestSerializer(StrictSerializer):
     format = serializers.ChoiceField(choices=ExportFormat.choices)
     batch = serializers.UUIDField(required=False, allow_null=True)
     course = serializers.UUIDField(required=False, allow_null=True)
+    # The list-screen reports take a few more, all narrowing, none authorising.
+    student = serializers.UUIDField(required=False, allow_null=True)
+    since = serializers.DateField(required=False, allow_null=True)
+    until = serializers.DateField(required=False, allow_null=True)
+    actor = serializers.UUIDField(required=False, allow_null=True)
+    kind = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    role = serializers.CharField(required=False, allow_blank=True, max_length=20)
 
 
 class ExportJobSerializer(StrictSerializer):

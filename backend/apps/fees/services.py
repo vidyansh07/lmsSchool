@@ -398,6 +398,13 @@ def fee_history(enrollment: Enrollment):
     )
 
 
+def _forget_overviews() -> None:
+    """Every ledger write makes the collections overview stale."""
+    from apps.common.caching import forget
+
+    forget("fees:overview")
+
+
 def sync_student_fee_status(student: StudentProfile, *, actor: User) -> None:
     """The coarse flag on the student follows the ledger.
 
@@ -430,6 +437,7 @@ def sync_student_fee_status(student: StudentProfile, *, actor: User) -> None:
         set_fee_status(
             profile=student, fee_status=status, actor=actor, note="Derived from the fee ledger."
         )
+    _forget_overviews()
 
 
 def fees_overview(*, user: User, limit: int = 20) -> dict[str, Any]:

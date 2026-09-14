@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
+import { ExportMenu } from '@/components/export-menu';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -14,7 +15,12 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { useList } from '@/hooks/use-list';
-import { BATCH_STATUS_LABEL, BATCH_STATUS_OPTIONS, BATCH_STATUS_VARIANT, formatDate } from '@/lib/batch-labels';
+import {
+  BATCH_STATUS_LABEL,
+  BATCH_STATUS_OPTIONS,
+  BATCH_STATUS_VARIANT,
+  formatDate,
+} from '@/lib/batch-labels';
 import { listBatches } from '@/lib/batches';
 import { Capability } from '@/lib/capabilities';
 import type { BatchListRow } from '@/types/api';
@@ -49,9 +55,12 @@ function BatchList() {
               : 'The cohorts you have been assigned to teach.'}
           </p>
         </div>
-        {can(Capability.batchCreate) ? (
-          <Button onClick={() => setShowCreate(true)}>New batch</Button>
-        ) : null}
+        <div className="flex gap-2">
+          <ExportMenu reportKey="batches" count={list.data?.count ?? null} size="md" />
+          {can(Capability.batchCreate) ? (
+            <Button onClick={() => setShowCreate(true)}>New batch</Button>
+          ) : null}
+        </div>
       </div>
 
       {showCreate ? (

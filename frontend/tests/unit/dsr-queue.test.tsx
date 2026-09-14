@@ -33,6 +33,7 @@ vi.mock('@/lib/people', async () => {
 
 const mockAuth = vi.hoisted(() => ({ value: { can: () => true } as { can: (capability: string) => boolean } }));
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => mockAuth.value }));
+vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
 
 function page<T>(results: T[], overrides: Partial<Paginated<T>> = {}): Paginated<T> {
   return { count: results.length, page: 1, page_size: 20, total_pages: 1, next: null, previous: null, results, ...overrides };

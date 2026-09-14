@@ -1872,3 +1872,25 @@ export interface StaffWarning {
   href: string | null;
   items: StaffWarningItem[];
 }
+
+// --- Exports -----------------------------------------------------------------
+
+export type ExportFormat = 'csv' | 'xlsx' | 'pdf';
+export type ExportStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+
+export interface ExportJob {
+  id: string;
+  report_key: string;
+  format: ExportFormat;
+  filters: Record<string, unknown>;
+  status: ExportStatus;
+  requested_by_email: string | null;
+  queued_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  row_count: number;
+  error: string;
+  expires_at: string | null;
+  /** This app's own download route, never a storage URL. Null until complete. */
+  download_url: string | null;
+}

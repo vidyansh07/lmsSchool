@@ -108,8 +108,39 @@ def _rescope(job: ExportJob):
                 "The course this export was scoped to is no longer visible to you."
             )
 
-    queryset = _queryset_for_user(user, source, batch, course)
+    extra = {
+        key: value
+        for key, value in filters.items()
+        if key in ("student", "since", "until", "actor", "kind", "role") and value
+    }
+    queryset = _queryset_for_user(user, source, batch, course, extra)
     return definition, queryset
+
+
+def _tell(job: ExportJob, *, ready: bool, label: str) -> None:
+    """ "Your export is ready" — or that it failed — in the requester's inbox.
+
+    In-app always, by email when their preferences allow; the person asked for
+    a file and walked away, and a notification is how they find out it exists.
+    """
+    from apps.notifications.models import NotificationKind
+    from apps.notifications.services import notify
+
+    if job.requested_by is None:
+        return
+    notify(
+        recipient=job.requested_by,
+        kind=NotificationKind.EXPORT_READY if ready else NotificationKind.EXPORT_FAILED,
+        title=f"Your {label} export is ready" if ready else f"Your {label} export failed",
+        body=(
+            f"{job.row_count} rows as {job.get_format_display()}. Download it from Reports."
+            if ready
+            else (job.error or "The export could not be produced.")
+        ),
+        link_path="/admin/reports#exports",
+        resource_type="export_job",
+        resource_id=str(job.pk),
+    )
 
 
 @shared_task(name="reporting.run_export", ignore_result=True)
@@ -193,6 +224,7 @@ def run_export(job_id: str) -> bool:
             context={"report": job.report_key, "format": job.format, "rows": row_count},
             durable=False,
         )
+        _tell(job, ready=True, label=definition.label)
         return True
 
     except (ExportScopeError, writers.RowLimitExceeded) as exc:
@@ -208,6 +240,7 @@ def run_export(job_id: str) -> bool:
     job.finished_at = timezone.now()
     job.error = error_message[:500]
     job.save(update_fields=["status", "finished_at", "error", "updated_at"])
+    _tell(job, ready=False, label=job.report_key)
     record(
         action=AuditAction.EXPORT_FAILED,
         actor=job.requested_by,

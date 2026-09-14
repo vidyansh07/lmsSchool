@@ -41,7 +41,7 @@ def build_workbook(path, *, with_email=True, dsr_style="classic"):
         datetime(2026, 6, 14),
         datetime(1900, 1, 25),
     ]
-    att.append(head + [dates[0]])
+    att.append([*head, dates[0]])
     att.append([None] * len(head) + dates)
     att.append([None] * len(head) + ["Wed", "Thu", "Sun", "?"])
     base = (
@@ -49,13 +49,13 @@ def build_workbook(path, *, with_email=True, dsr_style="classic"):
         + (["arjit@example.test"] if with_email else [])
         + ["Arjit Kaushik", "25EACEE003", 2, 1, 3, 66.6]
     )
-    att.append(base + ["P", "A", "SUNDAY", "P"])
+    att.append([*base, "P", "A", "SUNDAY", "P"])
     base2 = [2] + ([""] if with_email else []) + ["Somya Gupta", "25eacce026", 1, 0, 1, 100]
-    att.append(base2 + ["OP", "LT", None, None])
+    att.append([*base2, "OP", "LT", None, None])
     base3 = [3] + ([""] if with_email else []) + ["No Roll", "", 0, 0, 0, 0]
-    att.append(base3 + ["P", "P", None, None])
+    att.append([*base3, "P", "P", None, None])
     base4 = [4] + ([""] if with_email else []) + ["Odd Mark", "25EACCE099", 0, 0, 0, 0]
-    att.append(base4 + ["P", "X", None, None])
+    att.append([*base4, "P", "X", None, None])
 
     dsr = wb.create_sheet("DSR")
     if dsr_style == "classic":
@@ -246,7 +246,7 @@ def build_fraction_workbook(path):
     ]
     # Month markers in the header row, the real dates beneath — and typed as
     # day numbers, which Excel stored as dates in 1900.
-    att.append(head + [datetime(2026, 5, 1), None, None, datetime(2026, 6, 1)])
+    att.append([*head, datetime(2026, 5, 1), None, None, datetime(2026, 6, 1)])
     att.append(
         [None] * len(head)
         + [datetime(1900, 1, 30), datetime(1900, 1, 31), datetime(1900, 1, 1), datetime(1900, 1, 2)]
@@ -294,7 +294,7 @@ def test_day_numbers_typed_as_dates_are_read_as_days_of_the_programme_month(frac
 
 
 def test_the_header_row_is_found_below_the_month_markers(fraction_book):
-    assert [s.roll_number for s in fraction_book.students][0] == "24EACCS668"
+    assert next(s.roll_number for s in fraction_book.students) == "24EACCS668"
 
 
 def test_marks_written_as_a_fraction_carry_their_own_maximum(fraction_book):
@@ -394,7 +394,7 @@ def build_window_workbook(path):
         "Total Class",
         "Attendance Percent",
     ]
-    att.append(head + [datetime(2026, 6, 1)])
+    att.append([*head, datetime(2026, 6, 1)])
     att.append(
         [None] * len(head)
         + [

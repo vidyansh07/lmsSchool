@@ -422,6 +422,24 @@ and cached for a minute per person. Kinds: `fees_overdue`, `fees_missing`,
 (Monday 08:00) sends every staff member their open warnings as a
 notification, by email when their preferences allow.
 
+### Exports — every list, in Excel, PDF or CSV
+
+Six list screens are reports too (`students`, `enrollments`, `fee_payments`,
+`daily_reports`, `batches`, `activity`), beside the ten analytical ones. All of
+them run through `GET /reports/<key>/` and export through
+`GET /reports/<key>/export/?as=csv|xlsx|pdf` — `as`, not `format`, because
+DRF owns `?format=`. CSV streams at any size; Excel and PDF render inline up
+to 2,000 rows and answer 409 past that, at which point the client queues a
+background job (`POST /reports/exports/`, now also taking `student`, `since`,
+`until`, `actor`, `kind`, `role`) and the requester gets a notification —
+`export.ready` or `export.failed` — linking to "Your exports" on the Reports
+screen. Filters narrow inside the caller's visible set and never widen it:
+`student` resolves through visible students, `activity` needs `audit.view`.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `/api/v1/fees/payments/<id>/receipt/` | staff who can see the enrolment, or the student — the receipt as an A5 PDF; a voided payment renders stamped VOID |
+
 ### Fees — `/api/v1/fees/`
 
 A fee belongs to an **enrolment**, not a student: a student on two courses has

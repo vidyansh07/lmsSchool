@@ -792,6 +792,27 @@ def a_bit_of_everything(
         enrollment=enrollment, actor=admin_user, override=True, note="For the report."
     )
     issue_certificate(completion=completion, actor=admin_user)
+
+    # The list-screen reports (14 September 2026): a payment on the ledger and
+    # a submitted daily report, so those two produce rows here as well.
+    from datetime import time
+
+    from apps.dsr.services import start_dsr, submit_dsr
+    from apps.fees import services as fees
+    from apps.sessions.models import ClassSession, SessionStatus
+
+    plan = fees.set_fee_plan(enrollment=enrollment, actor=admin_user, agreed_amount="9000")
+    fees.record_payment(plan=plan, actor=admin_user, amount="1000", method="cash")
+    reported = ClassSession.objects.create(
+        batch=enrollment.batch,
+        session_date=enrollment.batch.start_date,
+        start_time=time(14, 0),
+        end_time=time(16, 0),
+        status=SessionStatus.COMPLETED,
+        trainer=enrollment.batch.trainer,
+    )
+    dsr = start_dsr(session=reported, actor=enrollment.batch.trainer.user)
+    submit_dsr(dsr=dsr, actor=enrollment.batch.trainer.user)
     return enrollment
 
 

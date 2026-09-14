@@ -15,7 +15,9 @@ import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { ApiError, errorMessage } from '@/lib/api';
 import { listBatches } from '@/lib/batches';
 import { Capability, can } from '@/lib/capabilities';
-import { listReports, reportExportUrl, runReport } from '@/lib/reporting';
+import { ExportJobsPanel } from '@/components/export-jobs-panel';
+import { ExportMenu } from '@/components/export-menu';
+import { listReports, runReport } from '@/lib/reporting';
 import type { BatchListRow, ReportDefinition, ReportPage } from '@/types/api';
 
 /** The ten reports §8.3 asks for, filtered and exportable. */
@@ -85,8 +87,8 @@ function Reports() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
         <p className="text-sm text-muted-foreground">
-          Every report is scoped to what you can already see, and exports the same rows
-          you are looking at.
+          Every report is scoped to what you can already see, and exports the same rows you are
+          looking at.
         </p>
       </div>
 
@@ -127,11 +129,9 @@ function Reports() {
           </Button>
 
           {mayExport && selected ? (
-            <Button asChild variant="outline" data-testid="export-link">
-              <a href={reportExportUrl(selected, { batch: batch || undefined })}>
-                Export as CSV
-              </a>
-            </Button>
+            <span data-testid="export-link">
+              <ExportMenu reportKey={selected} filters={{ batch: batch || undefined }} size="md" />
+            </span>
           ) : null}
         </CardContent>
       </Card>
@@ -144,21 +144,14 @@ function Reports() {
           </CardHeader>
           <CardContent>
             {page === null ? (
-              <EmptyState
-                title="Nothing run yet"
-                description="Choose a report and press Run."
-              />
+              <EmptyState title="Nothing run yet" description="Choose a report and press Run." />
             ) : page.rows.length === 0 ? (
-              <EmptyState
-                title="No rows"
-                description="Nothing matches. Try a different batch."
-              />
+              <EmptyState title="No rows" description="Nothing matches. Try a different batch." />
             ) : (
               <div className="space-y-3">
                 {page.truncated ? (
                   <Alert variant="warning">
-                    Showing the first {page.row_count} rows. Export the report for all of
-                    them.
+                    Showing the first {page.row_count} rows. Export the report for all of them.
                   </Alert>
                 ) : (
                   <Badge variant="neutral">{page.row_count} rows</Badge>
@@ -198,6 +191,7 @@ function Reports() {
           </CardContent>
         </Card>
       ) : null}
+      <ExportJobsPanel />
     </div>
   );
 }

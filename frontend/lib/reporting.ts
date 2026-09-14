@@ -7,6 +7,8 @@ import type {
   AdminDashboard,
   BatchSummary,
   BulkImport,
+  ExportFormat,
+  ExportJob,
   LmsMetric,
   ReportDefinition,
   ReportPage,
@@ -34,8 +36,47 @@ export async function runReport(key: string, filters: ReportFilters = {}): Promi
  * A plain link, not a fetch: the backend streams the CSV as an attachment and
  * re-checks the export capability on that request.
  */
-export function reportExportUrl(key: string, filters: ReportFilters = {}): string {
-  return `${apiBaseUrl()}/api/v1/reports/${key}/export/${queryString(filters)}`;
+export function reportExportUrl(
+  key: string,
+  filters: ReportFilters = {},
+  format: ExportFormat = 'csv',
+): string {
+  // `as`, not `format`: DRF reserves `?format=` for its own renderer switch.
+  return `${apiBaseUrl()}/api/v1/reports/${key}/export/${queryString({ ...filters, as: format })}`;
+}
+
+// --- Background exports ----------------------------------------------------
+
+/** Queue a report to be rendered off the request; a notification says when it is ready. */
+export async function queueExport(payload: {
+  report_key: string;
+  format: ExportFormat;
+  batch?: string;
+  course?: string;
+  student?: string;
+  since?: string;
+  until?: string;
+  actor?: string;
+  kind?: string;
+  role?: string;
+}): Promise<ExportJob> {
+  return apiMutate<ExportJob>('/api/v1/reports/exports/', { method: 'POST', body: payload });
+}
+
+export async function listExportJobs(): Promise<ExportJob[]> {
+  return apiFetch<ExportJob[]>('/api/v1/reports/exports/');
+}
+
+export async function cancelExport(id: string): Promise<ExportJob> {
+  return apiMutate<ExportJob>(`/api/v1/reports/exports/${id}/cancel/`, {
+    method: 'POST',
+    body: {},
+  });
+}
+
+/** A plain link; the download view re-checks ownership and expiry. */
+export function exportDownloadUrl(job: ExportJob): string | null {
+  return job.download_url ? `${apiBaseUrl()}${job.download_url}` : null;
 }
 
 // --- Analytics -------------------------------------------------------------
@@ -47,9 +88,7 @@ export async function listMetrics(filters: ReportFilters = {}): Promise<LmsMetri
 export async function attendanceTrend(
   filters: ReportFilters & { weeks?: number } = {},
 ): Promise<TrendPoint[]> {
-  return apiFetch<TrendPoint[]>(
-    `/api/v1/reports/metrics/attendance-trend/${queryString(filters)}`,
-  );
+  return apiFetch<TrendPoint[]>(`/api/v1/reports/metrics/attendance-trend/${queryString(filters)}`);
 }
 
 // --- Dashboards ------------------------------------------------------------
@@ -78,10 +117,7 @@ export async function previewStudentImport(file: File, batchId?: string): Promis
   });
 }
 
-export async function previewAttendanceImport(
-  sessionId: string,
-  file: File,
-): Promise<BulkImport> {
+export async function previewAttendanceImport(sessionId: string, file: File): Promise<BulkImport> {
   const form = new FormData();
   form.append('file', file);
   return apiMutate<BulkImport>(`/api/v1/imports/sessions/${sessionId}/attendance/`, {

@@ -22,6 +22,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.roles import has_capability
 from apps.batches import access as batch_access
+from apps.common.caching import MINUTE, remember
 from apps.common.permissions import Capability, HasCapability, IsActiveUser
 from apps.enrollments.models import Enrollment
 from apps.students import access as students_access
@@ -242,12 +243,60 @@ class FeesOverviewView(APIView):
         tags=FEES_TAG,
     )
     def get(self, request):
-        overview = services.fees_overview(user=request.user)
-        for key in ("overdue", "due_soon"):
-            rows = FeePlanBriefSerializer(overview[key], many=True).data
-            for row, plan in zip(rows, overview[key], strict=True):
-                user = plan.enrollment.student.user
-                row["student_id"] = str(plan.enrollment.student_id)
-                row["student_name"] = user.full_name or user.email
-            overview[key] = rows
-        return Response(FeesOverviewSerializer(overview).data)
+        def build():
+            overview = services.fees_overview(user=request.user)
+            for key in ("overdue", "due_soon"):
+                rows = FeePlanBriefSerializer(overview[key], many=True).data
+                for row, plan in zip(rows, overview[key], strict=True):
+                    user = plan.enrollment.student.user
+                    row["student_id"] = str(plan.enrollment.student_id)
+                    row["student_name"] = user.full_name or user.email
+                overview[key] = rows
+            return FeesOverviewSerializer(overview).data
+
+        return Response(remember("fees:overview", (request.user.pk,), MINUTE, build))
+
+
+class FeePaymentReceiptView(APIView):
+    """The receipt for one payment, as a PDF. Staff who can see the enrolment,
+    or the student it belongs to."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Download the receipt for a payment",
+        responses={200: OpenApiResponse(description="A PDF.")},
+        tags=FEES_TAG,
+    )
+    def get(self, request, payment_id):
+        from django.http import HttpResponse
+
+        from apps.configuration.settings_resolver import effective_settings
+
+        from .receipts import render_receipt_pdf
+
+        payment = get_object_or_404(
+            FeePayment.objects.filter(
+                plan__enrollment__in=batch_access.visible_enrollments(request.user)
+            ).select_related(
+                "plan__enrollment__student__user",
+                "plan__enrollment__course",
+                "plan__enrollment__batch",
+                "recorded_by",
+            ),
+            pk=payment_id,
+        )
+        settings = effective_settings()
+        support = " · ".join(
+            part for part in (settings.support_email, settings.support_phone) if part
+        )
+        content = render_receipt_pdf(
+            payment, institution_name=settings.institution_name, support_line=support
+        )
+        response = HttpResponse(content, content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'attachment; filename="receipt-{payment.receipt_number}.pdf"'
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Cache-Control"] = "private, no-store"
+        return response

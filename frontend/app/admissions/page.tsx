@@ -22,6 +22,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
+import { ExportMenu } from '@/components/export-menu';
 import { money } from '@/components/fees/fee-ledger';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
@@ -91,6 +92,15 @@ export function AdmissionsList() {
           <Button asChild variant="outline">
             <Link href="/admissions/import">Import students</Link>
           </Button>
+          <ExportMenu
+            reportKey="enrollments"
+            filters={{
+              batch: String(list.query.batch ?? '') || undefined,
+              course: String(list.query.course ?? '') || undefined,
+            }}
+            count={list.data?.count ?? null}
+            size="md"
+          />
           <Button asChild>
             <Link href="/admissions/new">Register a student</Link>
           </Button>

@@ -7,6 +7,7 @@ from .views import (
     EnrollmentFeeNextDueView,
     EnrollmentFeePaymentsView,
     EnrollmentFeeView,
+    FeePaymentReceiptView,
     FeePaymentVoidView,
     FeesOverviewView,
     MyFeesView,
@@ -36,4 +37,9 @@ urlpatterns = [
         name="history",
     ),
     path("payments/<uuid:payment_id>/void/", FeePaymentVoidView.as_view(), name="void"),
+    path(
+        "payments/<uuid:payment_id>/receipt/",
+        FeePaymentReceiptView.as_view(),
+        name="receipt",
+    ),
 ]

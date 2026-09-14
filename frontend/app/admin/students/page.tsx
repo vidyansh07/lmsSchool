@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
+import { ExportMenu } from '@/components/export-menu';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -60,9 +61,17 @@ function StudentsTable() {
             Student records, admissions detail and fee status.
           </p>
         </div>
-        {can(Capability.studentCreate) ? (
-          <Button onClick={() => setShowCreate(true)}>Add student</Button>
-        ) : null}
+        <div className="flex gap-2">
+          <ExportMenu
+            reportKey="students"
+            filters={{ search: String(list.query.search ?? '') || undefined }}
+            count={list.data?.count ?? null}
+            size="md"
+          />
+          {can(Capability.studentCreate) ? (
+            <Button onClick={() => setShowCreate(true)}>Add student</Button>
+          ) : null}
+        </div>
       </div>
 
       {showCreate ? (
@@ -180,7 +189,9 @@ function StudentsTable() {
                     <Td className="font-mono text-xs font-semibold text-foreground">
                       {row.student_id}
                       {row.roll_number ? (
-                        <span className="mt-0.5 block font-normal text-muted-foreground">{row.roll_number}</span>
+                        <span className="mt-0.5 block font-normal text-muted-foreground">
+                          {row.roll_number}
+                        </span>
                       ) : null}
                     </Td>
                     {/* Name and email in one cell, as the reference does it: the
@@ -194,11 +205,14 @@ function StudentsTable() {
                           </AvatarFallback>
                         </Avatar>
                         <div className="min-w-0 leading-tight">
-                          <p className="truncate font-semibold text-foreground">{row.full_name || '—'}</p>
+                          <p className="truncate font-semibold text-foreground">
+                            {row.full_name || '—'}
+                          </p>
                           <p className="truncate text-xs text-muted-foreground">{row.email}</p>
                           {row.institution ? (
                             <p className="truncate text-xs text-muted-foreground">
-                              {row.institution_kind === 'employer' ? 'Works at' : 'Studies at'} {row.institution}
+                              {row.institution_kind === 'employer' ? 'Works at' : 'Studies at'}{' '}
+                              {row.institution}
                             </p>
                           ) : null}
                         </div>
@@ -228,14 +242,22 @@ function StudentsTable() {
                       )}
                     </Td>
                     <Td className="whitespace-nowrap text-right tabular-nums text-green">
-                      {Number(row.fee_paid) > 0 ? formatCurrency(row.fee_paid) : <span className="text-muted-foreground">—</span>}
+                      {Number(row.fee_paid) > 0 ? (
+                        formatCurrency(row.fee_paid)
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </Td>
                     <Td className="whitespace-nowrap text-right tabular-nums">
                       {Number(row.fee_balance) > 0 ? (
                         <>
-                          <span className="font-medium text-amber">{formatCurrency(row.fee_balance)}</span>
+                          <span className="font-medium text-amber">
+                            {formatCurrency(row.fee_balance)}
+                          </span>
                           <span className="block text-xs text-muted-foreground">
-                            {row.fee_next_due_on ? `Expected ${formatDate(row.fee_next_due_on)}` : 'No date set'}
+                            {row.fee_next_due_on
+                              ? `Expected ${formatDate(row.fee_next_due_on)}`
+                              : 'No date set'}
                           </span>
                         </>
                       ) : Number(row.fee_payable) > 0 ? (
@@ -273,8 +295,16 @@ function StudentsTable() {
                     </Td>
                     <Td className="text-right">
                       <Tooltip content="Open the student's record">
-                        <Button asChild variant="ghost" size="sm" className="size-8 p-0 text-muted-foreground">
-                          <Link href={`/admissions/${row.id}`} aria-label={`Open ${row.full_name || row.email}`}>
+                        <Button
+                          asChild
+                          variant="ghost"
+                          size="sm"
+                          className="size-8 p-0 text-muted-foreground"
+                        >
+                          <Link
+                            href={`/admissions/${row.id}`}
+                            aria-label={`Open ${row.full_name || row.email}`}
+                          >
                             <Eye className="size-4" aria-hidden="true" />
                           </Link>
                         </Button>

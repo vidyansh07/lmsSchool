@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, ArrowUpRight, IndianRupee, Users } from 'lucide-react';
 
+import { ExportMenu } from '@/components/export-menu';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
@@ -371,6 +372,16 @@ export function ActivityReview() {
                 Everyone
               </Button>
             ) : null}
+            <ExportMenu
+              reportKey="activity"
+              filters={{
+                ...bounds,
+                actor: actor || undefined,
+                role: role || undefined,
+                kind: kind || undefined,
+              }}
+              count={feed?.count ?? null}
+            />
           </div>
         </CardHeader>
         <CardContent className="space-y-3">

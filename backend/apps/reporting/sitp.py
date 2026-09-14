@@ -363,7 +363,9 @@ def _read_attendance(sheet, book: Workbook) -> None:
         # — so both halves are kept. Reported, because it is a reconstruction
         # rather than a reading.
         decoded = _days_of_month([when.day for _, when in day_numbers], start=book.programme_start)
-        reconstructed = [(column, when) for (column, _), when in zip(day_numbers, decoded)]
+        reconstructed = [
+            (column, when) for (column, _), when in zip(day_numbers, decoded, strict=True)
+        ]
         book.problem(
             sheet.title,
             date_row_index + 1,
@@ -419,7 +421,8 @@ def _read_attendance(sheet, book: Workbook) -> None:
         book.problem(
             sheet.title,
             date_row_index + 1,
-            f"{len(unmarked)} dated columns have no marks for anybody (Sundays, holidays); no class created for them.",
+            f"{len(unmarked)} dated columns have no marks for anybody (Sundays, holidays); "
+            "no class created for them.",
         )
     book.class_dates = [when for when in book.class_dates if when in marked]
 
@@ -472,7 +475,8 @@ def _read_dsr(sheet, book: Workbook) -> None:
             book.problem(
                 sheet.title,
                 line,
-                f"{text(row[date_col])!r} read as {when}: the year, or the month and day, were typed the wrong way round.",
+                f"{text(row[date_col])!r} read as {when}: the year, or the month and day, "
+                "were typed the wrong way round.",
             )
         if module_col is not None and module_col < len(row) and text(row[module_col]):
             topic = f"{text(row[module_col])}: {topic}" if topic else text(row[module_col])
@@ -596,9 +600,8 @@ def _read_assessments(sheet, book: Workbook) -> None:
             book.problem(
                 sheet.title,
                 line,
-                f"{roll} is on the marks sheet but not the attendance sheet; enrolled with no attendance"
-                + ("" if name else " and no name")
-                + ".",
+                f"{roll} is on the marks sheet but not the attendance sheet; "
+                "enrolled with no attendance" + ("" if name else " and no name") + ".",
             )
         marks: dict[int, Decimal | str | None] = {}
         for column_info in book.assessments:
@@ -666,11 +669,13 @@ def read_workbook(path: Path) -> Workbook:
         lowered = name.strip().lower()
         if lowered.startswith("course time"):
             book.not_imported[name] = (
-                "Planned lecture list; the LMS plans per lesson, and there is no lesson content here to plan against."
+                "Planned lecture list; the LMS plans per lesson, and there is no lesson "
+                "content here to plan against."
             )
         elif lowered.startswith("project"):
             book.not_imported[name] = (
-                "Project marks and links; the LMS records project work as reviewed submissions, which these are not."
+                "Project marks and links; the LMS records project work as reviewed "
+                "submissions, which these are not."
             )
         elif lowered.startswith("quiz"):
             book.not_imported[name] = "A Microsoft Forms export; the LMS has no importer for it."

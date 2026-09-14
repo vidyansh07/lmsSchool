@@ -14,7 +14,7 @@ whole result set in memory.
 
 from __future__ import annotations
 
-from django.http import FileResponse, Http404, StreamingHttpResponse
+from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status as http_status
@@ -26,14 +26,15 @@ from rest_framework.views import APIView
 from apps.accounts.roles import Capability, has_capability
 from apps.audit.services import AuditAction, record
 from apps.batches import access as batch_access
-from apps.common.exceptions import ConflictError
+from apps.common.caching import MINUTE, remember
+from apps.common.exceptions import ApplicationError, ConflictError
 from apps.common.permissions import IsActiveUser
 from apps.common.throttling import BurstThrottle
 from apps.courses import access as course_access
 from apps.organisation.scoping import scope_to_branch
 
 from . import access, dashboards, exports, importers, metrics, reports, tasks, writers
-from .models import TERMINAL_EXPORT_STATUSES, BulkImport, ExportJob, ExportStatus
+from .models import TERMINAL_EXPORT_STATUSES, BulkImport, ExportFormat, ExportJob, ExportStatus
 from .serializers import (
     AdminDashboardSerializer,
     BatchOverviewSerializer,
@@ -53,6 +54,15 @@ from .serializers import (
 )
 
 REPORTS_TAG = ["reports and analytics"]
+
+#: Rows an inline Excel or PDF export will render before refusing (19a: "small
+#: lists download at once, large ones run in the background").
+SYNC_ROW_LIMIT = 2_000
+
+CONTENT_TYPES = {
+    ExportFormat.XLSX: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ExportFormat.PDF: "application/pdf",
+}
 
 #: How many rows a *screen* receives. An export streams the whole thing; a JSON
 #: response does not, because a browser rendering fifty thousand rows helps
@@ -85,12 +95,40 @@ def _filters(request):
     return batch, course
 
 
-def _queryset_for(request, source: str, batch, course):
+#: Filters beyond batch and course that some reports take. Read from the query
+#: string on a direct export and from `job.filters` on a queued one; never
+#: authorization, only narrowing inside an already visible set.
+EXTRA_FILTER_KEYS = ("student", "since", "until", "actor", "kind", "role")
+
+
+def _extra_filters(params) -> dict:
+    extra = {}
+    for key in EXTRA_FILTER_KEYS:
+        value = params.get(key)
+        if value not in (None, ""):
+            extra[key] = value
+    return extra
+
+
+def _queryset_for(request, source: str, batch, course, extra=None):
     """The scoped queryset a report producer expects."""
-    return _queryset_for_user(request.user, source, batch, course)
+    return _queryset_for_user(request.user, source, batch, course, extra)
 
 
-def _queryset_for_user(user, source: str, batch, course):
+def _apply_student(rows, user, extra, path: str):
+    """Narrow to one student, resolved inside the caller's visible students."""
+    from apps.students import access as students_access
+
+    student_id = (extra or {}).get("student")
+    if not student_id:
+        return rows
+    student = students_access.visible_students(user).filter(pk=student_id).first()
+    if student is None:
+        return rows.none()
+    return rows.filter(**{path: student.pk})
+
+
+def _queryset_for_user(user, source: str, batch, course, extra=None):
     """The same resolution, keyed on a user rather than a request.
 
     Split out so `apps.reporting.tasks.run_export` can re-derive a job's
@@ -127,12 +165,65 @@ def _queryset_for_user(user, source: str, batch, course):
             rows = rows.filter(batches=batch)
         return rows.distinct()
 
+    if source == "students":
+        from apps.students import access as students_access
+
+        rows = students_access.visible_students(user)
+        if batch is not None:
+            rows = rows.filter(enrollments__batch=batch)
+        if course is not None:
+            rows = rows.filter(enrollments__course=course)
+        return _apply_student(rows.distinct(), user, extra, "pk")
+    if source == "fee_payments":
+        from apps.fees.models import FeePayment
+
+        if not has_capability(user, Capability.FEE_VIEW_ANY):
+            return FeePayment.objects.none()
+        rows = FeePayment.objects.filter(
+            plan__enrollment__in=batch_access.visible_enrollments(user)
+        )
+        if batch is not None:
+            rows = rows.filter(plan__enrollment__batch=batch)
+        if course is not None:
+            rows = rows.filter(plan__enrollment__course=course)
+        return _apply_student(rows, user, extra, "plan__enrollment__student_id")
+    if source == "dsrs":
+        from apps.dsr import access as dsr_access
+
+        rows = dsr_access.visible_dsrs(user)
+        if batch is not None:
+            rows = rows.filter(batch=batch)
+        if course is not None:
+            rows = rows.filter(batch__course=course)
+        return rows
+    if source == "activity":
+        from datetime import date
+
+        from apps.activity import services as activity_services
+        from apps.audit.models import AuditLog
+
+        if not has_capability(user, Capability.AUDIT_VIEW):
+            return AuditLog.objects.none()
+        extra = extra or {}
+
+        def _day(value):
+            if not value:
+                return None
+            return value if isinstance(value, date) else date.fromisoformat(str(value))
+
+        return activity_services.feed(
+            since=_day(extra.get("since")),
+            until=_day(extra.get("until")),
+            actor_id=extra.get("actor") or None,
+            role=extra.get("role") or None,
+            kind=extra.get("kind") or None,
+        )
     rows = batch_access.visible_enrollments(user)
     if batch is not None:
         rows = rows.filter(batch=batch)
     if course is not None:
         rows = rows.filter(course=course)
-    return rows
+    return _apply_student(rows, user, extra, "student_id")
 
 
 class ReportCatalogueView(APIView):
@@ -173,7 +264,9 @@ class ReportView(APIView):
 
         definition, _producer, source = reports.REPORTS[key]
         batch, course = _filters(request)
-        queryset = _queryset_for(request, source, batch, course)
+        queryset = _queryset_for(
+            request, source, batch, course, _extra_filters(request.query_params)
+        )
 
         _report, produced = reports.run(key, queryset)
         rows = []
@@ -223,9 +316,31 @@ class ReportExportView(APIView):
     permission_classes = (IsActiveUser,)
 
     @extend_schema(
-        summary="Export a report as CSV",
-        parameters=[OpenApiParameter("batch", str), OpenApiParameter("course", str)],
-        responses={200: OpenApiResponse(description="A CSV stream.")},
+        summary="Export a report as CSV, Excel or PDF",
+        parameters=[
+            OpenApiParameter("batch", str),
+            OpenApiParameter("course", str),
+            OpenApiParameter("student", str),
+            OpenApiParameter("since", str),
+            OpenApiParameter("until", str),
+            OpenApiParameter("actor", str),
+            OpenApiParameter("kind", str),
+            OpenApiParameter("role", str),
+            # `as`, not `format`: DRF reserves `?format=` for its own renderer
+            # switch and answers 404 to any value it does not know.
+            OpenApiParameter(
+                "as",
+                str,
+                description=(
+                    "csv (streamed, any size), xlsx or pdf (rendered inline up to "
+                    f"{SYNC_ROW_LIMIT} rows; larger exports must be queued)"
+                ),
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(description="The file."),
+            409: OpenApiResponse(description="Too many rows for an inline export; queue it."),
+        },
         tags=REPORTS_TAG,
     )
     def get(self, request, key):
@@ -246,8 +361,12 @@ class ReportExportView(APIView):
             raise Http404
 
         definition, _producer, source = reports.REPORTS[key]
+        fmt = request.query_params.get("as", ExportFormat.CSV)
+        if fmt not in ExportFormat.values:
+            raise ApplicationError({"as": ["Choose csv, xlsx or pdf."]})
         batch, course = _filters(request)
-        queryset = _queryset_for(request, source, batch, course)
+        extra = _extra_filters(request.query_params)
+        queryset = _queryset_for(request, source, batch, course, extra)
         _report, produced = reports.run(key, queryset)
 
         record(
@@ -258,15 +377,49 @@ class ReportExportView(APIView):
             context={
                 "batch": str(batch.pk) if batch else None,
                 "course": str(course.pk) if course else None,
+                "format": fmt,
+                **{name: str(value) for name, value in extra.items()},
             },
             durable=False,
         )
 
-        response = StreamingHttpResponse(
-            exports.stream_csv(definition.column_dicts(), produced),
-            content_type="text/csv; charset=utf-8",
-        )
-        response["Content-Disposition"] = f'attachment; filename="{exports.filename_for(key)}"'
+        if fmt == ExportFormat.CSV:
+            response = StreamingHttpResponse(
+                exports.stream_csv(definition.column_dicts(), produced),
+                content_type="text/csv; charset=utf-8",
+            )
+            response["Content-Disposition"] = f'attachment; filename="{exports.filename_for(key)}"'
+        else:
+            # Excel and PDF are rendered whole, so they are bounded: a list a
+            # person is looking at fits; the whole institution goes through a
+            # background job with a notification when it is ready (19a).
+            rows = []
+            for index, row in enumerate(produced):
+                if index >= SYNC_ROW_LIMIT:
+                    raise ConflictError(
+                        {
+                            "export": [
+                                f"More than {SYNC_ROW_LIMIT:,} rows. Queue a background "
+                                "export and you will be told when it is ready."
+                            ]
+                        }
+                    )
+                rows.append(row)
+            content, _count = writers.write(
+                fmt,
+                definition.column_dicts(),
+                rows,
+                title=definition.label,
+                filters={
+                    "batch_label": batch.code if batch else None,
+                    "course_label": course.title if course else None,
+                    **extra,
+                },
+            )
+            response = HttpResponse(content, content_type=CONTENT_TYPES[fmt])
+            response["Content-Disposition"] = (
+                f'attachment; filename="{writers.filename_for(key, fmt)}"'
+            )
         response["X-Content-Type-Options"] = "nosniff"
         response["Cache-Control"] = "private, no-store"
         return response
@@ -365,6 +518,11 @@ class ExportJobQueueView(APIView):
         if course_id:
             course = get_object_or_404(course_access.visible_courses(request.user), pk=course_id)
 
+        extra = {
+            name: str(value)
+            for name, value in serializer.validated_data.items()
+            if name in EXTRA_FILTER_KEYS and value not in (None, "")
+        }
         job = ExportJob.objects.create(
             report_key=key,
             format=serializer.validated_data["format"],
@@ -373,6 +531,7 @@ class ExportJobQueueView(APIView):
                 "batch_label": batch.code if batch else None,
                 "course_id": str(course.pk) if course else None,
                 "course_label": course.title if course else None,
+                **extra,
             },
             requested_by=request.user,
             status=ExportStatus.QUEUED,
@@ -534,7 +693,13 @@ class AdminDashboardView(APIView):
     def get(self, request):
         if not access.can_read_everything(request.user):
             return _forbidden(request, "This dashboard is for administrators.")
-        return Response(AdminDashboardSerializer(dashboards.admin_dashboard(request.user)).data)
+        data = remember(
+            "dashboard:admin",
+            (request.user.pk,),
+            MINUTE,
+            lambda: AdminDashboardSerializer(dashboards.admin_dashboard(request.user)).data,
+        )
+        return Response(data)
 
 
 class TrainerWorkloadView(APIView):
@@ -595,7 +760,13 @@ class ManagerDashboardView(APIView):
     def get(self, request):
         if not access.can_read_manager_hubs(request.user):
             return _forbidden(request, "This dashboard is for administrators and managers.")
-        return Response(ManagerDashboardSerializer(dashboards.manager_dashboard(request.user)).data)
+        data = remember(
+            "dashboard:manager",
+            (request.user.pk,),
+            MINUTE,
+            lambda: ManagerDashboardSerializer(dashboards.manager_dashboard(request.user)).data,
+        )
+        return Response(data)
 
 
 class BatchOverviewView(APIView):

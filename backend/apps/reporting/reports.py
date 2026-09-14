@@ -613,3 +613,301 @@ def catalogue() -> list[dict[str, Any]]:
 def run(key: str, queryset) -> tuple[Report, Iterable[dict[str, Any]]]:
     report, producer, _source = REPORTS[key]
     return report, producer(queryset)
+
+
+# ---------------------------------------------------------------------------
+# The list screens as reports (14 September 2026: "everything exportable")
+# ---------------------------------------------------------------------------
+#
+# Each of these mirrors a screen an administrator, manager or counsellor reads
+# every day — students, enrolments, the fee ledger, daily reports, batches, the
+# activity record — so that "export what I am looking at" is the same rows the
+# screen showed, through the same scoped queryset, in CSV, Excel or PDF.
+
+
+def _fmt_money(value) -> str:
+    if value is None:
+        return ""
+    try:
+        return f"{value:,.2f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+STUDENTS = Report(
+    key="students",
+    label="Students",
+    description="Every student record with contact, background and what the fee ledger says.",
+    columns=(
+        Column("student_code", "Student"),
+        Column("student_name", "Name"),
+        Column("email", "Email"),
+        Column("phone", "Phone"),
+        Column("city", "City"),
+        Column("centre", "Centre"),
+        Column("institution", "College / employer"),
+        Column("qualification", "Qualification"),
+        Column("fee_status", "Fee status"),
+        Column("fee_payable", "Fee agreed"),
+        Column("fee_paid", "Paid"),
+        Column("fee_balance", "Balance"),
+        Column("fee_next_due_on", "Next expected"),
+        Column("registered_on", "Registered"),
+    ),
+)
+
+
+def students(profiles) -> Iterator[dict[str, Any]]:
+    from apps.fees.queries import annotate_student_fee_totals
+
+    rows = annotate_student_fee_totals(
+        profiles.select_related("user", "branch").order_by("student_id")
+    )
+    for profile in rows.iterator(chunk_size=CHUNK):
+        yield {
+            "student_code": profile.student_id,
+            "student_name": profile.user.get_full_name(),
+            "email": profile.user.email,
+            "phone": profile.user.phone,
+            "city": profile.city,
+            "centre": profile.branch.name if profile.branch_id else "",
+            "institution": profile.institution,
+            "qualification": profile.get_qualification_display() if profile.qualification else "",
+            "fee_status": profile.get_fee_status_display(),
+            "fee_payable": _fmt_money(profile.fee_payable),
+            "fee_paid": _fmt_money(profile.fee_paid),
+            "fee_balance": _fmt_money(profile.fee_balance),
+            "fee_next_due_on": profile.fee_next_due_on,
+            "registered_on": profile.created_at.date(),
+        }
+
+
+ENROLLMENTS = Report(
+    key="enrollments",
+    label="Enrolments",
+    description="Every enrolment: who is on which batch, its status, and the fee against it.",
+    columns=(
+        Column("enrollment_code", "Enrolment"),
+        Column("student_code", "Student"),
+        Column("student_name", "Name"),
+        Column("course_title", "Course"),
+        Column("batch_code", "Batch"),
+        Column("trainer_name", "Trainer"),
+        Column("status", "Status"),
+        Column("enrolled_on", "Enrolled"),
+        Column("fee_payable", "Fee agreed"),
+        Column("fee_paid", "Paid"),
+        Column("fee_balance", "Balance"),
+        Column("fee_next_due_on", "Next expected"),
+    ),
+)
+
+
+def enrollments(rows) -> Iterator[dict[str, Any]]:
+    from apps.fees.queries import annotate_enrollment_fee
+
+    base = annotate_enrollment_fee(
+        rows.select_related("student__user", "course", "batch__trainer__user").order_by(
+            "-enrolled_at"
+        )
+    )
+    for enrollment in base.iterator(chunk_size=CHUNK):
+        trainer = enrollment.batch.trainer
+        yield {
+            "enrollment_code": enrollment.code,
+            "student_code": enrollment.student.student_id,
+            "student_name": enrollment.student.user.get_full_name(),
+            "course_title": enrollment.course.title,
+            "batch_code": enrollment.batch.code,
+            "trainer_name": trainer.user.get_full_name() if trainer else "",
+            "status": enrollment.get_status_display(),
+            "enrolled_on": enrollment.enrolled_at.date(),
+            "fee_payable": _fmt_money(enrollment.fee_payable),
+            "fee_paid": _fmt_money(enrollment.fee_paid),
+            "fee_balance": _fmt_money(enrollment.fee_balance),
+            "fee_next_due_on": enrollment.fee_next_due_on,
+        }
+
+
+FEE_PAYMENTS = Report(
+    key="fee_payments",
+    label="Fee payments",
+    description="The ledger, one line per payment, voided ones marked rather than hidden.",
+    columns=(
+        Column("receipt_number", "Receipt"),
+        Column("paid_on", "Paid on"),
+        Column("student_code", "Student"),
+        Column("student_name", "Name"),
+        Column("course_title", "Course"),
+        Column("batch_code", "Batch"),
+        Column("amount", "Amount"),
+        Column("method", "Method"),
+        Column("reference", "Reference"),
+        Column("recorded_by", "Recorded by"),
+        Column("voided", "Voided"),
+        Column("void_reason", "Void reason"),
+    ),
+)
+
+
+def fee_payments(payments) -> Iterator[dict[str, Any]]:
+    base = payments.select_related(
+        "plan__enrollment__student__user",
+        "plan__enrollment__course",
+        "plan__enrollment__batch",
+        "recorded_by",
+    ).order_by("-paid_on", "-created_at")
+    for payment in base.iterator(chunk_size=CHUNK):
+        enrollment = payment.plan.enrollment
+        yield {
+            "receipt_number": payment.receipt_number,
+            "paid_on": payment.paid_on,
+            "student_code": enrollment.student.student_id,
+            "student_name": enrollment.student.user.get_full_name(),
+            "course_title": enrollment.course.title,
+            "batch_code": enrollment.batch.code,
+            "amount": _fmt_money(payment.amount),
+            "method": payment.get_method_display(),
+            "reference": payment.reference,
+            "recorded_by": payment.recorded_by.get_full_name() if payment.recorded_by else "",
+            "voided": "yes" if payment.is_voided else "",
+            "void_reason": payment.void_reason,
+        }
+
+
+DAILY_REPORTS = Report(
+    key="daily_reports",
+    label="Daily reports",
+    description="Every daily status report: the class, the trainer, the counts and its review.",
+    columns=(
+        Column("report_date", "Date"),
+        Column("batch_code", "Batch"),
+        Column("trainer_name", "Trainer"),
+        Column("status", "Status"),
+        Column("planned_topic", "Planned"),
+        Column("actual_topic", "Taught"),
+        Column("student_count", "Roster"),
+        Column("present_count", "Present"),
+        Column("absent_count", "Absent"),
+        Column("issues", "Issues"),
+        Column("reviewed_by", "Reviewed by"),
+        Column("reviewed_at", "Reviewed at"),
+    ),
+)
+
+
+def daily_reports(reports_qs) -> Iterator[dict[str, Any]]:
+    base = reports_qs.select_related("batch", "trainer__user", "reviewed_by").order_by(
+        "-report_date"
+    )
+    for dsr in base.iterator(chunk_size=CHUNK):
+        yield {
+            "report_date": dsr.report_date,
+            "batch_code": dsr.batch.code,
+            "trainer_name": dsr.trainer.user.get_full_name() if dsr.trainer_id else "",
+            "status": dsr.get_status_display(),
+            "planned_topic": dsr.planned_topic,
+            "actual_topic": dsr.actual_topic,
+            "student_count": dsr.student_count,
+            "present_count": dsr.present_count,
+            "absent_count": dsr.absent_count,
+            "issues": dsr.issues,
+            "reviewed_by": dsr.reviewed_by.get_full_name() if dsr.reviewed_by_id else "",
+            "reviewed_at": dsr.reviewed_at,
+        }
+
+
+BATCHES = Report(
+    key="batches",
+    label="Batches",
+    description="Every batch: course, centre, trainer, dates, capacity and seats taken.",
+    columns=(
+        Column("batch_code", "Batch"),
+        Column("batch_name", "Name"),
+        Column("course_title", "Course"),
+        Column("centre", "Centre"),
+        Column("trainer_name", "Trainer"),
+        Column("status", "Status"),
+        Column("start_date", "Starts"),
+        Column("end_date", "Ends"),
+        Column("capacity", "Capacity"),
+        Column("enrolled", "Enrolled"),
+        Column("seats_left", "Seats left"),
+    ),
+)
+
+
+def batches(rows) -> Iterator[dict[str, Any]]:
+    from django.db.models import Count, Q
+
+    from apps.enrollments.models import LIVE_STATUSES
+
+    base = (
+        rows.select_related("course", "branch", "trainer__user")
+        .annotate(live=Count("enrollments", filter=Q(enrollments__status__in=LIVE_STATUSES)))
+        .order_by("-start_date")
+    )
+    for batch in base.iterator(chunk_size=CHUNK):
+        yield {
+            "batch_code": batch.code,
+            "batch_name": batch.name,
+            "course_title": batch.course.title,
+            "centre": batch.branch.name if batch.branch_id else "",
+            "trainer_name": batch.trainer.user.get_full_name() if batch.trainer_id else "",
+            "status": batch.get_status_display(),
+            "start_date": batch.start_date,
+            "end_date": batch.end_date,
+            "capacity": batch.capacity,
+            "enrolled": batch.live,
+            "seats_left": max(batch.capacity - batch.live, 0),
+        }
+
+
+ACTIVITY = Report(
+    key="activity",
+    label="Activity record",
+    description=(
+        "Who did what, when — the audit log without the noise, as the activity review shows it."
+    ),
+    columns=(
+        Column("when", "When"),
+        Column("actor", "Who"),
+        Column("role", "Role"),
+        Column("centre", "Centre"),
+        Column("action", "Action"),
+        Column("kind", "Kind"),
+        Column("summary", "What"),
+        Column("resource_type", "Record"),
+        Column("resource_id", "Record id"),
+    ),
+)
+
+
+def activity(entries) -> Iterator[dict[str, Any]]:
+    from apps.activity import services as activity_services
+
+    for entry in entries.iterator(chunk_size=CHUNK):
+        actor = entry.actor
+        yield {
+            "when": entry.created_at,
+            "actor": entry.actor_label or (actor.email if actor else "system"),
+            "role": actor.role if actor else "",
+            "centre": actor.branch.name if actor and actor.branch_id else "",
+            "action": entry.get_action_display(),
+            "kind": activity_services.kind_of(entry.action),
+            "summary": activity_services.describe(entry),
+            "resource_type": entry.resource_type,
+            "resource_id": entry.resource_id,
+        }
+
+
+REPORTS.update(
+    {
+        STUDENTS.key: (STUDENTS, students, "students"),
+        ENROLLMENTS.key: (ENROLLMENTS, enrollments, "enrollments"),
+        FEE_PAYMENTS.key: (FEE_PAYMENTS, fee_payments, "fee_payments"),
+        DAILY_REPORTS.key: (DAILY_REPORTS, daily_reports, "dsrs"),
+        BATCHES.key: (BATCHES, batches, "batches"),
+        ACTIVITY.key: (ACTIVITY, activity, "activity"),
+    }
+)

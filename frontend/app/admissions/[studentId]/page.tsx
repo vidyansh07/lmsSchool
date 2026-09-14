@@ -36,7 +36,12 @@ import { ENROLLMENT_STATUS_LABEL, ENROLLMENT_STATUS_VARIANT, formatDate } from '
 import { Capability } from '@/lib/capabilities';
 import { listCourses } from '@/lib/courses';
 import { getStudentFees } from '@/lib/fees';
-import { FEE_STATUS_LABEL, FEE_STATUS_VARIANT, INSTITUTION_KIND_LABEL, QUALIFICATION_LABEL } from '@/lib/labels';
+import {
+  FEE_STATUS_LABEL,
+  FEE_STATUS_VARIANT,
+  INSTITUTION_KIND_LABEL,
+  QUALIFICATION_LABEL,
+} from '@/lib/labels';
 import { getStudent } from '@/lib/people';
 import type { BatchListRow, CourseListRow, Enrollment, StudentProfile } from '@/types/api';
 
@@ -53,7 +58,9 @@ function EnrolPanel({ student, onEnrolled }: { student: StudentProfile; onEnroll
   useEffect(() => {
     const timer = setTimeout(() => {
       listCourses({ search: courseQuery, page_size: 50, ordering: 'title' })
-        .then((page) => setCourseOptions(page.results.filter((course) => course.status !== 'archived')))
+        .then((page) =>
+          setCourseOptions(page.results.filter((course) => course.status !== 'archived')),
+        )
         .catch(() => setCourseOptions([]));
     }, 250);
     return () => clearTimeout(timer);
@@ -62,9 +69,16 @@ function EnrolPanel({ student, onEnrolled }: { student: StudentProfile; onEnroll
   useEffect(() => {
     if (!course) return;
     const timer = setTimeout(() => {
-      listBatches({ course: course.slug, search: batchQuery, page_size: 50, ordering: 'start_date' })
+      listBatches({
+        course: course.slug,
+        search: batchQuery,
+        page_size: 50,
+        ordering: 'start_date',
+      })
         .then((page) =>
-          setBatchOptions(page.results.filter((b) => b.status === 'upcoming' || b.status === 'active')),
+          setBatchOptions(
+            page.results.filter((b) => b.status === 'upcoming' || b.status === 'active'),
+          ),
         )
         .catch(() => setBatchOptions([]));
     }, 250);
@@ -182,7 +196,9 @@ function EnrolmentHistory({
     <Card className="animate-rise-in">
       <CardHeader>
         <CardTitle>Enrolment history</CardTitle>
-        <CardDescription>Every batch this student has been placed on, most recent first.</CardDescription>
+        <CardDescription>
+          Every batch this student has been placed on, most recent first.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {message ? <Alert variant="error">{message}</Alert> : null}
@@ -257,7 +273,9 @@ function EnrolmentHistory({
                               Withdraw
                             </Button>
                             <Button asChild size="sm" variant="outline">
-                              <Link href={`/admissions/transfer?student=${studentId}&enrollment=${entry.id}`}>
+                              <Link
+                                href={`/admissions/transfer?student=${studentId}&enrollment=${entry.id}`}
+                              >
                                 Transfer
                               </Link>
                             </Button>
@@ -362,6 +380,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
       </div>
 
       <FeeLedger
+        studentId={studentId}
         summary={fees.summary}
         enrollments={enrollments}
         mayManage={can(Capability.feeManageAny)}
@@ -399,11 +418,17 @@ export function StudentDetail({ studentId }: { studentId: string }) {
             ) : null}
             <div>
               <dt className="text-xs text-muted-foreground">Qualification</dt>
-              <dd>{student.qualification ? QUALIFICATION_LABEL[student.qualification] : 'Not provided'}</dd>
+              <dd>
+                {student.qualification
+                  ? QUALIFICATION_LABEL[student.qualification]
+                  : 'Not provided'}
+              </dd>
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">
-                {student.institution_kind ? INSTITUTION_KIND_LABEL[student.institution_kind] : 'College or employer'}
+                {student.institution_kind
+                  ? INSTITUTION_KIND_LABEL[student.institution_kind]
+                  : 'College or employer'}
               </dt>
               <dd>{student.institution || 'Not provided'}</dd>
             </div>
@@ -411,7 +436,10 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               <dt className="text-xs text-muted-foreground">Referred by</dt>
               <dd>
                 {student.referred_by && student.referred_by_label ? (
-                  <Link href={`/admissions/${student.referred_by}`} className="text-primary hover:underline">
+                  <Link
+                    href={`/admissions/${student.referred_by}`}
+                    className="text-primary hover:underline"
+                  >
                     {student.referred_by_label}
                   </Link>
                 ) : (
@@ -427,7 +455,9 @@ export function StudentDetail({ studentId }: { studentId: string }) {
                     href={`/admin/students?referred_by=${student.id}`}
                     className="text-primary hover:underline"
                   >
-                    {student.referrals_count === 1 ? '1 student' : `${student.referrals_count} students`}
+                    {student.referrals_count === 1
+                      ? '1 student'
+                      : `${student.referrals_count} students`}
                   </Link>
                 </dd>
               </div>
@@ -469,7 +499,11 @@ export function StudentDetail({ studentId }: { studentId: string }) {
   );
 }
 
-export default function AdmissionStudentPage({ params }: { params: Promise<{ studentId: string }> }) {
+export default function AdmissionStudentPage({
+  params,
+}: {
+  params: Promise<{ studentId: string }>;
+}) {
   const { studentId } = use(params);
   return (
     <RequireAuth capability={Capability.studentViewAny}>
