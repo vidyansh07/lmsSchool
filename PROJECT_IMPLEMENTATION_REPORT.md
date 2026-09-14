@@ -683,6 +683,8 @@ UI component system, or any working feature.
 | 12.2 Reversible deletion | `SoftDeleteModel`, three verbs, recycle bin over every adopting model | 1,444 | 80 |
 | 12.3–12.9 Domain features | DSR, course timeline, risk engine, export jobs, transfers and batch kinds | 1,818 | 80 |
 | 12.10 Role screens | Manager hubs, counsellor pipeline, trainer end-of-class capture, student dashboard, UX primitives | 1,818 | 581 |
+| 13 (8–9 Sep) | Liner design system and animated dashboards, branding, fee quoted at registration, college/professional registration, referrals, SITP workbook import, one-command deploy to EC2 | not recorded | not recorded |
+| 13 (12 Sep) | Per-enrolment fee ledger (plans, payments, receipts, discounts, next-due, voids, history, list annotations, counsellor fees panel, student "My fees"); batches on any non-archived course | 1,981 | 866 |
 
 ### What is left of the eight gaps
 
@@ -700,6 +702,16 @@ UI component system, or any working feature.
 Two items from the original audit remain open, both known and neither blocking:
 **application caching** (Redis runs, the app caches nothing) and **authentication
 hardening** (MFA, per-account rate limiting, bounded session revocation).
+
+Two more were built on side branches on 7 September and are **not merged**:
+organisational scoping by centre (`feat/erp-org-scoping`, the −5 in the RBAC
+row above) and operator-changeable platform settings
+(`feat/erp-system-settings`). Both conflict with the current branch and need a
+rebase before review.
+
+Since the audit the brief's "payments" line, originally out of scope, was
+requested by the owner and delivered as a ledger rather than a gateway — see
+`docs/FEATURE_STATUS.md` Phase 13 and `docs/DECISIONS.md` D-011.
 
 Three brief items are blocked on a decision rather than on work: inline
 "acknowledge a risk flag" and "mark a review done" have no backing state — risk

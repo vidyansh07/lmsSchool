@@ -1,4 +1,4 @@
-# Grass LMS — project context
+# Grras ERP / LMS — project context
 
 The single orientation document. Written from the actual repository, not from a
 plan. If this disagrees with the code, the code is right and this file is stale —
@@ -8,20 +8,26 @@ fix it.
 
 ## What this is
 
-A Learning Management System for Grass Solutions. **An LMS, not an ERP.**
+The training-institute system for Grras. It started as an LMS and, from
+Phase 12 on, grew the ERP the institute runs on. **There is one repository and
+one application; "ERP" and "LMS" name the same thing.** The current branch is
+`feat/erp-foundation`.
 
-In scope: people, courses, content, batches, enrolment, sessions, attendance,
-assignments, assessments, projects, exams, results, progress, completion,
-certificates, notifications, calendar, reports, analytics, LMS administration.
+In scope and built: people and roles (superadmin, admin, manager, counsellor,
+trainer, student), admissions, courses and content, batches, enrolment,
+transfers, class sessions, attendance, daily status reports, assignments,
+assessments, projects, question bank, exams, results, progress, completion,
+certificates, notifications, announcements, discussions, calendar, reports,
+metrics, exports as jobs, bulk import, performance and risk, recovery,
+branding, and — since 12 September 2026 — a **fee ledger**.
 
-Explicitly out of scope unless separately requested: payments, accounting,
-payroll, HR, CRM, sales, procurement, inventory, placement ERP.
-
-One deliberate exception already shipped: `StudentProfile.fee_status` is a
-*status flag* (pending / partial / paid / waived / overdue), and beside it the
-fee *agreed* at registration (`fee_amount`, quoted by the counsellor or
-manager, minimum ₹1,000). No transactions, no receipts and no gateway — see
-`docs/DECISIONS.md` D-011 and its 2026-09-08 amendment.
+The fee ledger (`apps/fees`) is the one money feature and it is deliberately
+small: a fee agreed per enrolment, ad-hoc payments with receipt numbers,
+discounts with reasons, an optional "next ₹N expected by <date>", voids instead
+of deletes, everything audited, and the student's coarse `fee_status` derived
+from it. Still not in scope: a payment gateway, invoicing, accounting, payroll,
+HR, CRM, sales, procurement, inventory, placement. See `docs/DECISIONS.md`
+D-011 and its two amendments.
 
 ---
 
@@ -74,7 +80,14 @@ frontend (Next.js)            backend (Django + DRF)          PostgreSQL
 | `announcements` | Announcement, audience rules, fan-out on publish |
 | `discussions` | Thread, Reply, moderation |
 | `learning` | Bookmarks, lesson notes, continue-learning, the batch directory |
-| `reporting` | The ten reports, nine metrics with definitions, dashboards, CSV export, bulk import |
+| `reporting` | The ten reports, nine metrics with definitions, role dashboards, export jobs, bulk import, the SITP workbook importer |
+| `dsr` | Daily status reports: a trainer's end-of-class capture and the manager's review workflow |
+| `performance` | The performance and risk engine: thresholds, verdicts, reviews |
+| `fees` | The fee ledger: `FeePlan` per enrolment, `FeePayment`, receipt numbers, the list-screen annotations |
+| `branding` | The institution's colour |
+| `dashboards` | No models — the calendar registry and role dashboards |
+| `audit` | Append-only audit trail |
+| `health` | Liveness and readiness probes |
 
 Phase 9 added no app. It added three modules that cut across them:
 `apps/common/storage.py` (private object storage), `apps/common/scanning.py`
@@ -87,9 +100,6 @@ found. What it added is around the edges: a production-shaped staging stack
 (`scripts/verify_demo.sh`, `scripts/backup.sh`, `scripts/check_migrations.sh`),
 and `frontend/middleware.ts`, which owns the Content-Security-Policy because it
 needs a per-request nonce. Start at `docs/RELEASE_READINESS.md`.
-| `dashboards` | No models — the calendar registry and role dashboards |
-| `audit` | Append-only audit trail |
-| `health` | Liveness and readiness probes |
 
 **Five rules that hold everywhere.** Break one and the review fails.
 
@@ -111,7 +121,10 @@ needs a per-request nonce. Start at `docs/RELEASE_READINESS.md`.
 
 ## Roles
 
-`SUPERADMIN`, `ADMIN`, `MANAGER`, `TRAINER`, `STUDENT`.
+`SUPERADMIN` ⊃ `ADMIN` ⊃ `MANAGER` ⊃ `COUNSELLOR` on a proven-monotonic ladder;
+`TRAINER` and `STUDENT` hold the base set and are scoped by assignment.
+A counsellor registers students, quotes and collects fees, plans batches and
+enrols; they hold nothing academic and nothing about accounts.
 
 Scoping that is not expressible as a global capability is resolved per record:
 

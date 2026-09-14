@@ -434,7 +434,7 @@ restructuring the project:
 | A new calendar feed | One function appended to `EVENT_SOURCES`; no view or component changes |
 | Real video hosting | `VideoAsset.provider` already models S3 and managed services; the signed-URL call belongs in `LessonVideoPlaybackView` and nothing else changes |
 | A new lesson content type | One `LessonContentType` member, one entry in `LESSON_CONTENT_REQUIREMENTS`, one branch in the renderer |
-| A real fee ledger | A `payments` app owning amounts and transactions; `StudentProfile.fee_status` becomes derived rather than hand-set |
+| ~~A real fee ledger~~ | Built as `apps/fees` (12 September 2026): a plan per enrolment, payments, receipts, and `StudentProfile.fee_status` derived from it — exactly the shape this row predicted |
 | Redis cache | `CACHE_URL` env var; `redis` service already in compose behind a profile |
 | Celery workers | Redis broker as above; a worker service alongside it; tasks call the same services |
 | New health dependency | Append a check function to `apps/health/checks.py::READINESS_CHECKS` |

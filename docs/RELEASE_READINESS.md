@@ -254,7 +254,7 @@ URLs that modern AWS regions reject.
 | No account lockout | Throttling only |
 | No malware scanning | The hook exists, fails closed, and no scanner is configured |
 | Object storage not backed up | Needs bucket versioning on a real bucket |
-| Fee handling is a status only | As specified: no amounts, transactions or gateway |
+| Fees are a ledger, not a gateway | Agreed amounts, payments and receipts are recorded by hand at the desk; nothing moves money |
 | XLSX export not built | Exports are CSV |
 | Certificates render one layout | Templates are configuration, not a designer |
 | Google Forms is a link | No API integration; marks are imported |
@@ -278,9 +278,11 @@ have. Nothing here is blocked on code.
 4. **Create the database roles** from `infra/db/least-privilege.sql`, and give
    the application the `grras_app` URL — the one that cannot change the schema
    or edit the audit log.
-5. **Push to a remote and let CI run.** The pipeline has never executed: this
-   repository has no remote. Every gate in it has been run locally, which is not
-   the same thing.
+5. **Make CI green.** The original task here was "push to a remote and let CI
+   run"; that is done — the repository is on GitHub and the workflow runs on
+   every push. On `feat/erp-foundation` it fails before any job starts
+   (GitHub reports a workflow-file problem), so every gate has still only been
+   proven locally. Triage the run, fix the workflow, and get one green run.
 
 Until 1–5 are done, this is a verified staging system, not a production one.
 It should not be labelled otherwise.

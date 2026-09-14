@@ -5,8 +5,8 @@ tested and verified running — not when the code exists.
 
 **Statuses:** `TODO` · `IN_PROGRESS` · `BLOCKED` · `DONE`
 
-Totals at last full run: **1,818 backend** (3 skipped) · **581 frontend unit** ·
-**82 end-to-end** = 2,481 tests, all passing.
+Totals at last full run (12 September 2026): **1,981 backend** (3 skipped) ·
+**866 frontend unit** · **82 end-to-end** = 2,929 tests, all passing locally.
 
 ---
 
@@ -129,19 +129,6 @@ Totals at last full run: **1,818 backend** (3 skipped) · **581 frontend unit** 
 | 10.x Seeder died on a batch with no timetable (bug fix) | 10 | DONE | `seed_academics.py` | `test_seed_academics` | Skipped and reported, not fatal | Seed completes with timetables stripped | — | 2026-09-02 |
 | 10.x One shared E2E sign-in helper | 10 | DONE | `frontend/e2e/helpers.ts` | whole suite | Waits out the credential throttle rather than raising it | 45→61 staging passes | Seven specs still dev-specific | 2026-09-02 |
 
-## Phases 5–10 — not started
-
-| Phase | Scope | Status |
-| --- | --- | --- |
-| 5 | Projects, question bank, final exams | TODO |
-| 6 | Progress, completion rules, certificates | TODO |
-| 7 | Notifications, email, announcements, discussions | TODO |
-| 8 | Admin control centre, reports, analytics, bulk data | TODO |
-| 9 | Security, performance, reliability hardening | TODO |
-| 10 | Release engineering, staging, verification script | TODO |
-
----
-
 ## Phase 12 — ERP foundation
 
 Built on the audited baseline in `PROJECT_IMPLEMENTATION_REPORT.md`. The eight
@@ -161,7 +148,31 @@ phase.
 | 12.8 Export jobs | 12 | DONE | `apps/reporting/` (models, writers, tasks) | `test_export_jobs` | Scope re-derived inside the task, never carried in the payload; formula neutralisation in XLSX | CSV, XLSX and PDF written to private storage | PDF capped at a documented row limit | 2026-09-07 |
 | 12.9 Transfers, upgrades, batch kinds | 12 | DONE | `apps/batches/`, `apps/enrollments/` | `test_batch_transfer` (20) | A transfer cannot get a student into a full batch | Attendance stays honest across a move via `transfer_chain` | `MODULAR` is stored; nothing branches on it pending a client decision | 2026-09-07 |
 | 12.10 Role screens | 12 | DONE | `frontend/app/{manage,admissions,teaching/today,dashboard}` | 581 frontend unit tests | Every page gated by capability; backend re-checks | Manager hubs, counsellor pipeline, trainer end-of-class capture, student dashboard | Inline risk-acknowledge and review-done need backing models first | 2026-09-07 |
-| 12.11 Recycle bin | 12 | DONE | `apps/common/recovery.py` | `test_recovery` (27) | Model label matched against a closed registry, never `get_model` | Restore and purge driven through the API | No frontend screen yet | 2026-09-07 |
+| 12.11 Recycle bin | 12 | DONE | `apps/common/recovery.py`, `frontend/app/admin/recovery` | `test_recovery` (27) | Model label matched against a closed registry, never `get_model` | Restore and purge driven through the API and the admin screen | — | 2026-09-07 |
+| 12.12 Set a batch up for teaching in one action | 12 | DONE | `apps/batches/services.py::setup_for_teaching`, `frontend/app/admin/batches/[batchId]` | `test_batch_setup` | `batch.manage_schedule`; refuses a trainer clash | Six days a week by default; classes generated and lessons placed in order | — | 2026-09-07 |
+
+---
+
+## Phase 13 — client delivery (8–12 September 2026)
+
+What the owner asked for once the ERP foundation was in place: the look, the
+admissions desk, the college data, a host to show it on, and money.
+
+| Feature | Phase | Status | Main files | Tests | Security checks | Manual verification | Known limitation | Last verified |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 13.1 Design system: Liner look and motion | 13 | DONE | `frontend/app/globals.css`, `components/app-shell.tsx`, `components/ui/motion/*` | `motion-primitives` (16 primitives), `dashboard-grid` | Light-only; WCAG AA contrast asserted | All five role dashboards screenshotted desktop and mobile | No dark mode, by request | 2026-09-08 |
+| 13.2 Institution branding | 13 | DONE | `apps/branding/`, `frontend/app/admin/branding`, `lib/brand.ts` | `test_branding`, `brand.test` | `platform.configure`; colour validated server-side | Colour picked, applied on next load; logo keeps its own colour | One colour, no logo upload | 2026-09-08 |
+| 13.3 Fee quoted at registration, college or employer | 13 | DONE | `apps/students/` (`fee_amount`, `institution`, `institution_kind`, `job_title`, `roll_number`) | `test_student_fees` (17) | Quoting a fee is `student.set_fee_status`, checked in the service | Registered with and without a fee | Superseded as the source of truth by 13.8; kept as "what was quoted" | 2026-09-08 |
+| 13.4 Referrals | 13 | DONE | `StudentProfile.referred_by`, `frontend/app/admissions/new` | `test_student_referrals` (12) | Self-referral refused; only an existing student can be credited | Referrer picked in the wizard, shown on the record | No referral reward logic yet — groundwork only | 2026-09-08 |
+| 13.5 Register a college student and a working professional differently | 13 | DONE | `components/admissions/student-background-fields.tsx` | `admissions-new` | — | Three-way choice in the wizard; summary on confirm | — | 2026-09-08 |
+| 13.6 SITP ACE 2026 workbook import | 13 | DONE | `apps/reporting/sitp.py`, `management/commands/import_sitp_workbooks.py` | `test_sitp_reader`, `test_sitp_import_command` | Goes through the services, so every rule and audit entry applies; invalid rows reported, never dropped | 16 workbooks imported into dev and staging; 616 DSRs approved; report kept under `backups/` | Placeholder trainer and student emails on the `.invalid` domain until real ones are supplied | 2026-09-09 |
+| 13.7 Deploy to a host | 13 | DONE | `scripts/deploy.sh`, `docker-compose.staging.yml`, `infra/proxy/Caddyfile` | `make verify ENV=staging` | Host config only in the host's `.env.staging`; refuses a dirty checkout | Running on EC2 (us-east-1) with demo and SITP data | Self-signed certificate on :8443; no domain, no SMTP | 2026-09-09 |
+| 13.8 Fee ledger | 13 | DONE | `apps/fees/` (models, services, queries, views), `frontend/components/fees/fee-ledger.tsx`, `components/counsellor/fees-panel.tsx`, `app/my-fees` | `test_fees` (20), `fee-ledger` (8), `fees-panel` (2), `test_data_and_audit_security` (no gateway) | `fee.manage_any` checked in the service; students read only their own; first payment ≥ ₹1,000; no payment above the balance; void needs a reason | Counsellor set fees, discounts, payments, next-due and a void end to end; admin and manager lists show paid/balance/expected date; history timeline read back | Per-enrolment, ad hoc payments, no instalment schedule — by decision (D-011, second amendment) | 2026-09-12 |
+| 13.9 Batches on any non-archived course | 13 | DONE | `apps/batches/models.py::Batch.clean`, course pickers | `test_batches_on_draft_courses`, `test_batches_api` | Archived still refused | Batch created on a draft course; publish panel says what publishing now means | — | 2026-09-12 |
+| 13.x Manager attention links, approve-only-for-manager, 127.0.0.1 dev origin, worker healthcheck, avatar behind proxy (bug fixes) | 13 | DONE | `apps/reporting/dashboards.py`, `docker-compose.yml`, `frontend/lib/env.ts`, `middleware.ts` | `test_manager_hubs`, `manage-*` | — | Links resolve; healthcheck passes | — | 2026-09-09 |
+
+---
+
 
 ---
 
@@ -171,6 +182,8 @@ phase.
 | --- | --- | --- |
 | No S3 bucket provisioned | The backend, the privacy rules and the boot guard are built and tested (§14.3); a bucket and credentials are a human step | Engineering |
 | No managed Redis | Celery worker and beat run against local Redis and are verified end to end (§14.10); a deployment needs a managed broker | Engineering |
-| No real SMTP credentials | Password reset and verification links go nowhere | **Human** |
-| No remote; CI has never run on GitHub | Unproven pipeline | **Human** |
-| No staging deployment | Release gate | **Human** |
+| No real SMTP credentials | Password reset, verification and fee-related mail go nowhere; the outbox holds them | **Human** |
+| CI runs on GitHub and is red on `feat/erp-foundation` | The workflow runs now that the repository has a remote; its failures are the pipeline's own environment (see the latest run) and have not been triaged | Engineering |
+| Staging is on EC2 with a self-signed certificate | Reachable by hostname on :8443 only; a domain or a hosted certificate is needed before a client sees it without a browser warning | **Human** |
+| Two unmerged feature branches | `feat/erp-org-scoping` (centre scoping) and `feat/erp-system-settings` (platform settings) were built in parallel worktrees on 7 September and conflict with the current branch; they need a rebase, then review | Engineering |
+| Real trainer and student emails for the SITP batches | 14 placeholder trainer accounts and the students without a sheet email are on the `.invalid` domain | **Human** |

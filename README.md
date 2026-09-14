@@ -1,12 +1,43 @@
-# Grras LMS
+# Grras ERP / LMS
 
-A Learning Management System for students, trainers and administrators.
+The training-institute system for Grras: one product that is both the Learning
+Management System (courses, batches, classes, attendance, assignments, exams,
+certificates, the student's own learning experience) and the ERP around it
+(admissions, counsellors, fees, daily status reports, performance and risk,
+manager rollups, exports, recovery, branding). **"ERP" and "LMS" are the same
+repository and the same running application**; the ERP work is the
+`feat/erp-*` line of commits on top of the LMS, not a second project.
 
-This repository currently contains **Phase 0 (platform foundation)**,
-**Phase 1 (identity and people)**, **Phase 2 (courses and learning content)**
-and **Phase 3 (batches, enrolment, scheduling and dashboards)**. Attendance,
-assignments, exams, certificates and payments are not built yet and are
-deliberately absent from the API.
+**Where the code is.** The current branch is `feat/erp-foundation` (33 commits
+ahead of `main`, which stopped on 2 September 2026). Everything below describes
+that branch. Four side branches, each in its own worktree, carry work that is
+**not** merged yet — see [Branches](#branches).
+
+**Status at a glance** (measured 12 September 2026, not quoted):
+
+| | |
+| --- | --- |
+| Backend | 30 Django apps, 1,981 tests passing (3 skipped) |
+| Frontend | 74 routed screens, 866 unit tests, 82 end-to-end specs |
+| Deployed | Production-shaped staging on an EC2 host (`scripts/deploy.sh`), seeded with demo data and the SITP ACE 2026 college batches |
+| Not production | Real TLS/domain, SMTP, S3 bucket, managed Redis and the least-privilege DB role are still human steps — `docs/RELEASE_READINESS.md` |
+
+Delivered, phase by phase — the full task board with tests and known
+limitations is [`docs/FEATURE_STATUS.md`](docs/FEATURE_STATUS.md):
+
+| Phase | What |
+| --- | --- |
+| 0–3 | Foundation, identity and roles, courses and content, batches, enrolment, scheduling, calendar, dashboards |
+| 4 | Class sessions, daily attendance, assignments with file security, weekly tests and result import, academic configuration |
+| 5 | Projects with rubric review, native question bank, final examination engine |
+| 6 | Progress, configurable completion rules, certificates with PDF and QR, public verification |
+| 7 | Notifications, email outbox, announcements, unified calendar, bookmarks and notes, discussions |
+| 8 | Configuration centre, ten reports, nine metrics, bulk import and export, analytics |
+| 9 | Security and performance hardening, private object storage seam, Celery worker |
+| 10 | Release engineering: staging stack, verification script, migration safety, backups |
+| 11 | Role hierarchy (superadmin over admin), user administration, light theme, sidebar navigation |
+| 12 | ERP foundation: counsellor role, DSR, course timeline, performance and risk engine, export jobs, transfers and batch kinds, manager and counsellor hubs, recycle bin |
+| 13 | Client delivery: Liner-style design system and animated dashboards for every role, institution branding, admissions wizard for college students and working professionals, referrals, SITP workbook import, one-command deploy, **per-enrolment fee ledger** with receipts, discounts, expected dates and a full change history |
 
 ---
 
@@ -62,7 +93,10 @@ Requirement-by-requirement completion:
 - Capability-based authorization — one table maps roles to permissions, so a new
   role is one entry rather than an audit of every view
 - Student and trainer profile domains with human-readable IDs (`GRS-S-00042`)
-- Fee **status** tracking on a student record (a flag, not an accounting system)
+- Fee status on a student record — since Phase 13 derived from the fee ledger
+  (`apps/fees`): a fee agreed per enrolment, ad-hoc payments with receipt
+  numbers, discounts with reasons, an optional "next expected by" date, voids
+  instead of deletes, and every change audited
 - Secure profile image uploads: content verified, re-encoded, EXIF stripped,
   served only to authenticated callers
 - Admin interfaces for users, students and trainers with server-side search,
@@ -341,12 +375,41 @@ Endpoint groups (full reference in [`docs/api.md`](docs/api.md)):
 | Calendar | `/api/v1/calendar/` | only the caller's own events |
 | Dashboard | `/api/v1/dashboard/student/`, `/api/v1/dashboard/trainer/` | any signed-in user |
 
-Frontend pages: `/login`, `/forgot-password`, `/reset-password`, `/verify-email`,
-`/dashboard`, `/profile`, `/settings/account`, `/settings/security`, `/courses`,
-`/courses/[slug]`, `/courses/[slug]/learn/[lessonId]`, `/my-batches`,
-`/calendar`, `/admin/batches`, `/admin/batches/[batchId]`, `/admin/courses`,
-`/admin/courses/[courseId]`, `/admin/categories`, `/admin/users`,
-`/admin/students`, `/admin/trainers`, `/status`.
+The table above is the Phase 0–3 core. Later phases added, among others:
+`/api/v1/sessions/`, `/attendance/`, `/assignments/`, `/assessments/`,
+`/academics/`, `/projects/`, `/questions/`, `/exams/`, `/progress/`,
+`/completions/`, `/certificates/`, `/notifications/`, `/announcements/`,
+`/discussions/`, `/learning/`, `/reports/`, `/exports/`, `/imports/`, `/dsr/`,
+`/performance/`, `/reviews/`, `/recovery/`, `/branding/` and `/fees/`. Every
+one is in [`docs/api.md`](docs/api.md) with its capability.
+
+Frontend screens by audience (74 routes; `find frontend/app -name page.tsx`
+is the source of truth):
+
+| Audience | Routes |
+| --- | --- |
+| Everyone | `/login`, `/forgot-password`, `/reset-password`, `/verify-email`, `/verify/[code]`, `/status`, `/profile`, `/settings/*`, `/notifications`, `/announcements`, `/discussions/*`, `/calendar` |
+| Students | `/dashboard`, `/my-learning`, `/courses/*` (catalogue and player), `/my-batches`, `/my-fees`, `/my-assignments`, `/my-projects`, `/exams/*`, `/attempts/*`, `/my-results`, `/my-attendance`, `/my-progress` |
+| Trainers | `/teaching/today`, `/teaching/sessions/*`, `/teaching/assignments/*`, `/teaching/assessments/*`, `/teaching/projects/*`, `/teaching/questions`, `/teaching/exams/*`, `/dsr` |
+| Counsellors | `/admissions` (working list), `/admissions/dashboard`, `/admissions/new` (registration wizard with fee and first payment), `/admissions/[studentId]` (record with the fee ledger), `/admissions/batches`, `/admissions/transfer`, `/admissions/import` |
+| Managers | `/manage`, `/manage/batches/*`, `/manage/students/*`, `/manage/trainers/*` |
+| Administrators | `/admin/overview`, `/admin/users/*`, `/admin/students`, `/admin/trainers`, `/admin/courses/*`, `/admin/categories`, `/admin/batches/*`, `/admin/academics`, `/admin/completions`, `/admin/certificates`, `/admin/reports`, `/admin/imports`, `/admin/recovery`, `/admin/branding` |
+
+## Branches
+
+| Branch | State | What it holds |
+| --- | --- | --- |
+| `feat/erp-foundation` | **current**; deployed to staging | Everything in this README |
+| `main` | 33 commits behind | The Phase 0–11 LMS as of 2 September 2026 |
+| `feat/erp-org-scoping` | 1 commit, unmerged, based on 7 September | Branch/centre scoping: `apps/organisation`, a `branch` on users, students, trainers and batches, sixteen access modules narrowed to the caller's centre (decision recorded in the owner's scope notes: managers and counsellors see only their own centre) |
+| `feat/erp-system-settings` | 1 commit, unmerged, based on 7 September | `apps/configuration`: institution name, support contact, email on/off, export retention, upload limits — one row, named columns, every setting with a consumer |
+| `feat/erp-design-system` | 10 commits, unmerged, based on 7 September | A denser token layer and type scale; largely superseded by the Phase 13 Liner theme on the current branch |
+| `feat/ui-refresh` | 1 commit, unmerged, based on 8 September | An alternative design-system pass; superseded by Phase 13 |
+
+The two feature branches (org scoping, system settings) conflict with the
+current branch in `roles.py`, the audit action list and the seed command and
+need a rebase before they can land. The two design branches should be closed
+rather than merged.
 
 ## Staging
 
@@ -433,10 +496,17 @@ Report a suspected vulnerability privately to the maintainers; do not open a pub
 
 ## Deployment overview
 
-Nothing is deployed to production during Phase 0. When production begins, a
-release requires all of: feature testing, security testing, staging validation,
-database migration review, backup verification, a rollback plan, passing CI,
-production configuration review and release documentation.
+A production-shaped staging stack runs on an EC2 host and is redeployed with
+one command — `scripts/deploy.sh user@host --key <pem> --branch <branch>
+[--seed] [--import-sitp DIR]` — which backs the host up first, refuses to
+overwrite local edits there, rebuilds the images, waits for readiness and
+optionally seeds. Host configuration lives only in the host's `.env.staging`.
+See [`docs/operations.md`](docs/operations.md).
+
+Nothing is deployed to production. A production release requires all of:
+feature testing, security testing, staging validation, database migration
+review, backup verification, a rollback plan, passing CI, production
+configuration review and release documentation.
 
 The production path is: build the `production` image targets → run
 `manage.py migrate` as a separate reviewed step → start gunicorn behind a
