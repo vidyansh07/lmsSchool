@@ -24,7 +24,15 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { BookOpen, CalendarClock, ClipboardList, GraduationCap, PlayCircle, TrendingUp, Users } from 'lucide-react';
+import {
+  BookOpen,
+  CalendarClock,
+  ClipboardList,
+  GraduationCap,
+  PlayCircle,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
 import { ProgressBar } from '@/components/progress-bar';
@@ -33,9 +41,14 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { CertificatesPanel } from '@/components/student/certificates-panel';
 import { FeedbackPanel } from '@/components/student/feedback-panel';
 import { NotificationsPanel } from '@/components/student/notifications-panel';
-import { PendingWorkPanel, tallyAssignments, tallyProjects } from '@/components/student/pending-work-panel';
+import {
+  PendingWorkPanel,
+  tallyAssignments,
+  tallyProjects,
+} from '@/components/student/pending-work-panel';
 import { StandingPanel, collectRiskItems } from '@/components/student/standing-panel';
 import { UpcomingTimeline } from '@/components/student/upcoming-timeline';
+import { WarningsStrip } from '@/components/warnings-strip';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -53,7 +66,12 @@ import {
   formatEventTime,
 } from '@/lib/batch-labels';
 import { listNotifications } from '@/lib/communication';
-import { getMyPerformance, listMyFeedback, type PerformanceFeedback, type StudentPerformanceEntry } from '@/lib/performance';
+import {
+  getMyPerformance,
+  listMyFeedback,
+  type PerformanceFeedback,
+  type StudentPerformanceEntry,
+} from '@/lib/performance';
 import { listMyCertificates } from '@/lib/progress';
 import { listMyProjects } from '@/lib/projects';
 import type {
@@ -71,10 +89,11 @@ function ClassList({ events, empty }: { events: CalendarEvent[]; empty: string }
   return (
     <ul className="divide-y divide-border">
       {events.map((event, index) => (
-        <li key={`${event.start}-${index}`} className="flex flex-wrap items-center gap-3 py-2 text-sm">
-          <span className="w-24 shrink-0 text-muted-foreground">
-            {formatEventDay(event.start)}
-          </span>
+        <li
+          key={`${event.start}-${index}`}
+          className="flex flex-wrap items-center gap-3 py-2 text-sm"
+        >
+          <span className="w-24 shrink-0 text-muted-foreground">{formatEventDay(event.start)}</span>
           {!event.all_day ? (
             <span className="w-16 shrink-0 text-muted-foreground">
               {formatEventTime(event.start)}
@@ -115,9 +134,12 @@ interface SectionState<T> {
  */
 function useDashboardSection<T>(loader: () => Promise<T>, empty: T): SectionState<T> {
   const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<{ data: T; error: ApiError | null; isLoading: boolean; attempt: number }>(
-    { data: empty, error: null, isLoading: true, attempt },
-  );
+  const [state, setState] = useState<{
+    data: T;
+    error: ApiError | null;
+    isLoading: boolean;
+    attempt: number;
+  }>({ data: empty, error: null, isLoading: true, attempt });
 
   // The reset-on-refetch this used to do at the top of the effect below is
   // exactly the pattern `hooks/use-list.ts` and `hooks/use-api.ts` both avoid,
@@ -138,7 +160,12 @@ function useDashboardSection<T>(loader: () => Promise<T>, empty: T): SectionStat
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
-          setState({ data: empty, error: cause instanceof ApiError ? cause : null, isLoading: false, attempt });
+          setState({
+            data: empty,
+            error: cause instanceof ApiError ? cause : null,
+            isLoading: false,
+            attempt,
+          });
         }
       });
     return () => {
@@ -183,7 +210,10 @@ export function StudentView({ data }: { data: StudentDashboard }) {
     () => listMyProjects({ page_size: 100, ordering: 'end_date' }).then((page) => page.results),
     [] as StudentProject[],
   );
-  const performance = useDashboardSection(() => getMyPerformance(), [] as StudentPerformanceEntry[]);
+  const performance = useDashboardSection(
+    () => getMyPerformance(),
+    [] as StudentPerformanceEntry[],
+  );
   const certificates = useDashboardSection(() => listMyCertificates(), [] as Certificate[]);
   const feedback = useDashboardSection(() => listMyFeedback(), [] as PerformanceFeedback[]);
   const notifications = useDashboardSection(
@@ -204,7 +234,8 @@ export function StudentView({ data }: { data: StudentDashboard }) {
   const pendingTotal =
     tallyAssignments(assignments.data).count + tallyProjects(projects.data).count;
   const riskCount = collectRiskItems(performance.data).length;
-  const showStatusLine = pendingLoaded && !pendingFailed && !performance.isLoading && !performance.error;
+  const showStatusLine =
+    pendingLoaded && !pendingFailed && !performance.isLoading && !performance.error;
 
   return (
     <div className="stagger space-y-6">
@@ -314,10 +345,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
               <Card key={course.enrollment_id} className="animate-rise-in">
                 <CardHeader className="gap-1">
                   <CardTitle>
-                    <Link
-                      href={`/courses/${course.course_slug}`}
-                      className="hover:text-primary"
-                    >
+                    <Link href={`/courses/${course.course_slug}`} className="hover:text-primary">
                       {course.course_title}
                     </Link>
                   </CardTitle>
@@ -332,9 +360,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
                   />
                   {course.last_lesson_id ? (
                     <Button asChild variant="outline" size="sm">
-                      <Link
-                        href={`/courses/${course.course_slug}/learn/${course.last_lesson_id}`}
-                      >
+                      <Link href={`/courses/${course.course_slug}/learn/${course.last_lesson_id}`}>
                         Continue
                       </Link>
                     </Button>
@@ -600,9 +626,13 @@ export function Dashboard() {
           Welcome back, {user?.first_name || user?.email}
         </h1>
         <p className="text-sm text-muted-foreground">
-          {isTrainer ? 'Your batches, classes and students.' : 'Your courses, classes and progress.'}
+          {isTrainer
+            ? 'Your batches, classes and students.'
+            : 'Your courses, classes and progress.'}
         </p>
       </div>
+
+      {isTrainer ? <WarningsStrip /> : null}
 
       {isTrainer && trainer ? (
         trainer.is_trainer ? (
@@ -623,8 +653,8 @@ export function Dashboard() {
                 Nothing to show here
               </CardTitle>
               <CardDescription>
-                This dashboard is for students. Administrators manage the platform from the
-                sections in the navigation.
+                This dashboard is for students. Administrators manage the platform from the sections
+                in the navigation.
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -394,6 +394,34 @@ sweep, the shared upload guard.
 | `GET` / `PATCH` | `` | `settings.manage` — administrators (deliberately not `platform.configure`, which is superadmin-only) |
 | `GET` | `public/` | any signed-in user — the name and support contact only |
 
+### Activity review — `/api/v1/activity/`
+
+The audit log read as an administrator reads it. `audit.view` only.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `feed/` | `audit.view` — changes only, newest first; `?since=&until=&actor=&role=&kind=&branch=&search=`; paginated. Each row carries `summary` (a sentence written by the server), `kind` and `href` |
+| `GET` | `scorecards/` | `audit.view` — `?period=today|week|month|custom&since=&until=&branch=&role=`; one card per active staff member, busiest first, with the figures that role is measured by and the fees they collected |
+
+Noise — sign-ins, listings, downloads, verifications, refusals — is never
+listed or counted. Views are not logged (owner's call), so they are not counted.
+
+### Warnings — `/api/v1/warnings/`
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `` | any signed-in staff member — their own warnings, most urgent first; a student gets `[]` |
+
+Each warning: `kind`, `severity` (`error` today, `warning` this week, `info`
+worth knowing), `label`, `count`, `href` (where to fix it) and up to five
+`items` with their own `href`. Computed over the caller's visible querysets
+and cached for a minute per person. Kinds: `fees_overdue`, `fees_missing`,
+`batch_no_trainer`, `batch_seats`, `trainer_clash`, `batch_overrun`,
+`dsr_missing`, `students_at_risk`, `not_enrolled`, `account_no_centre`,
+`email_unverified`, `completions_pending`. The `warnings.weekly_digest` task
+(Monday 08:00) sends every staff member their open warnings as a
+notification, by email when their preferences allow.
+
 ### Fees — `/api/v1/fees/`
 
 A fee belongs to an **enrolment**, not a student: a student on two courses has
@@ -539,7 +567,8 @@ re-checks each one on every request.
 | `student.view_any`, `student.create`, `student.update_any` | ✅ | — | — |
 | `student.set_fee_status` | ✅ | — | — |
 | `fee.view_any`, `fee.manage_any` (counsellor and manager too) | ✅ | — | — |
-| `trainer.view_any`, `trainer.create`, `trainer.update_any` | ✅ | — | — |
+| `trainer.view_any` | ✅ | — | — |
+| `trainer.create`, `trainer.update_any` (manager too; the one thing a counsellor does not hold) | ✅ | — | — |
 | `category.manage` | ✅ | — | — |
 | `course.view_any`, `course.create`, `course.update_any` | ✅ | — | — |
 | `course.publish_any`, `course.assign_authors` | ✅ | — | — |

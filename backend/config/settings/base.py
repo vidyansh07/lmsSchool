@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import environ
+from celery.schedules import crontab
 
 from apps.common.storage import LOCAL_BACKEND, storage_settings
 
@@ -95,6 +96,8 @@ LOCAL_APPS = [
     "apps.exams",
     "apps.enrollments",
     "apps.fees",
+    "apps.activity",
+    "apps.warnings",
     "apps.dashboards",
     "apps.audit",
     "apps.health",
@@ -280,6 +283,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "notifications.retry_pending_email",
         "schedule": env.int("EMAIL_RETRY_INTERVAL_SECONDS", default=300),
         "options": {"expires": 240},
+    },
+    # Monday 08:00 local: every staff member's open warnings, once a week.
+    "weekly-warnings-digest": {
+        "task": "warnings.weekly_digest",
+        "schedule": crontab(hour=8, minute=0, day_of_week="mon"),
+        "options": {"expires": 3600},
     },
 }
 

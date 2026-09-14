@@ -50,9 +50,7 @@ API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=True)
 # password beside it) is how to try real delivery from a laptop — this used to
 # be pinned to console regardless, which made "email is not working" the only
 # possible local finding.
-EMAIL_BACKEND = env.str(
-    "EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend"
-)
+EMAIL_BACKEND = env.str("EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
 
 # Local/test environments may create fake demo data.
 ALLOW_DEMO_SEED = True

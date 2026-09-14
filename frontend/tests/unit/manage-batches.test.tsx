@@ -13,6 +13,8 @@ vi.mock('@/lib/manage', async () => {
 });
 
 vi.mock('@/components/manage/attention-strip', () => ({ ManagerAttentionStrip: () => null }));
+// The warnings strip has its own test; here it would only add a second retry button.
+vi.mock('@/components/warnings-strip', () => ({ WarningsStrip: () => null }));
 
 const push = vi.hoisted(() => vi.fn());
 // The hub reads `?attention=` from the address bar and the filter chip

@@ -261,6 +261,9 @@ export interface CourseListRow {
   category_name: string;
   category_slug: string;
   difficulty: CourseDifficulty;
+  /** Rupees, as the API's decimal string; null when not set. Prefills the
+   *  registration wizard; the fee ledger records what was actually agreed. */
+  default_fee: string | null;
   estimated_duration_minutes: number | null;
   status: PublishStatus;
   visibility: CourseVisibility;
@@ -1788,4 +1791,84 @@ export interface Branch {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// --- Activity review ---------------------------------------------------------
+
+export type ActivityKind =
+  | 'admissions'
+  | 'fees'
+  | 'teaching'
+  | 'reviews'
+  | 'courses'
+  | 'outcomes'
+  | 'accounts'
+  | 'communication'
+  | 'institution'
+  | 'other';
+
+export interface ActivityFeedEntry {
+  id: string;
+  created_at: string;
+  action: string;
+  action_label: string;
+  kind: ActivityKind;
+  actor_id: string | null;
+  actor_label: string;
+  actor_role: UserRole | null;
+  actor_branch: string | null;
+  resource_type: string;
+  resource_id: string;
+  /** One sentence, written by the server from what the service recorded. */
+  summary: string;
+  /** Where the row leads, when the record has a screen. */
+  href: string | null;
+  context: Record<string, unknown>;
+}
+
+export interface ActivityFigure {
+  key: string;
+  label: string;
+  value: number;
+}
+
+export interface ActivityScorecard {
+  user_id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  branch_name: string | null;
+  total_actions: number;
+  /** Rupees, as the API's decimal string. Payments recorded by this person. */
+  fees_collected: string;
+  last_active_at: string | null;
+  figures: ActivityFigure[];
+}
+
+export interface ActivityScorecards {
+  since: string;
+  until: string;
+  cards: ActivityScorecard[];
+}
+
+// --- Warnings ----------------------------------------------------------------
+
+export type WarningSeverity = 'error' | 'warning' | 'info';
+
+export interface StaffWarningItem {
+  label: string;
+  href: string | null;
+}
+
+/**
+ * One thing that needs doing, computed by the server over what the caller can
+ * see. `error` is today, `warning` this week, `info` worth knowing.
+ */
+export interface StaffWarning {
+  kind: string;
+  severity: WarningSeverity;
+  label: string;
+  count: number;
+  href: string | null;
+  items: StaffWarningItem[];
 }

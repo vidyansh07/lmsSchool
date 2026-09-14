@@ -51,6 +51,7 @@ class NotificationKind(models.TextChoices):
     EXAM_REMINDER = "exam.reminder", _("Examination reminder")
     PROJECT_REVIEWED = "project.reviewed", _("Project reviewed")
     ATTENDANCE_WARNING = "attendance.warning", _("Attendance warning")
+    WARNING_DIGEST = "warning.digest", _("Weekly warnings digest")
     COMPLETION_APPROVED = "completion.approved", _("Course completion approved")
     CERTIFICATE_ISSUED = "certificate.issued", _("Certificate issued")
 
@@ -74,6 +75,7 @@ KIND_CATEGORY: dict[str, str] = {
     NotificationKind.EXAM_REMINDER: NotificationCategory.SCHEDULE,
     NotificationKind.PROJECT_REVIEWED: NotificationCategory.ACADEMIC,
     NotificationKind.ATTENDANCE_WARNING: NotificationCategory.SCHEDULE,
+    NotificationKind.WARNING_DIGEST: NotificationCategory.ADMINISTRATIVE,
     NotificationKind.COMPLETION_APPROVED: NotificationCategory.ADMINISTRATIVE,
     NotificationKind.CERTIFICATE_ISSUED: NotificationCategory.ADMINISTRATIVE,
 }

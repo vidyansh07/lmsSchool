@@ -26,6 +26,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
+import { WarningsStrip } from '@/components/warnings-strip';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ListToolbar } from '@/components/list-toolbar';
 import { AttentionChip } from '@/components/manage/attention-chip';
@@ -68,7 +69,8 @@ function KindCell({ row }: { row: ManageBatchRow }) {
 }
 
 function PlanVarianceCell({ row }: { row: ManageBatchRow }) {
-  if (!row.timeline_status) return <span className="text-muted-foreground">{fallback(null, NO_DATA)}</span>;
+  if (!row.timeline_status)
+    return <span className="text-muted-foreground">{fallback(null, NO_DATA)}</span>;
   return (
     <Badge variant={TIMELINE_STATUS_VARIANT[row.timeline_status]}>
       {TIMELINE_STATUS_LABEL[row.timeline_status]}
@@ -78,7 +80,8 @@ function PlanVarianceCell({ row }: { row: ManageBatchRow }) {
 
 function DsrStateCell({ row }: { row: ManageBatchRow }) {
   const known = row.dsr_state && row.dsr_state in DSR_STATUS_LABEL;
-  if (!row.dsr_state) return <span className="text-muted-foreground">{fallback(null, NO_DATA)}</span>;
+  if (!row.dsr_state)
+    return <span className="text-muted-foreground">{fallback(null, NO_DATA)}</span>;
   if (known) {
     const status = row.dsr_state as DsrStatus;
     return <Badge variant={DSR_STATUS_VARIANT[status]}>{DSR_STATUS_LABEL[status]}</Badge>;
@@ -93,7 +96,10 @@ export function BatchesHub() {
   // narrowed to the thing the person clicked on, rather than to everything.
   const searchParams = useSearchParams();
   const attention = searchParams.get('attention') ?? '';
-  const list = useList<ManageBatchRow>(listManageBatches, { page_size: 20, ...(attention ? { attention } : {}) });
+  const list = useList<ManageBatchRow>(listManageBatches, {
+    page_size: 20,
+    ...(attention ? { attention } : {}),
+  });
 
   const columns: DataTableColumn<ManageBatchRow>[] = [
     {
@@ -111,7 +117,11 @@ export function BatchesHub() {
         </Link>
       ),
     },
-    { key: 'name', header: 'Name', render: (row) => <span className="font-medium">{row.name}</span> },
+    {
+      key: 'name',
+      header: 'Name',
+      render: (row) => <span className="font-medium">{row.name}</span>,
+    },
     { key: 'course_title', header: 'Course', render: (row) => row.course_title },
     {
       key: 'trainer_name',
@@ -119,7 +129,12 @@ export function BatchesHub() {
       render: (row) => fallback(row.trainer_name, NOT_ASSIGNED),
     },
     { key: 'kind', header: 'Kind', render: (row) => <KindCell row={row} /> },
-    { key: 'students', header: 'Students', align: 'right', render: (row) => <StudentsCell row={row} /> },
+    {
+      key: 'students',
+      header: 'Students',
+      align: 'right',
+      render: (row) => <StudentsCell row={row} />,
+    },
     {
       key: 'attendance',
       header: 'Attendance',
@@ -132,7 +147,9 @@ export function BatchesHub() {
       key: 'status',
       header: 'Status',
       sortable: true,
-      render: (row) => <Badge variant={BATCH_STATUS_VARIANT[row.status]}>{BATCH_STATUS_LABEL[row.status]}</Badge>,
+      render: (row) => (
+        <Badge variant={BATCH_STATUS_VARIANT[row.status]}>{BATCH_STATUS_LABEL[row.status]}</Badge>
+      ),
     },
   ];
 
@@ -147,6 +164,7 @@ export function BatchesHub() {
       </div>
 
       <ManagerAttentionStrip />
+      <WarningsStrip />
 
       <div className="space-y-4">
         <AttentionChip
@@ -160,7 +178,10 @@ export function BatchesHub() {
           placeholder="Batch code, name or course"
         >
           <div>
-            <label htmlFor="filter-manage-batch-status" className="mb-1.5 block text-sm font-medium">
+            <label
+              htmlFor="filter-manage-batch-status"
+              className="mb-1.5 block text-sm font-medium"
+            >
               Status
             </label>
             <Select
@@ -184,7 +205,9 @@ export function BatchesHub() {
           rows={list.data?.results ?? []}
           getRowId={(row) => row.id}
           isLoading={list.isLoading}
-          error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}
+          error={
+            list.error ? { message: list.error.message, requestId: list.error.requestId } : null
+          }
           onRetry={list.reload}
           emptyTitle="No batches match these filters"
           emptyDescription="Try a different search term or status."

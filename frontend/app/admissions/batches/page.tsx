@@ -90,7 +90,9 @@ function CreateBatchInline({ onCreated }: { onCreated: () => void }) {
     <Card className="animate-rise-in">
       <CardHeader>
         <CardTitle>New batch</CardTitle>
-        <CardDescription>Starts as upcoming, with no trainer — assign one afterwards.</CardDescription>
+        <CardDescription>
+          Starts as upcoming, with no trainer — assign one afterwards.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
@@ -110,15 +112,33 @@ function CreateBatchInline({ onCreated }: { onCreated: () => void }) {
               </Select>
             </Field>
             <Field label="Start date" htmlFor="ab-start" error={errors.start_date} required>
-              <Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+              />
             </Field>
             <Field label="End date" htmlFor="ab-end" error={errors.end_date} required>
-              <Input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
+              />
             </Field>
             <Field label="Capacity" htmlFor="ab-capacity" error={errors.capacity} required>
-              <Input type="number" min={1} value={capacity} onChange={(event) => setCapacity(event.target.value)} />
+              <Input
+                type="number"
+                min={1}
+                value={capacity}
+                onChange={(event) => setCapacity(event.target.value)}
+              />
             </Field>
-            <BranchField idPrefix="ab-branch" value={branchId} onChange={setBranchId} error={errors.branch} />
+            <BranchField
+              idPrefix="ab-branch"
+              value={branchId}
+              onChange={setBranchId}
+              error={errors.branch}
+            />
           </div>
           <Button type="submit" disabled={isSaving || courses.length === 0}>
             {isSaving ? 'Creating…' : 'Create batch'}
@@ -151,10 +171,15 @@ function RosterRow({ batch }: { batch: BatchListRow }) {
           <ul className="space-y-1 text-sm">
             {roster.map((entry) => (
               <li key={entry.id} className="flex flex-wrap items-center gap-2">
-                <Link href={`/admissions/${entry.student_id}`} className="font-medium hover:text-primary">
+                <Link
+                  href={`/admissions/${entry.student_id}`}
+                  className="font-medium hover:text-primary"
+                >
                   {entry.full_name || entry.email}
                 </Link>
-                <span className="font-mono text-xs text-muted-foreground">{entry.student_code}</span>
+                <span className="font-mono text-xs text-muted-foreground">
+                  {entry.student_code}
+                </span>
                 <Badge variant={ENROLLMENT_STATUS_VARIANT[entry.status]}>
                   {ENROLLMENT_STATUS_LABEL[entry.status]}
                 </Badge>
@@ -192,7 +217,9 @@ export function BatchBrowser() {
       <div className="animate-rise-in flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Batches</h1>
-          <p className="text-sm text-muted-foreground">Open cohorts, their seats, and their rosters.</p>
+          <p className="text-sm text-muted-foreground">
+            Open cohorts, their seats, and their rosters.
+          </p>
         </div>
         <Button onClick={() => setShowCreate((value) => !value)}>
           {showCreate ? 'Close' : 'New batch'}
@@ -259,7 +286,10 @@ export function BatchBrowser() {
           onRetry={list.reload}
         />
       ) : list.data && list.data.count === 0 ? (
-        <EmptyState title="No batches yet" description="Create the first batch to start enrolling students." />
+        <EmptyState
+          title="No batches yet"
+          description="Create the first batch to start enrolling students."
+        />
       ) : (
         <>
           <TableWrapper className="animate-fade-in">
@@ -284,14 +314,22 @@ export function BatchBrowser() {
                         <button
                           type="button"
                           className="text-left hover:text-primary"
-                          onClick={() => setExpanded((current) => (current === batch.id ? '' : batch.id))}
+                          onClick={() =>
+                            setExpanded((current) => (current === batch.id ? '' : batch.id))
+                          }
                           aria-expanded={expanded === batch.id}
                         >
                           {batch.name}
                         </button>
                       </Td>
                       <Td>{batch.course_title}</Td>
-                      <Td>{batch.trainer_name || 'Not assigned'}</Td>
+                      <Td>
+                        {batch.trainer_name || (
+                          <Badge variant="warning" dot>
+                            No trainer
+                          </Badge>
+                        )}
+                      </Td>
                       <Td className="whitespace-nowrap text-muted-foreground">
                         {formatDate(batch.start_date)} – {formatDate(batch.end_date)}
                       </Td>

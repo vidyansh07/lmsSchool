@@ -1,6 +1,7 @@
 /** Display labels for API enumerations, kept in one place. */
 
 import type {
+  ActivityKind,
   FeePlanStatus,
   FeeStatus,
   InstitutionKind,
@@ -89,4 +90,33 @@ export const FEE_PLAN_STATUS_VARIANT: Record<FeePlanStatus, 'neutral' | 'success
   partial: 'warning',
   paid: 'success',
   waived: 'neutral',
+};
+
+export const ACTIVITY_KIND_LABEL: Record<ActivityKind, string> = {
+  admissions: 'Admissions',
+  fees: 'Fees',
+  teaching: 'Teaching',
+  reviews: 'Reviews',
+  courses: 'Courses',
+  outcomes: 'Outcomes',
+  accounts: 'Accounts',
+  communication: 'Communication',
+  institution: 'Institution',
+  other: 'Other',
+};
+
+export const ACTIVITY_KIND_VARIANT: Record<
+  ActivityKind,
+  'blue' | 'green' | 'violet' | 'amber' | 'indigo' | 'teal' | 'rose' | 'cyan' | 'pink' | 'neutral'
+> = {
+  admissions: 'blue',
+  fees: 'green',
+  teaching: 'violet',
+  reviews: 'amber',
+  courses: 'indigo',
+  outcomes: 'teal',
+  accounts: 'rose',
+  communication: 'cyan',
+  institution: 'pink',
+  other: 'neutral',
 };

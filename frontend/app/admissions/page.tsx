@@ -240,7 +240,10 @@ export function AdmissionsList() {
                     <tr key={row.id}>
                       <Td className="font-medium">
                         {row.student_id ? (
-                          <Link href={`/admissions/${row.student_id}`} className="hover:text-primary">
+                          <Link
+                            href={`/admissions/${row.student_id}`}
+                            className="hover:text-primary"
+                          >
                             {row.student_name || row.student_email || 'Unnamed student'}
                           </Link>
                         ) : (
@@ -257,22 +260,34 @@ export function AdmissionsList() {
                           {row.batch_code || ''}
                         </span>
                       </Td>
-                      <Td>{row.trainer_name || 'Not assigned'}</Td>
+                      <Td>
+                        {row.trainer_name || (
+                          <Badge variant="warning" dot>
+                            No trainer
+                          </Badge>
+                        )}
+                      </Td>
                       <Td className="whitespace-nowrap text-right tabular-nums">
                         {row.fee_payable === null || row.fee_payable === undefined ? (
                           <span className="text-xs text-muted-foreground">Not set</span>
                         ) : Number(row.fee_balance) > 0 ? (
                           <>
-                            <span className="font-medium text-amber">{money(row.fee_balance)} due</span>
+                            <span className="font-medium text-amber">
+                              {money(row.fee_balance)} due
+                            </span>
                             <span className="block text-xs text-muted-foreground">
                               {money(row.fee_paid)} of {money(row.fee_payable)}
-                              {row.fee_next_due_on ? ` · by ${formatDate(row.fee_next_due_on)}` : ''}
+                              {row.fee_next_due_on
+                                ? ` · by ${formatDate(row.fee_next_due_on)}`
+                                : ''}
                             </span>
                           </>
                         ) : (
                           <>
                             <span className="font-medium text-green">Paid</span>
-                            <span className="block text-xs text-muted-foreground">{money(row.fee_payable)}</span>
+                            <span className="block text-xs text-muted-foreground">
+                              {money(row.fee_payable)}
+                            </span>
                           </>
                         )}
                       </Td>

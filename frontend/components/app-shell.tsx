@@ -30,7 +30,7 @@ import { Bell, ChevronRight, LogOut, Menu, Search, Settings } from 'lucide-react
 
 import { useAuth } from '@/components/auth-provider';
 import {
-  STAFF_NAV,
+  navFor,
   STAFF_ROLES,
   STUDENT_NAV,
   isVisible,
@@ -50,7 +50,8 @@ function useActiveHref(hrefs: string[]): string | null {
   const pathname = usePathname();
   let best: string | null = null;
   for (const href of hrefs) {
-    const matches = href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+    const matches =
+      href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
     if (matches && (best === null || href.length > best.length)) best = href;
   }
   return best;
@@ -104,7 +105,9 @@ function Brand({ compact = false }: { compact?: boolean }) {
         </span>
         {compact ? null : (
           <span className="flex min-w-0 flex-col leading-none">
-            <span className="truncate text-base font-bold tracking-tight text-foreground">Grras</span>
+            <span className="truncate text-base font-bold tracking-tight text-foreground">
+              Grras
+            </span>
             <span className="mt-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               LMS
             </span>
@@ -331,7 +334,12 @@ function Shell({
                   screens that have something to search, and this takes a
                   person to the one they most often want. */}
               <Tooltip content="Search">
-                <Button asChild variant="ghost" size="sm" className="size-9 p-0 text-muted-foreground">
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="size-9 p-0 text-muted-foreground"
+                >
                   <Link href={searchHref} aria-label="Search">
                     <Search className="size-[18px]" aria-hidden="true" />
                   </Link>
@@ -374,10 +382,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   // The student's links are a flat list; give them the one untitled group the
   // sidebar already knows how to draw, so both audiences share one shell.
   const groups: NavGroup[] = isStaff
-    ? STAFF_NAV.map((group) => ({
-        ...group,
-        items: group.items.filter((item) => isVisible(item, user)),
-      })).filter((group) => group.items.length > 0)
+    ? navFor(user?.role)
+        .map((group) => ({
+          ...group,
+          items: group.items.filter((item) => isVisible(item, user)),
+        }))
+        .filter((group) => group.items.length > 0)
     : [{ items: STUDENT_NAV.filter((item) => isVisible(item, user)) }];
 
   return (

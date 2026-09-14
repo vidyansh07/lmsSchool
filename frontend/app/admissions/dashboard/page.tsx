@@ -45,6 +45,7 @@ import { RecentActivityPanel } from '@/components/counsellor/recent-activity-pan
 import { BentoGrid, BentoTile, StatCard, type StatAccent } from '@/components/ui/motion';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { RequireAuth } from '@/components/require-auth';
+import { WarningsStrip } from '@/components/warnings-strip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api';
@@ -72,9 +73,12 @@ interface SectionState<T> {
 
 function useDashboardSection<T>(loader: () => Promise<T>, empty: T): SectionState<T> {
   const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<{ data: T; error: ApiError | null; isLoading: boolean; attempt: number }>(
-    { data: empty, error: null, isLoading: true, attempt },
-  );
+  const [state, setState] = useState<{
+    data: T;
+    error: ApiError | null;
+    isLoading: boolean;
+    attempt: number;
+  }>({ data: empty, error: null, isLoading: true, attempt });
 
   // Reset during render when `attempt` moves, not inside the effect below —
   // the same "adjust state during render" pattern `hooks/use-list.ts` and
@@ -94,7 +98,12 @@ function useDashboardSection<T>(loader: () => Promise<T>, empty: T): SectionStat
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
-          setState({ data: empty, error: cause instanceof ApiError ? cause : null, isLoading: false, attempt });
+          setState({
+            data: empty,
+            error: cause instanceof ApiError ? cause : null,
+            isLoading: false,
+            attempt,
+          });
         }
       });
     return () => {
@@ -195,7 +204,10 @@ function KpiTileSection({
 
 export function AdmissionsDashboardContent() {
   const recentStudents = useDashboardSection(
-    () => listStudents({ ordering: '-created_at', page_size: REGISTRATION_WINDOW }).then((page) => page.results),
+    () =>
+      listStudents({ ordering: '-created_at', page_size: REGISTRATION_WINDOW }).then(
+        (page) => page.results,
+      ),
     [] as StudentListRow[],
   );
 
@@ -204,16 +216,19 @@ export function AdmissionsDashboardContent() {
   // the not-yet-enrolled panel can check membership instead of searching per
   // student. See that panel's own docstring for the trade-off this implies.
   const recentEnrollments = useDashboardSection(
-    () => listEnrollments({ ordering: '-enrolled_at', page_size: 100 }).then((page) => page.results),
+    () =>
+      listEnrollments({ ordering: '-enrolled_at', page_size: 100 }).then((page) => page.results),
     [] as Enrollment[],
   );
 
   const pending = useDashboardSection(
     () =>
-      listEnrollments({ status: 'pending', ordering: '-enrolled_at', page_size: 10 }).then((page) => ({
-        results: page.results,
-        count: page.count,
-      })),
+      listEnrollments({ status: 'pending', ordering: '-enrolled_at', page_size: 10 }).then(
+        (page) => ({
+          results: page.results,
+          count: page.count,
+        }),
+      ),
     { results: [] as Enrollment[], count: 0 },
   );
 
@@ -235,7 +250,9 @@ export function AdmissionsDashboardContent() {
   const fees = useDashboardSection<FeesOverview | null>(() => getFeesOverview(), null);
 
   const enrolledStudentCodes = new Set(
-    recentEnrollments.data.map((entry) => entry.student_code).filter((code): code is string => Boolean(code)),
+    recentEnrollments.data
+      .map((entry) => entry.student_code)
+      .filter((code): code is string => Boolean(code)),
   );
 
   const now = new Date();
@@ -244,9 +261,24 @@ export function AdmissionsDashboardContent() {
   const startingSoonCount = batches.data.filter((batch) => batch.status === 'upcoming').length;
 
   const quickActions: QuickAction[] = [
-    { id: 'register', label: 'Register a student', href: '/admissions/new', icon: <UserPlus className="size-4" /> },
-    { id: 'batch', label: 'Create a batch', href: '/admissions/batches', icon: <PlusCircle className="size-4" /> },
-    { id: 'import', label: 'Bulk import', href: '/admissions/import', icon: <UploadCloud className="size-4" /> },
+    {
+      id: 'register',
+      label: 'Register a student',
+      href: '/admissions/new',
+      icon: <UserPlus className="size-4" />,
+    },
+    {
+      id: 'batch',
+      label: 'Create a batch',
+      href: '/admissions/batches',
+      icon: <PlusCircle className="size-4" />,
+    },
+    {
+      id: 'import',
+      label: 'Bulk import',
+      href: '/admissions/import',
+      icon: <UploadCloud className="size-4" />,
+    },
   ];
 
   return (
@@ -259,6 +291,8 @@ export function AdmissionsDashboardContent() {
       </div>
 
       <QuickActions actions={quickActions} />
+
+      <WarningsStrip />
 
       <BentoGrid>
         <BentoTile span={3} index={0}>
@@ -340,7 +374,12 @@ export function AdmissionsDashboardContent() {
             Collections and what is still owed. Record a payment from the student&apos;s record.
           </p>
         </div>
-        <FeesPanel overview={fees.data} isLoading={fees.isLoading} error={fees.error} onRetry={fees.reload} />
+        <FeesPanel
+          overview={fees.data}
+          isLoading={fees.isLoading}
+          error={fees.error}
+          onRetry={fees.reload}
+        />
       </section>
 
       <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-2">

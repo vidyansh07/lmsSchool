@@ -50,6 +50,8 @@ urlpatterns = [
     ),
     path("trainers/", include("apps.trainers.urls")),
     path("fees/", include("apps.fees.urls")),
+    path("activity/", include("apps.activity.urls")),
+    path("warnings/", include("apps.warnings.urls")),
     path("categories/", include((course_urls.category_patterns, "categories"))),
     path(
         "courses/",

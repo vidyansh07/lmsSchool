@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  Award,
-  BookOpen,
-  ClipboardCheck,
-  GraduationCap,
-  Layers,
-  Users,
-} from 'lucide-react';
+import { Award, BookOpen, ClipboardCheck, GraduationCap, Layers, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -17,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
+import { WarningsStrip } from '@/components/warnings-strip';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { ApiError } from '@/lib/api';
 import { formatNumber, formatPercent, NO_DATA } from '@/lib/format';
@@ -144,6 +138,8 @@ function Overview() {
         </div>
       </div>
 
+      <WarningsStrip />
+
       <BentoGrid>
         {headline.map((figure, index) => (
           <BentoTile key={figure.label} span={4} index={index}>
@@ -166,13 +162,17 @@ function Overview() {
         <CardHeader>
           <CardTitle>Metrics</CardTitle>
           <CardDescription>
-            Each carries its definition. Hover or read below — the number is only
-            meaningful with it.
+            Each carries its definition. Hover or read below — the number is only meaningful with
+            it.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           {data.metrics.map((metric) => (
-            <div key={metric.key} className="rounded-md border border-border p-3" data-testid="metric">
+            <div
+              key={metric.key}
+              className="rounded-md border border-border p-3"
+              data-testid="metric"
+            >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="font-medium">{metric.label}</span>
                 <span className="text-2xl font-semibold tabular-nums">
@@ -198,8 +198,8 @@ function Overview() {
         <CardHeader>
           <CardTitle>Attendance by week</CardTitle>
           <CardDescription>
-            Excused absences leave the denominator, so a term of excused absence does
-            not read as poor attendance.
+            Excused absences leave the denominator, so a term of excused absence does not read as
+            poor attendance.
           </CardDescription>
         </CardHeader>
         <CardContent>
