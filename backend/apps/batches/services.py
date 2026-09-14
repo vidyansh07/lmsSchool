@@ -67,8 +67,19 @@ def _apply(instance, fields: dict[str, Any]) -> list[str]:
 
 
 @transaction.atomic
-def create_batch(*, actor: User, **fields: Any) -> Batch:
-    batch = Batch(code=next_batch_code(), created_by=actor, **fields)
+def create_batch(*, actor: User, branch=None, **fields: Any) -> Batch:
+    """Open a class.
+
+    The centre is resolved the same way a new account's is
+    (``apps.accounts.services.resolve_branch_for_new_record``): a bounded
+    caller's own centre is forced, an unbounded one names it. A class is where
+    it is taught, so this is the one field a caller cannot get wrong by sending
+    somebody else's id.
+    """
+    from apps.accounts.services import resolve_branch_for_new_record
+
+    branch = resolve_branch_for_new_record(actor=actor, branch=branch)
+    batch = Batch(code=next_batch_code(), created_by=actor, branch=branch, **fields)
     batch.full_clean(exclude=["code"])
     batch.save()
 
@@ -145,6 +156,11 @@ def assign_trainer(*, batch: Batch, trainer, actor: User) -> Batch:
     if trainer is not None:
         if not trainer.user.is_active:
             raise ApplicationError({"trainer": ["That trainer's account is not active."]})
+        if trainer.branch_id != batch.branch_id:
+            # A 400 naming the reason rather than a 404, because both records
+            # are ones the caller can legitimately see: "not found" for a
+            # trainer visible on their own screen reads as a bug.
+            raise ApplicationError({"trainer": ["That trainer is at a different centre."]})
 
         clashes = trainer_conflicts_for_batch(batch, trainer)
         if clashes:

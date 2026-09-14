@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
+import { BranchField } from '@/components/organisation/branch-field';
 import { fieldErrors } from '@/lib/api';
 import { createBatch } from '@/lib/batches';
 import { listCourses } from '@/lib/courses';
@@ -35,6 +36,7 @@ export function CreateBatchDialog({
   const [startDate, setStartDate] = useState(isoToday());
   const [endDate, setEndDate] = useState(isoDaysFromNow(90));
   const [capacity, setCapacity] = useState('20');
+  const [branchId, setBranchId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -68,6 +70,7 @@ export function CreateBatchDialog({
         start_date: startDate,
         end_date: endDate,
         capacity: Number(capacity),
+        ...(branchId ? { branch: branchId } : {}),
       });
       onCreated();
       router.push(`/admin/batches/${batch.id}`);
@@ -132,6 +135,7 @@ export function CreateBatchDialog({
                 onChange={(event) => setCapacity(event.target.value)}
               />
             </Field>
+            <BranchField idPrefix="b-branch" value={branchId} onChange={setBranchId} error={errors.branch} />
           </div>
 
           <Field label="Description" htmlFor="batch-description" error={errors.description}>

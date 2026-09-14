@@ -90,12 +90,23 @@ def test_the_authority_table_covers_every_pair():
 
 
 def _person(role: str, tag: str = "") -> User:
+    """One account of a given role, at the default centre.
+
+    Everybody here shares one branch on purpose. This module states a policy
+    about *seniority*, and two people in different centres would be refused for
+    a reason that has nothing to do with the ladder — which would leave the
+    ladder itself untested while the suite stayed green. The MAIN row is the one
+    `organisation.0002_default_branch` puts in every database.
+    """
+    from apps.organisation.models import Branch
+
     return User.objects.create_user(
         email=f"{role}{tag}@hierarchy.grras.invalid",
         password=PASSWORD,
         first_name=role.title(),
         last_name="Person",
         role=role,
+        branch=Branch.objects.get(code="MAIN"),
     )
 
 

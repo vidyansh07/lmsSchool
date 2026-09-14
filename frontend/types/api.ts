@@ -39,6 +39,11 @@ export interface User {
   is_email_verified: boolean;
   profile_image_url: string | null;
   date_joined: string;
+  /** The centre this account belongs to. Null for a superadmin, who is
+   *  bounded to none of them and sees every centre. */
+  branch_id: string | null;
+  branch_code: string | null;
+  branch_name: string | null;
 }
 
 /**
@@ -1770,4 +1775,17 @@ export interface FeesOverview {
   enrollments_without_plan: number;
   overdue: FeePlanBrief[];
   due_soon: FeePlanBrief[];
+}
+
+/** One centre. A branch bounds who a manager may see and which classes appear
+ *  on their screens; it is not a tenant — the course catalogue and the academic
+ *  rules are shared across all of them. */
+export interface Branch {
+  id: string;
+  code: string;
+  name: string;
+  city: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }

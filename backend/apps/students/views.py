@@ -24,8 +24,9 @@ from rest_framework.views import APIView
 from apps.accounts.roles import UserRole, has_capability
 from apps.common.permissions import Capability, HasCapability, IsActiveUser, IsOwnerOrHasCapability
 from apps.fees.queries import annotate_student_fee_totals
+from apps.organisation.access import resolve_submitted_branch
 
-from . import services
+from . import access, services
 from .models import StudentProfile
 from .serializers import (
     AdminStudentProfileSerializer,
@@ -50,6 +51,7 @@ class StudentFilterSet(django_filters.FilterSet):
     institution = django_filters.CharFilter(field_name="institution", lookup_expr="icontains")
     institution_kind = django_filters.CharFilter(field_name="institution_kind", lookup_expr="exact")
     referred_by = django_filters.UUIDFilter(field_name="referred_by_id")
+    branch = django_filters.UUIDFilter(field_name="branch_id")
 
     class Meta:
         model = StudentProfile
@@ -60,15 +62,8 @@ class StudentFilterSet(django_filters.FilterSet):
             "institution",
             "institution_kind",
             "referred_by",
+            "branch",
         )
-
-
-def _base_queryset():
-    return annotate_student_fee_totals(
-        StudentProfile.objects.select_related(
-            "user", "fee_status_updated_by", "fee_amount_updated_by", "referred_by__user"
-        )
-    )
 
 
 class StudentListCreateView(ListCreateAPIView):
@@ -94,7 +89,14 @@ class StudentListCreateView(ListCreateAPIView):
     serializer_class = StudentListSerializer
 
     def get_queryset(self):
-        return _base_queryset()
+        # The ledger's totals ride on the *visible* queryset, so a bounded
+        # caller's list carries paid/balance for their own centre's students
+        # and never resolves anybody else's.
+        return annotate_student_fee_totals(
+            access.visible_students(self.request.user).select_related(
+                "fee_amount_updated_by", "referred_by__user"
+            )
+        )
 
     @extend_schema(
         summary="List students", responses={200: StudentListSerializer}, tags=STUDENTS_TAG
@@ -118,7 +120,10 @@ class StudentListCreateView(ListCreateAPIView):
         profile_fields = data.pop("profile", None) or {}
         # The service re-checks that this actor may quote a fee; the view's
         # capability is `student.create`, which is not the same permission.
-        profile = services.create_student(actor=request.user, profile_fields=profile_fields, **data)
+        branch = resolve_submitted_branch(request.user, data.pop("branch", None))
+        profile = services.create_student(
+            actor=request.user, branch=branch, profile_fields=profile_fields, **data
+        )
         return Response(AdminStudentProfileSerializer(profile).data, status=status.HTTP_201_CREATED)
 
 
@@ -134,7 +139,9 @@ class StudentDetailView(RetrieveUpdateAPIView):
     lookup_url_kwarg = "student_id"
 
     def get_queryset(self):
-        return _base_queryset()
+        # The branch, and only the branch: `IsOwnerOrHasCapability` still
+        # answers the audience question, and it answers it with a 403.
+        return access.reachable_students(self.request.user)
 
     def get_object(self):
         profile = get_object_or_404(self.get_queryset(), pk=self.kwargs["student_id"])
@@ -246,7 +253,7 @@ class StudentFeeAmountView(APIView):
         tags=STUDENTS_TAG,
     )
     def post(self, request, student_id):
-        profile = get_object_or_404(_base_queryset(), pk=student_id)
+        profile = get_object_or_404(access.visible_students(request.user), pk=student_id)
         serializer = FeeAmountUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         updated = services.set_fee_amount(
@@ -271,7 +278,7 @@ class StudentFeeStatusView(APIView):
         tags=STUDENTS_TAG,
     )
     def post(self, request, student_id):
-        profile = get_object_or_404(_base_queryset(), pk=student_id)
+        profile = get_object_or_404(access.visible_students(request.user), pk=student_id)
         serializer = FeeStatusUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         updated = services.set_fee_status(

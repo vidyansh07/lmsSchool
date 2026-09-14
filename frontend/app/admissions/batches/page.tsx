@@ -39,6 +39,7 @@ import {
   isoDaysFromNow,
   isoToday,
 } from '@/lib/batch-labels';
+import { BranchField } from '@/components/organisation/branch-field';
 import { Capability } from '@/lib/capabilities';
 import { listCourses } from '@/lib/courses';
 import type { BatchListRow, CourseListRow, RosterEntry } from '@/types/api';
@@ -50,6 +51,7 @@ function CreateBatchInline({ onCreated }: { onCreated: () => void }) {
   const [startDate, setStartDate] = useState(isoToday());
   const [endDate, setEndDate] = useState(isoDaysFromNow(90));
   const [capacity, setCapacity] = useState('20');
+  const [branchId, setBranchId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -73,6 +75,7 @@ function CreateBatchInline({ onCreated }: { onCreated: () => void }) {
         start_date: startDate,
         end_date: endDate,
         capacity: Number(capacity) || 1,
+        ...(branchId ? { branch: branchId } : {}),
       });
       setName('');
       onCreated();
@@ -115,6 +118,7 @@ function CreateBatchInline({ onCreated }: { onCreated: () => void }) {
             <Field label="Capacity" htmlFor="ab-capacity" error={errors.capacity} required>
               <Input type="number" min={1} value={capacity} onChange={(event) => setCapacity(event.target.value)} />
             </Field>
+            <BranchField idPrefix="ab-branch" value={branchId} onChange={setBranchId} error={errors.branch} />
           </div>
           <Button type="submit" disabled={isSaving || courses.length === 0}>
             {isSaving ? 'Creating…' : 'Create batch'}

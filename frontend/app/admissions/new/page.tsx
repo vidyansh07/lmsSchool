@@ -37,6 +37,7 @@ import {
   type StudentBackground,
 } from '@/components/admissions/student-background-fields';
 import { StepIndicator, type WizardStep } from '@/components/admissions/step-indicator';
+import { BranchField } from '@/components/organisation/branch-field';
 import { RequireAuth } from '@/components/require-auth';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -119,6 +120,9 @@ export function RegistrationWizard() {
   // changed hands today.
   const [paidNow, setPaidNow] = useState('1000');
   const [paidMethod, setPaidMethod] = useState<PaymentMethod>('cash');
+  // Which centre the student — and a batch created here — belong to. Only a
+  // superadmin is asked; everybody else's own centre is forced by the server.
+  const [branchId, setBranchId] = useState('');
   // Who sent them. Optional, and only ever an existing student picked from a
   // search — a free-text name would be a referral nobody could credit.
   const [referrerQuery, setReferrerQuery] = useState('');
@@ -411,6 +415,7 @@ export function RegistrationWizard() {
       // Sent only when a figure was typed: an empty field means "not decided",
       // which the API stores as null, not as a fee of nothing.
       fee_amount: feeAmount.trim() === '' ? null : feeAmount.trim(),
+      ...(branchId ? { branch: branchId } : {}),
     });
     setCreatedStudent(created);
     return created;
@@ -434,6 +439,7 @@ export function RegistrationWizard() {
       start_date: draftBatch.startDate,
       end_date: draftBatch.endDate,
       capacity: Number(draftBatch.capacity) || 1,
+      ...(branchId ? { branch: branchId } : {}),
     });
     setCreatedBatch(created);
     return { id: created.id, name: created.name, code: created.code, hasTrainer: false };
@@ -694,6 +700,7 @@ export function RegistrationWizard() {
                     ))}
                   </Select>
                 </Field>
+                <BranchField idPrefix="reg-branch" value={branchId} onChange={setBranchId} error={studentErrors.branch} />
               </div>
 
               <StudentBackgroundFields

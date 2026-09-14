@@ -4,6 +4,12 @@ Reading a fee is for whoever may see the enrolment: staff with `fee.view_any`,
 or the student it belongs to. Changing one is `fee.manage_any` — counsellors
 and managers — and the services check that again, so the permission lives in
 one place even if a view is wired wrong.
+
+Every record is resolved inside the caller's *visible* queryset
+(`apps.batches.access.visible_enrollments`, `apps.students.access.visible_students`)
+rather than the model manager, so a counsellor at one centre asking for an
+enrolment at another gets the same 404 a guessed id gets, and the overview
+totals are about their centre and nobody else's.
 """
 
 from __future__ import annotations
@@ -15,9 +21,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.roles import has_capability
+from apps.batches import access as batch_access
 from apps.common.permissions import Capability, HasCapability, IsActiveUser
 from apps.enrollments.models import Enrollment
-from apps.students.models import StudentProfile
+from apps.students import access as students_access
 
 from . import services
 from .models import FeePayment, FeePlan
@@ -37,9 +44,10 @@ from .serializers import (
 FEES_TAG = ["Fees"]
 
 
-def _enrollment(enrollment_id) -> Enrollment:
+def _enrollment(user, enrollment_id) -> Enrollment:
     return get_object_or_404(
-        Enrollment.objects.select_related("student__user", "batch", "course"), pk=enrollment_id
+        batch_access.visible_enrollments(user).select_related("student__user", "batch", "course"),
+        pk=enrollment_id,
     )
 
 
@@ -67,7 +75,7 @@ class EnrollmentFeeView(APIView):
         tags=FEES_TAG,
     )
     def get(self, request, enrollment_id):
-        enrollment = _enrollment(enrollment_id)
+        enrollment = _enrollment(request.user, enrollment_id)
         if not _may_read(request.user, enrollment):
             return Response(status=status.HTTP_403_FORBIDDEN)
         return Response(FeePlanSerializer(_plan_or_404(enrollment)).data)
@@ -81,7 +89,7 @@ class EnrollmentFeeView(APIView):
     def put(self, request, enrollment_id):
         if not has_capability(request.user, Capability.FEE_MANAGE_ANY):
             return Response(status=status.HTTP_403_FORBIDDEN)
-        enrollment = _enrollment(enrollment_id)
+        enrollment = _enrollment(request.user, enrollment_id)
         serializer = SetFeePlanSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         services.set_fee_plan(
@@ -101,7 +109,7 @@ class EnrollmentFeeNextDueView(APIView):
         tags=FEES_TAG,
     )
     def post(self, request, enrollment_id):
-        enrollment = _enrollment(enrollment_id)
+        enrollment = _enrollment(request.user, enrollment_id)
         plan = _plan_or_404(enrollment)
         serializer = SetNextDueSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -125,7 +133,7 @@ class EnrollmentFeePaymentsView(APIView):
         tags=FEES_TAG,
     )
     def post(self, request, enrollment_id):
-        enrollment = _enrollment(enrollment_id)
+        enrollment = _enrollment(request.user, enrollment_id)
         plan = _plan_or_404(enrollment)
         serializer = RecordPaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -147,9 +155,9 @@ class FeePaymentVoidView(APIView):
     )
     def post(self, request, payment_id):
         payment = get_object_or_404(
-            FeePayment.objects.select_related(
-                "plan__enrollment__student", "plan__enrollment__batch"
-            ),
+            FeePayment.objects.filter(
+                plan__enrollment__in=batch_access.visible_enrollments(request.user)
+            ).select_related("plan__enrollment__student", "plan__enrollment__batch"),
             pk=payment_id,
         )
         serializer = VoidPaymentSerializer(data=request.data)
@@ -171,7 +179,7 @@ class EnrollmentFeeHistoryView(APIView):
         tags=FEES_TAG,
     )
     def get(self, request, enrollment_id):
-        enrollment = _enrollment(enrollment_id)
+        enrollment = _enrollment(request.user, enrollment_id)
         if not _may_read(request.user, enrollment):
             return Response(status=status.HTTP_403_FORBIDDEN)
         rows = [
@@ -200,7 +208,7 @@ class StudentFeesView(APIView):
         tags=FEES_TAG,
     )
     def get(self, request, student_id):
-        student = get_object_or_404(StudentProfile.objects.select_related("user"), pk=student_id)
+        student = get_object_or_404(students_access.visible_students(request.user), pk=student_id)
         if (
             not has_capability(request.user, Capability.FEE_VIEW_ANY)
             and student.user_id != request.user.pk
@@ -234,7 +242,7 @@ class FeesOverviewView(APIView):
         tags=FEES_TAG,
     )
     def get(self, request):
-        overview = services.fees_overview()
+        overview = services.fees_overview(user=request.user)
         for key in ("overdue", "due_soon"):
             rows = FeePlanBriefSerializer(overview[key], many=True).data
             for row, plan in zip(rows, overview[key], strict=True):

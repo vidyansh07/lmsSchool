@@ -24,6 +24,7 @@ from rest_framework.views import APIView
 from apps.accounts.roles import Capability, has_capability
 from apps.common.permissions import IsActiveUser
 from apps.enrollments.serializers import RosterEntrySerializer
+from apps.organisation.access import resolve_submitted_branch
 
 from . import access, services
 from .models import Batch, BatchSchedule
@@ -61,6 +62,7 @@ class BatchFilterSet(django_filters.FilterSet):
     status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
     course = django_filters.CharFilter(field_name="course__slug", lookup_expr="iexact")
     trainer = django_filters.UUIDFilter(field_name="trainer_id")
+    branch = django_filters.UUIDFilter(field_name="branch_id")
     starts_after = django_filters.DateFilter(field_name="start_date", lookup_expr="gte")
     starts_before = django_filters.DateFilter(field_name="start_date", lookup_expr="lte")
     # The manager's attention strip links here: `?attention=behind_schedule`
@@ -72,7 +74,7 @@ class BatchFilterSet(django_filters.FilterSet):
 
     class Meta:
         model = Batch
-        fields = ("status", "course", "trainer")
+        fields = ("status", "course", "trainer", "branch")
 
     def filter_attention(self, queryset, name, value):
         from apps.reporting.dashboards import at_risk_batch_ids, behind_schedule_batch_ids
@@ -125,7 +127,9 @@ class BatchListCreateView(ListCreateAPIView):
             return _forbidden(request, "You do not have permission to create batches.")
         serializer = BatchWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        batch = services.create_batch(actor=request.user, **serializer.validated_data)
+        fields = dict(serializer.validated_data)
+        branch = resolve_submitted_branch(request.user, fields.pop("branch", None))
+        batch = services.create_batch(actor=request.user, branch=branch, **fields)
         return Response(
             BatchDetailSerializer(batch, context={"request": request}).data,
             status=http_status.HTTP_201_CREATED,
@@ -211,15 +215,20 @@ class BatchTrainerView(APIView):
         tags=BATCHES_TAG,
     )
     def post(self, request, batch_id):
-        from apps.trainers.models import TrainerProfile
+        from apps.trainers import access as trainers_access
 
         batch = _batch_for(request, batch_id, manage=True)
         serializer = AssignTrainerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         trainer_id = serializer.validated_data["trainer_id"]
+        # Resolved out of the caller's own visible trainers, so a trainer they
+        # cannot see is a 404 rather than an ownership check bolted on after
+        # the fetch. `services.assign_trainer` then refuses a trainer from
+        # another centre with a 400 that says why — the caller can see both
+        # records, so "not found" would be the wrong answer there.
         trainer = (
-            get_object_or_404(TrainerProfile.objects.select_related("user"), pk=trainer_id)
+            get_object_or_404(trainers_access.visible_trainers(request.user), pk=trainer_id)
             if trainer_id
             else None
         )

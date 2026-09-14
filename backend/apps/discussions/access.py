@@ -30,9 +30,17 @@ def can_post_in(user, batch) -> bool:
 
     Enrolment must be *live*: a cancelled student keeps their history but stops
     taking part.
+
+    The capability branch answers through `visible_batches`, not through the
+    capability alone. Every caller today resolves the batch out of that same
+    queryset first, so the short-circuit was unreachable — but it was also an
+    assertion that a moderator may moderate every centre's discussions, which
+    stopped being true the day batches were bounded to a centre. CONVENTIONS
+    §3.5: the boolean and the queryset are two halves of one rule and must not
+    be able to disagree.
     """
     if has_capability(user, Capability.DISCUSSION_MODERATE_ANY):
-        return True
+        return batch_access.visible_batches(user).filter(pk=batch.pk).exists()
 
     trainer = batch_access.trainer_profile(user)
     if trainer is not None:
@@ -49,9 +57,9 @@ def can_post_in(user, batch) -> bool:
 
 
 def can_moderate(user, batch) -> bool:
-    """Pin, close, and hide replies."""
+    """Pin, close, and hide replies. Through the queryset, as `can_post_in` is."""
     if has_capability(user, Capability.DISCUSSION_MODERATE_ANY):
-        return True
+        return batch_access.visible_batches(user).filter(pk=batch.pk).exists()
     trainer = batch_access.trainer_profile(user)
     return trainer is not None and batch.trainer_id == trainer.pk
 

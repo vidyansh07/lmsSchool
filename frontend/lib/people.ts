@@ -31,6 +31,7 @@ export async function getUser(id: string): Promise<AdminUser> {
 }
 
 export async function createUser(payload: {
+  branch?: string | null;
   email: string;
   first_name: string;
   last_name?: string;
@@ -108,6 +109,8 @@ export async function updateStudent(
 }
 
 export async function createStudent(payload: {
+  /** Required of a superadmin, ignored for everybody else (their own centre is forced). */
+  branch?: string | null;
   email: string;
   first_name: string;
   last_name?: string;
@@ -170,6 +173,7 @@ export async function updateTrainer(
 }
 
 export async function createTrainer(payload: {
+  branch?: string | null;
   email: string;
   first_name: string;
   last_name?: string;

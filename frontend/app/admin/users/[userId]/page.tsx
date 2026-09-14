@@ -30,6 +30,8 @@ import {
   setUserActive,
   updateUser,
 } from "@/lib/people";
+import { useBranches } from "@/components/organisation/branch-field";
+import { moveUserToBranch } from "@/lib/organisation";
 import type { AdminUser, UserAuditEntry, UserRole } from "@/types/api";
 
 /**
@@ -374,6 +376,10 @@ function UserAdministration({ userId }: { userId: string }) {
         </CardContent>
       </Card>
 
+      {mayAdminister && user.role !== "superadmin" ? (
+        <CentreCard user={user} busy={busy} run={run} errors={errors} />
+      ) : null}
+
       {mayAdminister ? (
         <Card>
           <CardHeader>
@@ -455,6 +461,102 @@ function UserAdministration({ userId }: { userId: string }) {
 
       <History userId={user.id} />
     </div>
+  );
+}
+
+/**
+ * Which centre an account is bounded to, and the one control that changes it.
+ *
+ * Moving somebody is its own audited action server-side, not a field on the
+ * details form, because it is the only edit that changes what a person can
+ * *see* rather than what they are. Shown only to a caller who may assign
+ * users to centres; the select lists the centres *they* may see, so a
+ * bounded administrator cannot move somebody out of their own centre.
+ */
+function CentreCard({
+  user,
+  busy,
+  run,
+  errors,
+}: {
+  user: AdminUser;
+  busy: string;
+  run: (
+    key: string,
+    work: () => Promise<unknown>,
+    said: string,
+  ) => Promise<void>;
+  errors: Record<string, string>;
+}) {
+  const { can } = useAuth();
+  const mayMove = can(Capability.organisationAssignUsers);
+  const { branches } = useBranches(mayMove);
+  const [target, setTarget] = useState("");
+  const [reason, setReason] = useState("");
+  const others = branches.filter((branch) => branch.id !== user.branch_id);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Centre</CardTitle>
+        <CardDescription>
+          {user.branch_name
+            ? `Bounded to ${user.branch_name} (${user.branch_code}). What they can see stops at its edge.`
+            : "Not placed in any centre. Under the fail-closed rule this account sees nothing until it is."}
+        </CardDescription>
+      </CardHeader>
+      {mayMove ? (
+        <CardContent className="space-y-3">
+          {errors.branch_id ? (
+            <Alert variant="error">{errors.branch_id}</Alert>
+          ) : null}
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+            <Field label="Move to" htmlFor="user-branch">
+              <Select
+                id="user-branch"
+                value={target}
+                onChange={(event) => setTarget(event.target.value)}
+              >
+                <option value="">Choose a centre</option>
+                {others.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name} ({branch.code})
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field
+              label="Reason"
+              htmlFor="user-branch-reason"
+              hint="Kept in the audit trail."
+            >
+              <Input
+                id="user-branch-reason"
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+              />
+            </Field>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy === "branch" || target === ""}
+              onClick={() =>
+                void run(
+                  "branch",
+                  () => moveUserToBranch(user.id, target, reason.trim()),
+                  "Moved to the other centre.",
+                ).then(() => {
+                  setTarget("");
+                  setReason("");
+                })
+              }
+            >
+              Move
+            </Button>
+          </div>
+        </CardContent>
+      ) : null}
+    </Card>
   );
 }
 

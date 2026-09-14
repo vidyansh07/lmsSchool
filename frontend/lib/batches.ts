@@ -30,6 +30,7 @@ export async function getBatch(id: string): Promise<BatchDetail> {
 }
 
 export async function createBatch(payload: {
+  branch?: string | null;
   name: string;
   course: string;
   description?: string;

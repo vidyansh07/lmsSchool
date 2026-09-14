@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
+import { BranchField } from '@/components/organisation/branch-field';
 import { fieldErrors } from '@/lib/api';
 import { QUALIFICATION_OPTIONS } from '@/lib/labels';
 import { createStudent } from '@/lib/people';
@@ -38,6 +39,7 @@ export function CreateStudentDialog({
   const [qualification, setQualification] = useState('');
   const [background, setBackground] = useState<StudentBackground>(EMPTY_BACKGROUND);
   const [feeAmount, setFeeAmount] = useState('');
+  const [branchId, setBranchId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -53,6 +55,7 @@ export function CreateStudentDialog({
         phone,
         profile: { city, qualification, ...backgroundToProfile(background) },
         fee_amount: feeAmount.trim() === '' ? null : feeAmount.trim(),
+        ...(branchId ? { branch: branchId } : {}),
       });
       onCreated();
     } catch (cause) {
@@ -122,6 +125,7 @@ export function CreateStudentDialog({
                 onChange={(event) => setFeeAmount(event.target.value)}
               />
             </Field>
+            <BranchField idPrefix="s-branch" value={branchId} onChange={setBranchId} error={errors.branch} />
           </div>
 
           <StudentBackgroundFields idPrefix="new" value={background} onChange={setBackground} errors={errors} />

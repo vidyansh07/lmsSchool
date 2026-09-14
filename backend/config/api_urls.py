@@ -24,6 +24,7 @@ from apps.enrollments import urls as enrollment_urls
 from apps.exams import urls as exam_urls
 from apps.learning import urls as learning_urls
 from apps.notifications import urls as notification_urls
+from apps.organisation import urls as organisation_urls
 from apps.performance import urls as performance_urls
 from apps.progress import urls as progress_urls
 from apps.projects import urls as project_urls
@@ -40,6 +41,7 @@ urlpatterns = [
     # Deleted records, across every model that supports recovery.
     path("recovery/", include("apps.common.recovery_urls")),
     path("users/", include("apps.accounts.user_urls")),
+    path("branches/", include((organisation_urls.urlpatterns, "branches"))),
     path("students/", include("apps.students.urls")),
     path(
         "trainers/",

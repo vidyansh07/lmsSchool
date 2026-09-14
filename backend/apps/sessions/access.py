@@ -16,6 +16,7 @@ from django.db.models import QuerySet
 
 from apps.accounts.roles import Capability, has_capability
 from apps.batches import access as batch_access
+from apps.organisation.scoping import scope_to_branch
 
 from .models import ClassSession
 
@@ -92,9 +93,15 @@ def can_manage_batch_topics(user, batch) -> bool:
 
 
 def manageable_sessions(user) -> QuerySet[ClassSession]:
+    """Classes the caller may reschedule or cancel.
+
+    `visible_sessions` derives from `visible_batches` and is scoped for free;
+    this one builds its own base, so it has to say the same thing again — a
+    manager must not be able to move another centre's class.
+    """
     base = ClassSession.objects.with_related()
     if has_capability(user, Capability.BATCH_MANAGE_SCHEDULE):
-        return base
+        return scope_to_branch(base, user, path="batch__branch")
     trainer = batch_access.trainer_profile(user)
     if trainer is None:
         return base.none()

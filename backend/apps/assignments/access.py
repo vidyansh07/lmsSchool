@@ -24,6 +24,7 @@ from django.db.models import Q, QuerySet
 
 from apps.accounts.roles import Capability, has_capability
 from apps.batches import access as batch_access
+from apps.organisation.scoping import scope_to_branch, scope_to_branch_or_shared
 
 from .models import Assignment, AssignmentSubmission
 
@@ -50,7 +51,7 @@ def visible_assignments(user) -> QuerySet[Assignment]:
     base = Assignment.objects.with_related()
 
     if has_capability(user, Capability.ASSIGNMENT_VIEW_ANY):
-        return base
+        return scope_to_branch_or_shared(base, user, path="batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -89,7 +90,7 @@ def manageable_assignments(user) -> QuerySet[Assignment]:
     base = Assignment.objects.with_related()
 
     if has_capability(user, Capability.ASSIGNMENT_MANAGE_ANY):
-        return base
+        return scope_to_branch_or_shared(base, user, path="batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -151,7 +152,7 @@ def visible_submissions(user) -> QuerySet[AssignmentSubmission]:
     base = AssignmentSubmission.objects.with_related()
 
     if has_capability(user, Capability.ASSIGNMENT_VIEW_ANY):
-        return base
+        return scope_to_branch(base, user, path="enrollment__batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

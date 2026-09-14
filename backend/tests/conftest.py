@@ -76,41 +76,77 @@ def api_client_no_csrf() -> APIClient:
 
 
 @pytest.fixture
-def student(db) -> User:
+def branch(db):
+    """The centre everything in the default fixture set belongs to.
+
+    One branch for the whole default set on purpose: the existing suite keeps
+    passing unchanged, and scoping is proved only by tests that deliberately opt
+    into `other_branch`. A shared fixture that quietly put two branches in play
+    would make every unrelated test a scoping test.
+
+    `get_or_create`, not `create`: `organisation.0002_default_branch` already
+    put a MAIN row in the test database, so this fixture adopts the same centre
+    a real deployment has after the backfill rather than colliding with it.
+    """
+    from apps.organisation.models import Branch
+
+    return Branch.objects.get_or_create(
+        code="MAIN", defaults={"name": "Main centre", "city": "Jaipur"}
+    )[0]
+
+
+@pytest.fixture
+def other_branch(db):
+    """A second centre, so a scoping test has something to be refused.
+
+    The sibling of `rival` in `tests/test_authorization_matrix.py`: the same
+    job, one level up. A test that only proves a manager sees their own branch
+    passes on a system with one branch.
+    """
+    from apps.organisation.models import Branch
+
+    return Branch.objects.create(code="PUNE", name="Pune centre", city="Pune")
+
+
+@pytest.fixture
+def student(branch) -> User:
     return User.objects.create_user(
         email="student@example.test",
         password=TEST_PASSWORD,
         first_name="Sam",
         last_name="Student",
         role=UserRole.STUDENT,
+        branch=branch,
     )
 
 
 @pytest.fixture
-def trainer(db) -> User:
+def trainer(branch) -> User:
     return User.objects.create_user(
         email="trainer@example.test",
         password=TEST_PASSWORD,
         first_name="Tina",
         last_name="Trainer",
         role=UserRole.TRAINER,
+        branch=branch,
     )
 
 
 @pytest.fixture
-def admin_user(db) -> User:
+def admin_user(branch) -> User:
     return User.objects.create_user(
         email="admin@example.test",
         password=TEST_PASSWORD,
         first_name="Amy",
         last_name="Admin",
         role=UserRole.ADMIN,
+        branch=branch,
         is_staff=True,
     )
 
 
 @pytest.fixture
-def manager_user(db) -> User:
+def manager_user(branch) -> User:
     """Runs academic operations; cannot change who anybody *is*."""
     return User.objects.create_user(
         email="manager@example.test",
@@ -118,11 +154,12 @@ def manager_user(db) -> User:
         first_name="Mira",
         last_name="Manager",
         role=UserRole.MANAGER,
+        branch=branch,
     )
 
 
 @pytest.fixture
-def counsellor_user(db) -> User:
+def counsellor_user(branch) -> User:
     """Brings students in: registers, enrols, staffs the batch, then hands over.
 
     Holds nothing academic and nothing about accounts, so this fixture is also
@@ -135,6 +172,7 @@ def counsellor_user(db) -> User:
         first_name="Kiran",
         last_name="Counsellor",
         role=UserRole.COUNSELLOR,
+        branch=branch,
     )
 
 
@@ -369,6 +407,104 @@ def upcoming_batch(admin_user, published_course, trainer_profile_two):
         start_date=today + timedelta(days=14),
         end_date=today + timedelta(days=90),
         capacity=2,
+    )
+
+
+@pytest.fixture
+def unbounded_superadmin(db) -> User:
+    """A platform operator, bounded to no centre at all.
+
+    `branch=None` here is the only place in the fixture set where a null branch
+    is correct — for everybody else it means "sees nothing", which is what makes
+    the fail-closed rule real rather than decorative.
+    """
+    return User.objects.create_user(
+        email="superadmin@example.test",
+        password=TEST_PASSWORD,
+        first_name="Sona",
+        last_name="Super",
+        role=UserRole.SUPERADMIN,
+        branch=None,
+    )
+
+
+@pytest.fixture
+def other_branch_manager(other_branch) -> User:
+    """A manager at the second centre. The person who must see nothing of the first."""
+    return User.objects.create_user(
+        email="manager@pune.example.test",
+        password=TEST_PASSWORD,
+        first_name="Priya",
+        last_name="Pune",
+        role=UserRole.MANAGER,
+        branch=other_branch,
+    )
+
+
+@pytest.fixture
+def other_branch_trainer(other_branch, unbounded_superadmin):
+    """A trainer at the second centre.
+
+    Created by the superadmin because only an unbounded actor may name a centre
+    other than their own — which is itself the rule under test elsewhere.
+    """
+    return create_trainer(
+        email="trainer@pune.example.test",
+        first_name="Prakash",
+        last_name="Pune",
+        actor=unbounded_superadmin,
+        branch=other_branch,
+        password=TEST_PASSWORD,
+        send_invitation=False,
+        profile_fields={"professional_title": "Networking Trainer", "skills": ["Networking"]},
+    )
+
+
+@pytest.fixture
+def other_branch_student(other_branch, unbounded_superadmin):
+    """A student at the second centre."""
+    return create_student(
+        email="student@pune.example.test",
+        first_name="Pooja",
+        last_name="Pune",
+        actor=unbounded_superadmin,
+        branch=other_branch,
+        password=TEST_PASSWORD,
+        send_invitation=False,
+    )
+
+
+@pytest.fixture
+def other_branch_batch(other_branch, unbounded_superadmin, published_course, other_branch_trainer):
+    """An active batch at the second centre, on the same shared course."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.batches.models import BatchStatus
+    from apps.batches.services import create_batch, set_batch_status
+
+    today = timezone.localdate()
+    created = create_batch(
+        actor=unbounded_superadmin,
+        branch=other_branch,
+        name="Linux Essentials — Pune",
+        course=published_course,
+        trainer=other_branch_trainer,
+        start_date=today - timedelta(days=7),
+        end_date=today + timedelta(days=60),
+        capacity=3,
+    )
+    return set_batch_status(batch=created, target=BatchStatus.ACTIVE, actor=unbounded_superadmin)
+
+
+@pytest.fixture
+def other_branch_enrollment(unbounded_superadmin, other_branch_student, other_branch_batch):
+    """An enrolment entirely inside the second centre."""
+    from apps.enrollments.services import enrol_student
+
+    return enrol_student(
+        student=other_branch_student, batch=other_branch_batch, actor=unbounded_superadmin
     )
 
 

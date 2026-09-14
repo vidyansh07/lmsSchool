@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bell,
   BookOpen,
+  Building2,
   BookOpenCheck,
   CalendarCheck,
   CalendarDays,
@@ -295,6 +296,12 @@ export const STAFF_NAV: NavGroup[] = [
         label: 'Deleted records',
         icon: Trash2,
         capability: Capability.recordViewDeleted,
+      },
+      {
+        href: '/admin/branches',
+        label: 'Centres',
+        icon: Building2,
+        capability: Capability.organisationViewAny,
       },
       {
         href: '/admin/branding',

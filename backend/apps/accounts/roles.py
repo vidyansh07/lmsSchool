@@ -81,6 +81,20 @@ class Capability(models.TextChoices):
     PLATFORM_CONFIGURE = "platform.configure", _("Change platform-wide settings")
     AUDIT_VIEW = "audit.view", _("Read the audit trail")
 
+    # --- Organisation
+    #
+    # A branch is a centre, and it is the unit an institution is actually run
+    # by. Reading the list is what lets a screen name somebody's centre, so a
+    # manager and a counsellor both hold it; creating one and moving a person
+    # between them are acts of authority over people, so they sit beside the
+    # other `user.*` rights.
+    ORGANISATION_VIEW_ANY = "organisation.view_any", _("View any branch")
+    ORGANISATION_MANAGE = "organisation.manage", _("Create or change a branch")
+    ORGANISATION_ASSIGN_USERS = (
+        "organisation.assign_users",
+        _("Move a person between branches"),
+    )
+
     # --- Reversible deletion
     #
     # Deleting is an ordinary right that lives with each domain: whoever may
@@ -237,6 +251,7 @@ BASE_CAPABILITIES: frozenset[str] = frozenset(
 _MANAGER_CAPABILITIES = frozenset(
     {
         Capability.USER_VIEW_ANY,
+        Capability.ORGANISATION_VIEW_ANY,
         Capability.STUDENT_VIEW_ANY,
         Capability.STUDENT_CREATE,
         Capability.STUDENT_UPDATE_ANY,
@@ -295,6 +310,8 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.USER_UPDATE_ANY,
         Capability.USER_SET_ACTIVE,
         Capability.USER_CHANGE_ROLE,
+        Capability.ORGANISATION_MANAGE,
+        Capability.ORGANISATION_ASSIGN_USERS,
         Capability.TRAINER_CREATE,
         Capability.TRAINER_UPDATE_ANY,
         Capability.ACADEMIC_CONFIGURE,
@@ -332,6 +349,9 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
 #: ladder test asserts it, so the property cannot be lost by accident.
 _COUNSELLOR_CAPABILITIES = frozenset(
     {
+        # Naming the centre a student is being admitted to. Read-only: a
+        # counsellor never creates a branch or moves anybody between two.
+        Capability.ORGANISATION_VIEW_ANY,
         # The student record itself, from registration onwards.
         Capability.STUDENT_VIEW_ANY,
         Capability.STUDENT_CREATE,

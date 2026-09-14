@@ -79,6 +79,21 @@ class User(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
         db_index=True,
         help_text=_("Authoritative role used for server-side authorization."),
     )
+    branch = models.ForeignKey(
+        "organisation.Branch",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="users",
+        verbose_name=_("branch"),
+        help_text=_(
+            "The centre this account belongs to. Empty means the account "
+            "carries no centre, which for everybody but a superadmin means it "
+            "sees nothing rather than everything. Which roles may leave it "
+            "empty is enforced by apps.accounts.services rather than by the "
+            "column, so that history survives a centre being closed."
+        ),
+    )
     is_active = models.BooleanField(
         _("active"),
         default=True,

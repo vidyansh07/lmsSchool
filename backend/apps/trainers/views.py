@@ -19,8 +19,9 @@ from rest_framework.views import APIView
 
 from apps.accounts.roles import UserRole, has_capability
 from apps.common.permissions import Capability, HasCapability, IsActiveUser, IsOwnerOrHasCapability
+from apps.organisation.access import resolve_submitted_branch
 
-from . import services
+from . import access, services
 from .models import TrainerProfile
 from .serializers import (
     AdminTrainerUpdateSerializer,
@@ -49,9 +50,11 @@ class TrainerFilterSet(django_filters.FilterSet):
         method="filter_attention",
     )
 
+    branch = django_filters.UUIDFilter(field_name="branch_id")
+
     class Meta:
         model = TrainerProfile
-        fields = ("is_accepting_assignments",)
+        fields = ("is_accepting_assignments", "branch")
 
     def filter_attention(self, queryset, name, value):
         from apps.reporting.dashboards import trainers_without_review_ids
@@ -60,10 +63,6 @@ class TrainerFilterSet(django_filters.FilterSet):
 
     def filter_skill(self, queryset, name, value):
         return queryset.filter(skills__icontains=value)
-
-
-def _base_queryset():
-    return TrainerProfile.objects.select_related("user")
 
 
 class TrainerListCreateView(ListCreateAPIView):
@@ -88,7 +87,7 @@ class TrainerListCreateView(ListCreateAPIView):
     serializer_class = TrainerListSerializer
 
     def get_queryset(self):
-        return _base_queryset()
+        return access.visible_trainers(self.request.user)
 
     @extend_schema(
         summary="List trainers", responses={200: TrainerListSerializer}, tags=TRAINERS_TAG
@@ -110,7 +109,10 @@ class TrainerListCreateView(ListCreateAPIView):
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
         profile_fields = data.pop("profile", None) or {}
-        profile = services.create_trainer(actor=request.user, profile_fields=profile_fields, **data)
+        branch = resolve_submitted_branch(request.user, data.pop("branch", None))
+        profile = services.create_trainer(
+            actor=request.user, branch=branch, profile_fields=profile_fields, **data
+        )
         return Response(TrainerProfileSerializer(profile).data, status=status.HTTP_201_CREATED)
 
 
@@ -123,7 +125,8 @@ class TrainerDetailView(RetrieveUpdateAPIView):
     serializer_class = TrainerProfileSerializer
 
     def get_queryset(self):
-        return _base_queryset()
+        # The branch, and only the branch — see `StudentDetailView`.
+        return access.reachable_trainers(self.request.user)
 
     def get_object(self):
         profile = get_object_or_404(self.get_queryset(), pk=self.kwargs["trainer_id"])

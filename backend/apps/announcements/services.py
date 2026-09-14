@@ -106,9 +106,21 @@ def audience_for(announcement: Announcement) -> list:
 
         return list(UserModel.objects.filter(is_active=True))
     if announcement.audience == Audience.BATCH and announcement.batch_id:
+        # A batch belongs to one centre, so its roster is already one centre's.
         return students_of_batch(announcement.batch)
     if announcement.audience == Audience.COURSE and announcement.course_id:
-        return students_of_course(announcement.course)
+        # The course catalogue is institution-wide and its students therefore
+        # are too, while a notice about one centre's sitting of it is not.
+        # Telling everybody would hand the other centres by notification
+        # precisely what `visible_announcements` keeps off their board — the
+        # delivery half and the reading half of one rule, disagreeing.
+        from .access import announcement_branch_id
+
+        branch_id = announcement_branch_id(announcement)
+        told = students_of_course(announcement.course)
+        if branch_id is None:
+            return told
+        return [person for person in told if person.branch_id == branch_id]
     if announcement.audience == Audience.SELECTED:
         return list(announcement.recipients.filter(is_active=True))
     return []

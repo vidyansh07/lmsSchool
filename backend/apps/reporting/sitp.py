@@ -48,8 +48,13 @@ EARLIEST_PLAUSIBLE = date(2020, 1, 1)
 
 _DDMMYYYY = re.compile(r"^\s*(\d{1,2})[-/._](\d{1,2})[-/._](\d{2}|\d{4})\s*$")
 _DD_MON_YYYY = re.compile(r"^\s*(\d{1,2})[-/. ]+([A-Za-z]+)\.?[-/. ]+(\d{2}|\d{4})\s*$")
-_MONTHS = {name.lower(): number for number, name in enumerate(
-    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
+_MONTHS = {
+    name.lower(): number
+    for number, name in enumerate(
+        ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"],
+        start=1,
+    )
+}
 _ASSESSMENT_HEADER = re.compile(
     r"^\s*assess?(?:e)?ment\s*(\d+)\s*(?:\((.*?)\))?\s*(?:out\s*of)?\s*(\d+(?:\.\d+)?)?\s*$",
     re.IGNORECASE,
@@ -203,7 +208,11 @@ def as_date(value: Any) -> date | None:
                 return None
         match = _DD_MON_YYYY.match(value)
         if match:
-            day, month_name, year = int(match.group(1)), match.group(2).lower()[:3], int(match.group(3))
+            day, month_name, year = (
+                int(match.group(1)),
+                match.group(2).lower()[:3],
+                int(match.group(3)),
+            )
             if year < 100:
                 year += 2000
             month = _MONTHS.get(month_name)
@@ -341,7 +350,9 @@ def _read_attendance(sheet, book: Workbook) -> None:
         # One or two stray 1900 cells in a row of real dates are a broken
         # formula, not a run of day numbers. Ignore them and say so.
         for column, when in day_numbers:
-            book.problem(sheet.title, date_row_index + 1, f"Column {column + 1} is dated {when}; ignored.")
+            book.problem(
+                sheet.title, date_row_index + 1, f"Column {column + 1} is dated {when}; ignored."
+            )
         day_numbers = []
     if day_numbers:
         # "Dates" in 1900 are day numbers (25, 26, …) typed into cells that
@@ -377,17 +388,23 @@ def _read_attendance(sheet, book: Workbook) -> None:
             book.problem(sheet.title, line, f"{name!r} has no roll number; skipped.")
             continue
         if roll in seen_rolls:
-            book.problem(sheet.title, line, f"Roll number {roll} repeats line {seen_rolls[roll]}; skipped.")
+            book.problem(
+                sheet.title, line, f"Roll number {roll} repeats line {seen_rolls[roll]}; skipped."
+            )
             continue
         seen_rolls[roll] = line
-        email = text(row[email_col]).lower() if email_col is not None and email_col < len(row) else ""
+        email = (
+            text(row[email_col]).lower() if email_col is not None and email_col < len(row) else ""
+        )
         book.students.append(Student(name=name, roll_number=roll, email=email, row=line))
 
         register: dict[date, str] = {}
         for column, when in date_columns:
             raw = text(row[column]).upper() if column < len(row) else ""
             if raw not in ATTENDANCE_VOCABULARY:
-                book.problem(sheet.title, line, f"{raw!r} on {when} is not an attendance mark; skipped.")
+                book.problem(
+                    sheet.title, line, f"{raw!r} on {when} is not an attendance mark; skipped."
+                )
                 continue
             status = ATTENDANCE_VOCABULARY[raw]
             if status is not None:
@@ -445,10 +462,18 @@ def _read_dsr(sheet, book: Workbook) -> None:
             continue
         when, corrected = _within_window(when, book)
         if when is None:
-            book.problem(sheet.title, line, f"{text(row[date_col])!r} is outside the batch's dates; report skipped.")
+            book.problem(
+                sheet.title,
+                line,
+                f"{text(row[date_col])!r} is outside the batch's dates; report skipped.",
+            )
             continue
         if corrected:
-            book.problem(sheet.title, line, f"{text(row[date_col])!r} read as {when}: the year, or the month and day, were typed the wrong way round.")
+            book.problem(
+                sheet.title,
+                line,
+                f"{text(row[date_col])!r} read as {when}: the year, or the month and day, were typed the wrong way round.",
+            )
         if module_col is not None and module_col < len(row) and text(row[module_col]):
             topic = f"{text(row[module_col])}: {topic}" if topic else text(row[module_col])
         entry = DsrRow(row=line, on=when, topic=topic[:255])
@@ -457,7 +482,12 @@ def _read_dsr(sheet, book: Workbook) -> None:
         if counts_col is not None and counts_col < len(row):
             raw_counts = text(row[counts_col])
             entry.online, entry.offline, entry.present, entry.roster_size = parse_counts(raw_counts)
-            if raw_counts and entry.present is None and entry.online is None and entry.offline is None:
+            if (
+                raw_counts
+                and entry.present is None
+                and entry.online is None
+                and entry.offline is None
+            ):
                 if raw_counts.lower() not in ("sunday", "holiday", "-", "na", "n/a"):
                     book.problem(sheet.title, line, f"Could not read counts from {raw_counts!r}.")
         if assignment_col is not None and assignment_col < len(row):
@@ -469,7 +499,8 @@ def _read_dsr(sheet, book: Workbook) -> None:
 def _read_assessments(sheet, book: Workbook) -> None:
     rows = _rows(sheet)
     header_index = next(
-        (i for i, row in enumerate(rows[:6]) if _header_index(row, "student name") is not None), None
+        (i for i, row in enumerate(rows[:6]) if _header_index(row, "student name") is not None),
+        None,
     )
     if header_index is None:
         book.problem(sheet.title, None, "No header row with 'Student Name'.")
@@ -477,7 +508,9 @@ def _read_assessments(sheet, book: Workbook) -> None:
     header = rows[header_index]
     roll_col = _header_index(header, "rtu roll no", "roll no", "roll number")
     if roll_col is None:
-        book.problem(sheet.title, header_index + 1, "No roll number column; marks cannot be matched.")
+        book.problem(
+            sheet.title, header_index + 1, "No roll number column; marks cannot be matched."
+        )
         return
 
     for column, cell in enumerate(header):
@@ -496,7 +529,11 @@ def _read_assessments(sheet, book: Workbook) -> None:
             index = len(book.assessments) + 1
             title = marks.group(1).strip()
             maximum = as_decimal(marks.group(2))
-        if not title or title.lower().startswith("topic") or title.lower().startswith("topics name"):
+        if (
+            not title
+            or title.lower().startswith("topic")
+            or title.lower().startswith("topics name")
+        ):
             title = f"Assessment {index}"
         if maximum is None:
             # The header says nothing, but every mark in the column may be
@@ -510,10 +547,14 @@ def _read_assessments(sheet, book: Workbook) -> None:
                 maximum = as_decimal(denominators.pop())
         if maximum is None:
             book.problem(
-                sheet.title, header_index + 1, f"Column {column + 1} ({label[:40]!r}) has no maximum marks; skipped."
+                sheet.title,
+                header_index + 1,
+                f"Column {column + 1} ({label[:40]!r}) has no maximum marks; skipped.",
             )
             continue
-        book.assessments.append(AssessmentColumn(index=index, title=title[:200], max_marks=maximum, column=column))
+        book.assessments.append(
+            AssessmentColumn(index=index, title=title[:200], max_marks=maximum, column=column)
+        )
 
     name_col = _header_index(header, "student name", "name")
     known = {student.roll_number for student in book.students}
@@ -522,7 +563,12 @@ def _read_assessments(sheet, book: Workbook) -> None:
         row = raw_row
         roll = text(row[roll_col]).upper() if roll_col < len(row) else ""
         shift = 0
-        if roll and not _ROLL.match(roll) and roll_col + 1 < len(row) and _ROLL.match(text(row[roll_col + 1]).upper()):
+        if (
+            roll
+            and not _ROLL.match(roll)
+            and roll_col + 1 < len(row)
+            and _ROLL.match(text(row[roll_col + 1]).upper())
+        ):
             # The row slid one column left — the name sits where the roll
             # should be and the roll where the first mark should be. Read it
             # one column over rather than treating a name as a roll number.
@@ -530,7 +576,11 @@ def _read_assessments(sheet, book: Workbook) -> None:
             roll = text(row[roll_col + 1]).upper()
         if not roll:
             continue
-        name = text(row[(name_col if name_col is not None else roll_col) + shift]) if name_col is not None else ""
+        name = (
+            text(row[(name_col if name_col is not None else roll_col) + shift])
+            if name_col is not None
+            else ""
+        )
         if shift and not name:
             name = text(row[roll_col])
         if roll not in known:
@@ -538,14 +588,17 @@ def _read_assessments(sheet, book: Workbook) -> None:
             # of this batch, so they join the roster — and it is said. A row
             # with no name at all is known by the roll number until somebody
             # fills it in.
-            book.students.append(Student(name=name or f"Student {roll}", roll_number=roll, row=line))
+            book.students.append(
+                Student(name=name or f"Student {roll}", roll_number=roll, row=line)
+            )
             book.attendance.setdefault(roll, {})
             known.add(roll)
             book.problem(
                 sheet.title,
                 line,
                 f"{roll} is on the marks sheet but not the attendance sheet; enrolled with no attendance"
-                + ("" if name else " and no name") + ".",
+                + ("" if name else " and no name")
+                + ".",
             )
         marks: dict[int, Decimal | str | None] = {}
         for column_info in book.assessments:
@@ -554,7 +607,17 @@ def _read_assessments(sheet, book: Workbook) -> None:
             word = text(raw).upper()
             # "Pending" is a mark not yet given, which is the same fact as an
             # empty cell — not a mark of zero, and not an absence.
-            if word in ("", "#N/A", "-", "NA", "N/A", "PENDING", "PENDING.", "LATE ADMISSION", "LATE JOIN"):
+            if word in (
+                "",
+                "#N/A",
+                "-",
+                "NA",
+                "N/A",
+                "PENDING",
+                "PENDING.",
+                "LATE ADMISSION",
+                "LATE JOIN",
+            ):
                 marks[column_info.index] = None
             elif word in ("ABSENT", "AB", "A", "ABS"):
                 marks[column_info.index] = "absent"
@@ -562,7 +625,11 @@ def _read_assessments(sheet, book: Workbook) -> None:
                 fraction = _FRACTION_MARK.match(text(raw))
                 value = as_decimal(fraction.group(1)) if fraction else as_decimal(raw)
                 if value is None:
-                    book.problem(sheet.title, line, f"{text(raw)!r} is not a mark for assessment {column_info.index}; skipped.")
+                    book.problem(
+                        sheet.title,
+                        line,
+                        f"{text(raw)!r} is not a mark for assessment {column_info.index}; skipped.",
+                    )
                     marks[column_info.index] = None
                 else:
                     marks[column_info.index] = value
@@ -598,9 +665,13 @@ def read_workbook(path: Path) -> Workbook:
     for name in workbook.sheetnames:
         lowered = name.strip().lower()
         if lowered.startswith("course time"):
-            book.not_imported[name] = "Planned lecture list; the LMS plans per lesson, and there is no lesson content here to plan against."
+            book.not_imported[name] = (
+                "Planned lecture list; the LMS plans per lesson, and there is no lesson content here to plan against."
+            )
         elif lowered.startswith("project"):
-            book.not_imported[name] = "Project marks and links; the LMS records project work as reviewed submissions, which these are not."
+            book.not_imported[name] = (
+                "Project marks and links; the LMS records project work as reviewed submissions, which these are not."
+            )
         elif lowered.startswith("quiz"):
             book.not_imported[name] = "A Microsoft Forms export; the LMS has no importer for it."
     return book

@@ -23,6 +23,7 @@ const createBatch = vi.hoisted(() => vi.fn());
 const assignBatchTrainer = vi.hoisted(() => vi.fn());
 const enrolStudent = vi.hoisted(() => vi.fn());
 
+vi.mock('@/components/auth-provider', () => ({ useAuth: () => ({ user: null, can: () => false }) }));
 vi.mock('@/lib/people', () => ({ createStudent, listStudents, listTrainers }));
 vi.mock('@/lib/courses', () => ({ listCourses }));
 vi.mock('@/lib/batches', () => ({ listBatches, createBatch, assignBatchTrainer, enrolStudent }));
@@ -100,6 +101,9 @@ function student(overrides: Partial<StudentProfile> = {}): StudentProfile {
       is_active: true,
       is_email_verified: false,
       profile_image_url: null,
+      branch_id: null,
+      branch_code: null,
+      branch_name: null,
       date_joined: '2026-01-01',
     },
     date_of_birth: null,

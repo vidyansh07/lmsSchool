@@ -23,6 +23,11 @@ from django.db.models import Q, QuerySet
 
 from apps.accounts.roles import Capability, has_capability
 from apps.batches import access as batch_access
+from apps.organisation.scoping import (
+    actor_branch_id,
+    is_unbounded,
+    scope_to_branch,
+)
 
 from .models import Feedback, PerformanceReview, PerformanceSubjectType
 
@@ -60,7 +65,7 @@ def visible_enrollments_for_performance(user) -> QuerySet:
     base = Enrollment.objects.with_related()
 
     if can_view_any_performance(user):
-        return base
+        return scope_to_branch(base, user, path="batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -75,9 +80,20 @@ def visible_enrollments_for_performance(user) -> QuerySet:
     return base.none()
 
 
+# Every boolean below answers through the queryset that answers the same
+# question, never through the capability alone. CONVENTIONS §3.5, and the reason
+# is what happened here: while `visible_*` returned the institution to a
+# capability holder, `if can_view_any_performance(user): return True` was an
+# exact restatement of it. Once the querysets narrowed to a centre, the
+# short-circuits did not, and the two halves of one rule started disagreeing —
+# `True` for another centre's review, from a function no test could catch out
+# because every caller happened to resolve the object safely first. One rule,
+# expressed once, so it cannot drift a second time.
+
+
 def can_view_student_performance(user, enrollment) -> bool:
     if can_view_any_performance(user):
-        return True
+        return visible_enrollments_for_performance(user).filter(pk=enrollment.pk).exists()
 
     student = batch_access.student_profile(user)
     if student is not None and enrollment.student_id == student.pk:
@@ -90,16 +106,38 @@ def can_view_student_performance(user, enrollment) -> bool:
 def can_view_batch_performance(user, batch) -> bool:
     """Whether the caller may see the cohort performance view for one batch."""
     if can_view_any_performance(user):
-        return True
+        return batch_access.visible_batches(user).filter(pk=batch.pk).exists()
     trainer = batch_access.trainer_profile(user)
     return trainer is not None and batch.trainer_id == trainer.pk
 
 
 def can_view_trainer_performance(user, trainer) -> bool:
     if can_view_any_performance(user):
-        return True
+        from apps.trainers.access import visible_trainers
+
+        return visible_trainers(user).filter(pk=trainer.pk).exists()
     own = batch_access.trainer_profile(user)
     return own is not None and own.pk == trainer.pk
+
+
+def scope_by_subject(queryset: QuerySet, user) -> QuerySet:
+    """Narrow reviews or feedback to the caller's centre, through the subject.
+
+    A review does not hang off a batch — it is about a person — so the branch is
+    reached through whichever of `student` or `trainer` is set. Both models are
+    constrained to exactly one non-null subject (`_subject_matches_type`), so the
+    `OR` cannot match a row twice and needs no `.distinct()`.
+
+    Public because `apps.common.recovery` borrows it for the restore guard: a
+    review is soft-deletable, and "which centre is this review's?" has to have
+    one answer whether the row is being read or being put back.
+    """
+    if is_unbounded(user):
+        return queryset
+    branch_id = actor_branch_id(user)
+    if branch_id is None:
+        return queryset.none()
+    return queryset.filter(Q(student__branch_id=branch_id) | Q(trainer__branch_id=branch_id))
 
 
 def visible_reviews(user) -> QuerySet:
@@ -112,7 +150,7 @@ def visible_reviews(user) -> QuerySet:
     base = PerformanceReview.objects.with_related()
 
     if can_manage_reviews(user) or can_view_any_performance(user):
-        return base
+        return scope_by_subject(base, user)
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -128,7 +166,7 @@ def visible_reviews(user) -> QuerySet:
 
 def can_view_review(user, review: PerformanceReview) -> bool:
     if can_manage_reviews(user) or can_view_any_performance(user):
-        return True
+        return visible_reviews(user).filter(pk=review.pk).exists()
     student = batch_access.student_profile(user)
     if student is not None and review.student_id == student.pk:
         return True
@@ -147,7 +185,7 @@ def visible_feedback(user) -> QuerySet:
     base = Feedback.objects.with_related()
 
     if can_manage_reviews(user) or can_view_any_performance(user):
-        return base
+        return scope_by_subject(base, user)
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

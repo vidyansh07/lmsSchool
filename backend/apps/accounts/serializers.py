@@ -74,6 +74,12 @@ class CurrentUserSerializer(UserSerializer):
     capabilities = serializers.SerializerMethodField()
     profile_type = serializers.SerializerMethodField()
     profile_id = serializers.SerializerMethodField()
+    # `default=None` on all three is load-bearing, not decoration: `branch` is
+    # nullable, and `source="branch.id"` on a null relation raises
+    # `AttributeError` — a 500 on the very first superadmin login.
+    branch_id = serializers.CharField(source="branch.id", read_only=True, default=None)
+    branch_code = serializers.CharField(source="branch.code", read_only=True, default=None)
+    branch_name = serializers.CharField(source="branch.name", read_only=True, default=None)
 
     class Meta(UserSerializer.Meta):
         fields = (
@@ -83,6 +89,9 @@ class CurrentUserSerializer(UserSerializer):
             "capabilities",
             "profile_type",
             "profile_id",
+            "branch_id",
+            "branch_code",
+            "branch_name",
         )
         read_only_fields = fields
 
@@ -142,6 +151,12 @@ class AdminUserCreateSerializer(StrictModelSerializer):
     No password field on purpose: the new user receives a single-use link and
     chooses their own, so an administrator never handles someone else's
     credentials.
+
+    ``branch`` is optional because for almost every caller it is ignored: a
+    bounded administrator's own centre is forced onto the record whatever they
+    send. It exists for the platform operator, who is bounded to no centre and
+    must therefore name one — without it, the only role that can run more than
+    one centre could not create a record in any of them.
     """
 
     email = serializers.EmailField(max_length=254)
@@ -149,10 +164,14 @@ class AdminUserCreateSerializer(StrictModelSerializer):
     last_name = SafeCharField(max_length=100, required=False, allow_blank=True, default="")
     phone = SafeCharField(max_length=20, required=False, allow_blank=True, default="")
     role = serializers.ChoiceField(choices=UserRole.choices)
+    #: A plain id rather than a `PrimaryKeyRelatedField`, which would validate
+    #: against the whole `Branch` table and so tell any caller which ids name a
+    #: real centre. Resolved in the view through `visible_branches`.
+    branch = serializers.UUIDField(required=False, allow_null=True)
 
     class Meta:
         model = User
-        fields = ("email", "first_name", "last_name", "phone", "role", "is_active")
+        fields = ("email", "first_name", "last_name", "phone", "role", "is_active", "branch")
 
     def validate_email(self, value: str) -> str:
         normalised = value.strip().lower()
@@ -260,6 +279,17 @@ class SetActiveSerializer(StrictSerializer):
     """
 
     is_active = serializers.BooleanField()
+    reason = SafeCharField(max_length=255, required=False, allow_blank=True, default="")
+
+
+class UserBranchSerializer(StrictSerializer):
+    """Moving an account between centres.
+
+    ``reason`` is what makes the move reviewable afterwards; the audit entry
+    records it beside the two branch codes.
+    """
+
+    branch_id = serializers.UUIDField()
     reason = SafeCharField(max_length=255, required=False, allow_blank=True, default="")
 
 

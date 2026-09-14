@@ -12,6 +12,20 @@ Three audiences, three answers:
   capability, so a trainer cannot reach a batch by guessing its id.
 * **Students** see the batches they are enrolled on, and only their own
   enrolment rows.
+
+And a fourth thing that cuts across the first: **a centre**. A global capability
+is no longer global — it is bounded to the branch the caller belongs to, through
+`apps.organisation.scoping`. This module is the hub eight other access modules
+derive from, so scoping it here scopes class sessions, discussions, progress,
+completions, certificates, the calendar and every report that reads
+`restrict_to_batches`, with no second copy of the rule to drift.
+
+The trainer branch is deliberately *not* intersected with a centre. A trainer's
+reach is defined by the batches they teach, and a cross-centre assignment is
+made impossible where the pairing is created (`services.assign_trainer`) rather
+than filtered where it is read — one rule, enforced once. The consequence is
+that a trainer moved between centres keeps their teaching history, which is the
+right answer.
 """
 
 from __future__ import annotations
@@ -19,6 +33,7 @@ from __future__ import annotations
 from django.db.models import QuerySet
 
 from apps.accounts.roles import Capability, has_capability
+from apps.organisation.scoping import scope_to_branch
 
 from .models import Batch
 
@@ -53,7 +68,7 @@ def visible_batches(user) -> QuerySet[Batch]:
     base = Batch.objects.with_related()
 
     if has_capability(user, Capability.BATCH_VIEW_ANY):
-        return base
+        return scope_to_branch(base, user, path="branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -125,7 +140,7 @@ def visible_enrollments(user):
     base = Enrollment.objects.with_related()
 
     if has_capability(user, Capability.ENROLMENT_VIEW_ANY):
-        return base
+        return scope_to_branch(base, user, path="batch__branch")
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

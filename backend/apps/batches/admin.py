@@ -18,16 +18,17 @@ class BatchAdmin(admin.ModelAdmin):
         "code",
         "name",
         "course",
+        "branch",
         "trainer",
         "start_date",
         "end_date",
         "capacity",
         "status",
     )
-    list_filter = ("status", "course", "start_date")
+    list_filter = ("status", "branch", "course", "start_date")
     search_fields = ("code", "name", "course__code", "course__title")
     readonly_fields = ("id", "code", "created_by", "created_at", "updated_at")
-    autocomplete_fields = ("course", "trainer")
+    autocomplete_fields = ("course", "trainer", "branch")
     inlines = (ScheduleInline,)
     ordering = ("-start_date",)
 

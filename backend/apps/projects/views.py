@@ -24,7 +24,6 @@ from apps.common.permissions import IsActiveUser
 from apps.common.uploads import SUBMISSION_CONTENT_TYPE, safe_download_name
 from apps.courses import access as course_access
 from apps.courses.models import Module
-from apps.trainers.models import TrainerProfile
 
 from . import access, services
 from .models import Project, ProjectFile, StudentProject
@@ -70,7 +69,14 @@ def _resolve_relations(request, course, data: dict) -> dict:
             batch_access.visible_batches(request.user).filter(course=course), pk=batch_id
         )
     if reviewer_id:
-        fields["reviewer"] = get_object_or_404(TrainerProfile.objects.all(), pk=reviewer_id)
+        # Out of the caller's own visible trainers, like the batch above: a
+        # project at one centre must not be able to name a marker at another,
+        # and an id the caller cannot see is not found rather than accepted.
+        from apps.trainers import access as trainers_access
+
+        fields["reviewer"] = get_object_or_404(
+            trainers_access.visible_trainers(request.user), pk=reviewer_id
+        )
     return fields
 
 

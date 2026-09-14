@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { fieldErrors } from '@/lib/api';
+import { BranchField } from '@/components/organisation/branch-field';
 import { createTrainer } from '@/lib/people';
 
 export function CreateTrainerDialog({
@@ -23,6 +24,7 @@ export function CreateTrainerDialog({
   const [title, setTitle] = useState('');
   const [skills, setSkills] = useState('');
   const [years, setYears] = useState('');
+  const [branchId, setBranchId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -43,6 +45,7 @@ export function CreateTrainerDialog({
             .filter(Boolean),
           years_of_experience: years === '' ? null : Number(years),
         },
+        ...(branchId ? { branch: branchId } : {}),
       });
       onCreated();
     } catch (cause) {
@@ -94,6 +97,7 @@ export function CreateTrainerDialog({
                 onChange={(event) => setYears(event.target.value)}
               />
             </Field>
+            <BranchField idPrefix="t-branch" value={branchId} onChange={setBranchId} error={errors.branch} />
           </div>
 
           <div className="flex gap-2">

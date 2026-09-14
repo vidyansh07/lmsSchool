@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from apps.accounts.models import User, UserRole
 from apps.accounts.roles import Capability, has_capability
-from apps.accounts.services import create_user
+from apps.accounts.services import create_user, resolve_branch_for_new_record
 from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
 from apps.common.identifiers import next_student_id
@@ -26,6 +26,7 @@ def create_student(
     last_name: str = "",
     phone: str = "",
     actor: User,
+    branch=None,
     profile_fields: dict[str, Any] | None = None,
     password: str | None = None,
     send_invitation: bool = True,
@@ -42,9 +43,13 @@ def create_student(
     than ``student.create`` — and it is checked here, not only in the view, so
     a caller that reaches this function some other way is held to the same
     rule.
+
+    The centre is resolved once and written to both halves, so an account and
+    its profile can never disagree about where somebody is.
     """
     if fee_amount is not None:
         _check_fee_amount(fee_amount, actor=actor)
+    branch = resolve_branch_for_new_record(actor=actor, branch=branch)
     user = create_user(
         email=email,
         password=password,
@@ -53,15 +58,21 @@ def create_student(
         phone=phone,
         role=UserRole.STUDENT,
         actor=actor,
+        branch=branch,
         send_invitation=send_invitation,
     )
 
-    profile = StudentProfile(user=user, student_id=next_student_id(), **(profile_fields or {}))
+    profile = StudentProfile(
+        user=user,
+        student_id=next_student_id(),
+        branch=user.branch,
+        **(profile_fields or {}),
+    )
     if fee_amount is not None:
         profile.fee_amount = fee_amount
         profile.fee_amount_updated_at = timezone.now()
         profile.fee_amount_updated_by = actor
-    profile.full_clean(exclude=["user", "student_id"])
+    profile.full_clean(exclude=["user", "student_id", "branch"])
     profile.save()
 
     record(
@@ -211,7 +222,8 @@ def get_or_create_profile_for(user: User, *, actor: User | None = None) -> Stude
     """Fetch the profile for a student account, creating it if it is missing.
 
     Covers accounts whose role was changed to student after creation. The
-    profile is empty, not fabricated: only the identifier is allocated.
+    profile is empty, not fabricated: only the identifier is allocated, and the
+    centre is taken from the account rather than guessed.
     """
     if user.role != UserRole.STUDENT:
         raise ConflictError("This account does not have the student role.")
@@ -219,7 +231,9 @@ def get_or_create_profile_for(user: User, *, actor: User | None = None) -> Stude
     if profile is not None:
         return profile
     with transaction.atomic():
-        profile = StudentProfile.objects.create(user=user, student_id=next_student_id())
+        profile = StudentProfile.objects.create(
+            user=user, student_id=next_student_id(), branch=user.branch
+        )
         record(
             action=AuditAction.STUDENT_CREATED,
             actor=actor or user,

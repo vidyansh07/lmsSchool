@@ -44,15 +44,29 @@ def _forbidden(request, message: str) -> Response:
     )
 
 
-def _resolve_subject(data: dict) -> tuple:
-    """Turn the ``student``/``trainer`` ids a write submits into profiles."""
-    from apps.students.models import StudentProfile
-    from apps.trainers.models import TrainerProfile
+def _resolve_subject(request, data: dict) -> tuple:
+    """Turn the ``student``/``trainer`` ids a write submits into profiles.
+
+    Resolved out of the caller's own scoped querysets rather than out of the
+    table, so a subject at another centre is a 404. A write is a read as well:
+    a 201 here would both confirm that the person exists and file a review
+    against them that their own centre would then watch appear.
+    """
+    from apps.students import access as students_access
+    from apps.trainers import access as trainers_access
 
     student_id = data.get("student")
     trainer_id = data.get("trainer")
-    student = get_object_or_404(StudentProfile, pk=student_id) if student_id else None
-    trainer = get_object_or_404(TrainerProfile, pk=trainer_id) if trainer_id else None
+    student = (
+        get_object_or_404(students_access.visible_students(request.user), pk=student_id)
+        if student_id
+        else None
+    )
+    trainer = (
+        get_object_or_404(trainers_access.visible_trainers(request.user), pk=trainer_id)
+        if trainer_id
+        else None
+    )
     return student, trainer
 
 
@@ -155,7 +169,7 @@ class ReviewListView(APIView):
         serializer = ReviewWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
-        student, trainer = _resolve_subject(data)
+        student, trainer = _resolve_subject(request, data)
         data.pop("student", None)
         data.pop("trainer", None)
 
@@ -271,14 +285,14 @@ class FeedbackListView(APIView):
         serializer = FeedbackWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
-        student, trainer = _resolve_subject(data)
+        student, trainer = _resolve_subject(request, data)
 
         batch = None
         batch_id = data.get("batch")
         if batch_id:
-            from apps.batches.models import Batch
-
-            batch = get_object_or_404(Batch.objects.all(), pk=batch_id)
+            # Out of the caller's own visible batches, for the same reason the
+            # subject above is: a class at another centre is not found.
+            batch = get_object_or_404(batch_access.visible_batches(request.user), pk=batch_id)
 
         feedback = services.create_feedback(
             actor=request.user,

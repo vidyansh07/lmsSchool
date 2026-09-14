@@ -65,11 +65,13 @@ def _add_students(batch, count: int, *, start: int = 0) -> list[Enrollment]:
             last_name=f"Student {start + index}",
             role=UserRole.STUDENT,
             is_active=True,
+            branch=batch.branch,
         )
         for index in range(count)
     )
     profiles = StudentProfile.objects.bulk_create(
-        StudentProfile(user=user, student_id=next_student_id()) for user in users
+        StudentProfile(user=user, student_id=next_student_id(), branch=batch.branch)
+        for user in users
     )
     return Enrollment.objects.bulk_create(
         Enrollment(

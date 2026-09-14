@@ -330,10 +330,12 @@ def test_a_student_sees_their_own_fees_and_nobody_elses(
     assert mine.json()["plans"][0]["course_title"] == enrollment.course.title
 
     assert api_client_no_csrf.get(fee_url(enrollment)).status_code == 200
-    assert api_client_no_csrf.get(fee_url(other_enrollment)).status_code == 403
+    # Somebody else's record is not theirs to know about: a 404, never a 403
+    # that confirms the id exists.
+    assert api_client_no_csrf.get(fee_url(other_enrollment)).status_code == 404
     assert (
         api_client_no_csrf.get(f"/api/v1/fees/students/{other_enrollment.student_id}/").status_code
-        == 403
+        == 404
     )
     assert api_client_no_csrf.get("/api/v1/fees/overview/").status_code == 403
 
@@ -420,3 +422,60 @@ def test_the_enrolment_list_carries_the_fee_for_staff_only(
     api_client_no_csrf.force_login(enrollment.student.user)
     mine = api_client_no_csrf.get("/api/v1/enrollments/").json()["results"]
     assert "fee_balance" not in mine[0]
+
+
+# ---------------------------------------------------------------------------
+# Centres
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_counsellor_at_another_centre_cannot_reach_the_fee(
+    api_client_no_csrf, counsellor_user, other_branch_manager, enrollment
+):
+    plan = services.set_fee_plan(enrollment=enrollment, actor=counsellor_user, agreed_amount="9000")
+    payment = services.record_payment(plan=plan, actor=counsellor_user, amount="1000")
+    api_client_no_csrf.force_login(other_branch_manager)
+    assert api_client_no_csrf.get(fee_url(enrollment)).status_code == 404
+    assert (
+        api_client_no_csrf.put(
+            fee_url(enrollment), {"agreed_amount": "1"}, format="json"
+        ).status_code
+        == 404
+    )
+    assert (
+        api_client_no_csrf.post(
+            f"{fee_url(enrollment)}payments/", {"amount": "1000", "method": "cash"}, format="json"
+        ).status_code
+        == 404
+    )
+    assert (
+        api_client_no_csrf.post(
+            f"/api/v1/fees/payments/{payment.pk}/void/", {"reason": "Not mine"}, format="json"
+        ).status_code
+        == 404
+    )
+    assert (
+        api_client_no_csrf.get(f"/api/v1/fees/students/{enrollment.student_id}/").status_code == 404
+    )
+    overview = api_client_no_csrf.get("/api/v1/fees/overview/")
+    assert overview.status_code == 200
+    assert overview.json()["collected_today"] == "0.00"
+    assert overview.json()["outstanding_total"] == "0.00"
+    assert overview.json()["enrollments_without_plan"] == 0
+
+
+@pytest.mark.django_db
+def test_the_overview_counts_only_the_callers_centre(
+    api_client_no_csrf, counsellor_user, unbounded_superadmin, enrollment, other_branch_enrollment
+):
+    services.set_fee_plan(enrollment=enrollment, actor=counsellor_user, agreed_amount="9000")
+    services.set_fee_plan(
+        enrollment=other_branch_enrollment, actor=unbounded_superadmin, agreed_amount="5000"
+    )
+    api_client_no_csrf.force_login(counsellor_user)
+    mine = api_client_no_csrf.get("/api/v1/fees/overview/").json()
+    assert mine["outstanding_total"] == "9000.00"
+    api_client_no_csrf.force_login(unbounded_superadmin)
+    everything = api_client_no_csrf.get("/api/v1/fees/overview/").json()
+    assert everything["outstanding_total"] == "14000.00"

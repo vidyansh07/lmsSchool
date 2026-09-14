@@ -211,9 +211,16 @@ def confirm_students(*, run: BulkImport, actor: User) -> BulkImport:
 
     batch = None
     if run.report.get("batch"):
-        from apps.batches.models import Batch
+        # Through the *confirming* actor's reach, not `Batch.objects`. The batch
+        # id was stored at preview time by whoever uploaded the file, and the
+        # person confirming it need not be the same person — so a preview taken
+        # by an operator who can see both centres, confirmed by a manager who
+        # can see one, must not enrol into the other. Resolving to `None` means
+        # the accounts are still created and simply not enrolled, which is the
+        # recoverable half of the two.
+        from apps.batches import access as batch_access
 
-        batch = Batch.objects.filter(pk=run.report["batch"]["id"]).first()
+        batch = batch_access.visible_batches(actor).filter(pk=run.report["batch"]["id"]).first()
 
     created = 0
     for row in run.report.get("rows", []):

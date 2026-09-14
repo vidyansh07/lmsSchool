@@ -432,18 +432,25 @@ def sync_student_fee_status(student: StudentProfile, *, actor: User) -> None:
         )
 
 
-def fees_overview(*, limit: int = 20) -> dict[str, Any]:
-    """The counsellor's fees panel: what came in, who is late, who has no fee."""
+def fees_overview(*, user: User, limit: int = 20) -> dict[str, Any]:
+    """The counsellor's fees panel: what came in, who is late, who has no fee.
+
+    Computed over the enrolments the caller may see — their centre — so a
+    bounded counsellor's "collected today" is about their own desk.
+    """
+    from apps.batches.access import visible_enrollments
+
     today = timezone.localdate()
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
-    live = FeePayment.objects.filter(voided_at__isnull=True)
+    enrollments = visible_enrollments(user)
+    live = FeePayment.objects.filter(voided_at__isnull=True, plan__enrollment__in=enrollments)
 
     def collected(since: date) -> Decimal:
         return Decimal(live.filter(paid_on__gte=since).aggregate(total=Sum("amount"))["total"] or 0)
 
     plans = (
-        FeePlan.objects.filter(enrollment__status__in=LIVE_STATUSES)
+        FeePlan.objects.filter(enrollment__status__in=LIVE_STATUSES, enrollment__in=enrollments)
         .select_related("enrollment__student__user", "enrollment__batch")
         .with_totals()
     )
@@ -460,9 +467,7 @@ def fees_overview(*, limit: int = 20) -> dict[str, Any]:
         key=lambda plan: plan.next_due_on,
     )
     unpaid = [plan for plan in plans if plan.paid <= ZERO and plan.payable > ZERO]
-    without_plan = Enrollment.objects.filter(
-        status__in=LIVE_STATUSES, fee_plan__isnull=True
-    ).count()
+    without_plan = enrollments.filter(status__in=LIVE_STATUSES, fee_plan__isnull=True).count()
     outstanding = sum((plan.balance for plan in plans if plan.balance > ZERO), ZERO)
     return {
         "collected_today": collected(today),

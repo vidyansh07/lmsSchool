@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import django_filters
+from django.http import Http404
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status as http_status
@@ -11,7 +12,7 @@ from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.models import User
+from apps.accounts.access import visible_accounts
 from apps.audit.services import AuditAction, record
 from apps.batches import access as batch_access
 from apps.common.permissions import IsActiveUser
@@ -57,7 +58,18 @@ def _resolve(request, data: dict) -> tuple[dict, list]:
 
     recipients = []
     if recipient_ids:
-        recipients = list(User.objects.filter(pk__in=recipient_ids, is_active=True))
+        # Through the caller's own reach, like the course and the batch above.
+        # Resolving these from `User.objects` let a manager in one city address
+        # a student in another — a notice on their board and a notification in
+        # their tray — and made the create a quiet existence oracle for account
+        # ids, since only a real active account survived the filter.
+        #
+        # Every named id must resolve, so a wrong one is a 404 rather than a
+        # silently shorter recipient list.
+        reachable = visible_accounts(request.user).filter(pk__in=recipient_ids, is_active=True)
+        recipients = list(reachable)
+        if len(recipients) != len(set(recipient_ids)):
+            raise Http404("No such recipient.")
     return fields, recipients
 
 

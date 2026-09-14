@@ -200,7 +200,12 @@ function HeaderAccount() {
         </Avatar>
         <span className="hidden min-w-0 flex-col leading-tight md:flex">
           <span className="truncate text-sm font-semibold text-foreground">{name}</span>
-          <span className="text-xs capitalize text-muted-foreground">{user.role}</span>
+          <span className="text-xs capitalize text-muted-foreground">
+            {user.role}
+            {/* Which centre this account is bounded to. Only when there is one —
+                a superadmin belongs to none, and "all of them" is not a value. */}
+            {user.branch_name ? <span className="normal-case"> · {user.branch_name}</span> : null}
+          </span>
         </span>
       </Link>
     </div>

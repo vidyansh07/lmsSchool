@@ -63,7 +63,11 @@ CLASS_END = time(12, 0)
 CATEGORY_BY_KEYWORD: list[tuple[tuple[str, ...], str, str]] = [
     (("aws", "azure", "cloud"), "cloud-devops", "Cloud & DevOps"),
     (("cyber", "soc", "security"), "cyber-security", "Cyber Security"),
-    (("data", "analytics", "power bi", "pl300", "ml", "science"), "data-analytics", "Data & Analytics"),
+    (
+        ("data", "analytics", "power bi", "pl300", "ml", "science"),
+        "data-analytics",
+        "Data & Analytics",
+    ),
     (("agentic", "ai"), "ai-engineering", "AI Engineering"),
     (("mern", "web", "stack"), "programming", "Programming"),
 ]
@@ -99,14 +103,30 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("paths", nargs="+", help="Workbook files or folders of them.")
-        parser.add_argument("--actor", required=True, help="Email of the staff account doing the import.")
-        parser.add_argument("--dry-run", action="store_true", help="Do everything, then roll it all back.")
-        parser.add_argument("--report", help="Write the JSON report here as well as printing a summary.")
+        parser.add_argument(
+            "--actor", required=True, help="Email of the staff account doing the import."
+        )
+        parser.add_argument(
+            "--dry-run", action="store_true", help="Do everything, then roll it all back."
+        )
+        parser.add_argument(
+            "--report", help="Write the JSON report here as well as printing a summary."
+        )
+        parser.add_argument(
+            "--branch",
+            default="MAIN",
+            help="Code of the centre the students, trainers and batches belong to (default MAIN).",
+        )
 
     def handle(self, *args, **options):
         actor = User.objects.filter(email__iexact=options["actor"]).first()
         if actor is None:
             raise CommandError(f"No account with email {options['actor']!r}.")
+        from apps.organisation.models import Branch
+
+        branch = Branch.objects.filter(code=options["branch"]).first()
+        if branch is None:
+            raise CommandError(f"No centre with code {options['branch']!r}.")
 
         files = sorted({path for raw in options["paths"] for path in _expand(Path(raw))})
         if not files:
@@ -123,9 +143,11 @@ class Command(BaseCommand):
                         report.problem(problem.sheet, problem.row, problem.reason)
                     report.not_imported = dict(book.not_imported)
                     if book.non_class_rows:
-                        report.counts["report rows that were Sundays or holidays"] += book.non_class_rows
-                    Importer(actor=actor, book=book, report=report).run()
-                except Exception as exc:  # noqa: BLE001 — one bad file must not hide the rest
+                        report.counts["report rows that were Sundays or holidays"] += (
+                            book.non_class_rows
+                        )
+                    Importer(actor=actor, branch=branch, book=book, report=report).run()
+                except Exception as exc:
                     report.problem("workbook", None, f"Import stopped: {exc}")
                     self.stderr.write(f"  ✗ {exc}")
                 reports.append(report)
@@ -141,14 +163,24 @@ class Command(BaseCommand):
         totals = Counter()
         for report in reports:
             totals.update(report.counts)
-        self.stdout.write(self.style.SUCCESS("Totals: " + ", ".join(f"{k} {v}" for k, v in sorted(totals.items()))))
+        self.stdout.write(
+            self.style.SUCCESS(
+                "Totals: " + ", ".join(f"{k} {v}" for k, v in sorted(totals.items()))
+            )
+        )
         problems = sum(len(r.problems) for r in reports)
         if problems:
-            self.stdout.write(self.style.WARNING(f"{problems} rows or cells were not imported; see the report."))
+            self.stdout.write(
+                self.style.WARNING(f"{problems} rows or cells were not imported; see the report.")
+            )
 
         if options["report"]:
             Path(options["report"]).write_text(
-                json.dumps({"dry_run": options["dry_run"], "files": [r.as_dict() for r in reports]}, indent=2, default=str)
+                json.dumps(
+                    {"dry_run": options["dry_run"], "files": [r.as_dict() for r in reports]},
+                    indent=2,
+                    default=str,
+                )
             )
             self.stdout.write(f"Report written to {options['report']}")
 
@@ -167,14 +199,19 @@ def _expand(path: Path) -> list[Path]:
 
 
 class Importer:
-    def __init__(self, *, actor: User, book: Workbook, report: FileReport):
+    def __init__(self, *, actor: User, branch, book: Workbook, report: FileReport):
         self.actor = actor
+        # The centre every imported person and class belongs to. A bounded actor's
+        # own centre wins inside the services; for a superadmin this is the answer.
+        self.branch = branch
         self.book = book
         self.report = report
 
     def run(self) -> None:
         if not self.book.students:
-            self.report.problem("Attendance", None, "No students could be read, so nothing else was imported.")
+            self.report.problem(
+                "Attendance", None, "No students could be read, so nothing else was imported."
+            )
             return
         course = self.course()
         trainer = self.trainer()
@@ -188,7 +225,13 @@ class Importer:
     # --- course ----------------------------------------------------------
 
     def course(self):
-        from apps.courses.models import Category, Course, CourseDifficulty, LessonContentType, PublishStatus
+        from apps.courses.models import (
+            Category,
+            Course,
+            CourseDifficulty,
+            LessonContentType,
+            PublishStatus,
+        )
         from apps.courses.services import (
             create_category,
             create_course,
@@ -219,7 +262,9 @@ class Importer:
                 slug=slugify(re.sub(r"[_—–]+", " ", title))[:60].strip("-"),
                 category=category,
                 short_description=f"{self.book.batch_name} — summer industrial training for {COLLEGE}, {self.book.year_label or 'B.Tech'}.",
-                difficulty=CourseDifficulty.BEGINNER if "1st" in self.book.year_label else CourseDifficulty.INTERMEDIATE,
+                difficulty=CourseDifficulty.BEGINNER
+                if "1st" in self.book.year_label
+                else CourseDifficulty.INTERMEDIATE,
             )
             # A batch may only run a course that is published or in review, and
             # publishing needs real lesson content, which these sheets do not
@@ -277,6 +322,7 @@ class Importer:
             self.report.trainer = existing.trainer_id
             return existing
         profile = create_trainer(
+            branch=self.branch,
             email=email,
             first_name=first.title(),
             last_name=last.title(),
@@ -286,7 +332,9 @@ class Importer:
         )
         self.report.counts["trainers created"] += 1
         self.report.problem(
-            "DSR", None, f"Trainer {name!r} has no account; created {email} with no way to sign in until a real address is set."
+            "DSR",
+            None,
+            f"Trainer {name!r} has no account; created {email} with no way to sign in until a real address is set.",
         )
         self.report.trainer = profile.trainer_id
         return profile
@@ -297,20 +345,29 @@ class Importer:
         from apps.batches.models import Batch, BatchKind, BatchStatus, DeliveryMode
         from apps.batches.services import create_batch
 
-        name = f"{PROGRAMME} {self.book.year_label} — {self.book.batch_name}".replace("  ", " ").strip()
+        name = f"{PROGRAMME} {self.book.year_label} — {self.book.batch_name}".replace(
+            "  ", " "
+        ).strip()
         # The batch spans every day anything happened: a register was taken or
         # a report was written. Reports often start a day or two before the
         # first register, and a class must fall inside its batch.
-        dates = sorted(set(self.book.class_dates) | {row.on for row in self.book.dsr}) or [date.today()]
+        dates = sorted(set(self.book.class_dates) | {row.on for row in self.book.dsr}) or [
+            date.today()
+        ]
         batch = Batch.objects.filter(name=name).first()
         if batch is None:
             online = sum(1 for row in self.book.dsr if row.online)
             offline = sum(1 for row in self.book.dsr if row.offline)
             mode = (
-                DeliveryMode.HYBRID if online and offline else DeliveryMode.ONLINE if online else DeliveryMode.OFFLINE
+                DeliveryMode.HYBRID
+                if online and offline
+                else DeliveryMode.ONLINE
+                if online
+                else DeliveryMode.OFFLINE
             )
             batch = create_batch(
                 actor=self.actor,
+                branch=self.branch,
                 name=name,
                 course=course,
                 trainer=trainer,
@@ -337,9 +394,17 @@ class Importer:
 
         enrollments: dict[str, Any] = {}
         for student in self.book.students:
-            profile = StudentProfile.objects.filter(roll_number=student.roll_number).select_related("user").first()
+            profile = (
+                StudentProfile.objects.filter(roll_number=student.roll_number)
+                .select_related("user")
+                .first()
+            )
             if profile is None and student.email:
-                profile = StudentProfile.objects.filter(user__email__iexact=student.email).select_related("user").first()
+                profile = (
+                    StudentProfile.objects.filter(user__email__iexact=student.email)
+                    .select_related("user")
+                    .first()
+                )
                 if profile is not None and not profile.roll_number:
                     profile.roll_number = student.roll_number
                     profile.save(update_fields=["roll_number", "updated_at"])
@@ -355,6 +420,7 @@ class Importer:
                 email = student.email or f"rtu-{student.roll_number.lower()}@{PLACEHOLDER_DOMAIN}"
                 try:
                     profile = create_student(
+                        branch=self.branch,
                         email=email,
                         first_name=first.title()[:100],
                         last_name=last.title()[:100],
@@ -367,15 +433,21 @@ class Importer:
                             "notes": " ".join(
                                 part
                                 for part in (
-                                    "" if student.email else "No email in the SITP sheet; placeholder address, cannot sign in until one is set.",
-                                    f"Name not in the SITP sheet; known only by roll number {student.roll_number}." if nameless else "",
+                                    ""
+                                    if student.email
+                                    else "No email in the SITP sheet; placeholder address, cannot sign in until one is set.",
+                                    f"Name not in the SITP sheet; known only by roll number {student.roll_number}."
+                                    if nameless
+                                    else "",
                                 )
                                 if part
                             ),
                         },
                     )
-                except Exception as exc:  # noqa: BLE001 — reported per row
-                    self.report.problem("Attendance", student.row, f"{student.name!r}: {_message(exc)}")
+                except Exception as exc:
+                    self.report.problem(
+                        "Attendance", student.row, f"{student.name!r}: {_message(exc)}"
+                    )
                     continue
                 self.report.counts["students created"] += 1
                 if not student.email:
@@ -392,8 +464,12 @@ class Importer:
                     self.report.counts["enrolments created"] += 1
                 except DuplicateEnrollmentError:
                     enrollment = Enrollment.objects.filter(student=profile, batch=batch).first()
-                except Exception as exc:  # noqa: BLE001
-                    self.report.problem("Attendance", student.row, f"{student.name!r} could not be enrolled: {_message(exc)}")
+                except Exception as exc:
+                    self.report.problem(
+                        "Attendance",
+                        student.row,
+                        f"{student.name!r} could not be enrolled: {_message(exc)}",
+                    )
                     continue
             enrollments[student.roll_number] = enrollment
         return enrollments
@@ -415,7 +491,9 @@ class Importer:
         if dsr_only:
             self.report.counts["classes known only from a report"] += len(dsr_only)
         for when in sorted(set(self.book.class_dates) | set(dsr_only)):
-            session = ClassSession.objects.filter(batch=batch, session_date=when, start_time=CLASS_START).first()
+            session = ClassSession.objects.filter(
+                batch=batch, session_date=when, start_time=CLASS_START
+            ).first()
             if session is None:
                 try:
                     session = create_session(
@@ -428,8 +506,10 @@ class Importer:
                         topic=topics.get(when, ""),
                     )
                     self.report.counts["classes created"] += 1
-                except Exception as exc:  # noqa: BLE001
-                    self.report.problem("Attendance", None, f"Class on {when} could not be created: {_message(exc)}")
+                except Exception as exc:
+                    self.report.problem(
+                        "Attendance", None, f"Class on {when} could not be created: {_message(exc)}"
+                    )
                     continue
             sessions[when] = session
         return sessions
@@ -446,7 +526,9 @@ class Importer:
             if enrollment is None:
                 continue
             for when, status in register.items():
-                by_date[when].append({"enrollment_id": str(enrollment.pk), "status": status, "note": ""})
+                by_date[when].append(
+                    {"enrollment_id": str(enrollment.pk), "status": status, "note": ""}
+                )
 
         for when, entries in sorted(by_date.items()):
             session = sessions.get(when)
@@ -463,8 +545,10 @@ class Importer:
                 mark_attendance(session=session, actor=self.actor, entries=entries)
                 self.report.counts["registers marked"] += 1
                 self.report.counts["attendance records"] += len(entries)
-            except Exception as exc:  # noqa: BLE001
-                self.report.problem("Attendance", None, f"Register for {when} refused: {_message(exc)}")
+            except Exception as exc:
+                self.report.problem(
+                    "Attendance", None, f"Register for {when} refused: {_message(exc)}"
+                )
 
     # --- daily status reports ------------------------------------------------
 
@@ -475,12 +559,16 @@ class Importer:
         for row in self.book.dsr:
             session = sessions.get(row.on)
             if session is None:
-                self.report.problem("DSR", row.row, f"No class on {row.on} in the attendance sheet; report skipped.")
+                self.report.problem(
+                    "DSR", row.row, f"No class on {row.on} in the attendance sheet; report skipped."
+                )
                 continue
             if DSR.all_objects.filter(session=session).exists():
                 self.report.counts["reports already present"] += 1
                 continue
-            present = row.present if row.present is not None else (row.online or 0) + (row.offline or 0)
+            present = (
+                row.present if row.present is not None else (row.online or 0) + (row.offline or 0)
+            )
             roster = row.roster_size or session.batch.enrollments.count()
             note = f"Imported from {self.book.path.name}, DSR row {row.row}."
             if row.online is None and row.offline is None and row.present is not None:
@@ -503,7 +591,7 @@ class Importer:
                 dsr = start_dsr(session=session, actor=self.actor, **fields)
                 submit_dsr(dsr=dsr, actor=self.actor)
                 self.report.counts["reports submitted"] += 1
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 self.report.problem("DSR", row.row, f"Report for {row.on} refused: {_message(exc)}")
 
     # --- assessments ------------------------------------------------------------
@@ -516,7 +604,11 @@ class Importer:
             AssessmentStatus,
             ResultSource,
         )
-        from apps.assessments.services import create_assessment, record_result, set_assessment_status
+        from apps.assessments.services import (
+            create_assessment,
+            record_result,
+            set_assessment_status,
+        )
 
         for column in self.book.assessments:
             title = f"{column.index}. {column.title}"[:200]
@@ -532,17 +624,27 @@ class Importer:
                         max_marks=column.max_marks,
                     )
                     # A test whose marks exist has been sat: publish, then close.
-                    set_assessment_status(assessment=assessment, actor=self.actor, status=AssessmentStatus.PUBLISHED)
-                    set_assessment_status(assessment=assessment, actor=self.actor, status=AssessmentStatus.CLOSED)
+                    set_assessment_status(
+                        assessment=assessment, actor=self.actor, status=AssessmentStatus.PUBLISHED
+                    )
+                    set_assessment_status(
+                        assessment=assessment, actor=self.actor, status=AssessmentStatus.CLOSED
+                    )
                     self.report.counts["assessments created"] += 1
-                except Exception as exc:  # noqa: BLE001
-                    self.report.problem("Assessment", None, f"{title!r} could not be created: {_message(exc)}")
+                except Exception as exc:
+                    self.report.problem(
+                        "Assessment", None, f"{title!r} could not be created: {_message(exc)}"
+                    )
                     continue
 
             for roll, marks in self.book.marks.items():
                 enrollment = enrollments.get(roll)
                 if enrollment is None:
-                    self.report.problem("Assessment", None, f"Roll {roll} has marks but is not on the attendance roster; skipped.")
+                    self.report.problem(
+                        "Assessment",
+                        None,
+                        f"Roll {roll} has marks but is not on the attendance roster; skipped.",
+                    )
                     continue
                 value = marks.get(column.index)
                 if value is None:
@@ -550,14 +652,22 @@ class Importer:
                 try:
                     if value == "absent":
                         _, created = record_result(
-                            assessment=assessment, enrollment=enrollment, actor=self.actor, is_absent=True, source=ResultSource.IMPORT
+                            assessment=assessment,
+                            enrollment=enrollment,
+                            actor=self.actor,
+                            is_absent=True,
+                            source=ResultSource.IMPORT,
                         )
                     else:
                         _, created = record_result(
-                            assessment=assessment, enrollment=enrollment, actor=self.actor, marks=Decimal(value), source=ResultSource.IMPORT
+                            assessment=assessment,
+                            enrollment=enrollment,
+                            actor=self.actor,
+                            marks=Decimal(value),
+                            source=ResultSource.IMPORT,
                         )
                     self.report.counts["results created" if created else "results updated"] += 1
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     self.report.problem("Assessment", None, f"{roll} on {title!r}: {_message(exc)}")
 
 
@@ -574,20 +684,29 @@ def _clean_name(value: str) -> str:
 
 
 def _same_person(a: str, b: str) -> bool:
-    """"Kapil Jangid" and "kapil jangid" are one person; so are "Vidyansh"
+    """ "Kapil Jangid" and "kapil jangid" are one person; so are "Vidyansh"
     and "Vidyansh Sharma" — a first name alone matches a trainer whose first
     name it is, when nothing else does."""
     left = _clean_name(a).lower().split()
     right = _clean_name(b).lower().split()
     if not left or not right:
         return False
-    return left == right or (len(right) == 1 and right[0] == left[0]) or (len(left) == 1 and left[0] == right[0])
+    return (
+        left == right
+        or (len(right) == 1 and right[0] == left[0])
+        or (len(left) == 1 and left[0] == right[0])
+    )
 
 
 def _message(exc: Exception) -> str:
     detail = getattr(exc, "detail", None)
     if isinstance(detail, dict):
-        return "; ".join(f"{key}: {' '.join(map(str, value)) if isinstance(value, list) else value}" for key, value in detail.items())
+        return "; ".join(
+            f"{key}: {' '.join(map(str, value)) if isinstance(value, list) else value}"
+            for key, value in detail.items()
+        )
     if hasattr(exc, "message_dict"):
-        return "; ".join(f"{key}: {' '.join(map(str, value))}" for key, value in exc.message_dict.items())
+        return "; ".join(
+            f"{key}: {' '.join(map(str, value))}" for key, value in exc.message_dict.items()
+        )
     return str(detail or exc)
