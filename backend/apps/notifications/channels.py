@@ -63,7 +63,20 @@ def _wants_email(notification: Notification) -> bool:
     A missing preference row means the defaults, so nobody has to be
     back-filled. An address that cannot receive mail is skipped rather than
     queued and failed repeatedly.
+
+    The institution's own switch is checked first and overrides every
+    preference. What a person experiences when it is off is that the bell in
+    the app still lights up and nothing arrives in their inbox — `notify`
+    writes the `Notification` row before `deliver` is ever called, so
+    suppressing delivery loses nothing, which is what makes this safe to reach
+    for during a mail-provider migration or a bulk backfill.
     """
+    # Cross-app import inside the function on purpose: see `templates._footer`.
+    from apps.configuration.settings_resolver import effective_settings
+
+    if not effective_settings().notification_email_enabled:
+        return False
+
     recipient = notification.recipient
     if not recipient.email or not recipient.is_active:
         return False

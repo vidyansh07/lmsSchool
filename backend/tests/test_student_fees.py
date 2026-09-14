@@ -134,14 +134,20 @@ def test_the_service_checks_the_permission_itself(trainer):
 def test_the_service_enforces_the_floor_itself(counsellor_user):
     with pytest.raises(ApplicationError):
         services.create_student(
-            email="svc2@example.test", first_name="Svc", actor=counsellor_user, fee_amount=Decimal("999")
+            email="svc2@example.test",
+            first_name="Svc",
+            actor=counsellor_user,
+            fee_amount=Decimal("999"),
         )
 
 
 @pytest.mark.django_db
 def test_registration_with_a_fee_is_audited(counsellor_user):
     profile = services.create_student(
-        email="audited@example.test", first_name="A", actor=counsellor_user, fee_amount=Decimal("3000")
+        email="audited@example.test",
+        first_name="A",
+        actor=counsellor_user,
+        fee_amount=Decimal("3000"),
     )
 
     entry = AuditLog.objects.filter(
@@ -177,9 +183,14 @@ def test_the_fee_can_be_changed_by_those_who_may_quote_it(
 
 @pytest.mark.django_db
 def test_a_change_is_audited_with_both_values(counsellor_user, student_profile):
-    services.set_fee_amount(profile=student_profile, fee_amount=Decimal("2000"), actor=counsellor_user)
     services.set_fee_amount(
-        profile=student_profile, fee_amount=Decimal("2500"), actor=counsellor_user, note="Lab add-on"
+        profile=student_profile, fee_amount=Decimal("2000"), actor=counsellor_user
+    )
+    services.set_fee_amount(
+        profile=student_profile,
+        fee_amount=Decimal("2500"),
+        actor=counsellor_user,
+        note="Lab add-on",
     )
 
     entry = (
@@ -196,16 +207,22 @@ def test_a_change_is_audited_with_both_values(counsellor_user, student_profile):
 
 @pytest.mark.django_db
 def test_setting_the_same_fee_records_nothing(counsellor_user, student_profile):
-    services.set_fee_amount(profile=student_profile, fee_amount=Decimal("2000"), actor=counsellor_user)
+    services.set_fee_amount(
+        profile=student_profile, fee_amount=Decimal("2000"), actor=counsellor_user
+    )
     before = AuditLog.objects.filter(action=AuditAction.STUDENT_FEE_AMOUNT_CHANGED).count()
 
-    services.set_fee_amount(profile=student_profile, fee_amount=Decimal("2000"), actor=counsellor_user)
+    services.set_fee_amount(
+        profile=student_profile, fee_amount=Decimal("2000"), actor=counsellor_user
+    )
 
     assert AuditLog.objects.filter(action=AuditAction.STUDENT_FEE_AMOUNT_CHANGED).count() == before
 
 
 @pytest.mark.django_db
-def test_the_fee_can_be_cleared_back_to_undecided(api_client_no_csrf, manager_user, student_profile):
+def test_the_fee_can_be_cleared_back_to_undecided(
+    api_client_no_csrf, manager_user, student_profile
+):
     """``null`` is the way back. Zero is not a fee."""
     api_client_no_csrf.force_login(manager_user)
     services.set_fee_amount(profile=student_profile, fee_amount=Decimal("2000"), actor=manager_user)
@@ -217,7 +234,9 @@ def test_the_fee_can_be_cleared_back_to_undecided(api_client_no_csrf, manager_us
     assert response.status_code == 200
     assert response.json()["fee_amount"] is None
 
-    zero = api_client_no_csrf.post(fee_amount_url(student_profile), {"fee_amount": "0"}, format="json")
+    zero = api_client_no_csrf.post(
+        fee_amount_url(student_profile), {"fee_amount": "0"}, format="json"
+    )
     assert zero.status_code == 400
 
 
@@ -245,7 +264,9 @@ def test_nobody_else_may_change_it(api_client_no_csrf, request, fixture, student
 def test_a_student_sees_the_fee_and_cannot_change_it(
     api_client_no_csrf, counsellor_user, student_profile
 ):
-    services.set_fee_amount(profile=student_profile, fee_amount=Decimal("8000"), actor=counsellor_user)
+    services.set_fee_amount(
+        profile=student_profile, fee_amount=Decimal("8000"), actor=counsellor_user
+    )
     api_client_no_csrf.force_login(student_profile.user)
 
     assert api_client_no_csrf.get(ME_URL).json()["fee_amount"] == "8000.00"
@@ -280,10 +301,16 @@ def test_an_unknown_institution_kind_is_refused(api_client_no_csrf, student_prof
 
 
 @pytest.mark.django_db
-def test_the_list_carries_the_fee_for_the_table(api_client_no_csrf, counsellor_user, student_profile):
-    services.set_fee_amount(profile=student_profile, fee_amount=Decimal("4500"), actor=counsellor_user)
+def test_the_list_carries_the_fee_for_the_table(
+    api_client_no_csrf, counsellor_user, student_profile
+):
+    services.set_fee_amount(
+        profile=student_profile, fee_amount=Decimal("4500"), actor=counsellor_user
+    )
     api_client_no_csrf.force_login(counsellor_user)
 
-    rows = api_client_no_csrf.get(f"{STUDENTS_URL}?search={student_profile.student_id}").json()["results"]
+    rows = api_client_no_csrf.get(f"{STUDENTS_URL}?search={student_profile.student_id}").json()[
+        "results"
+    ]
 
     assert rows[0]["fee_amount"] == "4500.00"

@@ -70,6 +70,7 @@ LOCAL_APPS = [
     "apps.common",
     "apps.accounts",
     "apps.organisation",
+    "apps.configuration",
     "apps.students",
     "apps.trainers",
     "apps.courses",

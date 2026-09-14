@@ -703,11 +703,12 @@ Two items from the original audit remain open, both known and neither blocking:
 **application caching** (Redis runs, the app caches nothing) and **authentication
 hardening** (MFA, per-account rate limiting, bounded session revocation).
 
-Two more were built on side branches on 7 September and are **not merged**:
-organisational scoping by centre (`feat/erp-org-scoping`, the −5 in the RBAC
-row above) and operator-changeable platform settings
-(`feat/erp-system-settings`). Both conflict with the current branch and need a
-rebase before review.
+Two more were built on side branches on 7 September and merged on 14
+September: organisational scoping by centre (`feat/erp-org-scoping`, closing
+the −5 in the RBAC row above) and operator-changeable institution settings
+(`feat/erp-system-settings`). The merge also carried the centre into the
+Phase 13 code that post-dated the branches: the fees API, the SITP importer
+and the create forms.
 
 Since the audit the brief's "payments" line, originally out of scope, was
 requested by the owner and delivered as a ledger rather than a gateway — see

@@ -356,6 +356,44 @@ For callers holding `fee.view_any`, list rows carry `fee_payable`, `fee_paid`,
 `fee_balance` and `fee_next_due_on` for that enrolment (`null` when no fee has
 been agreed yet); students never receive them.
 
+### Centres — `/api/v1/branches/`
+
+A branch is one centre. It bounds **people and classes** — `User`,
+`StudentProfile`, `TrainerProfile` and `Batch` carry a `branch`; everything
+else reaches a centre through one of them. It is not a tenant: courses, the
+question bank and the academic policy are shared. `apps/organisation/scoping.py`
+is the one place the rule lives and every `access.py` calls it.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `` | `organisation.view_any` — a bounded caller sees only their own centre |
+| `POST` | `` | `organisation.manage` (unbounded operators) — `code`, `name`, `city` |
+| `GET` | `<id>/` | visible to the caller |
+| `PATCH` | `<id>/` | `organisation.manage` |
+| `POST` | `/api/v1/users/<id>/branch/` | `organisation.assign_users` — `branch_id`, `reason`; audited as its own action |
+
+Rules: a **bounded** caller (any staff account with a branch) reads only that
+centre — every other centre's id is a 404, never a 403 — and anything they
+create is stamped with their own centre whatever they submit. An **unbounded**
+caller (a superadmin with no branch) sees every centre and must name one on
+create (`branch` on `POST /users/`, `/students/`, `/trainers/`, `/batches/`),
+or the request is refused with "Choose the centre". A staff account with no
+centre sees nothing. The data migration `organisation.0002` stamps every
+existing row with a `MAIN` centre; the SITP importer takes `--branch`.
+
+### Institution settings — `/api/v1/settings/`
+
+One row with named columns (`apps/configuration`): `institution_name`,
+`support_email`, `support_phone`, `notification_email_enabled`,
+`export_retention_days`, `resource_upload_max_mb`. Each has a consumer —
+notification templates and the support card, the email channel, the export
+sweep, the shared upload guard.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` / `PATCH` | `` | `settings.manage` — administrators (deliberately not `platform.configure`, which is superadmin-only) |
+| `GET` | `public/` | any signed-in user — the name and support contact only |
+
 ### Fees — `/api/v1/fees/`
 
 A fee belongs to an **enrolment**, not a student: a student on two courses has

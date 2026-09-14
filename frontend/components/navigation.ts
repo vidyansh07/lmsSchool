@@ -25,6 +25,7 @@ import {
   Repeat,
   ScrollText,
   Settings2,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   TrendingUp,
@@ -290,6 +291,12 @@ export const STAFF_NAV: NavGroup[] = [
         label: 'Academic rules',
         icon: Settings2,
         capability: Capability.academicConfigure,
+      },
+      {
+        href: '/admin/settings',
+        label: 'Settings',
+        icon: SlidersHorizontal,
+        capability: Capability.settingsManage,
       },
       {
         href: '/admin/recovery',

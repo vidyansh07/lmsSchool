@@ -68,7 +68,9 @@ def test_everyone_they_referred_is_one_filter_away(
     other_student_profile.referred_by = student_profile
     other_student_profile.save(update_fields=["referred_by"])
 
-    rows = api_client_no_csrf.get(f"{STUDENTS_URL}?referred_by={student_profile.pk}").json()["results"]
+    rows = api_client_no_csrf.get(f"{STUDENTS_URL}?referred_by={student_profile.pk}").json()[
+        "results"
+    ]
 
     assert [row["id"] for row in rows] == [str(other_student_profile.pk)]
 
@@ -109,7 +111,9 @@ def test_a_student_cannot_refer_themselves(api_client_no_csrf, counsellor_user, 
     api_client_no_csrf.force_login(counsellor_user)
 
     response = api_client_no_csrf.patch(
-        f"{STUDENTS_URL}{student_profile.pk}/", {"referred_by": str(student_profile.pk)}, format="json"
+        f"{STUDENTS_URL}{student_profile.pk}/",
+        {"referred_by": str(student_profile.pk)},
+        format="json",
     )
 
     assert response.status_code == 400

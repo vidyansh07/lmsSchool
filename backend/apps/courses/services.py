@@ -575,8 +575,16 @@ def create_file_resource(
     Validation lives in ``apps.common.uploads``: extension allowlist paired with
     a magic-byte check, and a server-generated storage name. The uploader's
     filename is kept for display only and never used as a path.
+
+    The size ceiling is the institution's, resolved here rather than inside the
+    validator so ``apps.common`` keeps no import back into a domain app.
     """
-    extension, content_type = validate_resource_upload(uploaded_file)
+    # Cross-app import inside the function on purpose.
+    from apps.configuration.settings_resolver import resource_upload_limit_bytes
+
+    extension, content_type = validate_resource_upload(
+        uploaded_file, limit_bytes=resource_upload_limit_bytes()
+    )
     original_name = (getattr(uploaded_file, "name", "") or "")[:255]
 
     resource = LessonResource(

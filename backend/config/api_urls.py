@@ -16,6 +16,7 @@ from apps.assignments import urls as assignment_urls
 from apps.attendance import urls as attendance_urls
 from apps.batches import urls as batch_urls
 from apps.certificates import urls as certificate_urls
+from apps.configuration import urls as configuration_urls
 from apps.courses import urls as course_urls
 from apps.dashboards import urls as dashboard_urls
 from apps.discussions import urls as discussion_urls
@@ -65,6 +66,7 @@ urlpatterns = [
     path("assessments/", include((assessment_urls.assessment_urlpatterns, "assessments"))),
     path("results/", include((assessment_urls.result_urlpatterns, "results"))),
     path("academics/", include((academics_urls.urlpatterns, "academics"))),
+    path("settings/", include((configuration_urls.urlpatterns, "settings"))),
     path("projects/", include((project_urls.project_urlpatterns, "projects"))),
     path("completions/", include((progress_urls.completion_urlpatterns, "completions"))),
     path("certificates/", include((certificate_urls.certificate_urlpatterns, "certificates"))),

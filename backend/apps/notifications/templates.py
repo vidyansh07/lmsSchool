@@ -6,8 +6,9 @@ That is a deliberate choice. A database-editable email template is a text field
 that ends up in somebody's inbox, and making it rich enough to be worth editing
 means accepting HTML, which means accepting an injection surface on a document
 this system sends *out* under the institution's name. What an operator actually
-needs to change — the institution name, the signature — is configuration, and
-lives in settings.
+needs to change — the institution's own name, the address somebody writes to
+when they are stuck — is configuration, and lives in
+:class:`apps.configuration.models.SystemSetting`.
 
 Each template is a function taking a context dictionary and returning
 ``(subject, body)``. Plain text, for the same reason as the credential mail in
@@ -23,12 +24,33 @@ from django.conf import settings
 
 
 def _footer() -> str:
-    return (
-        "\n\n—\n"
-        f"{getattr(settings, 'EMAIL_SIGNATURE_NAME', 'Grras Solutions')}\n"
+    """Sign off as the institution, in the words it configured.
+
+    ``EMAIL_SIGNATURE_NAME`` is kept as the fallback for a deployment that sets
+    it, but nothing in ``config/settings`` does, so before this every outbound
+    email was signed with a literal in this file. The name now comes from the
+    settings row, which is where an operator can reach it.
+    """
+    # Cross-app import inside the function on purpose: `apps.configuration`
+    # imports `apps.common`, and a module-scope import here would tie the
+    # notification templates to the settings app's load order for a value only
+    # needed at send time.
+    from apps.configuration.settings_resolver import effective_settings
+
+    resolved = effective_settings()
+    name = resolved.institution_name or getattr(settings, "EMAIL_SIGNATURE_NAME", "Grras Solutions")
+
+    lines = ["\n\n—", name]
+    # Only the parts that are set. A default install must not mail an empty
+    # "Contact:" line, which reads as a system that lost its own address.
+    contacts = [value for value in (resolved.support_email, resolved.support_phone) if value]
+    if contacts:
+        lines.append(f"Need help? {' · '.join(contacts)}")
+    lines.append(
         "You are receiving this because of your enrolment. "
         "You can turn these emails off in your notification settings."
     )
+    return "\n".join(lines)
 
 
 def _link(path: str) -> str:

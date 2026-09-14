@@ -23,14 +23,32 @@ def build_workbook(path, *, with_email=True, dsr_style="classic"):
     wb = openpyxl.Workbook()
     att = wb.active
     att.title = "Attendance"
-    head = ["S NO"] + (["Student Email"] if with_email else []) + [
-        "Student Name", "RTU Roll No.", "Total Present", "Total Absent", "Total Class", "Attendance Percent",
+    head = (
+        ["S NO"]
+        + (["Student Email"] if with_email else [])
+        + [
+            "Student Name",
+            "RTU Roll No.",
+            "Total Present",
+            "Total Absent",
+            "Total Class",
+            "Attendance Percent",
+        ]
+    )
+    dates = [
+        datetime(2026, 6, 10),
+        datetime(2026, 6, 11),
+        datetime(2026, 6, 14),
+        datetime(1900, 1, 25),
     ]
-    dates = [datetime(2026, 6, 10), datetime(2026, 6, 11), datetime(2026, 6, 14), datetime(1900, 1, 25)]
     att.append(head + [dates[0]])
     att.append([None] * len(head) + dates)
     att.append([None] * len(head) + ["Wed", "Thu", "Sun", "?"])
-    base = [1] + (["arjit@example.test"] if with_email else []) + ["Arjit Kaushik", "25EACEE003", 2, 1, 3, 66.6]
+    base = (
+        [1]
+        + (["arjit@example.test"] if with_email else [])
+        + ["Arjit Kaushik", "25EACEE003", 2, 1, 3, 66.6]
+    )
     att.append(base + ["P", "A", "SUNDAY", "P"])
     base2 = [2] + ([""] if with_email else []) + ["Somya Gupta", "25eacce026", 1, 0, 1, 100]
     att.append(base2 + ["OP", "LT", None, None])
@@ -42,28 +60,38 @@ def build_workbook(path, *, with_email=True, dsr_style="classic"):
     dsr = wb.create_sheet("DSR")
     if dsr_style == "classic":
         dsr.append(["SNO", "Date", "Topic Cover", "Student Count Online Offline", "Trainer Name"])
-        dsr.append([1, datetime(2026, 6, 10), "INTRO", "Online 5, Offline 0 | out of 11", "Kapil Jangid"])
+        dsr.append(
+            [1, datetime(2026, 6, 10), "INTRO", "Online 5, Offline 0 | out of 11", "Kapil Jangid"]
+        )
         dsr.append([2, "11-06-2026", "VARIABLES", "Online 9, Offline 1", "Kapil Jangid"])
         dsr.append([3, "not a date", "LOST", "", "Kapil Jangid"])
     else:
         dsr.append(["DAILY STATUS REPORT | SITP 2026"])
-        dsr.append(["Day #", "Date", "Module / Topic Name", "Topics Covered Today", "Assignment\nGiven"])
+        dsr.append(
+            ["Day #", "Date", "Module / Topic Name", "Topics Covered Today", "Assignment\nGiven"]
+        )
         dsr.append([1, "10-06-2026", "Cloud Intro", "Deployment types", "No"])
         dsr.append([2, datetime(2026, 6, 11), "AWS Intro", "Account creation", "Yes"])
 
     marks = wb.create_sheet("Assessment")
     marks.append([None, None, None, 1, 2, 3])
-    marks.append([
-        "S NO", "Student Name", "RTU Roll No.",
-        "Assesment 1 (Intro to python) Out of 30",
-        "Assesment 2 (Topics Name ) Out of ",
-        "HTML(20 marks)",
-    ])
+    marks.append(
+        [
+            "S NO",
+            "Student Name",
+            "RTU Roll No.",
+            "Assesment 1 (Intro to python) Out of 30",
+            "Assesment 2 (Topics Name ) Out of ",
+            "HTML(20 marks)",
+        ]
+    )
     marks.append([1, "Arjit Kaushik", "25EACEE003", 25, 10, "Absent"])
     marks.append([2, "Somya Gupta", "25EACCE026", "#N/A", None, "ninety"])
 
     wb.create_sheet("Course Timeline").append(["Lecture No.", "BLOWN UP TOPICS", "Status"])
-    wb.create_sheet("Project").append(["S NO", "Student Name", "RTU Roll No.", "PROJECT 1 () Out of"])
+    wb.create_sheet("Project").append(
+        ["S NO", "Student Name", "RTU Roll No.", "PROJECT 1 () Out of"]
+    )
     wb.save(path)
     return path
 
@@ -207,17 +235,36 @@ def build_fraction_workbook(path):
     wb = openpyxl.Workbook()
     att = wb.active
     att.title = "Attendence"
-    head = ["S NO", "Student Name", "RTU Roll No.", "Total Present", "Total Absent", "Total Class", "Attendance Percent"]
+    head = [
+        "S NO",
+        "Student Name",
+        "RTU Roll No.",
+        "Total Present",
+        "Total Absent",
+        "Total Class",
+        "Attendance Percent",
+    ]
     # Month markers in the header row, the real dates beneath — and typed as
     # day numbers, which Excel stored as dates in 1900.
     att.append(head + [datetime(2026, 5, 1), None, None, datetime(2026, 6, 1)])
-    att.append([None] * len(head) + [datetime(1900, 1, 30), datetime(1900, 1, 31), datetime(1900, 1, 1), datetime(1900, 1, 2)])
+    att.append(
+        [None] * len(head)
+        + [datetime(1900, 1, 30), datetime(1900, 1, 31), datetime(1900, 1, 1), datetime(1900, 1, 2)]
+    )
     att.append([None] * len(head) + ["Sat", "Sun", "Mon", "Tue"])
     att.append([1, "Ruchi Raj", "24EACCS668", 3, 0, 3, 100, "p", "SUNDAY", "P", "a"])
 
     marks = wb.create_sheet("Assesment")
     marks.append([None, None, None, 1, 2])
-    marks.append(["S NO", "Student Name", "RTU Roll No.", "Assesment 1 (Networking) 50", "Assessment 2 (All AWS Services)"])
+    marks.append(
+        [
+            "S NO",
+            "Student Name",
+            "RTU Roll No.",
+            "Assesment 1 (Networking) 50",
+            "Assessment 2 (All AWS Services)",
+        ]
+    )
     marks.append([1, "Ruchi Raj", "24EACCS668", "43/50", "29 / 30"])
     marks.append([2, "Only In Marks", "24EACAD002", "Absent", "30/30"])
 
@@ -240,7 +287,9 @@ def test_day_numbers_typed_as_dates_are_read_as_days_of_the_programme_month(frac
     assert fraction_book.class_dates == [date(2026, 5, 30), date(2026, 6, 1), date(2026, 6, 2)]
     assert any("typed as day numbers" in p.reason for p in fraction_book.problems)
     assert fraction_book.attendance["24EACCS668"] == {
-        date(2026, 5, 30): "present", date(2026, 6, 1): "present", date(2026, 6, 2): "absent"
+        date(2026, 5, 30): "present",
+        date(2026, 6, 1): "present",
+        date(2026, 6, 2): "absent",
     }
 
 
@@ -259,7 +308,10 @@ def test_a_student_only_on_the_marks_sheet_joins_the_roster_and_is_reported(frac
     assert rolls == ["24EACCS668", "24EACAD002"]
     assert fraction_book.attendance["24EACAD002"] == {}
     assert fraction_book.marks["24EACAD002"] == {1: "absent", 2: Decimal("30")}
-    assert any("on the marks sheet but not the attendance sheet" in p.reason for p in fraction_book.problems)
+    assert any(
+        "on the marks sheet but not the attendance sheet" in p.reason
+        for p in fraction_book.problems
+    )
 
 
 def test_a_bare_head_count_in_the_dsr_is_kept_as_present_only(fraction_book):
@@ -285,12 +337,32 @@ def test_a_marks_row_that_slid_one_column_left_is_read_one_column_over(tmp_path)
     wb = openpyxl.Workbook()
     att = wb.active
     att.title = "Attendance"
-    att.append(["S NO", "Student Email", "Student Name", "RTU Roll No.", "Total Present", "Total Absent", "Total Class", "Attendance Percent", datetime(2026, 6, 10)])
+    att.append(
+        [
+            "S NO",
+            "Student Email",
+            "Student Name",
+            "RTU Roll No.",
+            "Total Present",
+            "Total Absent",
+            "Total Class",
+            "Attendance Percent",
+            datetime(2026, 6, 10),
+        ]
+    )
     att.append([None] * 8 + [datetime(2026, 6, 10), datetime(2026, 6, 11), datetime(2026, 6, 12)])
     att.append([None] * 8 + ["Wed", "Thu", "Fri"])
     att.append([1, "", "Harshit", "25EACCC020", 1, 0, 1, 100, "P", "P", "P"])
     marks = wb.create_sheet("Assessment")
-    marks.append(["S NO", "Student Name", "RTU Roll No.", "Assesment 1 (Loops) Out of 30", "Assesment 2 (Sets) Out of 30"])
+    marks.append(
+        [
+            "S NO",
+            "Student Name",
+            "RTU Roll No.",
+            "Assesment 1 (Loops) Out of 30",
+            "Assesment 2 (Sets) Out of 30",
+        ]
+    )
     # The row slid one cell to the right: the name sits under "RTU Roll No."
     # and the roll number under the first assessment.
     marks.append([1, "", "Harshit", "25EACCC020", "Absent", "29 / 30"])
@@ -302,25 +374,51 @@ def test_a_marks_row_that_slid_one_column_left_is_read_one_column_over(tmp_path)
     assert book.marks["25EACCC020"] == {1: "absent", 2: Decimal("29")}
     # Joined after the first test: no mark, not an absence.
     assert book.marks["25EACCS119"] == {1: None, 2: Decimal("20")}
-    assert any("25EACCS119 is on the marks sheet but not the attendance sheet" in p.reason for p in book.problems)
+    assert any(
+        "25EACCS119 is on the marks sheet but not the attendance sheet" in p.reason
+        for p in book.problems
+    )
 
 
 def build_window_workbook(path):
     wb = openpyxl.Workbook()
     att = wb.active
     att.title = "Attendance"
-    head = ["S NO", "Student Email", "Student Name", "RTU Roll No.", "Total Present", "Total Absent", "Total Class", "Attendance Percent"]
+    head = [
+        "S NO",
+        "Student Email",
+        "Student Name",
+        "RTU Roll No.",
+        "Total Present",
+        "Total Absent",
+        "Total Class",
+        "Attendance Percent",
+    ]
     att.append(head + [datetime(2026, 6, 1)])
-    att.append([None] * len(head) + [datetime(2026, 6, 10), datetime(2026, 6, 11), datetime(2026, 6, 14), datetime(2026, 6, 15)])
+    att.append(
+        [None] * len(head)
+        + [
+            datetime(2026, 6, 10),
+            datetime(2026, 6, 11),
+            datetime(2026, 6, 14),
+            datetime(2026, 6, 15),
+        ]
+    )
     att.append([None] * len(head) + ["Wed", "Thu", "Sun", "Mon"])
     att.append([1, "", "Arjit Kaushik", "25EACEE003", 2, 1, 3, 66.6, "P", "A", "SUNDAY", "P"])
     dsr = wb.create_sheet("DSR")
     dsr.append(["SNO", "Date", "Topic Cover", "Student Count Online Offline", "Trainer Name"])
     dsr.append([1, datetime(2026, 6, 10), "INTRO", "Online 1, Offline 0", "Kapil Jangid"])
-    dsr.append([2, datetime(2025, 6, 11), "VARIABLES", "Online 1, Offline 0", "Kapil Jangid"])   # last year's year
-    dsr.append([3, datetime(2026, 6, 14), "SUNDAY", "", "Kapil Jangid"])                         # not a class
-    dsr.append([4, datetime(2028, 5, 27), "FAR AWAY", "Online 1, Offline 0", "Kapil Jangid"])   # fits no year
-    dsr.append([5, datetime(2026, 6, 16), "WRAP-UP", "Online 1, Offline 0", "Kapil Jangid"])    # just after the last register
+    dsr.append(
+        [2, datetime(2025, 6, 11), "VARIABLES", "Online 1, Offline 0", "Kapil Jangid"]
+    )  # last year's year
+    dsr.append([3, datetime(2026, 6, 14), "SUNDAY", "", "Kapil Jangid"])  # not a class
+    dsr.append(
+        [4, datetime(2028, 5, 27), "FAR AWAY", "Online 1, Offline 0", "Kapil Jangid"]
+    )  # fits no year
+    dsr.append(
+        [5, datetime(2026, 6, 16), "WRAP-UP", "Online 1, Offline 0", "Kapil Jangid"]
+    )  # just after the last register
     wb.save(path)
     return path
 
@@ -356,7 +454,6 @@ def test_a_sunday_row_is_not_a_report(window_book):
 
 def test_a_report_a_day_or_two_after_the_last_register_still_belongs(window_book):
     assert date(2026, 6, 16) in {row.on for row in window_book.dsr}
-
 
 
 def test_a_report_with_month_and_day_swapped_is_read_the_right_way_round(tmp_path):

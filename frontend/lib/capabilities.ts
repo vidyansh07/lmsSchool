@@ -40,6 +40,7 @@ export const Capability = {
   organisationViewAny: 'organisation.view_any',
   organisationManage: 'organisation.manage',
   organisationAssignUsers: 'organisation.assign_users',
+  settingsManage: 'settings.manage',
   recordViewDeleted: 'record.view_deleted',
   recordRestore: 'record.restore',
   recordPurge: 'record.purge',

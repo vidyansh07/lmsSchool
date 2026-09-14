@@ -147,6 +147,9 @@ class AuditAction(models.TextChoices):
     # --- Academic configuration
     ACADEMIC_POLICY_UPDATED = "academic.policy.updated", _("Academic rules changed")
 
+    # --- Institution settings
+    SYSTEM_SETTINGS_UPDATED = "settings.updated", _("Institution settings changed")
+
     # --- Projects
     PROJECT_CREATED = "project.created", _("Project created")
     PROJECT_UPDATED = "project.updated", _("Project updated")

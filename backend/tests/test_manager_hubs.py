@@ -1269,7 +1269,9 @@ def test_the_trainer_list_narrows_to_those_with_no_review(
 
 
 @pytest.mark.django_db
-def test_an_unknown_attention_value_is_refused_rather_than_ignored(api_client_no_csrf, manager_user):
+def test_an_unknown_attention_value_is_refused_rather_than_ignored(
+    api_client_no_csrf, manager_user
+):
     """Ignoring it would show *everything* under a heading that promised a
     subset — the quiet version of the 404 this replaced."""
     api_client_no_csrf.force_login(manager_user)

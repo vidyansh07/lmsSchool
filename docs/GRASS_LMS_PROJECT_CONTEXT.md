@@ -85,6 +85,8 @@ frontend (Next.js)            backend (Django + DRF)          PostgreSQL
 | `performance` | The performance and risk engine: thresholds, verdicts, reviews |
 | `fees` | The fee ledger: `FeePlan` per enrolment, `FeePayment`, receipt numbers, the list-screen annotations |
 | `branding` | The institution's colour |
+| `organisation` | Branch — one centre; the scoping module every `access.py` calls |
+| `configuration` | SystemSetting — the institution's name, support contact and operational limits, one row |
 | `dashboards` | No models — the calendar registry and role dashboards |
 | `audit` | Append-only audit trail |
 | `health` | Liveness and readiness probes |
@@ -123,6 +125,8 @@ needs a per-request nonce. Start at `docs/RELEASE_READINESS.md`.
 
 `SUPERADMIN` ⊃ `ADMIN` ⊃ `MANAGER` ⊃ `COUNSELLOR` on a proven-monotonic ladder;
 `TRAINER` and `STUDENT` hold the base set and are scoped by assignment.
+Every staff account except a superadmin is bounded to one **centre** and sees
+only that centre's people and classes (`apps/organisation/scoping.py`).
 A counsellor registers students, quotes and collects fees, plans batches and
 enrols; they hold nothing academic and nothing about accounts.
 

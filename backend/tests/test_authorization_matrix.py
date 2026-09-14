@@ -202,6 +202,12 @@ STUDENT_REACHABLE = frozenset(
         "/api/v1/calendar/",
         "/api/v1/academics/calendar/",
         "/api/v1/academics/policy/effective/",
+        # The institution's own name and how to reach it, rendered on a screen
+        # every signed-in person can open. A student reading their own product's
+        # name and its support address is not a disclosure — and the three
+        # fields are their own serializer rather than a filtered response, so a
+        # setting added later cannot arrive here by accident.
+        "/api/v1/settings/public/",
         # Communication.
         "/api/v1/notifications/",
         "/api/v1/notifications/unread/",

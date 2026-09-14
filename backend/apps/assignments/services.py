@@ -197,10 +197,16 @@ def add_attachment(
     """Attach a brief document or starter files.
 
     Trainer-supplied, so it goes through the course-resource rules: extension
-    allowlist paired with a magic-byte family, server-generated path.
+    allowlist paired with a magic-byte family, server-generated path, and the
+    institution's configured size ceiling.
     """
+    # Cross-app import inside the function on purpose.
+    from apps.configuration.settings_resolver import resource_upload_limit_bytes
+
     try:
-        _, content_type = validate_resource_upload(uploaded_file)
+        _, content_type = validate_resource_upload(
+            uploaded_file, limit_bytes=resource_upload_limit_bytes()
+        )
     except DjangoValidationError as exc:
         raise ApplicationError({"file": list(exc.messages)}) from exc
 

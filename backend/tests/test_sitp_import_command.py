@@ -58,7 +58,9 @@ def test_one_workbook_becomes_one_batch_with_its_roster_classes_registers_report
     assert batch.end_date == date(2026, 6, 11)
 
     # Three students had roll numbers; "No Roll" did not and was reported.
-    rolls = set(StudentProfile.objects.exclude(roll_number="").values_list("roll_number", flat=True))
+    rolls = set(
+        StudentProfile.objects.exclude(roll_number="").values_list("roll_number", flat=True)
+    )
     assert rolls == {"25EACEE003", "25EACCE026", "25EACCE099"}
     assert Enrollment.objects.filter(batch=batch).count() == 3
 
@@ -73,17 +75,22 @@ def test_one_workbook_becomes_one_batch_with_its_roster_classes_registers_report
     # A class per dated column somebody was marked on: the 1900 column was
     # refused, and June 14 was a Sunday for everybody.
     assert set(ClassSession.objects.filter(batch=batch).values_list("session_date", flat=True)) == {
-        date(2026, 6, 10), date(2026, 6, 11)
+        date(2026, 6, 10),
+        date(2026, 6, 11),
     }
     # Registers as marked, with the vocabulary normalised.
     first_day = ClassSession.objects.get(batch=batch, session_date=date(2026, 6, 10))
     statuses = dict(
-        AttendanceRecord.objects.filter(session=first_day).values_list("enrollment__student__roll_number", "status")
+        AttendanceRecord.objects.filter(session=first_day).values_list(
+            "enrollment__student__roll_number", "status"
+        )
     )
     assert statuses == {"25EACEE003": "present", "25EACCE026": "present", "25EACCE099": "present"}
     second_day = ClassSession.objects.get(batch=batch, session_date=date(2026, 6, 11))
     assert dict(
-        AttendanceRecord.objects.filter(session=second_day).values_list("enrollment__student__roll_number", "status")
+        AttendanceRecord.objects.filter(session=second_day).values_list(
+            "enrollment__student__roll_number", "status"
+        )
     ) == {"25EACEE003": "absent", "25EACCE026": "late"}
 
     # Two DSR rows matched classes; the "not a date" row was reported.
@@ -96,10 +103,14 @@ def test_one_workbook_becomes_one_batch_with_its_roster_classes_registers_report
     assert Assessment.objects.filter(batch=batch).count() == 2
     python = Assessment.objects.get(batch=batch, title__startswith="1.")
     assert python.max_marks == Decimal("30")
-    result = AssessmentResult.objects.get(assessment=python, enrollment__student__roll_number="25EACEE003")
+    result = AssessmentResult.objects.get(
+        assessment=python, enrollment__student__roll_number="25EACEE003"
+    )
     assert result.marks_obtained == Decimal("25")
     html = Assessment.objects.get(batch=batch, title__startswith="2.")
-    absent = AssessmentResult.objects.get(assessment=html, enrollment__student__roll_number="25EACEE003")
+    absent = AssessmentResult.objects.get(
+        assessment=html, enrollment__student__roll_number="25EACEE003"
+    )
     assert absent.is_absent and absent.marks_obtained is None
 
     # The report names what was left out, by sheet and row.
@@ -135,7 +146,16 @@ def test_running_it_twice_changes_nothing(workbook, admin_user):
     run(workbook, admin_user.email)
     before = {
         model: model.objects.count()
-        for model in (StudentProfile, Batch, Enrollment, ClassSession, AttendanceRecord, DSR, Assessment, AssessmentResult)
+        for model in (
+            StudentProfile,
+            Batch,
+            Enrollment,
+            ClassSession,
+            AttendanceRecord,
+            DSR,
+            Assessment,
+            AssessmentResult,
+        )
     }
 
     out = run(workbook, admin_user.email)

@@ -36,7 +36,7 @@ limitations is [`docs/FEATURE_STATUS.md`](docs/FEATURE_STATUS.md):
 | 9 | Security and performance hardening, private object storage seam, Celery worker |
 | 10 | Release engineering: staging stack, verification script, migration safety, backups |
 | 11 | Role hierarchy (superadmin over admin), user administration, light theme, sidebar navigation |
-| 12 | ERP foundation: counsellor role, DSR, course timeline, performance and risk engine, export jobs, transfers and batch kinds, manager and counsellor hubs, recycle bin |
+| 12 | ERP foundation: counsellor role, DSR, course timeline, performance and risk engine, export jobs, transfers and batch kinds, manager and counsellor hubs, recycle bin, centres (branch scoping), institution settings |
 | 13 | Client delivery: Liner-style design system and animated dashboards for every role, institution branding, admissions wizard for college students and working professionals, referrals, SITP workbook import, one-command deploy, **per-enrolment fee ledger** with receipts, discounts, expected dates and a full change history |
 
 ---
@@ -380,7 +380,7 @@ The table above is the Phase 0–3 core. Later phases added, among others:
 `/academics/`, `/projects/`, `/questions/`, `/exams/`, `/progress/`,
 `/completions/`, `/certificates/`, `/notifications/`, `/announcements/`,
 `/discussions/`, `/learning/`, `/reports/`, `/exports/`, `/imports/`, `/dsr/`,
-`/performance/`, `/reviews/`, `/recovery/`, `/branding/` and `/fees/`. Every
+`/performance/`, `/reviews/`, `/recovery/`, `/branding/`, `/branches/`, `/settings/` and `/fees/`. Every
 one is in [`docs/api.md`](docs/api.md) with its capability.
 
 Frontend screens by audience (74 routes; `find frontend/app -name page.tsx`
@@ -393,7 +393,7 @@ is the source of truth):
 | Trainers | `/teaching/today`, `/teaching/sessions/*`, `/teaching/assignments/*`, `/teaching/assessments/*`, `/teaching/projects/*`, `/teaching/questions`, `/teaching/exams/*`, `/dsr` |
 | Counsellors | `/admissions` (working list), `/admissions/dashboard`, `/admissions/new` (registration wizard with fee and first payment), `/admissions/[studentId]` (record with the fee ledger), `/admissions/batches`, `/admissions/transfer`, `/admissions/import` |
 | Managers | `/manage`, `/manage/batches/*`, `/manage/students/*`, `/manage/trainers/*` |
-| Administrators | `/admin/overview`, `/admin/users/*`, `/admin/students`, `/admin/trainers`, `/admin/courses/*`, `/admin/categories`, `/admin/batches/*`, `/admin/academics`, `/admin/completions`, `/admin/certificates`, `/admin/reports`, `/admin/imports`, `/admin/recovery`, `/admin/branding` |
+| Administrators | `/admin/overview`, `/admin/users/*`, `/admin/students`, `/admin/trainers`, `/admin/courses/*`, `/admin/categories`, `/admin/batches/*`, `/admin/academics`, `/admin/completions`, `/admin/certificates`, `/admin/reports`, `/admin/imports`, `/admin/recovery`, `/admin/branding`, `/admin/branches`, `/admin/settings` |
 
 ## Branches
 
@@ -401,15 +401,13 @@ is the source of truth):
 | --- | --- | --- |
 | `feat/erp-foundation` | **current**; deployed to staging | Everything in this README |
 | `main` | 33 commits behind | The Phase 0–11 LMS as of 2 September 2026 |
-| `feat/erp-org-scoping` | 1 commit, unmerged, based on 7 September | Branch/centre scoping: `apps/organisation`, a `branch` on users, students, trainers and batches, sixteen access modules narrowed to the caller's centre (decision recorded in the owner's scope notes: managers and counsellors see only their own centre) |
-| `feat/erp-system-settings` | 1 commit, unmerged, based on 7 September | `apps/configuration`: institution name, support contact, email on/off, export retention, upload limits — one row, named columns, every setting with a consumer |
+| `feat/erp-org-scoping` | **merged 14 September** | Centres: `apps/organisation`, a `branch` on users, students, trainers and batches, sixteen access modules narrowed to the caller's centre; managers and counsellors see only their own centre, a superadmin sees all |
+| `feat/erp-system-settings` | **merged 14 September** | `apps/configuration`: institution name, support contact, email on/off, export retention, upload limits — one row, named columns, every setting with a consumer |
 | `feat/erp-design-system` | 10 commits, unmerged, based on 7 September | A denser token layer and type scale; largely superseded by the Phase 13 Liner theme on the current branch |
 | `feat/ui-refresh` | 1 commit, unmerged, based on 8 September | An alternative design-system pass; superseded by Phase 13 |
 
-The two feature branches (org scoping, system settings) conflict with the
-current branch in `roles.py`, the audit action list and the seed command and
-need a rebase before they can land. The two design branches should be closed
-rather than merged.
+The two design branches are superseded and should be closed rather than
+merged; the two feature branches are in, and their worktrees can be removed.
 
 ## Staging
 
