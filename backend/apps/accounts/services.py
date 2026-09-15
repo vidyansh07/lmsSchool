@@ -234,6 +234,7 @@ def update_user(*, user: User, actor: User, **fields: Any) -> User:
         raise ApplicationError({"branch": ["A centre is changed through its own action."]})
 
     previous_role = user.role
+    previous_custom_role = user.custom_role.slug if user.custom_role_id else None
     previous_email = user.email
     changed: list[str] = []
 
@@ -249,6 +250,22 @@ def update_user(*, user: User, actor: User, **fields: Any) -> User:
             raise ApplicationError({"email": ["Another account already uses that address."]})
 
     new_role = fields.get("role")
+    if "custom_role" in fields:
+        # A custom role is a system kind with a different set (ADR-01). It is
+        # checked against the kind the account will have after this update,
+        # and against the actor's own reach, in the authorization service.
+        from apps.authorization.services import check_custom_role_assignment
+
+        check_custom_role_assignment(
+            actor=actor,
+            target=user,
+            role=fields["custom_role"],
+            kind=new_role if new_role is not None else user.role,
+        )
+    elif new_role is not None and new_role != user.role and user.custom_role_id is not None:
+        # Changing the kind under a custom role of the old kind would leave a
+        # contradiction; the custom role is dropped with the kind.
+        fields["custom_role"] = None
     if new_role is not None and new_role != user.role and not can_grant_role(actor, new_role):
         # Enforced in the service, not only in the view, so the admin site and
         # any future management command obey the same rule.
@@ -281,13 +298,18 @@ def update_user(*, user: User, actor: User, **fields: Any) -> User:
         context={"changed_fields": sorted(changed)},
     )
 
-    if "role" in changed:
+    if "role" in changed or "custom_role" in changed:
         record(
             action=AuditAction.USER_ROLE_CHANGED,
             actor=actor,
             resource_type="user",
             resource_id=user.pk,
-            context={"from": previous_role, "to": user.role},
+            context={
+                "from": previous_role,
+                "to": user.role,
+                "custom_role_from": previous_custom_role,
+                "custom_role_to": user.custom_role.slug if user.custom_role_id else None,
+            },
         )
         # A privilege change must not be usable from a session established under
         # the old role.

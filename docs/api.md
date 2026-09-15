@@ -422,6 +422,35 @@ and cached for a minute per person. Kinds: `fees_overdue`, `fees_missing`,
 (Monday 08:00) sends every staff member their open warnings as a
 notification, by email when their preferences allow.
 
+### Roles and permissions — `/api/v1/roles/`, `/api/v1/permissions/` (ERP Phase 1)
+
+Roles are rows (ADR-01 in `docs/erp/ARCHITECTURE_DECISIONS.md`); the
+permission catalog stays the `Capability` enum, mirrored into rows by
+`manage.py sync_permissions` (run by the seed migration and every deploy).
+The six system roles are seeded from the code matrix, so nothing changed the
+day the tables appeared. A custom role is built *from* a system kind and
+holds a different set — never a wider reach than the kind (its scope floor).
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `roles/` | `role.view` — every role with `user_count`, `permission_count` |
+| `POST` | `roles/` | `role.manage` (+ `permission.assign` to send `permissions`) — `slug`, `name`, `kind` (not superadmin), `description`, `permissions: [{code, scope?}]`; every code must be one the caller holds (403 otherwise, D-097); superadmin-only codes refused on other kinds; a scope wider than the kind's floor refused |
+| `GET` | `roles/matrix/` | `role.view` — `{roles, permissions, cells[slug][code]}` with cells `explicit`, `inherited`, `locked`, `denied`, `system` |
+| `GET` | `roles/<slug>/` | `role.view` |
+| `PATCH` | `roles/<slug>/` | `role.manage` — `name` (custom only), `description`, `status` (custom only), `permissions` (full replacement; locked grants need a superadmin). Changing permissions or status ends the holders' sessions |
+| `DELETE` | `roles/<slug>/` | `role.manage`; `reason`; refused for system roles (400) and while accounts hold it (409); reversible from the recycle bin |
+| `GET` | `permissions/` | `role.view` — the catalog: `code`, `resource`, `action`, `category`, `description`, `is_lockable` |
+
+`PATCH /users/<id>/` accepts `custom_role` (a slug of the same kind as
+`role`, or null). Changing it needs `user.change_role`, is audited as
+`user.role_changed` with `custom_role_from/to`, and cannot assign a role
+holding more than the caller does. Every representation of a user carries
+`custom_role` and `custom_role_name`.
+
+Scopes on a grant (`all`, `branch`, `assigned`, `own`) are stored now and
+enforced by Phase 2. `DYNAMIC_ROLES_ENABLED=false` makes every check read
+the code matrix alone.
+
 ### Trainer requirements — `/api/v1/requirements/`
 
 A manager's ask of the teaching staff (D-132). Raising one tells every

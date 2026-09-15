@@ -162,7 +162,12 @@ class UserDetailView(RetrieveUpdateAPIView):
 
         # Changing a role is a privilege change and needs its own capability,
         # so an operator with plain edit rights cannot promote anyone.
-        if "role" in serializer.validated_data and serializer.validated_data["role"] != user.role:
+        data = serializer.validated_data
+        role_changes = ("role" in data and data["role"] != user.role) or (
+            "custom_role" in data
+            and (data["custom_role"].pk if data["custom_role"] else None) != user.custom_role_id
+        )
+        if role_changes:
             if not has_capability(request.user, Capability.USER_CHANGE_ROLE):
                 return Response(
                     {

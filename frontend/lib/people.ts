@@ -54,7 +54,9 @@ export async function createUser(payload: {
 
 export async function updateUser(
   id: string,
-  changes: Partial<Pick<AdminUser, 'email' | 'first_name' | 'last_name' | 'phone' | 'role'>>,
+  changes: Partial<
+    Pick<AdminUser, 'email' | 'first_name' | 'last_name' | 'phone' | 'role' | 'custom_role'>
+  >,
 ): Promise<AdminUser> {
   return apiMutate<AdminUser>(`/api/v1/users/${id}/`, { method: 'PATCH', body: changes });
 }

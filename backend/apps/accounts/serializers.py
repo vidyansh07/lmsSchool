@@ -13,6 +13,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from apps.authorization.models import Role
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
 from .models import User
@@ -47,6 +48,10 @@ class UserSerializer(serializers.ModelSerializer):
     branch_id = serializers.CharField(source="branch.id", read_only=True, default=None)
     branch_code = serializers.CharField(source="branch.code", read_only=True, default=None)
     branch_name = serializers.CharField(source="branch.name", read_only=True, default=None)
+    custom_role = serializers.CharField(source="custom_role.slug", read_only=True, default=None)
+    custom_role_name = serializers.CharField(
+        source="custom_role.name", read_only=True, default=None
+    )
 
     class Meta:
         model = User
@@ -58,6 +63,8 @@ class UserSerializer(serializers.ModelSerializer):
             "full_name",
             "phone",
             "role",
+            "custom_role",
+            "custom_role_name",
             "is_active",
             "is_email_verified",
             "profile_image_url",
@@ -205,10 +212,18 @@ class AdminUserUpdateSerializer(StrictModelSerializer):
     last_name = SafeCharField(max_length=100, required=False, allow_blank=True)
     phone = SafeCharField(max_length=20, required=False, allow_blank=True)
     role = serializers.ChoiceField(choices=UserRole.choices, required=False)
+    # The slug of a configured role of the same kind, or null for the system
+    # role. Resolved to the row here so the service sees an object.
+    custom_role = serializers.SlugRelatedField(
+        slug_field="slug",
+        queryset=Role.objects.filter(is_system=False),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = User
-        fields = ("email", "first_name", "last_name", "phone", "role")
+        fields = ("email", "first_name", "last_name", "phone", "role", "custom_role")
 
 
 class SelfUserUpdateSerializer(StrictModelSerializer):

@@ -12,6 +12,10 @@ from apps.accounts.models import UserRole
 from apps.accounts.roles import Capability, capabilities_for
 from tests.conftest import TEST_PASSWORD
 
+# Since ERP Phase 1 the capability sets are read from seeded rows (ADR-01), so
+# even the pure-matrix assertions below need the database the seed lives in.
+pytestmark = pytest.mark.django_db
+
 USERS_URL = "/api/v1/users/"
 STUDENTS_URL = "/api/v1/students/"
 TRAINERS_URL = "/api/v1/trainers/"

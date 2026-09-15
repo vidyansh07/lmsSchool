@@ -184,6 +184,14 @@ admissions desk, the college data, a host to show it on, and money.
 
 ---
 
+## Phase 14 — ERP platform (from 15 September 2026)
+
+The 25-phase programme in `docs/erp/IMPLEMENTATION_PLAN.md`; one row per phase as it lands.
+
+| Feature | Phase | Status | Main files | Tests | Security checks | Manual verification | Known limitation | Last verified |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 14.1 Dynamic authorization: roles as rows, custom roles, the matrix | 14 (ERP P1) | DONE | `apps/authorization/` (models, resolver, sync, services, API), `apps/accounts/roles.py` (`effective_capabilities`), `apps/accounts/models.py` (`custom_role`), migrations `authorization/0001–0002`, `accounts/0006`, `audit/0025`; `frontend/components/roles/*`, `app/admin/roles/*`, custom-role picker on the user page | `test_dynamic_roles` (10), every existing authorization module unchanged (400 in the targeted run; 2737 full suite), `roles-page` (3), `role-builder` (4), `permission-matrix` (1) | Ladder over effective sets; superadmin-only codes refused elsewhere; scope never wider than the kind; refusals are 403 (D-097); version-keyed cache forgotten on write and on commit | Built "Placement coordinator" from Manager without `dsr.view_any`, assigned it, the holder got 403 on `/dsr/` and 200 after widening; disabled role fell back to the kind | Locking and scope enforcement land in Phase 2; `DYNAMIC_ROLES_ENABLED` is the rollback | 2026-09-15 |
+
 ## Cross-cutting gaps carried forward
 
 | Gap | Impact | Owner |

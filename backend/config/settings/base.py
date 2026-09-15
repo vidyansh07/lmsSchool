@@ -71,6 +71,7 @@ LOCAL_APPS = [
     "apps.common",
     "apps.accounts",
     "apps.organisation",
+    "apps.authorization",
     "apps.configuration",
     "apps.students",
     "apps.trainers",
@@ -379,6 +380,10 @@ API_DOCS_ENABLED = env.bool("API_DOCS_ENABLED", default=False)
 # Fake demo/seed data may only be created in environments that opt in.
 ALLOW_DEMO_SEED = False
 
+#: ERP Phase 1 (ADR-01): read role → permission grants from the database. Off
+#: means the code matrix alone decides, which is the rollback switch.
+DYNAMIC_ROLES_ENABLED = env.bool("DYNAMIC_ROLES_ENABLED", default=True)
+
 # --- Course content access -------------------------------------------------
 # Non-preview lesson content, resources and video require a live enrolment.
 # On by default from Phase 3, now that enrolment records exist to check against.
@@ -399,6 +404,8 @@ SPECTACULAR_SETTINGS = {
     "SORT_OPERATIONS": False,
     "ENUM_NAME_OVERRIDES": {
         "UserRoleEnum": "apps.accounts.roles.UserRole.choices",
+        "PermissionScopeEnum": "apps.authorization.models.PermissionScope.choices",
+        "RoleStatusEnum": "apps.authorization.models.RoleStatus.choices",
         "FeeStatusEnum": "apps.students.models.FeeStatus.choices",
         "QualificationEnum": "apps.students.models.Qualification.choices",
         "PublishStatusEnum": "apps.courses.models.PublishStatus.choices",

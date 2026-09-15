@@ -14,6 +14,7 @@ from apps.announcements import urls as announcement_urls
 from apps.assessments import urls as assessment_urls
 from apps.assignments import urls as assignment_urls
 from apps.attendance import urls as attendance_urls
+from apps.authorization import urls as authorization_urls
 from apps.batches import urls as batch_urls
 from apps.certificates import urls as certificate_urls
 from apps.configuration import urls as configuration_urls
@@ -53,6 +54,8 @@ urlpatterns = [
     path("activity/", include("apps.activity.urls")),
     path("warnings/", include("apps.warnings.urls")),
     path("requirements/", include("apps.requirements.urls")),
+    path("roles/", include("apps.authorization.urls")),
+    path("permissions/", include((authorization_urls.permission_urlpatterns, "permissions"))),
     path("categories/", include((course_urls.category_patterns, "categories"))),
     path(
         "courses/",

@@ -56,6 +56,12 @@ class AuditAction(models.TextChoices):
     PROFILE_IMAGE_UPDATED = "user.profile_image.updated", _("Profile image updated")
     PROFILE_IMAGE_REMOVED = "user.profile_image.removed", _("Profile image removed")
 
+    # --- Roles as rows (ERP Phase 1)
+    ROLE_CREATED = "role.created", _("Role created")
+    ROLE_UPDATED = "role.updated", _("Role updated")
+    ROLE_DELETED = "role.deleted", _("Role deleted")
+    PERMISSIONS_SYNCED = "permission.synced", _("Permission catalog synchronised")
+
     # --- Domain profiles
     STUDENT_CREATED = "student.created", _("Student created")
     STUDENT_UPDATED = "student.updated", _("Student profile updated")

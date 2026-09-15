@@ -1,4 +1,4 @@
-import type { LucideIcon } from 'lucide-react';
+import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   Award,
@@ -36,9 +36,10 @@ import {
   Wallet,
   UsersRound,
   Workflow,
-} from 'lucide-react';
+  ShieldCheck,
+} from "lucide-react";
 
-import { Capability } from '@/lib/capabilities';
+import { Capability } from "@/lib/capabilities";
 
 /**
  * What appears in the navigation, and for whom.
@@ -82,41 +83,96 @@ export interface NavGroup {
  * them to sign in.
  */
 export const STUDENT_NAV: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['student'] },
-  { href: '/my-learning', label: 'My learning', icon: BookOpenCheck, roles: ['student'] },
-  { href: '/courses', label: 'Courses', icon: BookOpen },
-  { href: '/my-batches', label: 'My batches', icon: Layers, roles: ['student'] },
-  { href: '/my-fees', label: 'My fees', icon: Wallet, roles: ['student'] },
-  { href: '/my-assignments', label: 'My assignments', icon: ClipboardList, roles: ['student'] },
-  { href: '/my-projects', label: 'My projects', icon: FolderKanban, roles: ['student'] },
-  { href: '/exams', label: 'Examinations', icon: ScrollText, roles: ['student'] },
-  { href: '/my-results', label: 'My results', icon: Award, roles: ['student'] },
-  { href: '/my-attendance', label: 'My attendance', icon: CalendarCheck, roles: ['student'] },
-  { href: '/my-progress', label: 'My progress', icon: TrendingUp, roles: ['student'] },
-  { href: '/calendar', label: 'Calendar', icon: CalendarDays, roles: ['student'] },
-  { href: '/announcements', label: 'Announcements', icon: Megaphone },
-  { href: '/discussions', label: 'Discussions', icon: MessagesSquare, roles: ['student'] },
-  { href: '/notifications', label: 'Notifications', icon: Bell },
-  { href: '/profile', label: 'My profile', icon: UserCircle2 },
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    roles: ["student"],
+  },
+  {
+    href: "/my-learning",
+    label: "My learning",
+    icon: BookOpenCheck,
+    roles: ["student"],
+  },
+  { href: "/courses", label: "Courses", icon: BookOpen },
+  {
+    href: "/my-batches",
+    label: "My batches",
+    icon: Layers,
+    roles: ["student"],
+  },
+  { href: "/my-fees", label: "My fees", icon: Wallet, roles: ["student"] },
+  {
+    href: "/my-assignments",
+    label: "My assignments",
+    icon: ClipboardList,
+    roles: ["student"],
+  },
+  {
+    href: "/my-projects",
+    label: "My projects",
+    icon: FolderKanban,
+    roles: ["student"],
+  },
+  {
+    href: "/exams",
+    label: "Examinations",
+    icon: ScrollText,
+    roles: ["student"],
+  },
+  { href: "/my-results", label: "My results", icon: Award, roles: ["student"] },
+  {
+    href: "/my-attendance",
+    label: "My attendance",
+    icon: CalendarCheck,
+    roles: ["student"],
+  },
+  {
+    href: "/my-progress",
+    label: "My progress",
+    icon: TrendingUp,
+    roles: ["student"],
+  },
+  {
+    href: "/calendar",
+    label: "Calendar",
+    icon: CalendarDays,
+    roles: ["student"],
+  },
+  { href: "/announcements", label: "Announcements", icon: Megaphone },
+  {
+    href: "/discussions",
+    label: "Discussions",
+    icon: MessagesSquare,
+    roles: ["student"],
+  },
+  { href: "/notifications", label: "Notifications", icon: Bell },
+  { href: "/profile", label: "My profile", icon: UserCircle2 },
 ];
 
 /** Everybody who runs the institution rather than studying at it. */
 export const STAFF_NAV: NavGroup[] = [
   {
     items: [
-      { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['trainer'] },
+      {
+        href: "/dashboard",
+        label: "Dashboard",
+        icon: LayoutDashboard,
+        roles: ["trainer"],
+      },
       // A counsellor's landing page is their pipeline, not an institution
       // overview they hold no capability to read.
       {
-        href: '/admissions/dashboard',
-        label: 'Dashboard',
+        href: "/admissions/dashboard",
+        label: "Dashboard",
         icon: LayoutDashboard,
         capability: Capability.enrolmentCreate,
-        roles: ['counsellor'],
+        roles: ["counsellor"],
       },
       {
-        href: '/admin/overview',
-        label: 'Overview',
+        href: "/admin/overview",
+        label: "Overview",
         icon: BarChart3,
         capability: Capability.reportViewAny,
       },
@@ -126,223 +182,234 @@ export const STAFF_NAV: NavGroup[] = [
     // The client asked for two manager pages that drill all the way down,
     // rather than a dashboard of widgets. They are grouped as "Review" because
     // that is the job: looking at how a batch or a trainer is doing.
-    title: 'Review',
+    title: "Review",
     items: [
       {
-        href: '/manage/batches',
-        label: 'Batch review',
+        href: "/manage/batches",
+        label: "Batch review",
         icon: Layers,
         capability: Capability.performanceViewAny,
       },
       {
-        href: '/manage/trainers',
-        label: 'Trainer review',
+        href: "/manage/trainers",
+        label: "Trainer review",
         icon: GraduationCap,
         capability: Capability.performanceViewAny,
       },
       {
-        href: '/dsr',
-        label: 'Daily reports',
+        href: "/dsr",
+        label: "Daily reports",
         icon: FileText,
         capability: Capability.dsrViewAny,
       },
       {
         // A manager's ask of the teaching staff. Trainers see it too: they
         // are the people being asked, and answer on it (D-132).
-        href: '/requirements',
-        label: 'Trainer requirements',
+        href: "/requirements",
+        label: "Trainer requirements",
         icon: Megaphone,
         capability: Capability.requirementManage,
-        roles: ['trainer'],
+        roles: ["trainer"],
       },
     ],
   },
   {
     // Admissions is one job done many times a day, so its screens sit together
     // and in the order somebody works through them.
-    title: 'Admissions',
+    title: "Admissions",
     items: [
       {
-        href: '/admissions',
-        label: 'Registrations',
+        href: "/admissions",
+        label: "Registrations",
         icon: ListChecks,
         capability: Capability.studentCreate,
       },
       {
-        href: '/admissions/new',
-        label: 'Register a student',
+        href: "/admissions/new",
+        label: "Register a student",
         icon: UserPlus,
         capability: Capability.studentCreate,
       },
       {
-        href: '/admissions/batches',
-        label: 'Batch planning',
+        href: "/admissions/batches",
+        label: "Batch planning",
         icon: CalendarDays,
         capability: Capability.batchCreate,
       },
       {
-        href: '/admissions/transfer',
-        label: 'Transfers',
+        href: "/admissions/transfer",
+        label: "Transfers",
         icon: Repeat,
         capability: Capability.enrolmentUpdateAny,
       },
     ],
   },
   {
-    title: 'Teaching',
+    title: "Teaching",
     items: [
       {
-        href: '/teaching/today',
-        label: 'Today',
+        href: "/teaching/today",
+        label: "Today",
         icon: Sparkles,
         capability: Capability.sessionManageAny,
-        roles: ['trainer'],
+        roles: ["trainer"],
       },
       {
-        href: '/teaching',
+        href: "/teaching",
         icon: CalendarCheck,
         // No apostrophe: a typographic one reads better and makes every locator
         // that names this link — a test, a screen reader script, a search box —
         // depend on which character was typed.
-        label: 'Classes today',
+        label: "Classes today",
         capability: Capability.sessionManageAny,
-        roles: ['trainer'],
+        roles: ["trainer"],
       },
       {
-        href: '/teaching/assignments',
-        label: 'Assignments',
+        href: "/teaching/assignments",
+        label: "Assignments",
         icon: ClipboardList,
         capability: Capability.assignmentManageAny,
-        roles: ['trainer'],
+        roles: ["trainer"],
       },
       {
-        href: '/teaching/assessments',
-        label: 'Weekly tests',
+        href: "/teaching/assessments",
+        label: "Weekly tests",
         icon: ClipboardCheck,
         capability: Capability.assessmentManageAny,
-        roles: ['trainer'],
+        roles: ["trainer"],
       },
       {
-        href: '/teaching/projects',
-        label: 'Projects',
+        href: "/teaching/projects",
+        label: "Projects",
         icon: FolderKanban,
         capability: Capability.projectManageAny,
-        roles: ['trainer'],
+        roles: ["trainer"],
       },
       {
-        href: '/teaching/exams',
-        label: 'Examinations',
+        href: "/teaching/exams",
+        label: "Examinations",
         icon: ScrollText,
         capability: Capability.examManageAny,
-        roles: ['trainer'],
+        roles: ["trainer"],
       },
       {
-        href: '/teaching/questions',
-        label: 'Question bank',
+        href: "/teaching/questions",
+        label: "Question bank",
         icon: LibraryBig,
         capability: Capability.questionViewAny,
-        roles: ['trainer'],
+        roles: ["trainer"],
       },
     ],
   },
   {
-    title: 'People',
+    title: "People",
     items: [
-      { href: '/admin/users', label: 'Users', icon: Users, capability: Capability.userViewAny },
       {
-        href: '/admin/students',
-        label: 'Students',
+        href: "/admin/users",
+        label: "Users",
+        icon: Users,
+        capability: Capability.userViewAny,
+      },
+      {
+        href: "/admin/students",
+        label: "Students",
         icon: UsersRound,
         capability: Capability.studentViewAny,
       },
       {
-        href: '/admin/trainers',
-        label: 'Trainers',
+        href: "/admin/trainers",
+        label: "Trainers",
         icon: GraduationCap,
         capability: Capability.trainerViewAny,
       },
     ],
   },
   {
-    title: 'Courses and batches',
+    title: "Courses and batches",
     items: [
       {
-        href: '/admin/courses',
-        label: 'Authoring',
+        href: "/admin/courses",
+        label: "Authoring",
         icon: PenLine,
         capability: Capability.courseViewAny,
-        roles: ['trainer'],
+        roles: ["trainer"],
       },
       {
-        href: '/admin/batches',
-        label: 'Batches',
+        href: "/admin/batches",
+        label: "Batches",
         icon: Layers,
         capability: Capability.batchViewAny,
-        roles: ['trainer'],
+        roles: ["trainer"],
       },
-      { href: '/courses', label: 'Catalogue', icon: BookOpen },
+      { href: "/courses", label: "Catalogue", icon: BookOpen },
     ],
   },
   {
-    title: 'Outcomes',
+    title: "Outcomes",
     items: [
       {
-        href: '/admin/completions',
-        label: 'Completions',
+        href: "/admin/completions",
+        label: "Completions",
         icon: ClipboardCheck,
         capability: Capability.completionApprove,
       },
       {
-        href: '/admin/certificates',
-        label: 'Certificates',
+        href: "/admin/certificates",
+        label: "Certificates",
         icon: Award,
         capability: Capability.certificateManage,
       },
       {
-        href: '/admin/reports',
-        label: 'Reports',
+        href: "/admin/reports",
+        label: "Reports",
         icon: FileSpreadsheet,
         capability: Capability.reportViewAny,
-        roles: ['trainer'],
+        roles: ["trainer"],
       },
       {
-        href: '/admin/imports',
-        label: 'Bulk import',
+        href: "/admin/imports",
+        label: "Bulk import",
         icon: Workflow,
         capability: Capability.dataImport,
       },
     ],
   },
   {
-    title: 'Institution',
+    title: "Institution",
     items: [
       {
-        href: '/admin/academics',
-        label: 'Academic rules',
+        href: "/admin/academics",
+        label: "Academic rules",
         icon: Settings2,
         capability: Capability.academicConfigure,
       },
       {
-        href: '/admin/settings',
-        label: 'Settings',
+        href: "/admin/roles",
+        label: "Roles",
+        icon: ShieldCheck,
+        capability: Capability.roleView,
+      },
+      {
+        href: "/admin/settings",
+        label: "Settings",
         icon: SlidersHorizontal,
         capability: Capability.settingsManage,
       },
       {
-        href: '/admin/recovery',
-        label: 'Deleted records',
+        href: "/admin/recovery",
+        label: "Deleted records",
         icon: Trash2,
         capability: Capability.recordViewDeleted,
       },
       {
-        href: '/admin/branches',
-        label: 'Centres',
+        href: "/admin/branches",
+        label: "Centres",
         icon: Building2,
         capability: Capability.organisationViewAny,
       },
       {
-        href: '/admin/branding',
-        label: 'Branding',
+        href: "/admin/branding",
+        label: "Branding",
         icon: Palette,
         capability: Capability.platformConfigure,
       },
@@ -350,20 +417,25 @@ export const STAFF_NAV: NavGroup[] = [
       // so a manager gets every batch's classes and milestones and a trainer
       // only theirs. The link was trainer-only by oversight, not by design.
       {
-        href: '/calendar',
-        label: 'Calendar',
+        href: "/calendar",
+        label: "Calendar",
         icon: CalendarDays,
-        roles: ['trainer', 'counsellor', 'manager', 'admin', 'superadmin'],
+        roles: ["trainer", "counsellor", "manager", "admin", "superadmin"],
       },
     ],
   },
   {
-    title: 'Everyday',
+    title: "Everyday",
     items: [
-      { href: '/announcements', label: 'Announcements', icon: Megaphone },
-      { href: '/discussions', label: 'Discussions', icon: MessagesSquare, roles: ['trainer'] },
-      { href: '/notifications', label: 'Notifications', icon: Bell },
-      { href: '/profile', label: 'My profile', icon: UserCircle2 },
+      { href: "/announcements", label: "Announcements", icon: Megaphone },
+      {
+        href: "/discussions",
+        label: "Discussions",
+        icon: MessagesSquare,
+        roles: ["trainer"],
+      },
+      { href: "/notifications", label: "Notifications", icon: Bell },
+      { href: "/profile", label: "My profile", icon: UserCircle2 },
     ],
   },
 ];
@@ -380,14 +452,14 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     items: [
       {
-        href: '/admin/activity',
-        label: 'Activity review',
+        href: "/admin/activity",
+        label: "Activity review",
         icon: Activity,
         capability: Capability.auditView,
       },
       {
-        href: '/admin/overview',
-        label: 'Overview',
+        href: "/admin/overview",
+        label: "Overview",
         icon: BarChart3,
         capability: Capability.reportViewAny,
       },
@@ -396,33 +468,38 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     title: "Manager's work",
     items: [
-      { href: '/dsr', label: 'Daily reports', icon: FileText, capability: Capability.dsrViewAny },
       {
-        href: '/manage/trainers',
-        label: 'Trainer review',
+        href: "/dsr",
+        label: "Daily reports",
+        icon: FileText,
+        capability: Capability.dsrViewAny,
+      },
+      {
+        href: "/manage/trainers",
+        label: "Trainer review",
         icon: GraduationCap,
         capability: Capability.performanceViewAny,
       },
       {
-        href: '/manage/batches',
-        label: 'Batch review',
+        href: "/manage/batches",
+        label: "Batch review",
         icon: Layers,
         capability: Capability.performanceViewAny,
       },
       {
-        href: '/requirements',
-        label: 'Trainer requirements',
+        href: "/requirements",
+        label: "Trainer requirements",
         icon: Megaphone,
         capability: Capability.requirementManage,
       },
     ],
   },
   {
-    title: 'Trainers',
+    title: "Trainers",
     items: [
       {
-        href: '/admin/trainers',
-        label: 'Trainers',
+        href: "/admin/trainers",
+        label: "Trainers",
         icon: GraduationCap,
         capability: Capability.trainerViewAny,
       },
@@ -432,205 +509,222 @@ export const ADMIN_NAV: NavGroup[] = [
     title: "Counsellor's work",
     items: [
       {
-        href: '/admissions/dashboard',
-        label: 'Admissions pipeline',
+        href: "/admissions/dashboard",
+        label: "Admissions pipeline",
         icon: LayoutDashboard,
         capability: Capability.enrolmentCreate,
       },
       {
-        href: '/admissions',
-        label: 'Registrations',
+        href: "/admissions",
+        label: "Registrations",
         icon: ListChecks,
         capability: Capability.studentCreate,
       },
       {
-        href: '/admissions/new',
-        label: 'Register a student',
+        href: "/admissions/new",
+        label: "Register a student",
         icon: UserPlus,
         capability: Capability.studentCreate,
       },
       {
-        href: '/admissions/batches',
-        label: 'Batch planning',
+        href: "/admissions/batches",
+        label: "Batch planning",
         icon: CalendarDays,
         capability: Capability.batchCreate,
       },
       {
-        href: '/admissions/transfer',
-        label: 'Transfers',
+        href: "/admissions/transfer",
+        label: "Transfers",
         icon: Repeat,
         capability: Capability.enrolmentUpdateAny,
       },
     ],
   },
   {
-    title: 'Students and fees',
+    title: "Students and fees",
     items: [
       {
-        href: '/admin/students',
-        label: 'Students',
+        href: "/admin/students",
+        label: "Students",
         icon: UsersRound,
         capability: Capability.studentViewAny,
       },
       {
-        href: '/admin/imports',
-        label: 'Bulk import',
+        href: "/admin/imports",
+        label: "Bulk import",
         icon: Workflow,
         capability: Capability.dataImport,
       },
     ],
   },
   {
-    title: 'Batches and courses',
+    title: "Batches and courses",
     items: [
       {
-        href: '/admin/batches',
-        label: 'Batches',
+        href: "/admin/batches",
+        label: "Batches",
         icon: Layers,
         capability: Capability.batchViewAny,
       },
       {
-        href: '/admin/courses',
-        label: 'Courses',
+        href: "/admin/courses",
+        label: "Courses",
         icon: LibraryBig,
         capability: Capability.courseViewAny,
       },
-      { href: '/courses', label: 'Catalogue', icon: BookOpen },
+      { href: "/courses", label: "Catalogue", icon: BookOpen },
     ],
   },
   {
-    title: 'Performance and outcomes',
+    title: "Performance and outcomes",
     items: [
       {
-        href: '/admin/reports',
-        label: 'Reports',
+        href: "/admin/reports",
+        label: "Reports",
         icon: FileSpreadsheet,
         capability: Capability.reportViewAny,
       },
       {
-        href: '/admin/completions',
-        label: 'Completions',
+        href: "/admin/completions",
+        label: "Completions",
         icon: ClipboardCheck,
         capability: Capability.completionApprove,
       },
       {
-        href: '/admin/certificates',
-        label: 'Certificates',
+        href: "/admin/certificates",
+        label: "Certificates",
         icon: Award,
         capability: Capability.certificateManage,
       },
     ],
   },
   {
-    title: 'Calendar',
+    title: "Calendar",
     items: [
       {
-        href: '/calendar',
-        label: 'Calendar',
+        href: "/calendar",
+        label: "Calendar",
         icon: CalendarDays,
-        roles: ['admin', 'superadmin'],
+        roles: ["admin", "superadmin"],
       },
     ],
   },
   {
-    title: 'Teaching',
+    title: "Teaching",
     items: [
       {
-        href: '/teaching/today',
-        label: 'Today',
+        href: "/teaching/today",
+        label: "Today",
         icon: Sparkles,
         capability: Capability.sessionManageAny,
       },
       {
-        href: '/teaching',
-        label: 'Classes today',
+        href: "/teaching",
+        label: "Classes today",
         icon: CalendarCheck,
         capability: Capability.sessionManageAny,
       },
       {
-        href: '/teaching/assignments',
-        label: 'Assignments',
+        href: "/teaching/assignments",
+        label: "Assignments",
         icon: ClipboardList,
         capability: Capability.assignmentManageAny,
       },
       {
-        href: '/teaching/assessments',
-        label: 'Weekly tests',
+        href: "/teaching/assessments",
+        label: "Weekly tests",
         icon: PenLine,
         capability: Capability.assessmentManageAny,
       },
       {
-        href: '/teaching/projects',
-        label: 'Projects',
+        href: "/teaching/projects",
+        label: "Projects",
         icon: FolderKanban,
         capability: Capability.projectManageAny,
       },
       {
-        href: '/teaching/exams',
-        label: 'Examinations',
+        href: "/teaching/exams",
+        label: "Examinations",
         icon: ScrollText,
         capability: Capability.examManageAny,
       },
       {
-        href: '/teaching/questions',
-        label: 'Question bank',
+        href: "/teaching/questions",
+        label: "Question bank",
         icon: LibraryBig,
         capability: Capability.questionViewAny,
       },
     ],
   },
   {
-    title: 'Institution',
+    title: "Institution",
     items: [
-      { href: '/admin/users', label: 'Users', icon: Users, capability: Capability.userViewAny },
       {
-        href: '/admin/branches',
-        label: 'Centres',
+        href: "/admin/users",
+        label: "Users",
+        icon: Users,
+        capability: Capability.userViewAny,
+      },
+      {
+        href: "/admin/roles",
+        label: "Roles",
+        icon: ShieldCheck,
+        capability: Capability.roleView,
+      },
+      {
+        href: "/admin/branches",
+        label: "Centres",
         icon: Building2,
         capability: Capability.organisationViewAny,
       },
       {
-        href: '/admin/settings',
-        label: 'Settings',
+        href: "/admin/settings",
+        label: "Settings",
         icon: SlidersHorizontal,
         capability: Capability.settingsManage,
       },
       {
-        href: '/admin/academics',
-        label: 'Academic rules',
+        href: "/admin/academics",
+        label: "Academic rules",
         icon: Settings2,
         capability: Capability.academicConfigure,
       },
       {
-        href: '/admin/branding',
-        label: 'Branding',
+        href: "/admin/branding",
+        label: "Branding",
         icon: Palette,
         capability: Capability.platformConfigure,
       },
       {
-        href: '/admin/recovery',
-        label: 'Deleted records',
+        href: "/admin/recovery",
+        label: "Deleted records",
         icon: Trash2,
         capability: Capability.recordViewDeleted,
       },
     ],
   },
   {
-    title: 'Everyday',
+    title: "Everyday",
     items: [
-      { href: '/announcements', label: 'Announcements', icon: Megaphone },
-      { href: '/notifications', label: 'Notifications', icon: Bell },
-      { href: '/profile', label: 'My profile', icon: UserCircle2 },
+      { href: "/announcements", label: "Announcements", icon: Megaphone },
+      { href: "/notifications", label: "Notifications", icon: Bell },
+      { href: "/profile", label: "My profile", icon: UserCircle2 },
     ],
   },
 ];
 
 /** Which sidebar a role gets. */
 export function navFor(role: string | undefined): NavGroup[] {
-  return role === 'admin' || role === 'superadmin' ? ADMIN_NAV : STAFF_NAV;
+  return role === "admin" || role === "superadmin" ? ADMIN_NAV : STAFF_NAV;
 }
 
-export const STAFF_ROLES = ['superadmin', 'admin', 'manager', 'counsellor', 'trainer'];
+export const STAFF_ROLES = [
+  "superadmin",
+  "admin",
+  "manager",
+  "counsellor",
+  "trainer",
+];
 
 /** Whether this person should see a given entry. */
 export function isVisible(

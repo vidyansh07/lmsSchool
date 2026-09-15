@@ -482,6 +482,11 @@ def test_reading_the_settings_costs_one_query(
     time. Either of those regressing takes it to nine.
     """
     api_client_no_csrf.force_login(admin_user)
+    # The first request after a cache clear also resolves the caller's role
+    # from its rows (ADR-01) and caches the set for ten minutes; that cost is
+    # the roles cache's, not this endpoint's, so it is paid once before the
+    # measurement.
+    assert api_client_no_csrf.get(_settings_url()).status_code == 200
     with django_assert_max_num_queries(8):
         assert api_client_no_csrf.get(_settings_url()).status_code == 200
 

@@ -224,6 +224,16 @@ class Capability(models.TextChoices):
     REQUIREMENT_MANAGE = "requirement.manage", _("Raise and close trainer requirements")
     DISCUSSION_MODERATE_ANY = "discussion.moderate_any", _("Moderate any discussion")
 
+    # --- Roles as rows (ERP Phase 1, ADR-01)
+    #
+    # The catalog stays in this enum; who holds what is configuration. Viewing
+    # the roles and the matrix is one thing, changing them another, and
+    # assigning permissions to a role a third — so a "read-only auditor"
+    # custom role can see the matrix without being able to touch it.
+    ROLE_VIEW = "role.view", _("View roles and the permission matrix")
+    ROLE_MANAGE = "role.manage", _("Create, edit and remove custom roles")
+    PERMISSION_ASSIGN = "permission.assign", _("Assign permissions to a role")
+
     # --- Reporting and data tools
     #
     # A trainer holds neither. They can read reports about the batches they
@@ -339,6 +349,9 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.EXPORT_VIEW_ANY,
         Capability.RECORD_VIEW_DELETED,
         Capability.RECORD_RESTORE,
+        Capability.ROLE_VIEW,
+        Capability.ROLE_MANAGE,
+        Capability.PERMISSION_ASSIGN,
     }
 )
 
@@ -381,17 +394,41 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
 }
 
 
-def capabilities_for(role: str, *, is_superuser: bool = False) -> frozenset[str]:
+def capabilities_for(
+    role: str, *, is_superuser: bool = False, custom_role_id=None
+) -> frozenset[str]:
     """Resolve the capability set for a role.
 
     Superusers are platform operators and hold every capability. Role-level
     capability does not bypass object-level ownership checks — a superadmin can
     reach any *record*, but ownership rules still decide whose data is whose
     where that distinction matters.
+
+    Since ERP Phase 1 (ADR-01) the *mapping* from a role to its capabilities
+    lives in `apps.authorization` as rows, seeded from `ROLE_CAPABILITIES`
+    below and editable by an administrator. This function asks those rows
+    first — through a cache — and falls back to the code matrix when the
+    table is empty (first boot, a test without the seed) or when
+    `DYNAMIC_ROLES_ENABLED` is off. A superadmin never reads the rows: the
+    one role that configuration can never lock out of a feature.
     """
-    if is_superuser:
+    if is_superuser or role == UserRole.SUPERADMIN:
         return frozenset(Capability.values)
+    from apps.authorization.resolver import resolved_capabilities
+
+    resolved = resolved_capabilities(role, custom_role_id)
+    if resolved is not None:
+        return resolved
     return ROLE_CAPABILITIES.get(role, BASE_CAPABILITIES)
+
+
+def effective_capabilities(user) -> frozenset[str]:
+    """What this user may do, custom role included."""
+    return capabilities_for(
+        user.role,
+        is_superuser=getattr(user, "is_superuser", False),
+        custom_role_id=getattr(user, "custom_role_id", None),
+    )
 
 
 def can_grant_role(actor, role: str) -> bool:
@@ -409,10 +446,10 @@ def can_grant_role(actor, role: str) -> bool:
     """
     if actor is None or not getattr(actor, "is_authenticated", False) or not actor.is_active:
         return False
-    granted = ROLE_CAPABILITIES.get(role)
-    if granted is None:
+    if role not in ROLE_CAPABILITIES:
         return False
-    held = capabilities_for(actor.role, is_superuser=actor.is_superuser)
+    granted = capabilities_for(role)
+    held = effective_capabilities(actor)
     return granted <= held
 
 
@@ -461,11 +498,11 @@ def can_administer(actor, target) -> bool:
     if getattr(target, "pk", None) is not None and target.pk == actor.pk:
         return False
 
-    held = capabilities_for(actor.role, is_superuser=actor.is_superuser)
+    held = effective_capabilities(actor)
     if actor.is_superuser or actor.role == UserRole.SUPERADMIN:
         return True
 
-    theirs = capabilities_for(target.role, is_superuser=target.is_superuser)
+    theirs = effective_capabilities(target)
     return theirs < held
 
 
@@ -475,4 +512,4 @@ def has_capability(user, capability: str) -> bool:
         return False
     if not user.is_active:
         return False
-    return capability in capabilities_for(user.role, is_superuser=user.is_superuser)
+    return capability in effective_capabilities(user)

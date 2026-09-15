@@ -8,24 +8,19 @@
  */
 
 export type UserRole =
-  | 'superadmin'
-  | 'admin'
-  | 'manager'
-  | 'counsellor'
-  | 'trainer'
-  | 'student';
+  "superadmin" | "admin" | "manager" | "counsellor" | "trainer" | "student";
 
-export type FeeStatus = 'pending' | 'partial' | 'paid' | 'waived' | 'overdue';
+export type FeeStatus = "pending" | "partial" | "paid" | "waived" | "overdue";
 
 export type Qualification =
-  | 'secondary'
-  | 'higher_secondary'
-  | 'diploma'
-  | 'bachelors'
-  | 'masters'
-  | 'other';
+  | "secondary"
+  | "higher_secondary"
+  | "diploma"
+  | "bachelors"
+  | "masters"
+  | "other";
 
-export type InstitutionKind = 'college' | 'employer';
+export type InstitutionKind = "college" | "employer";
 
 export interface User {
   id: string;
@@ -35,6 +30,10 @@ export interface User {
   full_name: string;
   phone: string;
   role: UserRole;
+  /** The slug of a configured role of the same kind (ADR-01), or null for
+   *  the system role. */
+  custom_role?: string | null;
+  custom_role_name?: string | null;
   is_active: boolean;
   is_email_verified: boolean;
   profile_image_url: string | null;
@@ -56,7 +55,7 @@ export interface CurrentUser extends User {
   last_login: string | null;
   email_verified_at: string | null;
   capabilities: string[];
-  profile_type: 'student' | 'trainer' | null;
+  profile_type: "student" | "trainer" | null;
   profile_id: string | null;
 }
 
@@ -77,7 +76,7 @@ export interface UserAuditEntry {
   id: string;
   action: string;
   action_label: string;
-  result: 'success' | 'failure' | 'denied';
+  result: "success" | "failure" | "denied";
   /** The label rather than a nested user: whoever made the change may since
    *  have been deleted, and the history should still say who it was. */
   actor_label: string;
@@ -96,9 +95,9 @@ export interface StudentProfile {
   state: string;
   country: string;
   postal_code: string;
-  qualification: Qualification | '';
+  qualification: Qualification | "";
   institution: string;
-  institution_kind: InstitutionKind | '';
+  institution_kind: InstitutionKind | "";
   /** For a working professional: what they do there. */
   job_title: string;
   /** An identifier issued elsewhere — a university roll number — that the
@@ -139,7 +138,7 @@ export interface StudentListRow {
   email: string;
   full_name: string;
   city: string;
-  qualification: Qualification | '';
+  qualification: Qualification | "";
   fee_status: FeeStatus;
   fee_amount: string | null;
   /** From the fee ledger, summed across the student's courses: agreed after
@@ -150,7 +149,7 @@ export interface StudentListRow {
   fee_next_due_on: string | null;
   institution: string;
   roll_number: string;
-  institution_kind: InstitutionKind | '';
+  institution_kind: InstitutionKind | "";
   referred_by: string | null;
   is_active: boolean;
   is_email_verified: boolean;
@@ -211,13 +210,13 @@ export interface Paginated<T> {
 }
 
 export interface HealthCheck {
-  status: 'ok' | 'error';
+  status: "ok" | "error";
   detail: string;
   duration_ms: number;
 }
 
 export interface ReadinessResponse {
-  status: 'ok' | 'degraded';
+  status: "ok" | "degraded";
   checks: Record<string, HealthCheck>;
 }
 
@@ -234,13 +233,13 @@ export interface DetailResponse {
 
 // --- Course catalogue -------------------------------------------------------
 
-export type PublishStatus = 'draft' | 'in_review' | 'published' | 'archived';
-export type CourseVisibility = 'public' | 'internal' | 'private';
-export type CourseDifficulty = 'beginner' | 'intermediate' | 'advanced';
-export type LessonContentType = 'text' | 'video' | 'document' | 'external_link';
-export type ResourceKind = 'file' | 'link';
-export type CourseAuthorRole = 'owner' | 'editor';
-export type VideoProvider = 'external_url' | 's3' | 'managed';
+export type PublishStatus = "draft" | "in_review" | "published" | "archived";
+export type CourseVisibility = "public" | "internal" | "private";
+export type CourseDifficulty = "beginner" | "intermediate" | "advanced";
+export type LessonContentType = "text" | "video" | "document" | "external_link";
+export type ResourceKind = "file" | "link";
+export type CourseAuthorRole = "owner" | "editor";
+export type VideoProvider = "external_url" | "s3" | "managed";
 
 export interface Category {
   id: string;
@@ -280,7 +279,7 @@ export interface VideoAsset {
   provider: VideoProvider;
   duration_seconds: number | null;
   thumbnail_url: string;
-  status: 'pending' | 'processing' | 'ready' | 'failed';
+  status: "pending" | "processing" | "ready" | "failed";
 }
 
 /** Returned only by the playback endpoint, after an access check. */
@@ -373,14 +372,11 @@ export interface PublishChecklist {
 
 // --- Batches, enrolment and scheduling --------------------------------------
 
-export type BatchStatus = 'upcoming' | 'active' | 'completed' | 'cancelled' | 'archived';
+export type BatchStatus =
+  "upcoming" | "active" | "completed" | "cancelled" | "archived";
 export type EnrollmentStatus =
-  | 'pending'
-  | 'active'
-  | 'suspended'
-  | 'completed'
-  | 'cancelled';
-export type LessonProgressStatus = 'not_started' | 'in_progress' | 'completed';
+  "pending" | "active" | "suspended" | "completed" | "cancelled";
+export type LessonProgressStatus = "not_started" | "in_progress" | "completed";
 
 /** 0 = Monday, matching Python's `date.weekday()`. */
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -493,20 +489,20 @@ export interface CourseProgress {
 }
 
 export type CalendarEventKind =
-  | 'class'
-  | 'batch_start'
-  | 'batch_end'
-  | 'course_start'
-  | 'course_end'
-  | 'assignment_due'
+  | "class"
+  | "batch_start"
+  | "batch_end"
+  | "course_start"
+  | "course_end"
+  | "assignment_due"
   // Emitted by `apps.dashboards.calendar` and missing here until now, which is
   // the failure mode of a hand-written union: the backend adds a source, the
   // type says it cannot happen, and the screen silently renders a project
   // deadline as whatever its fallback branch does.
-  | 'project_due'
-  | 'quiz'
-  | 'exam'
-  | 'announcement';
+  | "project_due"
+  | "quiz"
+  | "exam"
+  | "announcement";
 
 export interface CalendarEvent {
   kind: CalendarEventKind;
@@ -565,7 +561,12 @@ export interface StudentDashboard {
   batches: DashboardBatch[];
   upcoming_classes: CalendarEvent[];
   continue_learning: DashboardCourse | null;
-  recent_activity: { kind: string; title: string; at: string; status: string }[];
+  recent_activity: {
+    kind: string;
+    title: string;
+    at: string;
+    status: string;
+  }[];
   notifications: { title?: string; body?: string }[];
 }
 
@@ -575,7 +576,12 @@ export interface TrainerDashboard {
   today_classes: CalendarEvent[];
   upcoming_classes: CalendarEvent[];
   student_count: number;
-  courses: { course_id: string; title: string; slug: string; batch_count: number }[];
+  courses: {
+    course_id: string;
+    title: string;
+    slug: string;
+    batch_count: number;
+  }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -583,11 +589,7 @@ export interface TrainerDashboard {
 // ---------------------------------------------------------------------------
 
 export type SessionStatus =
-  | 'scheduled'
-  | 'in_progress'
-  | 'completed'
-  | 'cancelled'
-  | 'rescheduled';
+  "scheduled" | "in_progress" | "completed" | "cancelled" | "rescheduled";
 
 export interface ClassSession {
   id: string;
@@ -627,13 +629,9 @@ export interface ClassSession {
 
 /** Where a class sits against the plan. Mirrors `apps.sessions.models.TopicStatus`. */
 export type TopicStatus =
-  | 'planned'
-  | 'in_progress'
-  | 'completed'
-  | 'skipped'
-  | 'rescheduled';
+  "planned" | "in_progress" | "completed" | "skipped" | "rescheduled";
 
-export type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused';
+export type AttendanceStatus = "present" | "absent" | "late" | "excused";
 
 export interface RegisterEntry {
   enrollment_id: string;
@@ -695,9 +693,9 @@ export interface MyAttendance {
   records: AttendanceRecord[];
 }
 
-export type AcademicLifecycle = 'draft' | 'published' | 'closed' | 'archived';
-export type SubmissionKind = 'file' | 'text' | 'link' | 'any';
-export type SubmissionStatus = 'submitted' | 'graded' | 'returned';
+export type AcademicLifecycle = "draft" | "published" | "closed" | "archived";
+export type SubmissionKind = "file" | "text" | "link" | "any";
+export type SubmissionStatus = "submitted" | "graded" | "returned";
 
 export interface AssignmentAttachment {
   id: string;
@@ -798,9 +796,9 @@ export interface StudentAssignment {
   my_submission: Submission | null;
 }
 
-export type AssessmentCategory = 'weekly_test' | 'practice' | 'mock' | 'other';
-export type AssessmentDelivery = 'external_link' | 'file_upload' | 'offline';
-export type ResultSource = 'manual' | 'import' | 'graded';
+export type AssessmentCategory = "weekly_test" | "practice" | "mock" | "other";
+export type AssessmentDelivery = "external_link" | "file_upload" | "offline";
+export type ResultSource = "manual" | "import" | "graded";
 
 export interface Assessment {
   id: string;
@@ -845,7 +843,7 @@ export interface AssessmentResult {
   recorded_at: string;
 }
 
-export interface StudentAssessment extends Omit<Assessment, 'result_count'> {
+export interface StudentAssessment extends Omit<Assessment, "result_count"> {
   my_result: AssessmentResult | null;
 }
 
@@ -856,7 +854,7 @@ export interface MarksSheetEntry {
   marks_obtained: string | null;
   is_absent: boolean;
   remarks: string;
-  source: ResultSource | '';
+  source: ResultSource | "";
 }
 
 export interface MarksSheet {
@@ -865,7 +863,7 @@ export interface MarksSheet {
   can_record: boolean;
 }
 
-export type ImportStatus = 'preview' | 'confirmed' | 'rejected' | 'failed';
+export type ImportStatus = "preview" | "confirmed" | "rejected" | "failed";
 
 export interface ImportProblem {
   line: number;
@@ -935,7 +933,7 @@ export interface EffectivePolicy {
 /** A stored policy row. `null` on a field means "inherit". */
 export interface AcademicPolicy {
   id: string;
-  scope: 'global' | 'course';
+  scope: "global" | "course";
   course: string | null;
   course_title: string | null;
   minimum_attendance_percent: string | null;
@@ -957,16 +955,16 @@ export interface AcademicPolicy {
 // Phase 5 — projects, question bank, examinations
 // ---------------------------------------------------------------------------
 
-export type ProjectKind = 'small' | 'major' | 'capstone';
+export type ProjectKind = "small" | "major" | "capstone";
 
 export type ProjectWorkStatus =
-  | 'assigned'
-  | 'in_progress'
-  | 'submitted'
-  | 'under_review'
-  | 'rework'
-  | 'approved'
-  | 'completed';
+  | "assigned"
+  | "in_progress"
+  | "submitted"
+  | "under_review"
+  | "rework"
+  | "approved"
+  | "completed";
 
 export interface RubricCriterion {
   key: string;
@@ -1061,14 +1059,9 @@ export interface RequiredProjectProgress {
 }
 
 export type QuestionType =
-  | 'mcq'
-  | 'multiple'
-  | 'true_false'
-  | 'short_answer'
-  | 'long_answer'
-  | 'file';
+  "mcq" | "multiple" | "true_false" | "short_answer" | "long_answer" | "file";
 
-export type Difficulty = 'easy' | 'medium' | 'hard';
+export type Difficulty = "easy" | "medium" | "hard";
 
 export interface QuestionOption {
   id: string;
@@ -1145,7 +1138,7 @@ export interface ExamReadiness {
   approximate_total_marks: string;
 }
 
-export type AttemptStatus = 'in_progress' | 'submitted' | 'graded' | 'expired';
+export type AttemptStatus = "in_progress" | "submitted" | "graded" | "expired";
 
 export interface ExamAttempt {
   id: string;
@@ -1244,9 +1237,10 @@ export interface AttemptReview {
 // Phase 6 — progress, completion, certificates
 // ---------------------------------------------------------------------------
 
-export type DeliveryMode = 'offline' | 'online' | 'hybrid';
+export type DeliveryMode = "offline" | "online" | "hybrid";
 
-export type CompletionStatus = 'in_progress' | 'eligible' | 'approved' | 'rejected';
+export type CompletionStatus =
+  "in_progress" | "eligible" | "approved" | "rejected";
 
 export interface LessonProgressSummary {
   total: number;
@@ -1366,7 +1360,7 @@ export interface CompletionEvaluation {
   completion: CourseCompletion | null;
 }
 
-export type CertificateStatus = 'issued' | 'revoked' | 'superseded';
+export type CertificateStatus = "issued" | "revoked" | "superseded";
 
 export interface CertificateTemplate {
   id: string;
@@ -1422,10 +1416,7 @@ export interface PublicCertificate {
 // ---------------------------------------------------------------------------
 
 export type NotificationCategory =
-  | 'academic'
-  | 'schedule'
-  | 'announcements'
-  | 'administrative';
+  "academic" | "schedule" | "announcements" | "administrative";
 
 export interface AppNotification {
   id: string;
@@ -1449,8 +1440,9 @@ export interface NotificationPreference {
   updated_at: string;
 }
 
-export type Audience = 'everyone' | 'course' | 'batch' | 'selected' | 'trainers';
-export type AnnouncementStatus = 'draft' | 'published' | 'archived';
+export type Audience =
+  "everyone" | "course" | "batch" | "selected" | "trainers";
+export type AnnouncementStatus = "draft" | "published" | "archived";
 
 export interface Announcement {
   id: string;
@@ -1593,7 +1585,7 @@ export interface LmsMetric {
   key: string;
   label: string;
   definition: string;
-  unit: 'percent' | 'count';
+  unit: "percent" | "count";
   value: number | null;
   numerator?: number | null;
   denominator?: number | null;
@@ -1637,13 +1629,18 @@ export interface BatchSummary {
   attendance_percent: number | null;
 }
 
-export type BulkImportKind = 'students' | 'attendance';
-export type BulkImportStatus = 'preview' | 'confirmed' | 'rejected' | 'failed';
+export type BulkImportKind = "students" | "attendance";
+export type BulkImportStatus = "preview" | "confirmed" | "rejected" | "failed";
 
 export interface BulkImportReport {
   columns: Record<string, string>;
   rows: Record<string, unknown>[];
-  errors: { line: number; problem: string; email?: string; student_id?: string }[];
+  errors: {
+    line: number;
+    problem: string;
+    email?: string;
+    student_id?: string;
+  }[];
   not_in_file?: { student_id: string; student_name: string }[];
   summary: {
     read: number;
@@ -1670,7 +1667,7 @@ export interface BulkImport {
   created_at: string;
 }
 
-export type AcademicEventKind = 'term' | 'holiday' | 'exam_week' | 'other';
+export type AcademicEventKind = "term" | "holiday" | "exam_week" | "other";
 
 export interface AcademicEvent {
   id: string;
@@ -1689,10 +1686,11 @@ export interface GradeBand {
 
 // --- Fees --------------------------------------------------------------------
 
-export type PaymentMethod = 'cash' | 'upi' | 'card' | 'bank_transfer' | 'cheque' | 'other';
+export type PaymentMethod =
+  "cash" | "upi" | "card" | "bank_transfer" | "cheque" | "other";
 
 /** Derived by the server from the numbers; never stored, never set by hand. */
-export type FeePlanStatus = 'unpaid' | 'partial' | 'paid' | 'waived';
+export type FeePlanStatus = "unpaid" | "partial" | "paid" | "waived";
 
 export interface FeePayment {
   id: string;
@@ -1743,7 +1741,7 @@ export interface FeePlan {
 }
 
 /** A plan as it appears in lists: the same figures without the payments. */
-export type FeePlanBrief = Omit<FeePlan, 'payments'> & {
+export type FeePlanBrief = Omit<FeePlan, "payments"> & {
   student_id?: string;
   student_name?: string;
 };
@@ -1796,16 +1794,16 @@ export interface Branch {
 // --- Activity review ---------------------------------------------------------
 
 export type ActivityKind =
-  | 'admissions'
-  | 'fees'
-  | 'teaching'
-  | 'reviews'
-  | 'courses'
-  | 'outcomes'
-  | 'accounts'
-  | 'communication'
-  | 'institution'
-  | 'other';
+  | "admissions"
+  | "fees"
+  | "teaching"
+  | "reviews"
+  | "courses"
+  | "outcomes"
+  | "accounts"
+  | "communication"
+  | "institution"
+  | "other";
 
 export interface ActivityFeedEntry {
   id: string;
@@ -1853,9 +1851,66 @@ export interface ActivityScorecards {
 
 // --- Warnings ----------------------------------------------------------------
 
+// --- Roles as rows (ERP Phase 1, ADR-01) -------------------------------------
+
+export type PermissionScope = "all" | "branch" | "assigned" | "own";
+export type RoleStatus = "active" | "disabled";
+export type PermissionCategory =
+  | "people"
+  | "academic"
+  | "operations"
+  | "configuration"
+  | "communication"
+  | "system";
+export type MatrixCell =
+  "explicit" | "inherited" | "locked" | "denied" | "system";
+
+export interface PermissionDef {
+  code: string;
+  resource: string;
+  action: string;
+  category: PermissionCategory;
+  description: string;
+  is_lockable: boolean;
+  is_active: boolean;
+}
+
+export interface RoleGrant {
+  code: string;
+  /** Empty string means the role kind's floor. */
+  scope: PermissionScope | "";
+  is_locked: boolean;
+}
+
+export interface RoleSummary {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  kind: UserRole;
+  status: RoleStatus;
+  is_system: boolean;
+  is_locked: boolean;
+  user_count: number;
+  permission_count: number;
+  updated_at: string;
+}
+
+export interface Role extends Omit<RoleSummary, "permission_count"> {
+  permissions: RoleGrant[];
+  updated_by_name: string | null;
+  created_at: string;
+}
+
+export interface RoleMatrix {
+  roles: RoleSummary[];
+  permissions: PermissionDef[];
+  cells: Record<string, Record<string, MatrixCell>>;
+}
+
 // --- Trainer requirements (D-132) -------------------------------------------
 
-export type RequirementStatus = 'open' | 'fulfilled' | 'closed';
+export type RequirementStatus = "open" | "fulfilled" | "closed";
 
 export interface RequirementReply {
   id: string;
@@ -1890,7 +1945,7 @@ export interface TrainerRequirement {
   updated_at: string;
 }
 
-export type WarningSeverity = 'error' | 'warning' | 'info';
+export type WarningSeverity = "error" | "warning" | "info";
 
 export interface StaffWarningItem {
   label: string;
@@ -1912,8 +1967,9 @@ export interface StaffWarning {
 
 // --- Exports -----------------------------------------------------------------
 
-export type ExportFormat = 'csv' | 'xlsx' | 'pdf';
-export type ExportStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+export type ExportFormat = "csv" | "xlsx" | "pdf";
+export type ExportStatus =
+  "queued" | "processing" | "completed" | "failed" | "cancelled";
 
 export interface ExportJob {
   id: string;

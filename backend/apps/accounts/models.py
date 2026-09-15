@@ -33,7 +33,7 @@ from apps.common.uploads import profile_image_upload_to
 from apps.common.validators import validate_person_name, validate_phone_number
 
 from .managers import UserManager
-from .roles import Capability, UserRole, capabilities_for, has_capability
+from .roles import Capability, UserRole, effective_capabilities, has_capability
 
 __all__ = [
     "AccountToken",
@@ -78,6 +78,18 @@ class User(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
         default=UserRole.STUDENT,
         db_index=True,
         help_text=_("Authoritative role used for server-side authorization."),
+    )
+    custom_role = models.ForeignKey(
+        "authorization.Role",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="users",
+        verbose_name=_("custom role"),
+        help_text=_(
+            "A configured role of the same kind as `role`, whose permission set "
+            "replaces the kind's default (ADR-01). Empty means the system role."
+        ),
     )
     branch = models.ForeignKey(
         "organisation.Branch",
@@ -160,7 +172,7 @@ class User(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
     @property
     def capabilities(self) -> frozenset[str]:
         """Everything this user is permitted to do, resolved from the matrix."""
-        return capabilities_for(self.role, is_superuser=self.is_superuser)
+        return effective_capabilities(self)
 
     def has_capability(self, capability: str) -> bool:
         return has_capability(self, capability)

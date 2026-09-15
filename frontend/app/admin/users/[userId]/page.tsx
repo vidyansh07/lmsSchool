@@ -23,6 +23,7 @@ import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { ApiError, fieldErrors } from "@/lib/api";
 import { Capability } from "@/lib/capabilities";
 import { ROLE_LABEL, ROLE_OPTIONS } from "@/lib/labels";
+import { listRoles } from "@/lib/roles";
 import {
   getUser,
   getUserAudit,
@@ -32,7 +33,12 @@ import {
 } from "@/lib/people";
 import { useBranches } from "@/components/organisation/branch-field";
 import { moveUserToBranch } from "@/lib/organisation";
-import type { AdminUser, UserAuditEntry, UserRole } from "@/types/api";
+import type {
+  AdminUser,
+  RoleSummary,
+  UserAuditEntry,
+  UserRole,
+} from "@/types/api";
 
 /**
  * Administering one account.
@@ -151,6 +157,7 @@ function UserAdministration({ userId }: { userId: string }) {
     last_name: "",
     phone: "",
     role: "student" as UserRole,
+    custom_role: "" as string,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState("");
@@ -166,6 +173,7 @@ function UserAdministration({ userId }: { userId: string }) {
           last_name: row.last_name,
           phone: row.phone ?? "",
           role: row.role,
+          custom_role: row.custom_role ?? "",
         });
       })
       .catch((cause: unknown) =>
@@ -340,6 +348,14 @@ function UserAdministration({ userId }: { userId: string }) {
                 </Select>
               </Field>
             ) : null}
+            {can(Capability.userChangeRole) && mayAdminister && !isSelf ? (
+              <CustomRoleField
+                kind={form.role}
+                value={form.custom_role}
+                error={errors.custom_role}
+                onChange={(value) => setForm({ ...form, custom_role: value })}
+              />
+            ) : null}
           </div>
 
           {emailChanged ? (
@@ -363,7 +379,10 @@ function UserAdministration({ userId }: { userId: string }) {
                       last_name: form.last_name.trim(),
                       phone: form.phone.trim(),
                       ...(can(Capability.userChangeRole) && !isSelf
-                        ? { role: form.role }
+                        ? {
+                            role: form.role,
+                            custom_role: form.custom_role || null,
+                          }
                         : {}),
                     }),
                   "Saved.",
@@ -570,5 +589,64 @@ export default function UserAdministrationPage({
     <RequireAuth capability={Capability.userViewAny}>
       <UserAdministration userId={userId} />
     </RequireAuth>
+  );
+}
+
+/**
+ * The configured roles of the account's kind (ADR-01). Loaded once when the
+ * field mounts — a read — and offered only when at least one exists, so the
+ * common case stays one dropdown.
+ */
+function CustomRoleField({
+  kind,
+  value,
+  error,
+  onChange,
+}: {
+  kind: UserRole;
+  value: string;
+  error?: string;
+  onChange: (value: string) => void;
+}) {
+  const [roles, setRoles] = useState<RoleSummary[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    listRoles()
+      .then((rows) => {
+        if (!cancelled) setRoles(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setRoles([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const options = (roles ?? []).filter(
+    (row) => !row.is_system && row.kind === kind && row.status === "active",
+  );
+  if (roles === null || (options.length === 0 && !value)) return null;
+  return (
+    <Field
+      label="Custom role"
+      htmlFor="user-custom-role"
+      error={error}
+      hint={`A configured ${ROLE_LABEL[kind].toLowerCase()} role replaces the default set of permissions.`}
+    >
+      <Select
+        id="user-custom-role"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">
+          Default {ROLE_LABEL[kind].toLowerCase()} permissions
+        </option>
+        {options.map((row) => (
+          <option key={row.slug} value={row.slug}>
+            {row.name}
+          </option>
+        ))}
+      </Select>
+    </Field>
   );
 }

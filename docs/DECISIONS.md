@@ -1139,3 +1139,14 @@ is the third capability the counsellor's set lacks; D-130 amended). Nothing
 here is a workflow — no approval, no assignment made by the system; the
 manager still assigns the trainer on the batch as before.
 
+### D-133 · Roles are rows; the permission catalog stays code (15 September 2026)
+ERP Phase 1, ADR-01 in `docs/erp/ARCHITECTURE_DECISIONS.md`. An
+administrator builds and assigns roles without a deploy; a view still
+declares a `Capability` the enum knows, so a row cannot invent a permission
+nothing checks. `User.role` remains the kind — the rung on the ladder and the
+scoping floor — and `User.custom_role` narrows or reshapes the set within
+it. The ladder invariants (D-033, D-095) now compare *effective* sets, so a
+narrowed manager cannot hand out the full manager kind. `sync_permissions`
+keeps the rows equal to the enum on every deploy; `DYNAMIC_ROLES_ENABLED`
+is the rollback.
+
