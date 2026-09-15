@@ -63,7 +63,6 @@ def test_assigned_scope_reaches_exactly_the_trainers_batch(
 
     api_client_no_csrf.force_login(counsellor_user)
     listed = api_client_no_csrf.get("/api/v1/students/").json()["results"]
-    student_ids = {row["id"] for row in listed}
     # Nothing enrolled yet, so the list may be empty — the point is no error
     # and no leak; assert it does not include the other-centre student.
     assert student_profile.user_id not in {row.get("user_id") for row in listed}

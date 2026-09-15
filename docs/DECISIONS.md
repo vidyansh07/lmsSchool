@@ -1162,3 +1162,22 @@ factor once Phase 5 lands; every endpoint that checks it reads the same
 ten-minute freshness window, so the interface has one dialog to open
 regardless of which action asked for it.
 
+### D-135 · The Policy Builder infers a value's editor from its own shape, and ships institution-wide only (15 September 2026)
+ERP Phase 3, ADR-04, frontend. Two calls the planning docs left to the
+builder. First, `PolicyEntrySerializer` deliberately returns a resolved
+value and its default, never the schema's own type/min/max/choices —
+`apps.policies.schemas` stays server-only, the same reason the capability
+catalog stays code (D-133). Rather than duplicate that registry on the
+client, `lib/policies.ts#policyFieldKind` reads the value's own JS shape
+(number, boolean, object, numeric-looking string) plus two small
+hand-mirrored tables (`notification.digest_frequency`'s choices,
+`performance.weights`'s components) to choose the right editor — the same
+kind of small mirror `lib/labels.ts` already keeps for other backend
+enumerations, not the kind of hand-written union D-126 warned against,
+because a schema key changing shape is a deploy, not a runtime fact a type
+could silently miss. Second, this first version has no branch-override
+picker: `docs/erp/DESIGN_DECISIONS.md`'s "Policy builder" section names
+none, so every read and write goes institution-wide (`branch` omitted).
+Adding a picker later is additive — the API already carries a `branch`
+parameter end to end.
+

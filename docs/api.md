@@ -481,6 +481,37 @@ expired or never happened; the frontend opens a dialog and retries once.
 alone), and only with a fresh step-up. Freezes or unfreezes one grant so
 an ordinary administrator cannot remove it from the Role Builder.
 
+### Policies — `/api/v1/policies/` (ERP Phase 3, ADR-04)
+
+A generic table (`apps.policies`) for the settings `AcademicPolicy` and
+`SystemSetting` do not already own: `authentication`, `password`,
+`session`, `risk`, `performance`, `communication`, `export`, `deletion`,
+`approval`, `file_upload`, `notification`. Every key is declared in a
+code-defined schema (`apps.policies.schemas.POLICY_SCHEMAS`) with its type,
+default, bounds or choices, and whether it is `critical`. A row is either
+institution-wide (`scope=global`) or one centre's override
+(`scope=branch`); resolution is branch override, then global, then the
+schema default (`apps.policies.resolver.policy(category, key, branch=None)`),
+cached under the `policy` prefix and forgotten on every write — a read
+right after a write always sees the new value, never a stale one.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `` | `policy.view` — every schema key, resolved for `?branch=` (or institution-wide); `?category=` narrows to one category. Each row: `{category, key, value, default, is_default, scope, branch, version, critical, description, updated_at, updated_by_name}` |
+| `GET` | `<category>/<key>/` | `policy.view` — one key, same shape; `?branch=`. Unknown category/key is a 404 |
+| `PUT` | `<category>/<key>/` | `policy.manage` — `{value, branch?, reason}`; a critical key additionally needs a fresh step-up and `confirm` naming the key exactly, or `400`/`403` `step_up_required`. Validated against the schema (type, range, choices; the `weights` type requires exactly its declared component keys). Writing the value already in force is a no-op: nothing is versioned or audited |
+| `DELETE` | `<category>/<key>/` | `policy.manage`; `?branch=`; soft-deletes the row, returning to the schema default (or, for a branch override, falling through to the global row). A critical key needs a fresh step-up. Resetting something never configured is a no-op, not an error |
+| `GET` | `<category>/<key>/history/` | `policy.view`; `?branch=` — `PolicyVersion` rows, newest first, paginated: `{id, version, value, changed_by_name, reason, created_at}`. Survives a reset: the version history from before a reset-and-reconfigure is never lost |
+
+`policy.view` is held by superadmin, admin and manager; `policy.manage` by
+superadmin and admin only (a deliberate narrowing beyond D-130's usual
+"manager and counsellor are equals" — the counsellor does not hold
+`policy.view` either, per `docs/erp/PERMISSION_CATALOG.md`). A branch-scoped
+caller (`policy.view` at scope `branch`, ADR-02) may only name their own
+centre; naming another centre's id is `403`, and a centre that does not
+exist is `404` before the scope check runs (rule 2). Every write is audited
+(`policy.updated`, `policy.reset`) with the from/to value and the reason.
+
 ### Trainer requirements — `/api/v1/requirements/`
 
 A manager's ask of the teaching staff (D-132). Raising one tells every

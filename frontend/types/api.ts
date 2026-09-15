@@ -1908,6 +1908,53 @@ export interface RoleMatrix {
   cells: Record<string, Record<string, MatrixCell>>;
 }
 
+// --- Policy management (ERP Phase 3, ADR-04) --------------------------------
+
+/** `apps.policies.schemas.POLICY_SCHEMAS`'s top-level keys. */
+export type PolicyCategory =
+  | "authentication"
+  | "password"
+  | "session"
+  | "risk"
+  | "performance"
+  | "communication"
+  | "export"
+  | "deletion"
+  | "approval"
+  | "file_upload"
+  | "notification";
+
+export type PolicyRowScope = "global" | "branch";
+
+/** A resolved policy's value: a whole number, a decimal (sent and returned as
+ *  a string), a flag, a choice string, or `performance.weights`' component
+ *  map — never anything the schema registry does not define (D-135). */
+export type PolicyValue = number | string | boolean | Record<string, string>;
+
+export interface PolicyEntry {
+  category: PolicyCategory;
+  key: string;
+  value: PolicyValue;
+  default: PolicyValue;
+  is_default: boolean;
+  scope: PolicyRowScope;
+  branch: string | null;
+  version: number;
+  critical: boolean;
+  description: string;
+  updated_at: string | null;
+  updated_by_name: string | null;
+}
+
+export interface PolicyVersion {
+  id: string;
+  version: number;
+  value: PolicyValue;
+  changed_by_name: string | null;
+  reason: string;
+  created_at: string;
+}
+
 // --- Trainer requirements (D-132) -------------------------------------------
 
 export type RequirementStatus = "open" | "fulfilled" | "closed";

@@ -237,6 +237,19 @@ class Capability(models.TextChoices):
     # Seeded locked on the superadmin role and refused to every other kind.
     PERMISSION_LOCK = "permission.lock", _("Lock and unlock permission grants")
 
+    # --- Policy management (ERP Phase 3, ADR-04)
+    #
+    # A generic table for the categories `AcademicPolicy` and `SystemSetting`
+    # do not already cover (authentication, password, session, risk,
+    # performance weights, communication, export, deletion, approval, file
+    # upload, notification). Reading is a manager's business — they run the
+    # centre the values apply to — but writing is withheld from both manager
+    # and counsellor: these are institution- or security-shaped settings
+    # (lockout, session age, password rules), not day-to-day operations, and
+    # the catalog table keeps that reach at the administrator rung on purpose.
+    POLICY_VIEW = "policy.view", _("View policy settings")
+    POLICY_MANAGE = "policy.manage", _("Change policy settings")
+
     # --- Reporting and data tools
     #
     # A trainer holds neither. They can read reports about the batches they
@@ -332,6 +345,7 @@ _MANAGER_CAPABILITIES = frozenset(
         Capability.REPORT_VIEW_ANY,
         Capability.DATA_EXPORT,
         Capability.DATA_IMPORT,
+        Capability.POLICY_VIEW,
     }
 )
 
@@ -355,6 +369,7 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.ROLE_VIEW,
         Capability.ROLE_MANAGE,
         Capability.PERMISSION_ASSIGN,
+        Capability.POLICY_MANAGE,
     }
 )
 
@@ -369,12 +384,23 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
 #: what. The one exception is the trainer record itself: creating a trainer and
 #: editing their details is the manager's (2a), so those two capabilities are
 #: the whole difference between the rungs. That keeps the ladder a ladder —
-#: manager ⊃ counsellor still holds, by exactly three members — which
-#: `can_administer` and the hierarchy test depend on.
+#: manager ⊃ counsellor still holds — which `can_administer` and the
+#: hierarchy test depend on.
+#:
+#: ERP Phase 3 (`PERMISSION_CATALOG.md`) adds one more exclusion: `policy.view`.
+#: The policy screen is how a centre's own security and operational settings
+#: are read, and the planning package keeps that with the manager rung, not
+#: the counsellor's admissions-and-fees day — a deliberate, documented
+#: narrowing rather than an oversight.
 #:
 #: Superseded: D-106, under which the counsellor held nothing academic.
 _COUNSELLOR_CAPABILITIES = _MANAGER_CAPABILITIES - frozenset(
-    {Capability.TRAINER_CREATE, Capability.TRAINER_UPDATE_ANY, Capability.REQUIREMENT_MANAGE}
+    {
+        Capability.TRAINER_CREATE,
+        Capability.TRAINER_UPDATE_ANY,
+        Capability.REQUIREMENT_MANAGE,
+        Capability.POLICY_VIEW,
+    }
 )
 
 ROLE_CAPABILITIES: dict[str, frozenset[str]] = {

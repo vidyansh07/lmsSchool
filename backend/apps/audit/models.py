@@ -65,6 +65,10 @@ class AuditAction(models.TextChoices):
     PERMISSION_UNLOCKED = "permission.unlocked", _("Permission grant unlocked")
     SCOPE_GRANTED = "scope.granted", _("Batch or course scope granted")
     SCOPE_REVOKED = "scope.revoked", _("Batch or course scope revoked")
+
+    # --- Policy management (ERP Phase 3, ADR-04)
+    POLICY_UPDATED = "policy.updated", _("Policy changed")
+    POLICY_RESET = "policy.reset", _("Policy reset to its default")
     STEP_UP_SUCCEEDED = "auth.step_up.succeeded", _("Step-up authentication succeeded")
     STEP_UP_FAILED = "auth.step_up.failed", _("Step-up authentication failed")
 

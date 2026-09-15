@@ -62,6 +62,11 @@ def test_a_counsellor_holds_strictly_less_than_a_manager():
                 Capability.TRAINER_CREATE,
                 Capability.TRAINER_UPDATE_ANY,
                 Capability.REQUIREMENT_MANAGE,
+                # ERP Phase 3 (`docs/erp/PERMISSION_CATALOG.md`): reading policy
+                # settings stays with the manager rung, not the counsellor's
+                # admissions-and-fees day — a second, deliberate exception
+                # alongside the trainer-record one above.
+                Capability.POLICY_VIEW,
             }
         )
     ),
@@ -82,6 +87,10 @@ def test_a_counsellor_holds_everything_a_manager_does(counsellor_user, capabilit
         # people to bring in and keep current (2a).
         Capability.TRAINER_CREATE,
         Capability.TRAINER_UPDATE_ANY,
+        # ERP Phase 3: reading policy settings is the manager's, not the
+        # counsellor's (PERMISSION_CATALOG.md) — a second exception, held by
+        # neither trainer-record capability's reasoning.
+        Capability.POLICY_VIEW,
         # Everything above the manager rung stays above it.
         Capability.USER_CREATE,
         Capability.USER_UPDATE_ANY,

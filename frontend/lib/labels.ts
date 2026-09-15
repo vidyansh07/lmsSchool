@@ -9,6 +9,7 @@ import type {
   FeeStatus,
   InstitutionKind,
   PaymentMethod,
+  PolicyCategory,
   Qualification,
   RequirementStatus,
   UserRole,
@@ -185,4 +186,20 @@ export const MATRIX_CELL_LABEL: Record<MatrixCell, string> = {
   locked: "Locked",
   denied: "Not granted",
   system: "System",
+};
+
+// --- Policy management (ERP Phase 3, ADR-04) --------------------------------
+
+export const POLICY_CATEGORY_LABEL: Record<PolicyCategory, string> = {
+  authentication: "Authentication",
+  password: "Password",
+  session: "Session",
+  risk: "Risk rules",
+  performance: "Performance weights",
+  communication: "Communication",
+  export: "Export",
+  deletion: "Deletion",
+  approval: "Approval",
+  file_upload: "File upload",
+  notification: "Notification",
 };

@@ -81,6 +81,7 @@ LOCKABLE = frozenset(
         "role.manage",
         "permission.assign",
         "permission.lock",
+        "policy.manage",
     }
 )
 

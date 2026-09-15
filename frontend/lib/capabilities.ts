@@ -76,6 +76,8 @@ export const Capability = {
   roleManage: "role.manage",
   permissionAssign: "permission.assign",
   permissionLock: "permission.lock",
+  policyView: "policy.view",
+  policyManage: "policy.manage",
   discussionModerateAny: "discussion.moderate_any",
   reportViewAny: "report.view_any",
   dataExport: "data.export",

@@ -28,6 +28,7 @@ from apps.learning import urls as learning_urls
 from apps.notifications import urls as notification_urls
 from apps.organisation import urls as organisation_urls
 from apps.performance import urls as performance_urls
+from apps.policies import urls as policies_urls
 from apps.progress import urls as progress_urls
 from apps.projects import urls as project_urls
 from apps.questions import urls as question_urls
@@ -73,6 +74,7 @@ urlpatterns = [
     path("results/", include((assessment_urls.result_urlpatterns, "results"))),
     path("academics/", include((academics_urls.urlpatterns, "academics"))),
     path("settings/", include((configuration_urls.urlpatterns, "settings"))),
+    path("policies/", include((policies_urls.urlpatterns, "policies"))),
     path("projects/", include((project_urls.project_urlpatterns, "projects"))),
     path("completions/", include((progress_urls.completion_urlpatterns, "completions"))),
     path("certificates/", include((certificate_urls.certificate_urlpatterns, "certificates"))),

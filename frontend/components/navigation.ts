@@ -28,6 +28,7 @@ import {
   Settings2,
   SlidersHorizontal,
   Sparkles,
+  ToggleLeft,
   Trash2,
   TrendingUp,
   UserCircle2,
@@ -390,6 +391,12 @@ export const STAFF_NAV: NavGroup[] = [
         capability: Capability.roleView,
       },
       {
+        href: "/admin/policies",
+        label: "Policies",
+        icon: ToggleLeft,
+        capability: Capability.policyView,
+      },
+      {
         href: "/admin/settings",
         label: "Settings",
         icon: SlidersHorizontal,
@@ -670,6 +677,12 @@ export const ADMIN_NAV: NavGroup[] = [
         label: "Roles",
         icon: ShieldCheck,
         capability: Capability.roleView,
+      },
+      {
+        href: "/admin/policies",
+        label: "Policies",
+        icon: ToggleLeft,
+        capability: Capability.policyView,
       },
       {
         href: "/admin/branches",
