@@ -96,6 +96,33 @@ def send_email_verification_email(*, user, raw_token: str) -> bool:
     )
 
 
+def send_otp_code_email(*, user, code: str, minutes: int) -> bool:
+    """One-time code mail (ADR-05, Phase 4).
+
+    Sent inline for the same reason ``send_password_reset_email`` is (see the
+    module docstring): the code *is* the credential, and both halves of the
+    notification outbox — the ``EmailMessage`` row and the Celery payload —
+    would put it somewhere an operator with read access could take the
+    account. Worded generically ("confirm it's you") rather than naming
+    step-up specifically, since Phase 5 reuses the same code path to deliver
+    a sign-in code.
+    """
+    body = (
+        f"Hello {user.first_name or 'there'},\n\n"
+        f"Your one-time code is: {code}\n\n"
+        f"Use it to confirm it's you. It expires in {minutes} minute(s) and "
+        "works once.\n\n"
+        "If you did not request this, you can ignore this email — nobody can "
+        "do anything with your account without it.\n"
+    )
+    return _send(
+        subject="Your one-time code",
+        body=body,
+        recipient=user.email,
+        context="one-time code",
+    )
+
+
 def send_account_created_email(*, user, raw_token: str) -> bool:
     """Welcome mail for an administrator-created account.
 

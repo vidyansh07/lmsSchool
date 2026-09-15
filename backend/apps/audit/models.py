@@ -72,6 +72,12 @@ class AuditAction(models.TextChoices):
     STEP_UP_SUCCEEDED = "auth.step_up.succeeded", _("Step-up authentication succeeded")
     STEP_UP_FAILED = "auth.step_up.failed", _("Step-up authentication failed")
 
+    # --- Email one-time codes (ERP Phase 4, ADR-05). Never carry the code.
+    OTP_SENT = "otp.sent", _("One-time code sent")
+    OTP_VERIFIED = "otp.verified", _("One-time code verified")
+    OTP_FAILED = "otp.failed", _("One-time code verification failed")
+    OTP_THROTTLED = "otp.throttled", _("One-time code request throttled")
+
     # --- Domain profiles
     STUDENT_CREATED = "student.created", _("Student created")
     STUDENT_UPDATED = "student.updated", _("Student profile updated")

@@ -366,6 +366,11 @@ REST_FRAMEWORK = {
         "user": env.str("THROTTLE_RATE_USER", default="600/min"),
         "auth": env.str("THROTTLE_RATE_AUTH", default="10/min"),
         "burst": env.str("THROTTLE_RATE_BURST", default="20/min"),
+        # Per-IP request throttle on the OTP endpoints (SECURITY_DECISIONS
+        # "Rate limiting"). Separate from — and cheaper to evaluate than —
+        # the per-user/per-IP hourly send caps `apps.accounts.otp` itself
+        # enforces; this one just bounds raw request volume at the endpoint.
+        "otp": env.str("THROTTLE_RATE_OTP", default="5/min"),
         # Public certificate verification. A 160-bit code is not
         # brute-forceable, so this bounds bulk checking of a leaked list
         # rather than guessing.

@@ -8,6 +8,7 @@
 
 import { apiFetch, apiMutate } from "./api";
 import type {
+  DetailResponse,
   PermissionDef,
   PermissionScope,
   Role,
@@ -140,6 +141,26 @@ export async function stepUpWithPassword(password: string): Promise<void> {
   await apiMutate<void>("/api/v1/auth/step-up/", {
     method: "POST",
     body: { password },
+  });
+}
+
+/** Step-up authentication (ADR-05, Phase 4): the alternative to the password
+ *  — a 6-digit code already emailed via {@link requestStepUpCode}. */
+export async function stepUpWithCode(code: string): Promise<void> {
+  await apiMutate<void>("/api/v1/auth/step-up/", {
+    method: "POST",
+    body: { code },
+  });
+}
+
+/** Email a fresh one-time code (ADR-05, Phase 4) to the caller's own
+ *  registered address, for use with {@link stepUpWithCode}. Throttled —
+ *  a too-soon resend or too many sends raises `ApiError` with
+ *  `code === "rate_limited"` and `details.retry_after_seconds`. */
+export async function requestStepUpCode(): Promise<DetailResponse> {
+  return apiMutate<DetailResponse>("/api/v1/auth/step-up/request-code/", {
+    method: "POST",
+    body: {},
   });
 }
 

@@ -19,6 +19,7 @@ from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.common.middleware import client_ip
 from apps.common.mixins import EnforceCSRFMixin
 from apps.common.permissions import AllowAnyPublic, Capability, HasCapability, IsActiveUser
 from apps.common.throttling import AuthEndpointThrottle
@@ -148,26 +149,66 @@ class RevokeSessionsView(APIView):
 
 
 class StepUpView(APIView):
-    """Prove it is still you (ADR-05). Phase 2: the password; Phase 5 adds a
-    second factor. Sets a timestamp in the session that dangerous endpoints
-    check for freshness."""
+    """Prove it is still you (ADR-05): a password re-entry, or an emailed
+    one-time code — exactly one. Phase 5 adds TOTP and recovery codes as
+    further alternatives. Sets a timestamp in the session that dangerous
+    endpoints check for freshness."""
 
     permission_classes = (IsActiveUser,)
     throttle_classes = (AuthEndpointThrottle,)
+    throttle_scope = "auth"
 
     @extend_schema(
         summary="Step-up authentication",
         request=StepUpSerializer,
-        responses={204: None, 403: OpenApiResponse(description="Wrong password")},
+        responses={
+            204: None,
+            400: OpenApiResponse(description="Neither or both of password/code were sent."),
+            403: OpenApiResponse(description="Wrong password, or wrong/expired/void code."),
+        },
         tags=AUTH_TAG,
     )
     def post(self, request):
         serializer = StepUpSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        from .stepup import step_up_with_password
+        from .stepup import step_up_with_email_code, step_up_with_password
 
-        step_up_with_password(request, serializer.validated_data["password"])
+        password = serializer.validated_data.get("password")
+        if password:
+            step_up_with_password(request, password)
+        else:
+            step_up_with_email_code(request, serializer.validated_data["code"])
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class StepUpCodeRequestView(APIView):
+    """Email a one-time code (ADR-05) for step-up — the alternative to
+    re-entering the password. Always sent to the caller's own registered
+    address; there is no way to name anyone else's."""
+
+    permission_classes = (IsActiveUser,)
+    throttle_classes = (AuthEndpointThrottle,)
+    throttle_scope = "otp"
+
+    @extend_schema(
+        summary="Request a step-up one-time code by email",
+        request=None,
+        responses={
+            202: DetailSerializer,
+            429: OpenApiResponse(description="Too many requests — wait and retry."),
+        },
+        tags=AUTH_TAG,
+    )
+    def post(self, request):
+        from .otp import OtpPurpose, send_email_code
+
+        send_email_code(
+            user=request.user, purpose=OtpPurpose.STEP_UP, request_ip=client_ip(request)
+        )
+        return Response(
+            {"detail": "A one-time code has been sent to your email."},
+            status=status.HTTP_202_ACCEPTED,
+        )
 
 
 class MeView(APIView):

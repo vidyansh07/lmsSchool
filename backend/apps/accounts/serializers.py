@@ -257,7 +257,22 @@ class LoginSerializer(StrictSerializer):
 
 
 class StepUpSerializer(StrictSerializer):
-    password = serializers.CharField(write_only=True, trim_whitespace=False)
+    """Step-up input: a password re-entry, or an emailed one-time code
+    (ADR-05) — exactly one, never both, never neither."""
+
+    password = serializers.CharField(
+        write_only=True, trim_whitespace=False, required=False, allow_blank=False
+    )
+    code = SafeCharField(write_only=True, max_length=6, required=False, allow_blank=False)
+
+    def validate(self, attrs):
+        password = attrs.get("password")
+        code = attrs.get("code")
+        if bool(password) == bool(code):
+            raise serializers.ValidationError(
+                "Provide either a password or a one-time code, not both."
+            )
+        return attrs
 
 
 class PasswordChangeSerializer(StrictSerializer):

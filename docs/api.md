@@ -467,13 +467,32 @@ without being its trainer.
 | `POST` | `` | `user.update_any`; exactly one of `batch` or `course`; resolved through the caller's own `visible_batches`/`visible_courses`, so another centre's id (for a bounded caller) is a 404 |
 | `DELETE` | `<grant_id>/` | `user.update_any` |
 
-### Step-up authentication — `/api/v1/auth/step-up/` (ERP Phase 2/5)
+### Step-up authentication — `/api/v1/auth/step-up/` (ERP Phase 2/4/5)
 
-`POST` with `{password}` re-proves identity and marks the session fresh
-for ten minutes (`ADR-05`). Endpoints that need it (locking a permission
-today; purge, MFA disable and critical policy changes in later phases)
-answer `403 {"code": "step_up_required"}` when the session's step-up has
-expired or never happened; the frontend opens a dialog and retries once.
+`POST` with **exactly one** of `{password}` or `{code}` re-proves identity
+and marks the session fresh for ten minutes (`ADR-05`). Endpoints that need
+it (locking a permission today; purge, MFA disable and critical policy
+changes in later phases) answer `403 {"code": "step_up_required"}` when the
+session's step-up has expired or never happened; the frontend opens a
+dialog and retries once.
+
+Phase 4 adds the `code` alternative: a 6-digit one-time code emailed to the
+caller's own registered address, always via `POST` `request-code/` first.
+
+| Method | Path | Access | Body / notes |
+| --- | --- | --- | --- |
+| `POST` | `step-up/request-code/` | Any active, signed-in user | No body. Emails a 6-digit code to the caller's own address, `202 {"detail": "..."}`. `429 rate_limited` (`{"error": {"code": "rate_limited", "details": {"retry_after_seconds": <n>}}}`) if: less than 60s since the caller's last code of this purpose; 5 already sent to this user in the last hour; 20 already sent from this IP (any user) in the last hour. Also throttled at the endpoint itself, 5 requests/min per IP (`throttle_scope="otp"`) |
+| `POST` | `step-up/` | Any active, signed-in user | `{password}` **or** `{code}` (a 6-digit string), never both, never neither — `400` otherwise. A wrong password, or a wrong/expired/already-used/attempt-exhausted code, answers `403 {"code": "step_up_required"}`. Success: `204`, no body |
+
+The code is single-use, expires in 10 minutes, and is void after 5 wrong
+attempts — a 6th attempt fails even with the right code. It is delivered
+inline (never through the notification outbox — the code *is* the
+credential, per D-070) and is never returned by any endpoint, logged, or
+written to the audit log; audit rows for `otp.sent`/`otp.verified`/
+`otp.failed`/`otp.throttled` carry only the purpose (`step_up` today) and,
+for a failure, a reason string. The same `OneTimeCode` model (a `purpose`
+field, not a bespoke shape) is what Phase 5's pending-MFA sign-in reuses
+with `purpose="login"` — nothing about this contract changes for that.
 
 ### Permission locking — `/api/v1/roles/<slug>/permissions/<code>/lock|unlock/` (ERP Phase 2)
 

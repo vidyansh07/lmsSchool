@@ -33,11 +33,14 @@ from apps.common.uploads import profile_image_upload_to
 from apps.common.validators import validate_person_name, validate_phone_number
 
 from .managers import UserManager
+from .otp import OneTimeCode, OtpPurpose
 from .roles import Capability, UserRole, effective_capabilities, has_capability
 
 __all__ = [
     "AccountToken",
     "Capability",
+    "OneTimeCode",
+    "OtpPurpose",
     "TokenPurpose",
     "User",
     "UserRole",

@@ -1181,3 +1181,24 @@ none, so every read and write goes institution-wide (`branch` omitted).
 Adding a picker later is additive — the API already carries a `branch`
 parameter end to end.
 
+### D-136 · One step-up dialog, a mode toggle, not two screens (15 September 2026)
+ERP Phase 4, ADR-05, frontend. `StepUpDialog` stays the single dialog every
+caller already opens on `step_up_required` — Phase 4 adds a `mode` toggle
+("Send me a code instead" / "Use your password instead") rather than a
+second component or a wizard step, so `permission-matrix.tsx` and the
+policies screen need no changes at all; they still just render the one
+dialog and wait for `onConfirmed`. Three calls the planning docs left open.
+First, "Send me a code instead" sends the request immediately on click,
+rather than a separate confirm step — the endpoint is idempotent-enough
+(one email, throttled server-side) that a second click to confirm the
+click would only add friction. Second, a `429 rate_limited` refusal (from
+either the request-code throttle or the step-up throttle) is translated
+into a plain sentence naming the wait, reading `details.retry_after_seconds`
+off `ApiError` — the only place in the frontend that unpacks that field
+today; a fallback to "wait a moment" covers a payload without it rather
+than showing nothing. Third, switching modes and reopening the dialog after
+a cancel both clear the password/code fields and any error or info banner,
+adjusted during render on an `open`/prior-`open` comparison rather than in
+a `useEffect` (the latter trips `react-hooks/set-state-in-effect`) — the
+same reset-on-prop-change shape React's own docs recommend for this case.
+
