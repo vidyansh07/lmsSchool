@@ -1,42 +1,49 @@
-'use client';
+"use client";
 
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
-import { RequireAuth } from '@/components/require-auth';
-import { Alert, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Field } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { ApiError, fieldErrors } from '@/lib/api';
-import { changePassword, logoutEverywhere } from '@/lib/auth';
+import { RequireAuth } from "@/components/require-auth";
+import { MfaSettingsCard } from "@/components/settings/mfa-settings-card";
+import { Alert, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { ApiError, fieldErrors } from "@/lib/api";
+import { changePassword, logoutEverywhere } from "@/lib/auth";
 
 function SecuritySettings() {
   const router = useRouter();
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmation, setConfirmation] = useState('');
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [revokeMessage, setRevokeMessage] = useState('');
+  const [revokeMessage, setRevokeMessage] = useState("");
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (newPassword !== confirmation) {
-      setErrors({ confirmation: 'The two passwords do not match.' });
+      setErrors({ confirmation: "The two passwords do not match." });
       return;
     }
     setIsSaving(true);
     setErrors({});
-    setMessage('');
+    setMessage("");
     try {
       const response = await changePassword(currentPassword, newPassword);
       setMessage(response.detail);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmation('');
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmation("");
     } catch (cause) {
       setErrors(fieldErrors(cause));
     } finally {
@@ -50,10 +57,12 @@ function SecuritySettings() {
       setRevokeMessage(response.detail);
       // Signing out everywhere includes this browser, so send the user to the
       // sign-in page rather than leaving a dead session on screen.
-      router.replace('/login');
+      router.replace("/login");
     } catch (cause) {
       setRevokeMessage(
-        cause instanceof ApiError ? cause.message : 'Could not sign out of other sessions.',
+        cause instanceof ApiError
+          ? cause.message
+          : "Could not sign out of other sessions.",
       );
     }
   }
@@ -62,7 +71,9 @@ function SecuritySettings() {
     <div className="stagger space-y-6">
       <div className="animate-rise-in space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Security</h1>
-        <p className="text-sm text-muted-foreground">Manage your password and active sessions.</p>
+        <p className="text-sm text-muted-foreground">
+          Manage your password and active sessions.
+        </p>
       </div>
 
       <Card className="animate-rise-in">
@@ -74,7 +85,9 @@ function SecuritySettings() {
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="max-w-md space-y-4" noValidate>
-            {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
+            {errors.__all__ ? (
+              <Alert variant="error">{errors.__all__}</Alert>
+            ) : null}
             {message ? <Alert variant="success">{message}</Alert> : null}
 
             <Field
@@ -119,18 +132,20 @@ function SecuritySettings() {
             </Field>
 
             <Button type="submit" disabled={isSaving}>
-              {isSaving ? 'Saving…' : 'Change password'}
+              {isSaving ? "Saving…" : "Change password"}
             </Button>
           </form>
         </CardContent>
       </Card>
 
+      <MfaSettingsCard />
+
       <Card className="animate-rise-in">
         <CardHeader>
           <CardTitle>Active sessions</CardTitle>
           <CardDescription>
-            Sign out of every device, including this one. Use this if you think someone else has
-            access to your account.
+            Sign out of every device, including this one. Use this if you think
+            someone else has access to your account.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

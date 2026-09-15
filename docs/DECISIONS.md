@@ -1202,3 +1202,28 @@ adjusted during render on an `open`/prior-`open` comparison rather than in
 a `useEffect` (the latter trips `react-hooks/set-state-in-effect`) — the
 same reset-on-prop-change shape React's own docs recommend for this case.
 
+### D-137 · MFA sign-in gets its own component; the step-up dialog does not grow two more tabs (15 September 2026)
+ERP Phase 5, ADR-05, frontend. Two calls the planning docs left to this
+phase. First, the pending-MFA sign-in step is a new component,
+`MfaVerifyForm`, rather than a fork of `StepUpDialog` reused with a
+different verb on the button: the two solve different problems (one
+completes a `login()` the server never called yet, against an anonymous
+`mfa_pending` session; the other refreshes `step_up_at` on an already
+signed-in one) and share only a request/response shape, not a UI — a tab
+per method the login response actually named (never a method the account
+cannot use), a "Send code" hand-off for email identical in spirit to the
+step-up dialog's but calling the pending-aware `mfa/send-email-code/`
+endpoint instead, and completing sign-in by handing `auth-provider` the
+same `CurrentUser` an ordinary login returns. `rateLimitMessage` moves from
+`step-up-dialog.tsx` to an export the new form imports, rather than a
+second copy of the same sentence. Second, `StepUpDialog` itself is left
+exactly as Phase 4 built it — password or an emailed code, no TOTP or
+recovery tab — even though `POST step-up/` already accepts
+`{method: "totp"|"recovery", code}` (`apps.accounts.stepup`) for any
+caller. The two extra methods matter most at the moment an authenticator
+app and an inbox are both out of reach, which is precisely sign-in, not the
+comparatively rare mid-session step-up; adding them to the one dialog every
+dangerous action already opens is additive (`Mode` already reads from the
+same `_CODE_METHODS` map the backend does) and left for a later pass rather
+than grown here without a concrete caller asking for it.
+

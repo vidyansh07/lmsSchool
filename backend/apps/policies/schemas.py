@@ -60,6 +60,27 @@ POLICY_SCHEMAS: dict[str, dict[str, dict[str, Any]]] = {
             "critical": False,
             "description": "How long a step-up (ADR-05/06) stays fresh before it must be repeated.",
         },
+        "mfa_required_roles": {
+            "type": "role_list",
+            "default": [],
+            "critical": True,
+            "description": (
+                "Roles that must complete MFA to sign in, once past their own account's "
+                "mfa_grace_days (ADR-05). Empty means nobody is forced into MFA without "
+                "a device of their own choosing."
+            ),
+        },
+        "mfa_grace_days": {
+            "type": "integer",
+            "default": 7,
+            "min": 0,
+            "max": 90,
+            "critical": False,
+            "description": (
+                "Days a required role's account may sign in without MFA, counted from its "
+                "own date_joined, before enforcement begins (ADR-05)."
+            ),
+        },
     },
     "password": {
         "min_length": {
@@ -312,6 +333,24 @@ def validate_value(category: str, key: str, value: Any) -> Any:
             _check_range(entry, decimal_weight, field=component)
             normalised[component] = str(decimal_weight)
         return normalised
+
+    if kind == "role_list":
+        # Deliberately does not check each entry against `UserRole` — this
+        # module is self-contained and does not import `apps.accounts`
+        # (see the module docstring's boundary). An unrecognised role name
+        # here just never matches anyone at login, which fails safe: it is
+        # a misconfiguration an administrator notices, not a privilege gap.
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ApplicationError({"value": ["Must be a list of role names."]})
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            slug = item.strip().lower()
+            if not slug or slug in seen:
+                continue
+            seen.add(slug)
+            cleaned.append(slug)
+        return cleaned
 
     raise ApplicationError({"value": ["Unsupported policy type."]})  # pragma: no cover - defensive
 

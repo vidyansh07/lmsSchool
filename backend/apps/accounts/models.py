@@ -33,14 +33,18 @@ from apps.common.uploads import profile_image_upload_to
 from apps.common.validators import validate_person_name, validate_phone_number
 
 from .managers import UserManager
+from .mfa import MfaDevice, MfaMethod, RecoveryCode
 from .otp import OneTimeCode, OtpPurpose
 from .roles import Capability, UserRole, effective_capabilities, has_capability
 
 __all__ = [
     "AccountToken",
     "Capability",
+    "MfaDevice",
+    "MfaMethod",
     "OneTimeCode",
     "OtpPurpose",
+    "RecoveryCode",
     "TokenPurpose",
     "User",
     "UserRole",
@@ -124,6 +128,16 @@ class User(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
         help_text=_("Set once the user confirms an emailed verification link."),
     )
     email_verified_at = models.DateTimeField(_("email verified at"), null=True, blank=True)
+    mfa_enrolled_at = models.DateTimeField(
+        _("MFA enrolled at"),
+        null=True,
+        blank=True,
+        help_text=_(
+            "Set once a TOTP device is confirmed (ADR-05); cleared on disable. The one "
+            "column this phase adds to User — see apps.accounts.mfa for the device and "
+            "recovery-code tables themselves."
+        ),
+    )
     date_joined = models.DateTimeField(_("date joined"), default=timezone.now)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -191,6 +205,17 @@ class User(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
     @property
     def is_student_role(self) -> bool:
         return self.role == UserRole.STUDENT
+
+    @property
+    def mfa_enabled(self) -> bool:
+        """Whether this account has a confirmed TOTP device.
+
+        A convenience for ``CurrentUserSerializer`` (a settings screen needs
+        to know whether to offer "enable" or "manage/disable" without a
+        second round trip); it decides nothing — the same rule as
+        ``capabilities`` above.
+        """
+        return self.mfa_enrolled_at is not None
 
 
 class TokenPurpose(models.TextChoices):

@@ -7,12 +7,14 @@ minutes. The proof is a timestamp in the session; the API refuses with
 ``403 step_up_required`` when it is missing or stale, and the interface opens
 the step-up dialog in place and retries once.
 
-Phase 2 built the password path. Phase 4 (ADR-05) adds a second one: an
-emailed one-time code, verified by :mod:`apps.accounts.otp` — the same
-primitive Phase 5 will reuse at login time. Both paths end the same way,
-through :func:`grant`, and are reported through the same pair of audit
-events so "did this account step up, and how?" has one answer regardless of
-which proof was used.
+Phase 2 built the password path. Phase 4 (ADR-05) added a second: an emailed
+one-time code, verified by :mod:`apps.accounts.otp` — the same primitive
+Phase 5 reuses at login time. Phase 5 adds the remaining two: a TOTP code
+and a recovery code, both verified by :mod:`apps.accounts.mfa` against the
+caller's own confirmed device. All four paths end the same way, through
+:func:`grant`, and are reported through the same pair of audit events so
+"did this account step up, and how?" has one answer regardless of which
+proof was used.
 """
 
 from __future__ import annotations
@@ -25,8 +27,6 @@ from apps.audit.services import AuditAction, AuditResult, record
 from apps.common.middleware import client_ip
 
 SESSION_KEY = "step_up_at"
-#: Until the policy engine (Phase 3) makes it configurable.
-FRESH_FOR_MINUTES = 10
 
 
 class StepUpRequired(APIException):
@@ -39,7 +39,15 @@ def is_fresh(request) -> bool:
     stamp = request.session.get(SESSION_KEY)
     if not stamp:
         return False
-    return (timezone.now().timestamp() - float(stamp)) < FRESH_FOR_MINUTES * 60
+    # Local import: `apps.policies.resolver` is a leaf module with no import
+    # back to `apps.accounts`, but keeping the edge inside the function (the
+    # same discipline `step_up_with_email_code` already uses for `.otp`)
+    # means this module's import order still does not depend on the policy
+    # app being ready first.
+    from apps.policies.resolver import policy
+
+    minutes = policy("authentication", "step_up_minutes")
+    return (timezone.now().timestamp() - float(stamp)) < minutes * 60
 
 
 def grant(request) -> None:
@@ -114,16 +122,92 @@ def step_up_with_email_code(request, code: str) -> None:
     )
 
 
-def require_step_up(request, *, password: str | None = None, code: str | None = None) -> None:
-    """Pass when the session's step-up is fresh; accept a password or an
-    emailed one-time code inline (so a dialog can retry the original request
-    with whichever the caller supplied); refuse otherwise."""
+def step_up_with_totp(request, code: str) -> None:
+    """Verify a TOTP code (ADR-05, Phase 5) against the caller's own
+    confirmed device to obtain a fresh step-up. Same shape as
+    :func:`step_up_with_email_code`: the code is checked and its replay
+    guard updated by :func:`apps.accounts.mfa.verify_totp_code`, and this
+    wraps that with the step-up bookkeeping."""
+    from .mfa import verify_totp_code
+
+    user = request.user
+    verified = verify_totp_code(user=user, code=code or "")
+    if not verified:
+        record(
+            action=AuditAction.STEP_UP_FAILED,
+            actor=user,
+            resource_type="user",
+            resource_id=user.pk,
+            result=AuditResult.FAILURE,
+            context={"method": "totp"},
+        )
+        raise StepUpRequired("That code is not right.")
+    grant(request)
+    record(
+        action=AuditAction.STEP_UP_SUCCEEDED,
+        actor=user,
+        resource_type="user",
+        resource_id=user.pk,
+        context={"method": "totp"},
+        durable=False,
+    )
+
+
+def step_up_with_recovery(request, code: str) -> None:
+    """Burn one recovery code (ADR-05, Phase 5) to obtain a fresh step-up —
+    the last resort when the authenticator app and the inbox are both
+    unavailable. Single-use, like every other use of a recovery code: this
+    consumes it exactly as sign-in verification does."""
+    from .mfa import consume_recovery_code
+
+    user = request.user
+    verified = consume_recovery_code(user=user, code=code or "")
+    if not verified:
+        record(
+            action=AuditAction.STEP_UP_FAILED,
+            actor=user,
+            resource_type="user",
+            resource_id=user.pk,
+            result=AuditResult.FAILURE,
+            context={"method": "recovery"},
+        )
+        raise StepUpRequired("That code is not right.")
+    grant(request)
+    record(
+        action=AuditAction.STEP_UP_SUCCEEDED,
+        actor=user,
+        resource_type="user",
+        resource_id=user.pk,
+        context={"method": "recovery"},
+        durable=False,
+    )
+
+
+_CODE_METHODS = {
+    "totp": step_up_with_totp,
+    "recovery": step_up_with_recovery,
+}
+
+
+def require_step_up(
+    request,
+    *,
+    password: str | None = None,
+    code: str | None = None,
+    method: str | None = None,
+) -> None:
+    """Pass when the session's step-up is fresh; accept a password or a code
+    inline (so a dialog can retry the original request with whichever the
+    caller supplied) and refuse otherwise. ``method`` selects which kind of
+    code — ``"totp"`` or ``"recovery"`` reach a confirmed device via
+    :mod:`apps.accounts.mfa`; anything else (including omitted) is the
+    Phase 4 emailed one-time code, so an existing caller needs no change."""
     if is_fresh(request):
         return
     if password is not None:
         step_up_with_password(request, password)
         return
     if code is not None:
-        step_up_with_email_code(request, code)
+        _CODE_METHODS.get(method, step_up_with_email_code)(request, code)
         return
     raise StepUpRequired()

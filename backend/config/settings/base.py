@@ -460,6 +460,17 @@ SPECTACULAR_SETTINGS = {
         "ImportKindEnum": "apps.reporting.models.ImportKind.choices",
         "BulkImportStatusEnum": "apps.reporting.models.BulkImportStatus.choices",
         "LessonProgressStatusEnum": "apps.enrollments.models.LessonProgressStatus.choices",
+        # Two fields named `method` (StepUpSerializer, MfaVerifySerializer)
+        # share this one choice set (ERP Phase 5, ADR-05); without the
+        # override drf-spectacular sees two divergent auto-generated names
+        # for what is the same enum.
+        "MfaMethodEnum": "apps.accounts.mfa.MfaMethod.choices",
+        # `FeePayment.method` was the only field named `method` before the
+        # override above; adding a second, differently-shaped `method` enum
+        # to the schema exposed a pre-existing ambiguity — `method` is used
+        # by more than one fee-related component — that happened to resolve
+        # cleanly by luck while it was the only choice set of that name.
+        "PaymentMethodEnum": "apps.fees.models.PaymentMethod.choices",
     },
     "SWAGGER_UI_SETTINGS": {"persistAuthorization": False},
 }
@@ -534,3 +545,12 @@ FRONTEND_EMAIL_VERIFY_PATH = "/verify-email"
 # verification links are weaker and may live longer.
 AUTH_TOKEN_RESET_TTL_HOURS = env.int("AUTH_TOKEN_RESET_TTL_HOURS", default=1)
 AUTH_TOKEN_VERIFICATION_TTL_DAYS = env.int("AUTH_TOKEN_VERIFICATION_TTL_DAYS", default=3)
+
+# MFA (ERP Phase 5, ADR-05). Fernet key encrypting a TOTP device's secret at
+# rest (apps.accounts.mfa). No usable default here — an empty string fails
+# closed the moment a TOTP call is actually made (apps.accounts.mfa._fernet)
+# — and no default at all in a deployed environment (see
+# config/settings/hardened.py's require_setting call), matching the
+# "no defaults for secrets" rule in docs/environments.md. local/test each set
+# a fixed, clearly-labelled placeholder key of their own.
+MFA_ENCRYPTION_KEY = env.str("MFA_ENCRYPTION_KEY", default="")

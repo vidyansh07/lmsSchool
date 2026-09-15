@@ -38,6 +38,7 @@ ignore = [
 "*/admin.py" = ["RUF012"]               # declarative ModelAdmin attributes
 "*/user_views.py" = ["RUF012"]
 "apps/accounts/otp.py" = ["RUF012"]     # OneTimeCode.Meta.indexes is a list by design
+"apps/accounts/mfa.py" = ["RUF012"]     # MfaDevice/RecoveryCode.Meta.indexes, same reason
 
 [tool.ruff.lint.isort]
 known-first-party = ["apps", "config"]

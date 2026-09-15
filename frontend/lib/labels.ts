@@ -3,6 +3,7 @@
 import type {
   ActivityKind,
   MatrixCell,
+  MfaMethodName,
   PermissionCategory,
   PermissionScope,
   FeePlanStatus,
@@ -202,4 +203,12 @@ export const POLICY_CATEGORY_LABEL: Record<PolicyCategory, string> = {
   approval: "Approval",
   file_upload: "File upload",
   notification: "Notification",
+};
+
+// --- MFA (ERP Phase 5, ADR-05) ------------------------------------------------
+
+export const MFA_METHOD_LABEL: Record<MfaMethodName, string> = {
+  totp: "Authenticator app",
+  email: "Email code",
+  recovery: "Recovery code",
 };

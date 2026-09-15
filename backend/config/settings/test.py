@@ -30,6 +30,13 @@ SECURE_HSTS_SECONDS = 0
 # Fast, deterministic hashing keeps the suite quick without touching prod code.
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
+# Fixed test-only Fernet key (ERP Phase 5, ADR-05) so MFA tests are
+# deterministic. `tests/test_security_config.py` proves a deployed
+# environment refuses to boot without one of its own.
+MFA_ENCRYPTION_KEY = env.str(
+    "MFA_ENCRYPTION_KEY", default="DkIO8ntatHEpCxcZG95sTZHjlQgS0WH4V-UOA2h_Eik="
+)
+
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",

@@ -91,7 +91,7 @@ matches `^[A-Za-z0-9._-]{8,64}$`.
 | Method | Path | Access | Notes |
 | --- | --- | --- | --- |
 | `GET` | `csrf/` | public | Sets the `grras_csrftoken` cookie |
-| `POST` | `login/` | public, rate limited | Identical 401 for every failure reason |
+| `POST` | `login/` | public, rate limited | Identical 401 for every failure reason. On a correct password, when MFA applies (ERP Phase 5, ADR-05): `200 {"mfa_required": true, "methods": [...], "expires_in": 300}` instead of the signed-in user — see "Multi-factor authentication" below |
 | `POST` | `logout/` | authenticated | Ends the current session |
 | `POST` | `logout-all/` | authenticated | Revokes every session, including this one |
 | `GET` | `me/` | authenticated | Current user plus their capability list |
@@ -493,6 +493,44 @@ written to the audit log; audit rows for `otp.sent`/`otp.verified`/
 for a failure, a reason string. The same `OneTimeCode` model (a `purpose`
 field, not a bespoke shape) is what Phase 5's pending-MFA sign-in reuses
 with `purpose="login"` — nothing about this contract changes for that.
+
+### Multi-factor authentication — `/api/v1/auth/mfa/…` (ERP Phase 5, ADR-05)
+
+Two more factors beyond the password, and a third layer of step-up: a TOTP
+authenticator app and ten single-use recovery codes, alongside the emailed
+one-time code Phase 4 already built. `POST login/` never logs a person in
+directly when their account has a confirmed device, or their role is on
+`authentication.mfa_required_roles` and past `authentication.mfa_grace_days`
+(a policy pair) — instead the session holds `mfa_pending` (a user id and a
+5-minute expiry) and the response names which methods can complete it.
+
+| Method | Path | Access | Body / notes |
+| --- | --- | --- | --- |
+| `POST` | `mfa/send-email-code/` | A pending sign-in, or any authenticated caller (step-up/enrolment) | No body. `204`. Same throttle (`otp`) and limits as `step-up/request-code/` |
+| `POST` | `mfa/verify/` | A pending sign-in, or any authenticated caller | `{method: "totp"\|"email"\|"recovery", code}`. Completes the pending sign-in (calls `login()`, cycles the session key) or grants step-up, whichever context applies. `200` the signed-in user (`CurrentUserSerializer`, same shape `me/` returns) on success; `400 {"code": "invalid_code"}` on any failure — a wrong TOTP digit, an expired email code, and an already-used recovery code are all this one generic answer, never distinguishable from each other |
+| `POST` | `mfa/totp/enrol/` | Any active, signed-in user | No body. `200 {secret_uri, secret, qr_svg}` — `qr_svg` is inline SVG markup encoding `secret_uri`. The only response that ever carries the secret; an unconfirmed device is silently replaced by calling this again. `409` if a device is already confirmed |
+| `POST` | `mfa/totp/confirm/` | Any active, signed-in user | `{code}` (6 digits) against the pending device. `200 {recovery_codes: [...ten codes]}`, shown exactly once — the response is never retrievable again. `400` on a wrong code (the enrolment stays open to retry) or when there is no pending enrolment |
+| `POST` | `mfa/totp/disable/` | Any active, signed-in user, fresh step-up | No body. Deletes the device and every recovery code outright — not a soft delete, since a "restorable" MFA bypass would be a real vulnerability. `204`. `403 step_up_required` without a fresh step-up; `400` if MFA was not enabled |
+| `POST` | `mfa/recovery/regenerate/` | Any active, signed-in user, fresh step-up | No body. Invalidates every existing recovery code and issues ten new ones, shown exactly once, same shape as `totp/confirm/`. `403 step_up_required`; `400` if MFA was not enabled |
+
+`available_methods` (what `login/` and the two send/verify endpoints ever
+offer) always includes `email`; adds `totp` only with a confirmed device,
+and `recovery` only while at least one unused code remains — in that order,
+strongest first. TOTP is RFC 6238 (30s step, ±1 step tolerance), the shared
+secret encrypted at rest (`MFA_ENCRYPTION_KEY`, environment-only) and never
+logged, audited, or returned again after enrolment; replay of an
+already-accepted step is refused. `mfa.enrolled`/`mfa.disabled` also email
+the account (bypassing notification preferences — a security event, not a
+subscription) and every verify/enrol/disable/regenerate outcome is audited
+(`mfa.verified`/`mfa.failed`/`mfa.enrolled`/`mfa.disabled`/
+`mfa.recovery_regenerated`), never with the code or secret in the context.
+
+`GET me/` gains `mfa_enabled` (whether a confirmed device exists) so the
+security settings screen can offer "set up" or "manage" without a second
+call. The frontend's step-up dialog (`components/roles/step-up-dialog.tsx`)
+still offers only password and email code — `POST step-up/` already accepts
+`{method: "totp"|"recovery", code}` from any caller (see D-137), the UI
+addition is left for a later pass.
 
 ### Permission locking — `/api/v1/roles/<slug>/permissions/<code>/lock|unlock/` (ERP Phase 2)
 

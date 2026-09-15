@@ -57,6 +57,9 @@ export interface CurrentUser extends User {
   capabilities: string[];
   profile_type: "student" | "trainer" | null;
   profile_id: string | null;
+  /** Whether a confirmed TOTP device exists (ERP Phase 5, ADR-05) — lets the
+   *  settings screen offer "enable" or "manage/disable" without a second call. */
+  mfa_enabled: boolean;
 }
 
 export interface AdminUser extends User {
@@ -2033,4 +2036,34 @@ export interface ExportJob {
   expires_at: string | null;
   /** This app's own download route, never a storage URL. Null until complete. */
   download_url: string | null;
+}
+
+// --- MFA (ERP Phase 5, ADR-05) ------------------------------------------------
+
+/** The three ways a pending sign-in or a step-up may be proved
+ *  (`apps.accounts.mfa.MfaMethod`). */
+export type MfaMethodName = "totp" | "email" | "recovery";
+
+/** The alternate `200` shape `POST /auth/login/` answers with when MFA
+ *  applies, instead of the usual {@link CurrentUser}. */
+export interface MfaRequired {
+  mfa_required: true;
+  methods: MfaMethodName[];
+  /** Seconds until the pending sign-in expires (fixed at 300 by ADR-05). */
+  expires_in: number;
+}
+
+/** Response of `POST /auth/mfa/totp/enrol/`: an unconfirmed device's
+ *  provisioning URI, its raw secret, and a QR code as inline SVG markup.
+ *  None of the three is ever retrievable again after enrolment. */
+export interface MfaEnrolResponse {
+  secret_uri: string;
+  secret: string;
+  qr_svg: string;
+}
+
+/** Response of `POST /auth/mfa/totp/confirm/` and
+ *  `POST /auth/mfa/recovery/regenerate/`: ten codes, shown exactly once. */
+export interface RecoveryCodesResponse {
+  recovery_codes: string[];
 }

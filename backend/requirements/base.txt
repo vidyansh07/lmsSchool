@@ -44,3 +44,11 @@ boto3==1.43.85
 # that sending mail and other slow work happens outside the request that
 # triggered it. See `config/celery.py` for what does and does not belong here.
 celery==5.6.3
+
+# MFA (ERP Phase 5, ADR-05). pyotp implements RFC 6238 TOTP generation and
+# verification. cryptography's Fernet is how a TOTP device's secret is
+# encrypted at rest, keyed by MFA_ENCRYPTION_KEY — until now cryptography was
+# present only as a transitive dependency of `moto` (dev-only), which would
+# have made this a silent runtime break outside a dev install.
+pyotp==2.10.0
+cryptography==50.0.1

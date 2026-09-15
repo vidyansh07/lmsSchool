@@ -37,8 +37,11 @@ import {
 type Mode = "password" | "code";
 
 /** A friendly sentence for a `429 rate_limited` refusal, or `null` when the
- *  failure is something else and should go through `errorMessage` instead. */
-function rateLimitMessage(cause: unknown): string | null {
+ *  failure is something else and should go through `errorMessage` instead.
+ *  Exported: `components/auth/mfa-verify-form.tsx` (ADR-05, Phase 5) hits the
+ *  same throttle shape on the login-time MFA step and reuses this rather than
+ *  keeping a second copy of the sentence. */
+export function rateLimitMessage(cause: unknown): string | null {
   if (!(cause instanceof ApiError) || cause.code !== "rate_limited")
     return null;
   const raw = cause.details?.retry_after_seconds;

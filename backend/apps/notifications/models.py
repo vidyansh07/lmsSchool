@@ -59,12 +59,24 @@ class NotificationKind(models.TextChoices):
     COMPLETION_APPROVED = "completion.approved", _("Course completion approved")
     CERTIFICATE_ISSUED = "certificate.issued", _("Certificate issued")
 
+    # --- Security events (ERP Phase 5, ADR-05). Always delivered — see
+    # NotificationCategory.SECURITY below.
+    MFA_ENROLLED = "mfa.enrolled", _("Two-factor authentication turned on")
+    MFA_DISABLED = "mfa.disabled", _("Two-factor authentication turned off")
+
 
 class NotificationCategory(models.TextChoices):
     ACADEMIC = "academic", _("Coursework and results")
     SCHEDULE = "schedule", _("Classes, tests and deadlines")
     ANNOUNCEMENTS = "announcements", _("Announcements")
     ADMINISTRATIVE = "administrative", _("Completion and certificates")
+    #: Security events (ERP Phase 5). Deliberately not one of the four
+    #: categories `NotificationPreference` has a switch for: `wants_email`
+    #: falls back to `True` for a category with no matching `email_*`
+    #: column, so there is no preference to turn this off — a security
+    #: event is not a subscription (SECURITY_DECISIONS). Only the
+    #: institution-wide email kill switch in `_wants_email` still applies.
+    SECURITY = "security", _("Security")
 
 
 #: Which switch each kind answers to.
@@ -86,6 +98,8 @@ KIND_CATEGORY: dict[str, str] = {
     NotificationKind.EXPORT_FAILED: NotificationCategory.ADMINISTRATIVE,
     NotificationKind.COMPLETION_APPROVED: NotificationCategory.ADMINISTRATIVE,
     NotificationKind.CERTIFICATE_ISSUED: NotificationCategory.ADMINISTRATIVE,
+    NotificationKind.MFA_ENROLLED: NotificationCategory.SECURITY,
+    NotificationKind.MFA_DISABLED: NotificationCategory.SECURITY,
 }
 
 

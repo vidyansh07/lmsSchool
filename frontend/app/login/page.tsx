@@ -1,38 +1,52 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-import { AuthSplitShell } from '@/components/auth/auth-split-shell';
-import { useAuth } from '@/components/auth-provider';
-import { ErrorState } from '@/components/states';
-import { Button } from '@/components/ui/button';
-import { Field } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { fieldErrors } from '@/lib/api';
-import { login } from '@/lib/auth';
+import { AuthSplitShell } from "@/components/auth/auth-split-shell";
+import { MfaVerifyForm } from "@/components/auth/mfa-verify-form";
+import { useAuth } from "@/components/auth-provider";
+import { ErrorState } from "@/components/states";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { fieldErrors } from "@/lib/api";
+import { login } from "@/lib/auth";
+import type { CurrentUser, MfaMethodName } from "@/types/api";
 
 export default function LoginPage() {
   const router = useRouter();
   const { user, setUser } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Set once `POST /auth/login/` answers `{mfa_required: true}` (ADR-05):
+  // the credentials form gives way to the MFA-verify step rather than
+  // navigating anywhere, since the session is only pending, not signed in.
+  const [mfaMethods, setMfaMethods] = useState<MfaMethodName[] | null>(null);
 
   useEffect(() => {
-    if (user) router.replace('/');
+    if (user) router.replace("/");
   }, [user, router]);
+
+  function finishSignIn(signedIn: CurrentUser) {
+    setUser(signedIn);
+    router.replace("/");
+  }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setIsSubmitting(true);
     setErrors({});
     try {
-      const signedIn = await login(email, password);
-      setUser(signedIn);
-      router.replace('/');
+      const result = await login(email, password);
+      if ("mfa_required" in result) {
+        setMfaMethods(result.methods);
+      } else {
+        finishSignIn(result);
+      }
     } catch (cause) {
       setErrors(fieldErrors(cause));
     } finally {
@@ -40,8 +54,29 @@ export default function LoginPage() {
     }
   }
 
+  if (mfaMethods) {
+    return (
+      <AuthSplitShell
+        heading="Welcome back"
+        tagline="Sign in to keep learning where you left off."
+      >
+        <MfaVerifyForm
+          methods={mfaMethods}
+          onVerified={finishSignIn}
+          onBack={() => {
+            setMfaMethods(null);
+            setPassword("");
+          }}
+        />
+      </AuthSplitShell>
+    );
+  }
+
   return (
-    <AuthSplitShell heading="Welcome back" tagline="Sign in to keep learning where you left off.">
+    <AuthSplitShell
+      heading="Welcome back"
+      tagline="Sign in to keep learning where you left off."
+    >
       <div className="mb-6 space-y-1.5">
         <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
         <p className="text-sm text-muted-foreground">
@@ -64,7 +99,12 @@ export default function LoginPage() {
           />
         </Field>
 
-        <Field label="Password" htmlFor="password" error={errors.password} required>
+        <Field
+          label="Password"
+          htmlFor="password"
+          error={errors.password}
+          required
+        >
           <Input
             type="password"
             autoComplete="current-password"
@@ -74,11 +114,14 @@ export default function LoginPage() {
         </Field>
 
         <Button type="submit" disabled={isSubmitting} className="w-full">
-          {isSubmitting ? 'Signing in…' : 'Sign in'}
+          {isSubmitting ? "Signing in…" : "Sign in"}
         </Button>
 
         <p className="text-center text-sm text-muted-foreground">
-          <Link href="/forgot-password" className="underline hover:text-foreground">
+          <Link
+            href="/forgot-password"
+            className="underline hover:text-foreground"
+          >
             Forgot your password?
           </Link>
         </p>

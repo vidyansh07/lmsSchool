@@ -16,6 +16,7 @@ from rest_framework import serializers
 from apps.authorization.models import Role
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
+from .mfa import MfaMethod
 from .models import User
 from .roles import UserRole
 
@@ -93,6 +94,9 @@ class CurrentUserSerializer(UserSerializer):
     capabilities = serializers.SerializerMethodField()
     profile_type = serializers.SerializerMethodField()
     profile_id = serializers.SerializerMethodField()
+    #: Whether a confirmed TOTP device exists (ERP Phase 5, ADR-05) — lets the
+    #: settings screen offer "enable" or "manage/disable" without a second call.
+    mfa_enabled = serializers.BooleanField(read_only=True)
 
     class Meta(UserSerializer.Meta):
         fields = (
@@ -102,6 +106,7 @@ class CurrentUserSerializer(UserSerializer):
             "capabilities",
             "profile_type",
             "profile_id",
+            "mfa_enabled",
         )
         read_only_fields = fields
 
@@ -257,13 +262,20 @@ class LoginSerializer(StrictSerializer):
 
 
 class StepUpSerializer(StrictSerializer):
-    """Step-up input: a password re-entry, or an emailed one-time code
-    (ADR-05) — exactly one, never both, never neither."""
+    """Step-up input: a password re-entry, or a code — exactly one, never
+    both, never neither. ``method`` picks which kind of code (ADR-05 Phase
+    5 extends the Phase 4 email-only code with TOTP and recovery, both
+    verified against the caller's own confirmed device); it is meaningless
+    — and rejected — alongside a password, and defaults to ``"email"`` when
+    only ``code`` is sent, so an existing Phase 4 caller needs no change."""
 
     password = serializers.CharField(
         write_only=True, trim_whitespace=False, required=False, allow_blank=False
     )
-    code = SafeCharField(write_only=True, max_length=6, required=False, allow_blank=False)
+    method = serializers.ChoiceField(
+        choices=tuple(MfaMethod.choices), required=False, write_only=True
+    )
+    code = SafeCharField(write_only=True, max_length=16, required=False, allow_blank=False)
 
     def validate(self, attrs):
         password = attrs.get("password")
@@ -272,7 +284,52 @@ class StepUpSerializer(StrictSerializer):
             raise serializers.ValidationError(
                 "Provide either a password or a one-time code, not both."
             )
+        if password and attrs.get("method"):
+            raise serializers.ValidationError({"method": ["Not accepted alongside a password."]})
+        if code:
+            attrs["method"] = attrs.get("method") or MfaMethod.EMAIL
         return attrs
+
+
+class MfaVerifySerializer(StrictSerializer):
+    """Body of ``POST /auth/mfa/verify/``: which of the three factors, and
+    the code for it. Used both to complete a pending sign-in and, for an
+    already-authenticated caller, to obtain step-up — the view decides
+    which by whether a pending-MFA session is present (ADR-05)."""
+
+    method = serializers.ChoiceField(choices=tuple(MfaMethod.choices))
+    code = SafeCharField(max_length=16, allow_blank=False)
+
+
+class MfaTotpConfirmSerializer(StrictSerializer):
+    """Body of ``POST /auth/mfa/totp/confirm/``: the 6-digit code from the
+    authenticator app that was just scanned."""
+
+    code = SafeCharField(max_length=6, allow_blank=False)
+
+
+class MfaRequiredSerializer(serializers.Serializer):
+    """The alternate ``200`` shape ``POST /auth/login/`` answers with when
+    MFA applies (ADR-05) instead of the usual ``CurrentUserSerializer``."""
+
+    mfa_required = serializers.BooleanField(read_only=True)
+    methods = serializers.ListField(child=serializers.CharField(), read_only=True)
+    expires_in = serializers.IntegerField(read_only=True)
+
+
+class MfaEnrolSerializer(serializers.Serializer):
+    """Response of ``POST /auth/mfa/totp/enrol/``."""
+
+    secret_uri = serializers.CharField(read_only=True)
+    secret = serializers.CharField(read_only=True)
+    qr_svg = serializers.CharField(read_only=True)
+
+
+class RecoveryCodesSerializer(serializers.Serializer):
+    """Response carrying the ten recovery codes — shown exactly once, at
+    confirmation and at regeneration, and never retrievable again."""
+
+    recovery_codes = serializers.ListField(child=serializers.CharField(), read_only=True)
 
 
 class PasswordChangeSerializer(StrictSerializer):

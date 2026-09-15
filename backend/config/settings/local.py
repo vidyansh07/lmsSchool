@@ -54,3 +54,10 @@ EMAIL_BACKEND = env.str("EMAIL_BACKEND", default="django.core.mail.backends.cons
 
 # Local/test environments may create fake demo data.
 ALLOW_DEMO_SEED = True
+
+# MFA (ERP Phase 5, ADR-05). Dev-only placeholder key, the same pattern as
+# SECRET_KEY above: a real deployment must inject its own through the secret
+# manager (config/settings/hardened.py refuses to boot without one).
+MFA_ENCRYPTION_KEY = env.str(
+    "MFA_ENCRYPTION_KEY", default="LWVLvZNSRsq_9_FhXsNsARWMqvwWeg9RUtlvofCEUQs="
+)

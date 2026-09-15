@@ -24,6 +24,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 # A syntactically valid, obviously fake secret used only to load settings.
 FAKE_SECRET_KEY = "test-only-3Qv7pLxN2rW9zKmT8bYcF4dHsJ6gA1eU5nR0iOqZwXyVbMlP"
+# A syntactically valid Fernet key used only to load settings — never a real
+# deployment's MFA_ENCRYPTION_KEY (ERP Phase 5).
+FAKE_MFA_ENCRYPTION_KEY = "3P8O9bNX1ebAYT8WeIHLP4mWS7fFAi-KEMfOf_HI0YE="
 
 PROD_ENV = {
     "DJANGO_ENV": "production",
@@ -37,6 +40,7 @@ PROD_ENV = {
     "EMAIL_HOST": "smtp.example.com",
     "DEFAULT_FROM_EMAIL": "no-reply@example.com",
     "FRONTEND_BASE_URL": "https://app.example.com",
+    "MFA_ENCRYPTION_KEY": FAKE_MFA_ENCRYPTION_KEY,
     "SENTRY_DSN": "",
 }
 
@@ -132,6 +136,9 @@ def test_production_settings_load_and_are_hardened():
         ({"DEFAULT_FROM_EMAIL": ""}, "DEFAULT_FROM_EMAIL"),
         ({"FRONTEND_BASE_URL": ""}, "FRONTEND_BASE_URL"),
         ({"DATABASE_URL": ""}, "DATABASE_URL"),
+        # ERP Phase 5 (ADR-05): a deployed environment must fail closed
+        # without its own MFA_ENCRYPTION_KEY rather than boot with none.
+        ({"MFA_ENCRYPTION_KEY": ""}, "MFA_ENCRYPTION_KEY"),
         ({"DJANGO_ENV": "local"}, "Environment mismatch"),
         # §14.10: no broker means "background" work would run in the request.
         ({"CELERY_BROKER_URL": ""}, "CELERY_BROKER_URL"),

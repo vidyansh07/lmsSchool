@@ -139,6 +139,16 @@ FRONTEND_BASE_URL = require_setting(
     "FRONTEND_BASE_URL", env.str("FRONTEND_BASE_URL", default="")
 ).rstrip("/")
 
+# --- MFA (ERP Phase 5, ADR-05) ----------------------------------------------
+# Encrypts every TOTP device's secret at rest. Rotating it would make every
+# already-enrolled device unreadable, so treat it like DJANGO_SECRET_KEY:
+# generate once per environment, store in the secret manager, never reuse
+# across environments. Generate with:
+#   python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"
+MFA_ENCRYPTION_KEY = require_setting(
+    "MFA_ENCRYPTION_KEY", env.str("MFA_ENCRYPTION_KEY", default="")
+)
+
 # --- Observability ---------------------------------------------------------
 LOG_FORMAT = env.str("DJANGO_LOG_FORMAT", default="json")
 LOG_LEVEL = env.str("DJANGO_LOG_LEVEL", default="INFO")

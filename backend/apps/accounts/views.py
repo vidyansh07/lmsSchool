@@ -12,32 +12,40 @@ from django.contrib.auth import authenticate, login, logout
 from django.http import FileResponse, Http404
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
-from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import status
+from drf_spectacular.utils import OpenApiResponse, PolymorphicProxySerializer, extend_schema
+from rest_framework import exceptions, status
 from rest_framework.generics import get_object_or_404
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.audit.models import AuditAction, AuditResult
+from apps.audit.services import record
 from apps.common.middleware import client_ip
 from apps.common.mixins import EnforceCSRFMixin
 from apps.common.permissions import AllowAnyPublic, Capability, HasCapability, IsActiveUser
 from apps.common.throttling import AuthEndpointThrottle
 
-from . import services
+from . import mfa, services
 from .models import User
 from .serializers import (
     CurrentUserSerializer,
     DetailSerializer,
     EmailVerificationConfirmSerializer,
     LoginSerializer,
+    MfaEnrolSerializer,
+    MfaRequiredSerializer,
+    MfaTotpConfirmSerializer,
+    MfaVerifySerializer,
     PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
     ProfileImageUploadSerializer,
+    RecoveryCodesSerializer,
     SelfUserUpdateSerializer,
     StepUpSerializer,
 )
+from .stepup import StepUpRequired, is_fresh
 
 AUTH_TAG = ["auth"]
 
@@ -70,6 +78,15 @@ class LoginView(EnforceCSRFMixin, APIView):
     outcomes are audited by the authentication signal receivers. CSRF is
     enforced explicitly because DRF would otherwise skip the check on an
     anonymous request (see ``EnforceCSRFMixin``).
+
+    ADR-05 (Phase 5): a correct password does not always finish the sign-in.
+    When the account has a confirmed MFA device, or its role is required to
+    use one by policy and it is past its grace period
+    (:func:`apps.accounts.mfa.is_required`), ``django.contrib.auth.login`` is
+    never called here — instead the session is marked pending
+    (:func:`apps.accounts.mfa.start_pending`) and the response names which
+    methods can complete it. Every other endpoint already treats a pending
+    session as anonymous, because it is: nothing has authenticated it yet.
     """
 
     permission_classes = (AllowAnyPublic,)
@@ -80,7 +97,14 @@ class LoginView(EnforceCSRFMixin, APIView):
         summary="Sign in with email and password",
         request=LoginSerializer,
         responses={
-            200: CurrentUserSerializer,
+            # No discriminator: the two shapes share no common field to key
+            # on ("mfa_required" only appears in one of them), so this is a
+            # plain `oneOf` rather than a discriminated union.
+            200: PolymorphicProxySerializer(
+                component_name="LoginResponse",
+                serializers=[CurrentUserSerializer, MfaRequiredSerializer],
+                resource_type_field_name=None,
+            ),
             401: OpenApiResponse(description="Invalid credentials or inactive account."),
             429: OpenApiResponse(description="Too many attempts."),
         },
@@ -109,6 +133,25 @@ class LoginView(EnforceCSRFMixin, APIView):
                     }
                 },
                 status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if mfa.is_required(user=user):
+            mfa.start_pending(request=request, user=user)
+            methods = mfa.available_methods(user=user)
+            record(
+                action=AuditAction.LOGIN_PENDING,
+                actor=user,
+                resource_type="user",
+                resource_id=user.pk,
+                context={"methods": methods},
+                durable=False,
+            )
+            return Response(
+                {
+                    "mfa_required": True,
+                    "methods": methods,
+                    "expires_in": mfa.PENDING_TTL_SECONDS,
+                }
             )
 
         login(request, user)
@@ -171,13 +214,15 @@ class StepUpView(APIView):
     def post(self, request):
         serializer = StepUpSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        from .stepup import step_up_with_email_code, step_up_with_password
+        from .stepup import require_step_up
 
-        password = serializer.validated_data.get("password")
-        if password:
-            step_up_with_password(request, password)
-        else:
-            step_up_with_email_code(request, serializer.validated_data["code"])
+        data = serializer.validated_data
+        require_step_up(
+            request,
+            password=data.get("password"),
+            code=data.get("code"),
+            method=data.get("method"),
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -209,6 +254,248 @@ class StepUpCodeRequestView(APIView):
             {"detail": "A one-time code has been sent to your email."},
             status=status.HTTP_202_ACCEPTED,
         )
+
+
+def _resolve_mfa_target(request) -> tuple[User, str]:
+    """Who the next MFA action is for, and why.
+
+    Two contexts share these endpoints (ADR-05): a pending sign-in — the
+    session holds ``mfa_pending`` and ``request.user`` is anonymous, since
+    ``login()`` is never called until verification succeeds — or an already
+    signed-in caller reaching for step-up. Checked in that order: a pending
+    marker always wins, so a browser that happens to hold an unrelated
+    authenticated session in another tab cannot shadow the sign-in in
+    progress.
+    """
+    pending_user = mfa.get_pending_user(request=request)
+    if pending_user is not None:
+        return pending_user, "login"
+    user = getattr(request, "user", None)
+    if user is not None and user.is_authenticated and user.is_active:
+        return user, "step_up"
+    raise exceptions.NotAuthenticated()
+
+
+class MfaSendEmailCodeView(APIView):
+    """Email a one-time code (ADR-05) as one of the three MFA factors.
+
+    Works two ways, resolved by :func:`_resolve_mfa_target`: against a
+    pending sign-in (before ``login()`` has ever been called — see
+    ``LoginView``), or against an already-authenticated caller reaching for
+    step-up, reusing exactly the send path Phase 4's
+    ``StepUpCodeRequestView`` uses. Anonymous is allowed on purpose: a
+    pending session, by construction, is not authenticated yet.
+    """
+
+    permission_classes = (AllowAnyPublic,)
+    throttle_classes = (AuthEndpointThrottle,)
+    throttle_scope = "otp"
+
+    @extend_schema(
+        summary="Email an MFA one-time code",
+        request=None,
+        responses={
+            204: None,
+            401: OpenApiResponse(description="No pending sign-in and not authenticated."),
+            429: OpenApiResponse(description="Too many requests — wait and retry."),
+        },
+        tags=AUTH_TAG,
+    )
+    def post(self, request):
+        from .otp import OtpPurpose, send_email_code
+
+        target, purpose = _resolve_mfa_target(request)
+        otp_purpose = OtpPurpose.LOGIN if purpose == "login" else OtpPurpose.STEP_UP
+        send_email_code(user=target, purpose=otp_purpose, request_ip=client_ip(request))
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MfaVerifyView(EnforceCSRFMixin, APIView):
+    """Complete a pending sign-in, or obtain step-up, with one of the three
+    MFA factors (ADR-05). Which of the two this call is doing is decided the
+    same way :class:`MfaSendEmailCodeView` decides it — a pending session
+    wins over an authenticated one.
+
+    Every failure — wrong TOTP, an already-used recovery code, an expired
+    email code, no device at all — answers the same generic ``400
+    invalid_code``: SECURITY_DECISIONS is explicit that no method's failure
+    reason may be distinguishable from another's, by message or otherwise.
+    """
+
+    permission_classes = (AllowAnyPublic,)
+    throttle_classes = (AuthEndpointThrottle,)
+    throttle_scope = "auth"
+
+    @extend_schema(
+        summary="Verify an MFA code",
+        request=MfaVerifySerializer,
+        responses={
+            200: CurrentUserSerializer,
+            400: OpenApiResponse(description="Wrong or expired code (never says which factor)."),
+            401: OpenApiResponse(description="No pending sign-in and not authenticated."),
+            429: OpenApiResponse(description="Too many attempts."),
+        },
+        tags=AUTH_TAG,
+    )
+    def post(self, request):
+        serializer = MfaVerifySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        method = serializer.validated_data["method"]
+        code = serializer.validated_data["code"]
+
+        target, purpose = _resolve_mfa_target(request)
+        verified = mfa.verify(
+            user=target,
+            method=method,
+            code=code,
+            purpose=purpose,
+            request_ip=client_ip(request),
+        )
+        if not verified:
+            record(
+                action=AuditAction.MFA_FAILED,
+                actor=target,
+                resource_type="user",
+                resource_id=target.pk,
+                result=AuditResult.FAILURE,
+                context={"method": method, "purpose": purpose},
+            )
+            raise mfa.InvalidMfaCode()
+
+        if purpose == "login":
+            login(request, target)
+            request.session.cycle_key()
+            mfa.clear_pending(request=request)
+        else:
+            from .stepup import grant
+
+            grant(request)
+
+        record(
+            action=AuditAction.MFA_VERIFIED,
+            actor=target,
+            resource_type="user",
+            resource_id=target.pk,
+            context={"method": method, "purpose": purpose},
+            durable=False,
+        )
+        if method == "recovery":
+            record(
+                action=AuditAction.MFA_RECOVERY_USED,
+                actor=target,
+                resource_type="user",
+                resource_id=target.pk,
+                context={"purpose": purpose},
+                durable=False,
+            )
+        return _current_user_response(target)
+
+
+class MfaTotpEnrolView(APIView):
+    """Begin (or restart) TOTP enrolment (ADR-05).
+
+    Returns an unconfirmed device's provisioning URI, its raw secret (for
+    manual entry when a camera is unavailable) and a QR code as inline SVG.
+    None of the three is stored anywhere in plaintext, logged, or audited —
+    this is the one response that ever carries the secret.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Begin TOTP enrolment",
+        request=None,
+        responses={
+            200: MfaEnrolSerializer,
+            409: OpenApiResponse(description="MFA is already enabled; disable it first."),
+        },
+        tags=AUTH_TAG,
+    )
+    def post(self, request):
+        _device, secret = mfa.start_enrolment(user=request.user)
+        uri = mfa.provisioning_uri(user=request.user, secret=secret)
+        return Response(
+            MfaEnrolSerializer(
+                {"secret_uri": uri, "secret": secret, "qr_svg": mfa.qr_svg(uri)}
+            ).data
+        )
+
+
+class MfaTotpConfirmView(APIView):
+    """Confirm TOTP enrolment with a code from the app (ADR-05).
+
+    On success the device becomes active and ten recovery codes are issued
+    and returned — the only time they are ever retrievable. The user is
+    emailed (bypassing notification preferences: this is a security event,
+    not a subscription — see ``apps.accounts.mfa._security_email``).
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Confirm TOTP enrolment",
+        request=MfaTotpConfirmSerializer,
+        responses={
+            200: RecoveryCodesSerializer,
+            400: OpenApiResponse(description="Wrong code, or no pending enrolment."),
+        },
+        tags=AUTH_TAG,
+    )
+    def post(self, request):
+        serializer = MfaTotpConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        codes = mfa.confirm_enrolment(user=request.user, code=serializer.validated_data["code"])
+        return Response(RecoveryCodesSerializer({"recovery_codes": codes}).data)
+
+
+class MfaTotpDisableView(APIView):
+    """Turn MFA off (ADR-05): deletes the device and every recovery code —
+    genuinely, not a soft delete (a restorable MFA bypass would be a real
+    vulnerability). Requires a fresh step-up, the same pattern
+    ``LockPermissionView`` uses: refuse with ``403 step_up_required`` and let
+    the interface open the step-up dialog and retry."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Disable MFA",
+        request=None,
+        responses={
+            204: None,
+            400: OpenApiResponse(description="MFA is not enabled."),
+            403: OpenApiResponse(description="Step-up required."),
+        },
+        tags=AUTH_TAG,
+    )
+    def post(self, request):
+        if not is_fresh(request):
+            raise StepUpRequired()
+        mfa.disable(user=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MfaRecoveryRegenerateView(APIView):
+    """Invalidate every existing recovery code and issue ten new ones
+    (ADR-05), shown exactly once. Requires a fresh step-up, same pattern as
+    :class:`MfaTotpDisableView`."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Regenerate recovery codes",
+        request=None,
+        responses={
+            200: RecoveryCodesSerializer,
+            400: OpenApiResponse(description="MFA is not enabled."),
+            403: OpenApiResponse(description="Step-up required."),
+        },
+        tags=AUTH_TAG,
+    )
+    def post(self, request):
+        if not is_fresh(request):
+            raise StepUpRequired()
+        codes = mfa.regenerate_recovery_codes(user=request.user)
+        return Response(RecoveryCodesSerializer({"recovery_codes": codes}).data)
 
 
 class MeView(APIView):

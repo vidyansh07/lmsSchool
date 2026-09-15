@@ -78,6 +78,17 @@ class AuditAction(models.TextChoices):
     OTP_FAILED = "otp.failed", _("One-time code verification failed")
     OTP_THROTTLED = "otp.throttled", _("One-time code request throttled")
 
+    # --- MFA: TOTP and recovery codes (ERP Phase 5, ADR-05). Never the
+    # secret, the code, or a recovery code — see apps.accounts.mfa.
+    LOGIN_PENDING = "auth.login.pending", _("Sign-in pending MFA")
+    MFA_ENROLLED = "mfa.enrolled", _("MFA enabled")
+    MFA_CONFIRMED = "mfa.confirmed", _("MFA device confirmed")
+    MFA_DISABLED = "mfa.disabled", _("MFA disabled")
+    MFA_VERIFIED = "mfa.verified", _("MFA code verified")
+    MFA_FAILED = "mfa.failed", _("MFA code verification failed")
+    MFA_RECOVERY_USED = "mfa.recovery_used", _("Recovery code used")
+    MFA_RECOVERY_REGENERATED = "mfa.recovery_regenerated", _("Recovery codes regenerated")
+
     # --- Domain profiles
     STUDENT_CREATED = "student.created", _("Student created")
     STUDENT_UPDATED = "student.updated", _("Student profile updated")
