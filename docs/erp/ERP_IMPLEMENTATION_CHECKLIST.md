@@ -38,7 +38,7 @@ adds nothing in it.
 | Phase | Product | UX | Frontend | Backend | Database | API | Authorization | Security | Caching | Logging | Audit | Testing | Migration | Backup | Docs | Deploy |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 Dynamic authorization | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED |
-| 2 Scopes and locking | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | n/a | PLANNED | PLANNED | PLANNED | n/a | PLANNED | PLANNED |
+| 2 Scopes and locking | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED |
 | 3 Policy management | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | n/a | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED |
 | 4 Email OTP | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | n/a | PLANNED | PLANNED |
 | 5 MFA | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | n/a | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED |

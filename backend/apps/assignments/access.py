@@ -51,7 +51,14 @@ def visible_assignments(user) -> QuerySet[Assignment]:
     base = Assignment.objects.with_related()
 
     if has_capability(user, Capability.ASSIGNMENT_VIEW_ANY):
-        return scope_to_branch_or_shared(base, user, path="batch__branch")
+        return scope_to_branch_or_shared(
+            base,
+            user,
+            path="batch__branch",
+            capability=Capability.ASSIGNMENT_VIEW_ANY,
+            batch_path="batch",
+            course_path="course",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -90,7 +97,14 @@ def manageable_assignments(user) -> QuerySet[Assignment]:
     base = Assignment.objects.with_related()
 
     if has_capability(user, Capability.ASSIGNMENT_MANAGE_ANY):
-        return scope_to_branch_or_shared(base, user, path="batch__branch")
+        return scope_to_branch_or_shared(
+            base,
+            user,
+            path="batch__branch",
+            capability=Capability.ASSIGNMENT_MANAGE_ANY,
+            batch_path="batch",
+            course_path="course",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -152,7 +166,13 @@ def visible_submissions(user) -> QuerySet[AssignmentSubmission]:
     base = AssignmentSubmission.objects.with_related()
 
     if has_capability(user, Capability.ASSIGNMENT_VIEW_ANY):
-        return scope_to_branch(base, user, path="enrollment__batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="enrollment__batch__branch",
+            capability=Capability.ASSIGNMENT_VIEW_ANY,
+            batch_path="enrollment__batch",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

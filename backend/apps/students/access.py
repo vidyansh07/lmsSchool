@@ -35,7 +35,13 @@ def visible_students(user) -> QuerySet[StudentProfile]:
     base = _base()
 
     if has_capability(user, Capability.STUDENT_VIEW_ANY):
-        return scope_to_branch(base, user, path="branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="branch",
+            capability=Capability.STUDENT_VIEW_ANY,
+            batch_path="enrollments__batch",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

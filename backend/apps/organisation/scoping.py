@@ -82,14 +82,69 @@ def actor_branch_id(user) -> Any | None:
 _SELF_PATHS = frozenset({"id", "pk"})
 
 
-def scope_to_branch(queryset: QuerySet, user, *, path: str = "branch") -> QuerySet:
-    """Narrow ``queryset`` to the caller's centre.
+def _configured(user, capability, queryset, *, batch_path, course_path, own):
+    """Apply a configured scope narrower than the caller's floor (ADR-02).
+
+    Returns ``None`` when the floor applies (the common case), or the narrowed
+    queryset. ``assigned`` needs ``batch_path`` — the ORM path from this model
+    to a batch, ``"id"`` when the model is ``Batch`` — and ``own`` a callable
+    ``(queryset, user) -> queryset``; a model that can express neither answers
+    nothing for that scope, which is the fail-closed reading.
+    """
+    if capability is None:
+        return None
+    from apps.authorization.scopes import ASSIGNED, OWN, SCOPE_FLOOR, effective_scope
+
+    scope = effective_scope(user, capability)
+    if scope == SCOPE_FLOOR.get(user.role):
+        return None
+    if scope == ASSIGNED:
+        if batch_path is None:
+            return queryset.none()
+        from apps.authorization.scopes import assigned_batch_ids
+
+        ids = assigned_batch_ids(user)
+        lookup = "pk__in" if batch_path in _SELF_PATHS else f"{batch_path}__in"
+        narrowed = Q(**{lookup: ids})
+        if course_path is not None:
+            from apps.batches.models import Batch
+
+            courses = Batch.objects.filter(pk__in=ids).values_list("course_id", flat=True)
+            nullable_relation = batch_path
+            narrowed |= Q(**{f"{nullable_relation}__isnull": True}) & Q(
+                **{f"{course_path}__in": list(courses)}
+            )
+        return queryset.filter(narrowed).distinct()
+    if scope == OWN:
+        return own(queryset, user) if own is not None else queryset.none()
+    return None
+
+
+def scope_to_branch(
+    queryset: QuerySet,
+    user,
+    *,
+    path: str = "branch",
+    capability: str | None = None,
+    batch_path: str | None = None,
+    own=None,
+) -> QuerySet:
+    """Narrow ``queryset`` to the caller's centre — or narrower.
 
     ``path`` is the ORM path from this model to the branch, e.g.
     ``"batch__branch"`` — or ``"id"`` when the model *is* ``Branch``. An
     unbounded caller gets the queryset back untouched — the same object, so
     nothing about their query plan changes.
+
+    When ``capability`` is named, a scope configured on the caller's role for
+    it (ADR-02) can narrow further: ``assigned`` through ``batch_path``,
+    ``own`` through ``own``. Nothing here ever widens.
     """
+    narrowed = _configured(
+        user, capability, queryset, batch_path=batch_path, course_path=None, own=own
+    )
+    if narrowed is not None:
+        return narrowed
     if is_unbounded(user):
         return queryset
     branch_id = actor_branch_id(user)
@@ -100,7 +155,16 @@ def scope_to_branch(queryset: QuerySet, user, *, path: str = "branch") -> QueryS
     return queryset.filter(**{lookup: branch_id})
 
 
-def scope_to_branch_or_shared(queryset: QuerySet, user, *, path: str) -> QuerySet:
+def scope_to_branch_or_shared(
+    queryset: QuerySet,
+    user,
+    *,
+    path: str,
+    capability: str | None = None,
+    batch_path: str | None = None,
+    course_path: str | None = None,
+    own=None,
+) -> QuerySet:
     """Narrow to the caller's centre, keeping work that belongs to no batch.
 
     For the models whose ``batch`` is nullable, where ``batch IS NULL`` means
@@ -121,6 +185,11 @@ def scope_to_branch_or_shared(queryset: QuerySet, user, *, path: str) -> QuerySe
     genuinely sees everything is a superadmin, which :func:`is_unbounded`
     already answers above.
     """
+    narrowed = _configured(
+        user, capability, queryset, batch_path=batch_path, course_path=course_path, own=own
+    )
+    if narrowed is not None:
+        return narrowed
     if is_unbounded(user):
         return queryset
     branch_id = actor_branch_id(user)

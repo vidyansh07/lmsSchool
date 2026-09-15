@@ -171,3 +171,51 @@ class RolePermission(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.role_id}:{self.permission_id}"
+
+
+class ScopeGrant(BaseModel):
+    """A batch or a course a staff member may reach under an `assigned` scope
+    without being its trainer (ADR-02). Exactly one of the two is set."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="scope_grants"
+    )
+    batch = models.ForeignKey(
+        "batches.Batch",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="scope_grants",
+    )
+    course = models.ForeignKey(
+        "courses.Course",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="scope_grants",
+    )
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = _("scope grant")
+        verbose_name_plural = _("scope grants")
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(batch__isnull=False, course__isnull=True)
+                    | models.Q(batch__isnull=True, course__isnull=False)
+                ),
+                name="scope_grant_one_target",
+            ),
+            models.UniqueConstraint(fields=["user", "batch"], name="scope_grant_batch_unique"),
+            models.UniqueConstraint(fields=["user", "course"], name="scope_grant_course_unique"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id}:{self.batch_id or self.course_id}"

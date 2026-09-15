@@ -256,6 +256,10 @@ class LoginSerializer(StrictSerializer):
         return value.strip().lower()
 
 
+class StepUpSerializer(StrictSerializer):
+    password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+
 class PasswordChangeSerializer(StrictSerializer):
     current_password = SafeCharField(
         max_length=128, write_only=True, style=PASSWORD_STYLE, trim_whitespace=False

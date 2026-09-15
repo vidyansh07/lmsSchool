@@ -233,6 +233,9 @@ class Capability(models.TextChoices):
     ROLE_VIEW = "role.view", _("View roles and the permission matrix")
     ROLE_MANAGE = "role.manage", _("Create, edit and remove custom roles")
     PERMISSION_ASSIGN = "permission.assign", _("Assign permissions to a role")
+    # Freezing a grant so nobody but a superadmin can remove it (ADR-03).
+    # Seeded locked on the superadmin role and refused to every other kind.
+    PERMISSION_LOCK = "permission.lock", _("Lock and unlock permission grants")
 
     # --- Reporting and data tools
     #

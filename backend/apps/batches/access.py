@@ -68,7 +68,9 @@ def visible_batches(user) -> QuerySet[Batch]:
     base = Batch.objects.with_related()
 
     if has_capability(user, Capability.BATCH_VIEW_ANY):
-        return scope_to_branch(base, user, path="branch")
+        return scope_to_branch(
+            base, user, path="branch", capability=Capability.BATCH_VIEW_ANY, batch_path="id"
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -97,7 +99,8 @@ def can_manage_batch(user, batch: Batch) -> bool:
 
 def can_view_batch(user, batch: Batch) -> bool:
     if has_capability(user, Capability.BATCH_VIEW_ANY):
-        return True
+        # Through the queryset, so a configured scope (ADR-02) holds here too.
+        return visible_batches(user).filter(pk=batch.pk).exists()
 
     trainer = trainer_profile(user)
     if trainer is not None and batch.trainer_id == trainer.pk:
@@ -140,7 +143,13 @@ def visible_enrollments(user):
     base = Enrollment.objects.with_related()
 
     if has_capability(user, Capability.ENROLMENT_VIEW_ANY):
-        return scope_to_branch(base, user, path="batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="batch__branch",
+            capability=Capability.ENROLMENT_VIEW_ANY,
+            batch_path="batch",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

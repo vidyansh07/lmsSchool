@@ -49,7 +49,14 @@ def visible_dsrs(user) -> QuerySet[DSR]:
     base = DSR.objects.with_related()
 
     if has_capability(user, Capability.DSR_VIEW_ANY):
-        return scope_to_branch(base, user, path="session__batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="session__batch__branch",
+            capability=Capability.DSR_VIEW_ANY,
+            batch_path="session__batch",
+            own=lambda rows, who: rows.filter(trainer__user=who),
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

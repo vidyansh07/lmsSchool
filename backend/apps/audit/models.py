@@ -61,6 +61,12 @@ class AuditAction(models.TextChoices):
     ROLE_UPDATED = "role.updated", _("Role updated")
     ROLE_DELETED = "role.deleted", _("Role deleted")
     PERMISSIONS_SYNCED = "permission.synced", _("Permission catalog synchronised")
+    PERMISSION_LOCKED = "permission.locked", _("Permission grant locked")
+    PERMISSION_UNLOCKED = "permission.unlocked", _("Permission grant unlocked")
+    SCOPE_GRANTED = "scope.granted", _("Batch or course scope granted")
+    SCOPE_REVOKED = "scope.revoked", _("Batch or course scope revoked")
+    STEP_UP_SUCCEEDED = "auth.step_up.succeeded", _("Step-up authentication succeeded")
+    STEP_UP_FAILED = "auth.step_up.failed", _("Step-up authentication failed")
 
     # --- Domain profiles
     STUDENT_CREATED = "student.created", _("Student created")

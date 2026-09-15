@@ -5,7 +5,7 @@ from rest_framework import serializers
 from apps.accounts.roles import UserRole
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
-from .models import Permission, PermissionScope, Role, RolePermission, RoleStatus
+from .models import Permission, PermissionScope, Role, RolePermission, RoleStatus, ScopeGrant
 
 
 class PermissionSerializer(StrictModelSerializer):
@@ -111,3 +111,29 @@ class RoleMatrixSerializer(serializers.Serializer):
     roles = RoleSummarySerializer(many=True, read_only=True)
     permissions = PermissionSerializer(many=True, read_only=True)
     cells = serializers.DictField(child=serializers.DictField(child=serializers.CharField()))
+
+
+class ScopeGrantSerializer(StrictModelSerializer):
+    batch_code = serializers.CharField(source="batch.code", read_only=True, default=None)
+    batch_name = serializers.CharField(source="batch.name", read_only=True, default=None)
+    course_code = serializers.CharField(source="course.code", read_only=True, default=None)
+    course_title = serializers.CharField(source="course.title", read_only=True, default=None)
+
+    class Meta:
+        model = ScopeGrant
+        fields = (
+            "id",
+            "batch",
+            "batch_code",
+            "batch_name",
+            "course",
+            "course_code",
+            "course_title",
+            "created_at",
+        )
+        read_only_fields = fields
+
+
+class ScopeGrantWriteSerializer(StrictSerializer):
+    batch = serializers.UUIDField(required=False, allow_null=True, default=None)
+    course = serializers.UUIDField(required=False, allow_null=True, default=None)

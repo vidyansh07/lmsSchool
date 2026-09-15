@@ -95,3 +95,73 @@ export function slugify(name: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
 }
+
+// --- Scopes and locking (ERP Phase 2, ADR-02/ADR-03) ------------------------
+
+export interface ScopeGrantRow {
+  id: string;
+  batch: string | null;
+  batch_code: string | null;
+  batch_name: string | null;
+  course: string | null;
+  course_code: string | null;
+  course_title: string | null;
+  created_at: string;
+}
+
+export async function listScopeGrants(
+  userId: string,
+): Promise<ScopeGrantRow[]> {
+  return apiFetch<ScopeGrantRow[]>(`/api/v1/users/${userId}/scope-grants/`);
+}
+
+export async function grantScope(
+  userId: string,
+  payload: { batch?: string; course?: string },
+): Promise<ScopeGrantRow> {
+  return apiMutate<ScopeGrantRow>(`/api/v1/users/${userId}/scope-grants/`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function revokeScope(
+  userId: string,
+  grantId: string,
+): Promise<void> {
+  await apiMutate<void>(`/api/v1/users/${userId}/scope-grants/${grantId}/`, {
+    method: "DELETE",
+  });
+}
+
+/** Step-up authentication (ADR-05/ADR-03): re-enter the password to unlock a
+ *  fresh window for a dangerous action. */
+export async function stepUpWithPassword(password: string): Promise<void> {
+  await apiMutate<void>("/api/v1/auth/step-up/", {
+    method: "POST",
+    body: { password },
+  });
+}
+
+export async function lockPermission(
+  roleSlug: string,
+  code: string,
+): Promise<void> {
+  await apiMutate<void>(`/api/v1/roles/${roleSlug}/permissions/${code}/lock/`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+export async function unlockPermission(
+  roleSlug: string,
+  code: string,
+): Promise<void> {
+  await apiMutate<void>(
+    `/api/v1/roles/${roleSlug}/permissions/${code}/unlock/`,
+    {
+      method: "POST",
+      body: {},
+    },
+  );
+}

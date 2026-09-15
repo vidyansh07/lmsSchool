@@ -65,7 +65,13 @@ def visible_enrollments_for_performance(user) -> QuerySet:
     base = Enrollment.objects.with_related()
 
     if can_view_any_performance(user):
-        return scope_to_branch(base, user, path="batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="batch__branch",
+            capability=Capability.PERFORMANCE_VIEW_ANY,
+            batch_path="batch",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

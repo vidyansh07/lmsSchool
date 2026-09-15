@@ -101,7 +101,13 @@ def manageable_sessions(user) -> QuerySet[ClassSession]:
     """
     base = ClassSession.objects.with_related()
     if has_capability(user, Capability.BATCH_MANAGE_SCHEDULE):
-        return scope_to_branch(base, user, path="batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="batch__branch",
+            capability=Capability.SESSION_MANAGE_ANY,
+            batch_path="batch",
+        )
     trainer = batch_access.trainer_profile(user)
     if trainer is None:
         return base.none()

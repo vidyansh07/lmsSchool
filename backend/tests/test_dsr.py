@@ -443,6 +443,11 @@ def test_the_list_endpoint_costs_a_bounded_number_of_queries(
         start_dsr(session=session, actor=admin_user)
 
     api_client_no_csrf.force_login(manager_user)
+    # The first request after a cache clear also resolves the caller's
+    # configured scope for `dsr.view_any` (ADR-02) and caches it for ten
+    # minutes; that cost is the scope resolver's, not this endpoint's, so it
+    # is paid once before the measurement.
+    api_client_no_csrf.get(_list_url())
     with django_assert_max_num_queries(12):
         response = api_client_no_csrf.get(_list_url())
     assert response.json()["count"] == 5

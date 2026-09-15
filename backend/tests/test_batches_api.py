@@ -323,6 +323,11 @@ def test_seat_counts_come_from_one_annotated_query(
 ):
     """A page of batches must not cost one count query per row."""
     api_client_no_csrf.force_login(admin_user)
+    # The first request after a cache clear also resolves the caller's
+    # configured scope for `batch.view_any` (ADR-02) and caches it for ten
+    # minutes; that cost is the scope resolver's, not this endpoint's, so it
+    # is paid once before the measurement.
+    api_client_no_csrf.get(BATCHES_URL)
     with django_assert_max_num_queries(10):
         body = api_client_no_csrf.get(BATCHES_URL).json()
     row = next(item for item in body["results"] if item["code"] == batch.code)

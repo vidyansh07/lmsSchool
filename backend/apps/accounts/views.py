@@ -35,6 +35,7 @@ from .serializers import (
     PasswordResetRequestSerializer,
     ProfileImageUploadSerializer,
     SelfUserUpdateSerializer,
+    StepUpSerializer,
 )
 
 AUTH_TAG = ["auth"]
@@ -144,6 +145,29 @@ class RevokeSessionsView(APIView):
         logout(request)
         revoked = services.revoke_sessions(user=user, actor=user, reason="user_requested")
         return Response({"detail": f"Signed out of {revoked} session(s)."})
+
+
+class StepUpView(APIView):
+    """Prove it is still you (ADR-05). Phase 2: the password; Phase 5 adds a
+    second factor. Sets a timestamp in the session that dangerous endpoints
+    check for freshness."""
+
+    permission_classes = (IsActiveUser,)
+    throttle_classes = (AuthEndpointThrottle,)
+
+    @extend_schema(
+        summary="Step-up authentication",
+        request=StepUpSerializer,
+        responses={204: None, 403: OpenApiResponse(description="Wrong password")},
+        tags=AUTH_TAG,
+    )
+    def post(self, request):
+        serializer = StepUpSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        from .stepup import step_up_with_password
+
+        step_up_with_password(request, serializer.validated_data["password"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class MeView(APIView):

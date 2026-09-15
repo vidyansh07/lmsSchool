@@ -8,7 +8,7 @@ may build, assign or widen a role beyond what they themselves hold.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 
@@ -21,6 +21,9 @@ from apps.common.exceptions import ApplicationError, AuthorityError, ConflictErr
 from .models import Permission, PermissionScope, Role, RolePermission, RoleStatus
 from .resolver import forget_roles
 from .sync import SUPERADMIN_ONLY
+
+if TYPE_CHECKING:
+    from .models import ScopeGrant
 
 #: The widest reach each kind may be configured to. A grant may narrow below
 #: the floor; it may never widen above it (ADR-02).
@@ -253,6 +256,72 @@ def check_custom_role_assignment(
         beyond = sorted(role.codes - effective_capabilities(actor))
         if beyond:
             raise AuthorityError("You cannot assign a role that holds more than your own.")
+
+
+@transaction.atomic
+def set_grant_lock(*, actor: User, role: Role, code: str, locked: bool) -> RolePermission:
+    """Freeze or unfreeze one grant on a role (ADR-03). Superadmin only —
+    checked here as well as by the view's capability, because a future
+    caller of this service must not be able to skip it."""
+    if not _is_superadmin(actor):
+        raise AuthorityError("Only a superadmin may lock or unlock a permission.")
+    try:
+        grant = role.grants.select_related("permission").get(permission__code=code)
+    except RolePermission.DoesNotExist:
+        raise ApplicationError(
+            {"code": [f"{role.name} does not hold {code}; nothing to lock."]}
+        ) from None
+    if grant.is_locked == locked:
+        return grant
+    grant.is_locked = locked
+    grant.save(update_fields=["is_locked"])
+    _forget()
+    record(
+        action=AuditAction.PERMISSION_LOCKED if locked else AuditAction.PERMISSION_UNLOCKED,
+        actor=actor,
+        resource_type="role_permission",
+        resource_id=grant.pk,
+        context={"role": role.slug, "code": code},
+    )
+    return grant
+
+
+@transaction.atomic
+def grant_scope(*, actor: User, user: User, batch=None, course=None) -> ScopeGrant:
+    from .models import ScopeGrant
+
+    if (batch is None) == (course is None):
+        raise ApplicationError({"scope_grant": ["Name exactly one of batch or course."]})
+    grant, created = ScopeGrant.objects.get_or_create(
+        user=user, batch=batch, course=course, defaults={"granted_by": actor}
+    )
+    if created:
+        record(
+            action=AuditAction.SCOPE_GRANTED,
+            actor=actor,
+            resource_type="user",
+            resource_id=user.pk,
+            context={
+                "batch": str(batch.id) if batch else None,
+                "course": str(course.id) if course else None,
+            },
+        )
+    return grant
+
+
+@transaction.atomic
+def revoke_scope(*, actor: User, grant: ScopeGrant) -> None:
+    record(
+        action=AuditAction.SCOPE_REVOKED,
+        actor=actor,
+        resource_type="user",
+        resource_id=grant.user_id,
+        context={
+            "batch": str(grant.batch_id) if grant.batch_id else None,
+            "course": str(grant.course_id) if grant.course_id else None,
+        },
+    )
+    grant.delete()
 
 
 def matrix() -> dict[str, Any]:

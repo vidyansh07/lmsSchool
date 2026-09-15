@@ -15,6 +15,7 @@ from .views import (
     PasswordResetRequestView,
     ProfileImageView,
     RevokeSessionsView,
+    StepUpView,
 )
 
 app_name = "auth"
@@ -24,6 +25,7 @@ urlpatterns = [
     path("login/", LoginView.as_view(), name="login"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("logout-all/", RevokeSessionsView.as_view(), name="logout-all"),
+    path("step-up/", StepUpView.as_view(), name="step-up"),
     path("me/", MeView.as_view(), name="me"),
     path("me/email/", EmailSettingsView.as_view(), name="email-settings"),
     path("me/profile-image/", ProfileImageView.as_view(), name="profile-image"),

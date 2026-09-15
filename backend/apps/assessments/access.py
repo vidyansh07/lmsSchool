@@ -48,7 +48,13 @@ def visible_assessments(user) -> QuerySet[Assessment]:
     if has_capability(user, Capability.ASSESSMENT_VIEW_ANY):
         # `Assessment.batch` is not nullable, so there is no course-wide row to
         # preserve here and a plain branch filter is the whole rule.
-        return scope_to_branch(base, user, path="batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="batch__branch",
+            capability=Capability.ASSESSMENT_VIEW_ANY,
+            batch_path="batch",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -66,7 +72,13 @@ def manageable_assessments(user) -> QuerySet[Assessment]:
     base = Assessment.objects.with_related()
 
     if has_capability(user, Capability.ASSESSMENT_MANAGE_ANY):
-        return scope_to_branch(base, user, path="batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="batch__branch",
+            capability=Capability.ASSESSMENT_MANAGE_ANY,
+            batch_path="batch",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -110,7 +122,13 @@ def visible_results(user) -> QuerySet[AssessmentResult]:
     base = AssessmentResult.objects.with_related()
 
     if has_capability(user, Capability.ASSESSMENT_VIEW_ANY):
-        return scope_to_branch(base, user, path="enrollment__batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="enrollment__batch__branch",
+            capability=Capability.ASSESSMENT_VIEW_ANY,
+            batch_path="enrollment__batch",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

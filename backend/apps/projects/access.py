@@ -46,7 +46,14 @@ def visible_projects(user) -> QuerySet[Project]:
     base = Project.objects.with_related()
 
     if has_capability(user, Capability.PROJECT_VIEW_ANY):
-        return scope_to_branch_or_shared(base, user, path="batch__branch")
+        return scope_to_branch_or_shared(
+            base,
+            user,
+            path="batch__branch",
+            capability=Capability.PROJECT_VIEW_ANY,
+            batch_path="batch",
+            course_path="course",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -70,7 +77,14 @@ def manageable_projects(user) -> QuerySet[Project]:
     base = Project.objects.with_related()
 
     if has_capability(user, Capability.PROJECT_MANAGE_ANY):
-        return scope_to_branch_or_shared(base, user, path="batch__branch")
+        return scope_to_branch_or_shared(
+            base,
+            user,
+            path="batch__branch",
+            capability=Capability.PROJECT_MANAGE_ANY,
+            batch_path="batch",
+            course_path="course",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -115,7 +129,13 @@ def visible_student_projects(user) -> QuerySet[StudentProject]:
     base = StudentProject.objects.with_related()
 
     if has_capability(user, Capability.PROJECT_VIEW_ANY):
-        return scope_to_branch(base, user, path="enrollment__batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="enrollment__batch__branch",
+            capability=Capability.PROJECT_VIEW_ANY,
+            batch_path="enrollment__batch",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

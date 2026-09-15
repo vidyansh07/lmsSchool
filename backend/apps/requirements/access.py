@@ -29,7 +29,14 @@ def visible_requirements(user) -> QuerySet[TrainerRequirement]:
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
     if has_capability(user, Capability.REQUIREMENT_MANAGE):
-        return scope_to_branch(base, user, path="branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="branch",
+            capability=Capability.REQUIREMENT_MANAGE,
+            batch_path="batch",
+            own=lambda rows, who: rows.filter(raised_by=who),
+        )
     if batch_access.trainer_profile(user) is None:
         return base.none()
     branch_id = actor_branch_id(user)

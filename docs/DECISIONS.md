@@ -1150,3 +1150,15 @@ narrowed manager cannot hand out the full manager kind. `sync_permissions`
 keeps the rows equal to the enum on every deploy; `DYNAMIC_ROLES_ENABLED`
 is the rollback.
 
+### D-134 · Scope narrows on the queryset side, and step-up is a session timestamp (15 September 2026)
+ERP Phase 2, ADR-02/ADR-03/ADR-05. A configured scope (`assigned`, `own`)
+is applied *inside* `scope_to_branch`/`scope_to_branch_or_shared` before the
+branch wall, and only when it is narrower than the caller's kind already
+allows — the same "queryset first" rule (architecture rule 2) that keeps a
+guessed id 404ing rather than 403ing now also keeps a configured scope from
+ever widening what a role's kind permits. Step-up is a plain timestamp in
+the session (`stepup.py`), re-proved with the password today and a second
+factor once Phase 5 lands; every endpoint that checks it reads the same
+ten-minute freshness window, so the interface has one dialog to open
+regardless of which action asked for it.
+

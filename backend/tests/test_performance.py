@@ -375,6 +375,12 @@ def test_the_batch_report_does_not_query_per_batch(
         assert response.status_code == 200
         return len(captured.captured_queries)
 
+    # The first request after a cache clear also resolves the caller's
+    # configured scope for `batch.view_any` (ADR-02) and caches it for ten
+    # minutes; warm it once so both measurements below start from the same
+    # cache state, or the comparison would be comparing a cold call to a
+    # warm one rather than "does it grow with the data".
+    measure()
     small = measure()
     Batch.objects.bulk_create(
         Batch(

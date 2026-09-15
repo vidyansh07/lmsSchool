@@ -45,7 +45,13 @@ def visible_exams(user) -> QuerySet[Exam]:
     if has_capability(user, Capability.EXAM_VIEW_ANY):
         # `Exam.batch` is not nullable — an examination is always somebody's
         # class — so a plain branch filter drops nothing.
-        return scope_to_branch(base, user, path="batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="batch__branch",
+            capability=Capability.EXAM_VIEW_ANY,
+            batch_path="batch",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -63,7 +69,13 @@ def manageable_exams(user) -> QuerySet[Exam]:
     base = Exam.objects.with_related()
 
     if has_capability(user, Capability.EXAM_MANAGE_ANY):
-        return scope_to_branch(base, user, path="batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="batch__branch",
+            capability=Capability.EXAM_MANAGE_ANY,
+            batch_path="batch",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
@@ -102,7 +114,13 @@ def visible_attempts(user) -> QuerySet[ExamAttempt]:
     base = ExamAttempt.objects.with_related()
 
     if has_capability(user, Capability.EXAM_VIEW_ANY):
-        return scope_to_branch(base, user, path="enrollment__batch__branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="enrollment__batch__branch",
+            capability=Capability.EXAM_VIEW_ANY,
+            batch_path="enrollment__batch",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 

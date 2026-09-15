@@ -23,7 +23,13 @@ import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { ApiError, fieldErrors } from "@/lib/api";
 import { Capability } from "@/lib/capabilities";
 import { ROLE_LABEL, ROLE_OPTIONS } from "@/lib/labels";
-import { listRoles } from "@/lib/roles";
+import {
+  listRoles,
+  listScopeGrants,
+  grantScope,
+  revokeScope,
+  type ScopeGrantRow,
+} from "@/lib/roles";
 import {
   getUser,
   getUserAudit,
@@ -399,6 +405,10 @@ function UserAdministration({ userId }: { userId: string }) {
         <CentreCard user={user} busy={busy} run={run} errors={errors} />
       ) : null}
 
+      {mayAdminister && user.role !== "superadmin" ? (
+        <ScopeGrantsCard userId={user.id} />
+      ) : null}
+
       {mayAdminister ? (
         <Card>
           <CardHeader>
@@ -575,6 +585,113 @@ function CentreCard({
           </div>
         </CardContent>
       ) : null}
+    </Card>
+  );
+}
+
+/**
+ * Batches or courses this person was granted directly (ADR-02) — needed only
+ * when their role's scope on a capability has been narrowed to `assigned`,
+ * but shown here unconditionally since granting ahead of time is harmless
+ * and the alternative (guessing whether it currently matters) is worse.
+ */
+function ScopeGrantsCard({ userId }: { userId: string }) {
+  const [grants, setGrants] = useState<ScopeGrantRow[] | null>(null);
+  const [batchId, setBatchId] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(() => {
+    listScopeGrants(userId)
+      .then(setGrants)
+      .catch(() => setGrants([]));
+  }, [userId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function addGrant(event: React.FormEvent) {
+    event.preventDefault();
+    if (!batchId.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await grantScope(userId, { batch: batchId.trim() });
+      setBatchId("");
+      load();
+    } catch (cause) {
+      setError(fieldErrors(cause).batch ?? "That batch could not be granted.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(grantId: string) {
+    setBusy(true);
+    try {
+      await revokeScope(userId, grantId);
+      load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (grants === null) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Scope grants</CardTitle>
+        <CardDescription>
+          Batches or courses this account may reach directly, on top of what
+          their role already sees. Only matters when a permission on their role
+          is narrowed to &ldquo;assigned&rdquo;.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {error ? <Alert variant="error">{error}</Alert> : null}
+        {grants.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No direct grants.</p>
+        ) : (
+          <ul className="space-y-2">
+            {grants.map((grant) => (
+              <li
+                key={grant.id}
+                className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+              >
+                <span>
+                  {grant.batch_code
+                    ? `${grant.batch_code} · ${grant.batch_name}`
+                    : `${grant.course_code} · ${grant.course_title}`}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void remove(grant.id)}
+                >
+                  Revoke
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form onSubmit={addGrant} className="flex flex-wrap items-end gap-2">
+          <Field label="Batch ID" htmlFor="scope-grant-batch">
+            <Input
+              id="scope-grant-batch"
+              placeholder="Batch UUID"
+              value={batchId}
+              onChange={(event) => setBatchId(event.target.value)}
+            />
+          </Field>
+          <Button type="submit" disabled={busy || !batchId.trim()}>
+            Grant batch
+          </Button>
+        </form>
+      </CardContent>
     </Card>
   );
 }

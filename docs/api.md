@@ -447,9 +447,39 @@ holds a different set — never a wider reach than the kind (its scope floor).
 holding more than the caller does. Every representation of a user carries
 `custom_role` and `custom_role_name`.
 
-Scopes on a grant (`all`, `branch`, `assigned`, `own`) are stored now and
-enforced by Phase 2. `DYNAMIC_ROLES_ENABLED=false` makes every check read
-the code matrix alone.
+Scopes on a grant (`all`, `branch`, `assigned`, `own`) are enforced (ERP
+Phase 2, ADR-02): a role's grant may narrow below its kind's floor, never
+widen above it. `apps.organisation.scoping.scope_to_branch` and
+`scope_to_branch_or_shared` accept a `capability=` argument and consult the
+configured scope before falling back to the branch wall — `assigned`
+reaches the batches a trainer teaches plus any `ScopeGrant`; `own` reaches
+only the caller's own rows, per endpoint. `DYNAMIC_ROLES_ENABLED=false`
+makes every check read the code matrix alone, with no scope narrowing.
+
+### Scope grants — `/api/v1/users/<id>/scope-grants/` (ERP Phase 2)
+
+A batch or course an account may reach directly under an `assigned` scope,
+without being its trainer.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `` | `user.update_any`, within the caller's reach |
+| `POST` | `` | `user.update_any`; exactly one of `batch` or `course`; resolved through the caller's own `visible_batches`/`visible_courses`, so another centre's id (for a bounded caller) is a 404 |
+| `DELETE` | `<grant_id>/` | `user.update_any` |
+
+### Step-up authentication — `/api/v1/auth/step-up/` (ERP Phase 2/5)
+
+`POST` with `{password}` re-proves identity and marks the session fresh
+for ten minutes (`ADR-05`). Endpoints that need it (locking a permission
+today; purge, MFA disable and critical policy changes in later phases)
+answer `403 {"code": "step_up_required"}` when the session's step-up has
+expired or never happened; the frontend opens a dialog and retries once.
+
+### Permission locking — `/api/v1/roles/<slug>/permissions/<code>/lock|unlock/` (ERP Phase 2)
+
+`POST`, superadmin only (`permission.lock`, seeded locked to that role
+alone), and only with a fresh step-up. Freezes or unfreezes one grant so
+an ordinary administrator cannot remove it from the Role Builder.
 
 ### Trainer requirements — `/api/v1/requirements/`
 

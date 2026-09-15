@@ -10,11 +10,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.roles import Capability, has_capability
+from apps.accounts.stepup import StepUpRequired, is_fresh
 from apps.common.exceptions import AuthorityError
 from apps.common.permissions import HasCapability
 
 from . import services
-from .models import Permission, Role
+from .models import Permission, Role, ScopeGrant
 from .serializers import (
     PermissionSerializer,
     RoleDeleteSerializer,
@@ -23,6 +24,8 @@ from .serializers import (
     RoleSummarySerializer,
     RoleUpdateSerializer,
     RoleWriteSerializer,
+    ScopeGrantSerializer,
+    ScopeGrantWriteSerializer,
 )
 
 TAG = ["Roles"]
@@ -116,6 +119,108 @@ class RoleDetailView(APIView):
         services.delete_role(
             actor=request.user, role=role, reason=serializer.validated_data["reason"]
         )
+        return Response(status=http_status.HTTP_204_NO_CONTENT)
+
+
+class LockPermissionView(APIView):
+    """Freeze or unfree a role's grant (ADR-03). Superadmin only, and only
+    with a fresh step-up: locking is one of the acts §72 marks destructive
+    to the *configuration*, not to a record, so it gets the same treatment."""
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.PERMISSION_LOCK
+    serializer_class = RoleSerializer
+
+    def _apply(self, request, slug, code, locked):
+        if not is_fresh(request):
+            raise StepUpRequired()
+        role = get_object_or_404(Role.objects.all(), slug=slug)
+        services.set_grant_lock(actor=request.user, role=role, code=code, locked=locked)
+        return Response(RoleSerializer(_role_for(slug)).data)
+
+    @extend_schema(
+        summary="Lock a role's permission grant",
+        responses={
+            200: RoleSerializer,
+            403: OpenApiResponse(description="Not a superadmin, or step-up required"),
+        },
+        tags=TAG,
+    )
+    def post(self, request, slug, code):
+        return self._apply(request, slug, code, True)
+
+
+class UnlockPermissionView(LockPermissionView):
+    @extend_schema(
+        summary="Unlock a role's permission grant",
+        responses={
+            200: RoleSerializer,
+            403: OpenApiResponse(description="Not a superadmin, or step-up required"),
+        },
+        tags=TAG,
+    )
+    def post(self, request, slug, code):
+        return self._apply(request, slug, code, False)
+
+
+class ScopeGrantListView(APIView):
+    """A user's batch/course grants under the `assigned` scope (ADR-02)."""
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.USER_UPDATE_ANY
+
+    def _user_for(self, user_id):
+        from apps.accounts.access import visible_accounts
+
+        return get_object_or_404(visible_accounts(self.request.user), pk=user_id)
+
+    @extend_schema(
+        summary="A user's scope grants",
+        responses={200: ScopeGrantSerializer(many=True)},
+        tags=TAG,
+    )
+    def get(self, request, user_id):
+        target = self._user_for(user_id)
+        rows = ScopeGrant.objects.filter(user=target).select_related("batch", "course")
+        return Response(ScopeGrantSerializer(rows, many=True).data)
+
+    @extend_schema(
+        summary="Grant a batch or course scope",
+        request=ScopeGrantWriteSerializer,
+        responses={201: ScopeGrantSerializer},
+        tags=TAG,
+    )
+    def post(self, request, user_id):
+        target = self._user_for(user_id)
+        serializer = ScopeGrantWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        batch_id = data.pop("batch", None)
+        course_id = data.pop("course", None)
+        batch = course = None
+        if batch_id:
+            from apps.batches.access import visible_batches
+
+            batch = get_object_or_404(visible_batches(request.user), pk=batch_id)
+        if course_id:
+            from apps.courses.access import visible_courses
+
+            course = get_object_or_404(visible_courses(request.user), pk=course_id)
+        grant = services.grant_scope(actor=request.user, user=target, batch=batch, course=course)
+        return Response(ScopeGrantSerializer(grant).data, status=http_status.HTTP_201_CREATED)
+
+
+class ScopeGrantDetailView(APIView):
+    permission_classes = (HasCapability,)
+    required_capability = Capability.USER_UPDATE_ANY
+
+    @extend_schema(summary="Revoke a scope grant", responses={204: None}, tags=TAG)
+    def delete(self, request, user_id, grant_id):
+        from apps.accounts.access import visible_accounts
+
+        target = get_object_or_404(visible_accounts(request.user), pk=user_id)
+        grant = get_object_or_404(ScopeGrant.objects.filter(user=target), pk=grant_id)
+        services.revoke_scope(actor=request.user, grant=grant)
         return Response(status=http_status.HTTP_204_NO_CONTENT)
 
 

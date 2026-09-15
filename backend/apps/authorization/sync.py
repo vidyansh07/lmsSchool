@@ -80,11 +80,12 @@ LOCKABLE = frozenset(
         "data.import",
         "role.manage",
         "permission.assign",
+        "permission.lock",
     }
 )
 
 #: Granted to superadmin only and locked there; refused to any other kind.
-SUPERADMIN_ONLY = frozenset({"record.purge", "platform.configure"})
+SUPERADMIN_ONLY = frozenset({"record.purge", "platform.configure", "permission.lock"})
 
 SYSTEM_ROLE_NAMES = {
     UserRole.SUPERADMIN: "Superadmin",

@@ -38,7 +38,13 @@ def visible_trainers(user) -> QuerySet[TrainerProfile]:
     base = _base()
 
     if has_capability(user, Capability.TRAINER_VIEW_ANY):
-        return scope_to_branch(base, user, path="branch")
+        return scope_to_branch(
+            base,
+            user,
+            path="branch",
+            capability=Capability.TRAINER_VIEW_ANY,
+            batch_path="batches",
+        )
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return base.none()
 
