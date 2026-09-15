@@ -4,6 +4,7 @@ from django.urls import path
 
 from .views import (
     AttendanceCorrectionView,
+    AttendanceHistoryView,
     EnrollmentAttendanceView,
     MyAttendanceView,
     SessionAttendanceListView,
@@ -19,6 +20,7 @@ session_attendance_patterns = [
 attendance_patterns = [
     path("mine/", MyAttendanceView.as_view(), name="mine"),
     path("<uuid:record_id>/correct/", AttendanceCorrectionView.as_view(), name="correct"),
+    path("<uuid:record_id>/history/", AttendanceHistoryView.as_view(), name="history"),
 ]
 
 enrollment_attendance_patterns = [

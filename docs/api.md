@@ -598,6 +598,23 @@ session on either basis.
 alone), and only with a fresh step-up. Freezes or unfreezes one grant so
 an ordinary administrator cannot remove it from the Role Builder.
 
+### Recycle bin — `/api/v1/recovery/` (ERP Phase 1; step-up added Phase 7)
+
+`GET ` (`record.view_deleted`) lists deleted records by kind;
+`GET <label>/` the deleted rows of one kind; `POST <label>/<id>/restore/`
+(`record.restore`) brings one back, refused (`403`) outside the record's
+own centre for a bounded caller. `POST <label>/<id>/purge/` (`record.purge`,
+superadmin only) destroys one permanently and now **also requires a fresh
+step-up** — `403 step_up_required` before the record is even looked up,
+same pattern as permission locking and MFA disable above. `label` is
+matched against the closed set of models that actually inherit
+`SoftDeleteModel` (never `get_model()` on caller-supplied text); anything
+else is a bare `404`. `Announcement` joined that set in Phase 7 — its
+`archive`/`AnnouncementStatus.ARCHIVED` lifecycle transition stays a
+separate concept from this genuine removal, with its own
+`POST /announcements/<id>/delete/` (`reason` required) alongside
+`.../publish/` and `.../archive/`.
+
 ### Policies — `/api/v1/policies/` (ERP Phase 3, ADR-04)
 
 A generic table (`apps.policies`) for the settings `AcademicPolicy` and
@@ -651,6 +668,24 @@ appear in the activity review under Communication.
 Announcements gained the audience `trainers` alongside it: a
 `announcement.manage_any` holder addresses the teaching staff of their own
 centre without naming each one; a trainer may not address the trainers.
+
+### Attendance history — `GET /api/v1/attendance/<record_id>/history/` (ERP Phase 7 / Phase 22 hardening)
+
+Every correction ever made to one attendance mark, newest first:
+`{id, from_status, to_status, corrected_by_name, reason, created_at}`
+(`corrected_by_name` is `null` once the corrector's account is gone).
+`AttendanceRecord.previous_status`/`corrected_by`/`corrected_at` still hold
+only the single most recent prior value; this endpoint reads the append-only
+`AttendanceCorrection` table that supplements it, written by both a
+re-posted register (`POST /sessions/<id>/register/`) and a one-off
+correction (`POST /attendance/<record_id>/correct/`) alongside those
+existing fields. Gated like the record itself already is, combining the two
+existing rules rather than inventing one: the owning student
+(`EnrollmentAttendanceView`'s "the owner, their trainer, or staff"), or the
+staff-view rule `GET /sessions/<id>/attendance/` uses (`attendance.view_any`,
+or the trainer who takes that class). Another centre's record id is a `404`,
+resolved through the same `visible_sessions()` every other attendance
+endpoint uses.
 
 ### Exports — every list, in Excel, PDF or CSV
 

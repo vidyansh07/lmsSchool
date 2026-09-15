@@ -20,6 +20,7 @@ from apps.common.deletion import soft_delete
 
 BIN = "/api/v1/recovery/"
 BATCH_LABEL = "batches.batch"
+SUPERADMIN_PASSWORD = "Str0ng-Passphrase!42"
 
 
 @pytest.fixture
@@ -28,7 +29,7 @@ def superadmin(db):
 
     return User.objects.create_user(
         email="super@recovery.grras.invalid",
-        password="Str0ng-Passphrase!42",
+        password=SUPERADMIN_PASSWORD,
         first_name="Sena",
         last_name="Superadmin",
         role=UserRole.SUPERADMIN,
@@ -40,6 +41,11 @@ def deleted_batch(admin_user, batch):
     soft_delete(instance=batch, actor=admin_user, reason="Cohort never ran")
     batch.refresh_from_db()
     return batch
+
+
+def _step_up(client, password=SUPERADMIN_PASSWORD):
+    response = client.post("/api/v1/auth/step-up/", {"password": password}, format="json")
+    assert response.status_code == 204, response.json()
 
 
 # ---------------------------------------------------------------------------
@@ -212,10 +218,32 @@ def test_an_administrator_cannot_destroy(api_client_no_csrf, admin_user, deleted
 
 
 @pytest.mark.django_db
-def test_a_superadmin_can(api_client_no_csrf, superadmin, deleted_batch):
+def test_a_superadmin_without_a_fresh_step_up_is_refused(
+    api_client_no_csrf, superadmin, deleted_batch
+):
+    """The capability alone is not enough — SECURITY_DECISIONS.md's step-up
+    requirement, same shape as locking a permission grant."""
     from apps.batches.models import Batch
 
     api_client_no_csrf.force_login(superadmin)
+
+    response = api_client_no_csrf.post(
+        f"{BIN}{BATCH_LABEL}/{deleted_batch.pk}/purge/",
+        {"reason": "Created during a demo"},
+        format="json",
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "step_up_required"
+    assert Batch.all_objects.filter(pk=deleted_batch.pk).exists()
+
+
+@pytest.mark.django_db
+def test_a_superadmin_can_after_stepping_up(api_client_no_csrf, superadmin, deleted_batch):
+    from apps.batches.models import Batch
+
+    api_client_no_csrf.force_login(superadmin)
+    _step_up(api_client_no_csrf)
 
     response = api_client_no_csrf.post(
         f"{BIN}{BATCH_LABEL}/{deleted_batch.pk}/purge/",
@@ -235,6 +263,7 @@ def test_destroying_asks_for_a_reason_and_refuses_a_blank_one(
     from apps.batches.models import Batch
 
     api_client_no_csrf.force_login(superadmin)
+    _step_up(api_client_no_csrf)
 
     assert (
         api_client_no_csrf.post(
@@ -255,6 +284,7 @@ def test_destroying_asks_for_a_reason_and_refuses_a_blank_one(
 def test_a_live_record_cannot_be_destroyed(api_client_no_csrf, superadmin, batch):
     """Destruction is a second decision, not a stronger first one."""
     api_client_no_csrf.force_login(superadmin)
+    _step_up(api_client_no_csrf)
 
     response = api_client_no_csrf.post(
         f"{BIN}{BATCH_LABEL}/{batch.pk}/purge/", {"reason": "Skip the bin"}, format="json"
@@ -270,6 +300,7 @@ def test_the_audit_entry_outlives_the_record(api_client_no_csrf, superadmin, del
 
     code = deleted_batch.code
     api_client_no_csrf.force_login(superadmin)
+    _step_up(api_client_no_csrf)
     api_client_no_csrf.post(
         f"{BIN}{BATCH_LABEL}/{deleted_batch.pk}/purge/",
         {"reason": "Retention policy"},

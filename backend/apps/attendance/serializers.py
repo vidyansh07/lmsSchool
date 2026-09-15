@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from apps.common.serializers import SafeCharField, StrictSerializer
 
-from .models import AttendanceRecord, AttendanceStatus
+from .models import AttendanceCorrection, AttendanceRecord, AttendanceStatus
 
 
 class RegisterEntrySerializer(serializers.Serializer):
@@ -106,6 +106,27 @@ class AdminAttendanceRecordSerializer(AttendanceRecordSerializer):
 
     def get_marked_by_email(self, obj: AttendanceRecord) -> str:
         return obj.marked_by.email if obj.marked_by else ""
+
+
+class AttendanceCorrectionSerializer(serializers.ModelSerializer):
+    """One row of a record's history (Phase 7 / Phase 22 hardening)."""
+
+    corrected_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AttendanceCorrection
+        fields = (
+            "id",
+            "from_status",
+            "to_status",
+            "corrected_by_name",
+            "reason",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    def get_corrected_by_name(self, obj: AttendanceCorrection) -> str | None:
+        return obj.corrected_by.get_full_name() if obj.corrected_by else None
 
 
 class AttendanceSummarySerializer(serializers.Serializer):

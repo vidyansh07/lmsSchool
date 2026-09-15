@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { AttendanceHistory } from '@/components/academics/attendance-history';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
@@ -133,11 +134,17 @@ function MyAttendancePage_() {
                               <Badge variant={ATTENDANCE_STATUS_VARIANT[record.status]}>
                                 {ATTENDANCE_STATUS_LABEL[record.status]}
                               </Badge>
+                              {record.was_corrected ? (
+                                <Badge variant="warning" className="ml-2">
+                                  Corrected
+                                </Badge>
+                              ) : null}
                               {record.note ? (
                                 <span className="ml-2 text-xs text-muted-foreground">
                                   {record.note}
                                 </span>
                               ) : null}
+                              {record.was_corrected ? <AttendanceHistory recordId={record.id} /> : null}
                             </Td>
                           </tr>
                         ))}

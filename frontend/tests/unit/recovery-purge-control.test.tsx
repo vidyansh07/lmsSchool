@@ -13,6 +13,12 @@ vi.mock('@/lib/recovery', async () => {
   return { ...actual, purgeRecord };
 });
 
+const stepUpWithPassword = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/roles', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/roles')>('@/lib/roles');
+  return { ...actual, stepUpWithPassword };
+});
+
 const mockAuth = vi.hoisted(() => ({ value: { can: () => true } as { can: (capability: string) => boolean } }));
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => mockAuth.value }));
 
@@ -30,6 +36,7 @@ function record(overrides: Partial<DeletedRecord> = {}): DeletedRecord {
 
 beforeEach(() => {
   purgeRecord.mockReset();
+  stepUpWithPassword.mockReset();
   mockAuth.value = { can: () => true };
 });
 
@@ -157,5 +164,67 @@ describe('PurgeControl confirmation', () => {
     // uses, staying mounted for the exit animation's duration — see
     // `tests/unit/ui-dialog.test.tsx`'s identical wait for the same reason.
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  });
+});
+
+describe('PurgeControl step-up', () => {
+  it('opens the step-up dialog on a 403 step_up_required and retries the same purge once confirmed', async () => {
+    purgeRecord
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Confirm it is you before doing this.'), {
+          status: 403,
+          code: 'step_up_required',
+          details: null,
+        }),
+      )
+      .mockResolvedValueOnce(undefined);
+    const onPurged = vi.fn();
+    const user = userEvent.setup();
+    render(<PurgeControl record={record({ label: 'batches.batch', id: 'batch-9' })} onPurged={onPurged} />);
+
+    await user.click(screen.getByRole('button', { name: /purge/i }));
+    await user.type(screen.getByLabelText(/why destroy this permanently/i), 'No longer needed.');
+    await user.click(screen.getByRole('button', { name: /destroy permanently/i }));
+    const dialog = screen.getByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: /destroy permanently/i }));
+
+    expect(await screen.findByText('Confirm it is you')).toBeInTheDocument();
+    // `Confirm` plays the same exit animation noted above, staying mounted
+    // briefly — the step-up dialog opening alongside it is what matters here.
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+
+    const stepUpDialog = screen.getByRole('dialog');
+    await user.type(within(stepUpDialog).getByLabelText('Password'), 'secret');
+    await user.click(within(stepUpDialog).getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => expect(stepUpWithPassword).toHaveBeenCalledWith('secret'));
+    await waitFor(() => expect(purgeRecord).toHaveBeenCalledTimes(2));
+    expect(purgeRecord).toHaveBeenLastCalledWith('batches.batch', 'batch-9', 'No longer needed.');
+    await waitFor(() => expect(onPurged).toHaveBeenCalledOnce());
+  });
+
+  it('cancelling the step-up dialog leaves the reason in place without purging', async () => {
+    purgeRecord.mockRejectedValueOnce(
+      Object.assign(new Error('Confirm it is you before doing this.'), {
+        status: 403,
+        code: 'step_up_required',
+        details: null,
+      }),
+    );
+    const user = userEvent.setup();
+    render(<PurgeControl record={record()} onPurged={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: /purge/i }));
+    await user.type(screen.getByLabelText(/why destroy this permanently/i), 'No longer needed.');
+    await user.click(screen.getByRole('button', { name: /destroy permanently/i }));
+    const dialog = screen.getByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: /destroy permanently/i }));
+
+    expect(await screen.findByText('Confirm it is you')).toBeInTheDocument();
+    const stepUpDialog = screen.getByRole('dialog');
+    await user.click(within(stepUpDialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(purgeRecord).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText(/why destroy this permanently/i)).toHaveValue('No longer needed.');
   });
 });

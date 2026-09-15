@@ -3,6 +3,7 @@
 import { apiFetch, apiMutate, queryString } from './api';
 import type {
   AcademicPolicy,
+  AttendanceCorrection,
   AttendanceStatus,
   ClassSession,
   EffectivePolicy,
@@ -112,6 +113,16 @@ export async function markAttendance(
 
 export async function listMyAttendance(): Promise<MyAttendance[]> {
   return apiFetch<MyAttendance[]>('/api/v1/attendance/mine/');
+}
+
+/**
+ * The correction trail for one attendance record, newest first — the history
+ * `AttendanceRecord.was_corrected` only flags. Gated the same way the record
+ * itself is (self, or a trainer/admin who can already see it); another
+ * centre's record 404s exactly as fetching the record would.
+ */
+export async function getAttendanceHistory(recordId: string): Promise<AttendanceCorrection[]> {
+  return apiFetch<AttendanceCorrection[]>(`/api/v1/attendance/${recordId}/history/`);
 }
 
 // --- Academic rules --------------------------------------------------------

@@ -127,6 +127,48 @@ class AttendanceRecord(BaseModel):
         return self.status in COUNTS_AS_PRESENT
 
 
+class AttendanceCorrection(BaseModel):
+    """One change to one mark, kept forever (Phase 22 hardening / Phase 7 row).
+
+    `AttendanceRecord.previous_status`/`corrected_by`/`corrected_at` hold the
+    single most recent prior value — enough for "was this corrected, and by
+    whom, last?". This table supplements that rather than replacing it: a
+    record corrected twice keeps only one prior value on the row itself, but
+    every correction here, so "what did this go through before landing on
+    excused?" has an answer. Append-only and never soft-deletable — a history
+    log with a delete button is not a history log.
+    """
+
+    record = models.ForeignKey(
+        "attendance.AttendanceRecord", on_delete=models.CASCADE, related_name="corrections"
+    )
+    from_status = models.CharField(
+        _("from status"), max_length=20, choices=AttendanceStatus.choices
+    )
+    to_status = models.CharField(_("to status"), max_length=20, choices=AttendanceStatus.choices)
+    corrected_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="attendance_corrections_made",
+    )
+    reason = models.CharField(
+        _("reason"), max_length=255, blank=True, validators=[validate_no_control_characters]
+    )
+
+    class Meta:
+        verbose_name = _("attendance correction")
+        verbose_name_plural = _("attendance corrections")
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["record", "-created_at"], name="attend_correction_record_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.record_id}: {self.from_status} -> {self.to_status}"
+
+
 def _summary_from_counts(counts: dict[str, int]) -> dict[str, object]:
     """Turn a status histogram into the summary. The arithmetic lives here once.
 

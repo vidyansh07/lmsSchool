@@ -29,6 +29,7 @@ from . import services
 from .models import AttendanceRecord
 from .serializers import (
     AdminAttendanceRecordSerializer,
+    AttendanceCorrectionSerializer,
     AttendanceRecordSerializer,
     AttendanceSummarySerializer,
     CorrectAttendanceSerializer,
@@ -182,6 +183,44 @@ class AttendanceCorrectionView(APIView):
             reason=serializer.validated_data["reason"],
         )
         return Response(AdminAttendanceRecordSerializer(updated).data)
+
+
+class AttendanceHistoryView(APIView):
+    """Every correction made to one mark, newest first.
+
+    Gated exactly like the record itself already is: the owning student
+    (:class:`EnrollmentAttendanceView`'s "the owner, their trainer, or
+    staff"), or the staff-view rule :class:`SessionAttendanceListView` uses
+    (`ATTENDANCE_VIEW_ANY`, or the trainer who takes that class). Both are
+    existing checks, combined rather than reinvented, since a record is
+    reachable through either path today.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="A record's correction history",
+        responses={200: AttendanceCorrectionSerializer(many=True)},
+        tags=ATTENDANCE_TAG,
+    )
+    def get(self, request, record_id):
+        row = get_object_or_404(
+            AttendanceRecord.objects.with_related().filter(
+                session__in=session_access.visible_sessions(request.user)
+            ),
+            pk=record_id,
+        )
+        student = batch_access.student_profile(request.user)
+        is_owner = student is not None and row.enrollment.student_id == student.pk
+        if not (
+            is_owner
+            or has_capability(request.user, Capability.ATTENDANCE_VIEW_ANY)
+            or session_access.can_take_attendance(request.user, row.session)
+        ):
+            return _forbidden(request, "You do not have permission to see this record.")
+
+        rows = row.corrections.select_related("corrected_by").order_by("-created_at")
+        return Response(AttendanceCorrectionSerializer(rows, many=True).data)
 
 
 class MyAttendanceView(APIView):

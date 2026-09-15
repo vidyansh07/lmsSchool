@@ -24,6 +24,11 @@ urlpatterns = [
         name="announcement-archive",
     ),
     path(
+        "<uuid:announcement_id>/delete/",
+        views.DeleteAnnouncementView.as_view(),
+        name="announcement-delete",
+    ),
+    path(
         "<uuid:announcement_id>/audience/",
         views.AudiencePreviewView.as_view(),
         name="announcement-audience",

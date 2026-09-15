@@ -19,7 +19,7 @@ from apps.common.exceptions import ApplicationError
 from apps.enrollments.models import Enrollment, EnrollmentStatus
 from apps.sessions.models import ClassSession, SessionStatus
 
-from .models import AttendanceRecord, AttendanceStatus
+from .models import AttendanceCorrection, AttendanceRecord, AttendanceStatus
 
 #: Enrolment statuses that put a student on the register.
 #:
@@ -99,6 +99,7 @@ def mark_attendance(
 
     created: list[AttendanceRecord] = []
     updated: list[AttendanceRecord] = []
+    history: list[AttendanceCorrection] = []
     corrections = 0
 
     for entry in entries:
@@ -123,8 +124,14 @@ def mark_attendance(
         if row.status == status and row.note == note:
             continue
 
-        # Re-marking is a correction: the previous value is kept.
+        # Re-marking is a correction: the previous value is kept, and the
+        # change is appended to this row's own history alongside it.
         if row.status != status:
+            history.append(
+                AttendanceCorrection(
+                    record=row, from_status=row.status, to_status=status, corrected_by=actor
+                )
+            )
             row.previous_status = row.status
             row.corrected_by = actor
             row.corrected_at = now
@@ -140,6 +147,8 @@ def mark_attendance(
             updated,
             ["status", "note", "previous_status", "corrected_by", "corrected_at", "updated_at"],
         )
+    if history:
+        AttendanceCorrection.objects.bulk_create(history)
 
     session.attendance_taken_at = now
     session.attendance_taken_by = actor
@@ -195,6 +204,13 @@ def correct_record(
             "correction_reason",
             "updated_at",
         ]
+    )
+    AttendanceCorrection.objects.create(
+        record=record_row,
+        from_status=previous,
+        to_status=status,
+        corrected_by=actor,
+        reason=reason,
     )
 
     record(

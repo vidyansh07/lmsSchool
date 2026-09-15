@@ -19,12 +19,20 @@
  * `Confirm` itself — that component has no slot for a message, by design
  * (see its own docstring), so this closes the dialog and keeps the typed
  * reason in place rather than losing it on a failed attempt.
+ *
+ * A fresh step-up is required server-side before the purge itself runs
+ * (SECURITY_DECISIONS.md), on top of everything above. This follows the same
+ * retry-after-step-up shape `components/roles/permission-matrix.tsx` already
+ * uses for locking a permission: the first attempt that comes back
+ * `403 step_up_required` opens `StepUpDialog` instead of surfacing an error,
+ * and a successful step-up retries the exact same purge once.
  */
 import { useState } from 'react';
 import { Flame } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
 import { Confirm } from '@/components/confirm';
+import { isStepUpRequired, StepUpDialog } from '@/components/roles/step-up-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
@@ -39,6 +47,7 @@ export function PurgeControl({ record, onPurged }: { record: DeletedRecord; onPu
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isPurging, setIsPurging] = useState(false);
   const [error, setError] = useState('');
+  const [isStepUpOpen, setIsStepUpOpen] = useState(false);
 
   // Not `disabled` — absent. See the module docstring for why.
   if (!can(Capability.recordPurge)) return null;
@@ -58,6 +67,13 @@ export function PurgeControl({ record, onPurged }: { record: DeletedRecord; onPu
       onPurged();
     } catch (cause) {
       setIsConfirmOpen(false);
+      if (isStepUpRequired(cause)) {
+        // The typed reason stays in place — stepping up is a detour, not a
+        // cancellation, and confirming below resubmits this exact reason
+        // once freshness is proven.
+        setIsStepUpOpen(true);
+        return;
+      }
       setError(errorMessage(cause, 'Could not destroy this record.'));
     } finally {
       setIsPurging(false);
@@ -114,6 +130,15 @@ export function PurgeControl({ record, onPurged }: { record: DeletedRecord; onPu
         isConfirming={isPurging}
         onConfirm={() => void confirmPurge()}
         onCancel={() => setIsConfirmOpen(false)}
+      />
+
+      <StepUpDialog
+        open={isStepUpOpen}
+        onConfirmed={() => {
+          setIsStepUpOpen(false);
+          void confirmPurge();
+        }}
+        onCancel={() => setIsStepUpOpen(false)}
       />
     </div>
   );

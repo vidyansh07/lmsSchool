@@ -696,6 +696,18 @@ export interface MyAttendance {
   records: AttendanceRecord[];
 }
 
+/** One row of `GET /api/v1/attendance/{record_id}/history/` — a single prior
+ *  correction to that record, newest first. Supplements
+ *  `AttendanceRecord.was_corrected` (a flag) with the actual trail behind it. */
+export interface AttendanceCorrection {
+  id: string;
+  from_status: AttendanceStatus;
+  to_status: AttendanceStatus;
+  corrected_by_name: string | null;
+  reason: string;
+  created_at: string;
+}
+
 export type AcademicLifecycle = "draft" | "published" | "closed" | "archived";
 export type SubmissionKind = "file" | "text" | "link" | "any";
 export type SubmissionStatus = "submitted" | "graded" | "returned";

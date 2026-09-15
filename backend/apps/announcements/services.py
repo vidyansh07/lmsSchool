@@ -199,6 +199,20 @@ def archive(*, announcement: Announcement, actor: User) -> Announcement:
     return announcement
 
 
+@transaction.atomic
+def delete_announcement(*, announcement: Announcement, actor: User, reason: str) -> None:
+    """Remove it from the board, reversibly (Phase 7).
+
+    A genuine removal, not the ``archive`` lifecycle transition above: this is
+    for a notice that should not have been published at all, and it goes
+    through the same recycle bin as every other soft-deletable model rather
+    than a bespoke "hidden" status.
+    """
+    from apps.common.deletion import soft_delete
+
+    soft_delete(instance=announcement, actor=actor, reason=reason)
+
+
 def _validate(announcement: Announcement) -> None:
     errors: dict[str, list[str]] = {}
     if announcement.audience == Audience.COURSE and not announcement.course_id:

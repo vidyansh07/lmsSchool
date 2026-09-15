@@ -71,4 +71,11 @@ class AnnouncementWriteSerializer(StrictSerializer):
     expires_at = serializers.DateTimeField(required=False, allow_null=True)
 
 
+class AnnouncementDeleteSerializer(StrictSerializer):
+    """A reason is required in practice even though the column allows blank —
+    see `apps.common.deletion.soft_delete`."""
+
+    reason = SafeCharField(max_length=255)
+
+
 ANNOUNCEMENT_STATUS_CHOICES = list(AnnouncementStatus.choices)

@@ -15,7 +15,7 @@ from __future__ import annotations
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import BaseModel
+from apps.common.models import SoftDeleteBaseModel, SoftDeleteQuerySet, soft_delete_managers
 from apps.common.validators import validate_no_control_characters
 
 
@@ -36,7 +36,7 @@ class AnnouncementStatus(models.TextChoices):
     ARCHIVED = "archived", _("Archived")
 
 
-class AnnouncementQuerySet(models.QuerySet):
+class AnnouncementQuerySet(SoftDeleteQuerySet):
     def with_related(self):
         return self.select_related("course", "batch", "created_by")
 
@@ -49,8 +49,19 @@ class AnnouncementQuerySet(models.QuerySet):
         )
 
 
-class Announcement(BaseModel):
-    """Something the institution wants people to read."""
+class Announcement(SoftDeleteBaseModel):
+    """Something the institution wants people to read.
+
+    Soft-deletable (Phase 7): removal by an administrator is distinct from
+    :func:`apps.announcements.services.archive`. Archiving is an editorial
+    state the ``AnnouncementStatus`` enum already carries — a notice taken
+    off the board on purpose, still on the record, restorable by publishing
+    it again. Soft delete is the recovery-bin kind of removal: something
+    that should not have existed, gone from every normal query, and brought
+    back (or purged) only through the bin. The two stay separate rather than
+    collapsing into one "gone" concept, because an archived notice is not in
+    the bin and a deleted one is not still archivable.
+    """
 
     title = models.CharField(
         _("title"), max_length=200, validators=[validate_no_control_characters]
@@ -106,9 +117,9 @@ class Announcement(BaseModel):
         related_name="announcements_created",
     )
 
-    objects = AnnouncementQuerySet.as_manager()
+    objects, all_objects = soft_delete_managers(AnnouncementQuerySet)
 
-    class Meta:
+    class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("announcement")
         verbose_name_plural = _("announcements")
         ordering = ("-is_pinned", "-published_at", "-created_at")

@@ -5,7 +5,12 @@ from __future__ import annotations
 import pytest
 from django.utils import timezone
 
-from apps.attendance.models import AttendanceRecord, AttendanceStatus, attendance_summary
+from apps.attendance.models import (
+    AttendanceCorrection,
+    AttendanceRecord,
+    AttendanceStatus,
+    attendance_summary,
+)
 from apps.audit.models import AuditAction, AuditLog
 from apps.sessions.models import SessionStatus
 
@@ -266,6 +271,153 @@ def test_marking_and_correcting_are_audited(
     entry = AuditLog.objects.filter(action=AuditAction.ATTENDANCE_CORRECTED).first()
     assert entry is not None
     assert entry.context["corrections"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Correction history (Phase 7 / Phase 22 hardening's AttendanceCorrection)
+# ---------------------------------------------------------------------------
+
+
+def _history_url(record) -> str:
+    return f"/api/v1/attendance/{record.id}/history/"
+
+
+@pytest.mark.django_db
+def test_re_marking_writes_a_history_row(
+    api_client_no_csrf, trainer_profile, past_session, enrollment
+):
+    api_client_no_csrf.force_login(trainer_profile.user)
+    _mark(api_client_no_csrf, past_session, enrollment, status="absent")
+    _mark(api_client_no_csrf, past_session, enrollment, status="present")
+
+    row = AttendanceRecord.objects.get(session=past_session, enrollment=enrollment)
+    entries = list(AttendanceCorrection.objects.filter(record=row))
+    assert len(entries) == 1
+    assert entries[0].from_status == AttendanceStatus.ABSENT
+    assert entries[0].to_status == AttendanceStatus.PRESENT
+    assert entries[0].corrected_by == trainer_profile.user
+
+
+@pytest.mark.django_db
+def test_correct_record_writes_a_history_row_with_the_reason(
+    api_client_no_csrf, admin_user, trainer_profile, past_session, enrollment
+):
+    api_client_no_csrf.force_login(trainer_profile.user)
+    _mark(api_client_no_csrf, past_session, enrollment, status="absent")
+    row = AttendanceRecord.objects.get(session=past_session, enrollment=enrollment)
+
+    api_client_no_csrf.force_login(admin_user)
+    api_client_no_csrf.post(
+        f"/api/v1/attendance/{row.id}/correct/",
+        {"status": "excused", "reason": "Medical certificate provided"},
+        format="json",
+    )
+
+    entry = AttendanceCorrection.objects.get(record=row)
+    assert entry.from_status == AttendanceStatus.ABSENT
+    assert entry.to_status == AttendanceStatus.EXCUSED
+    assert entry.reason == "Medical certificate provided"
+    assert entry.corrected_by == admin_user
+
+
+@pytest.mark.django_db
+def test_the_history_endpoint_returns_rows_newest_first(
+    api_client_no_csrf, admin_user, trainer_profile, past_session, enrollment
+):
+    api_client_no_csrf.force_login(trainer_profile.user)
+    _mark(api_client_no_csrf, past_session, enrollment, status="absent")
+    _mark(api_client_no_csrf, past_session, enrollment, status="late")
+    row = AttendanceRecord.objects.get(session=past_session, enrollment=enrollment)
+
+    api_client_no_csrf.force_login(admin_user)
+    api_client_no_csrf.post(
+        f"/api/v1/attendance/{row.id}/correct/",
+        {"status": "excused", "reason": "Medical certificate provided"},
+        format="json",
+    )
+
+    response = api_client_no_csrf.get(_history_url(row))
+    assert response.status_code == 200
+    body = response.json()
+    assert [entry["to_status"] for entry in body] == ["excused", "late"]
+    assert body[0]["reason"] == "Medical certificate provided"
+    assert body[0]["corrected_by_name"] == admin_user.get_full_name()
+
+
+@pytest.mark.django_db
+def test_a_trainer_who_takes_the_class_can_see_its_history(
+    api_client_no_csrf, trainer_profile, past_session, enrollment
+):
+    api_client_no_csrf.force_login(trainer_profile.user)
+    _mark(api_client_no_csrf, past_session, enrollment, status="absent")
+    _mark(api_client_no_csrf, past_session, enrollment, status="present")
+    row = AttendanceRecord.objects.get(session=past_session, enrollment=enrollment)
+
+    assert api_client_no_csrf.get(_history_url(row)).status_code == 200
+
+
+@pytest.mark.django_db
+def test_a_student_can_see_their_own_records_history(
+    api_client_no_csrf, trainer_profile, past_session, enrollment
+):
+    """Gated like the record itself already is: the owner sees it, same as
+    `EnrollmentAttendanceView`'s "the owner, their trainer, or staff"."""
+    api_client_no_csrf.force_login(trainer_profile.user)
+    _mark(api_client_no_csrf, past_session, enrollment, status="absent")
+    _mark(api_client_no_csrf, past_session, enrollment, status="present")
+    row = AttendanceRecord.objects.get(session=past_session, enrollment=enrollment)
+
+    api_client_no_csrf.force_login(enrollment.student.user)
+    response = api_client_no_csrf.get(_history_url(row))
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
+@pytest.mark.django_db
+def test_a_student_cannot_see_another_students_record_history(
+    api_client_no_csrf, trainer_profile, past_session, enrollment, other_enrollment
+):
+    api_client_no_csrf.force_login(trainer_profile.user)
+    _mark(api_client_no_csrf, past_session, enrollment, status="absent")
+    _mark(api_client_no_csrf, past_session, enrollment, status="present")
+    row = AttendanceRecord.objects.get(session=past_session, enrollment=enrollment)
+
+    api_client_no_csrf.force_login(other_enrollment.student.user)
+    assert api_client_no_csrf.get(_history_url(row)).status_code == 403
+
+
+@pytest.mark.django_db
+def test_another_centres_record_is_a_404(
+    api_client_no_csrf,
+    trainer_profile,
+    unbounded_superadmin,
+    other_branch_batch,
+    other_branch_enrollment,
+):
+    """An administrator sees every centre (D-129, amended 14 Sep 2026), so the
+    caller here is a bounded role instead — the trainer is not assigned to
+    the other centre's batch at all."""
+    from datetime import time, timedelta
+
+    from apps.sessions.services import create_session
+
+    other_session = create_session(
+        batch=other_branch_batch,
+        actor=unbounded_superadmin,
+        session_date=timezone.localdate() - timedelta(days=1),
+        start_time=time(9, 0),
+        end_time=time(11, 0),
+        topic="Cabling",
+    )
+    other_row = AttendanceRecord.objects.create(
+        session=other_session,
+        enrollment=other_branch_enrollment,
+        status=AttendanceStatus.PRESENT,
+        marked_by=unbounded_superadmin,
+    )
+
+    api_client_no_csrf.force_login(trainer_profile.user)
+    assert api_client_no_csrf.get(_history_url(other_row)).status_code == 404
 
 
 # ---------------------------------------------------------------------------

@@ -21,6 +21,7 @@ from apps.courses import access as course_access
 from . import access, services
 from .models import Announcement, Audience
 from .serializers import (
+    AnnouncementDeleteSerializer,
     AnnouncementSerializer,
     AnnouncementWriteSerializer,
     StudentAnnouncementSerializer,
@@ -216,6 +217,31 @@ class ArchiveAnnouncementView(APIView):
         announcement = _announcement_for(request, announcement_id, manage=True)
         announcement = services.archive(announcement=announcement, actor=request.user)
         return Response(AnnouncementSerializer(announcement).data)
+
+
+class DeleteAnnouncementView(APIView):
+    """Soft-delete a notice (Phase 7). Reversible, and always with a reason —
+    distinct from :class:`ArchiveAnnouncementView`, which is the editorial
+    "take it off the board" transition, not a removal into the recycle bin."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Delete an announcement",
+        request=AnnouncementDeleteSerializer,
+        responses={204: None},
+        tags=ANNOUNCEMENTS_TAG,
+    )
+    def post(self, request, announcement_id):
+        announcement = _announcement_for(request, announcement_id, manage=True)
+        serializer = AnnouncementDeleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        services.delete_announcement(
+            announcement=announcement,
+            actor=request.user,
+            reason=serializer.validated_data["reason"],
+        )
+        return Response(status=http_status.HTTP_204_NO_CONTENT)
 
 
 class AudiencePreviewView(APIView):

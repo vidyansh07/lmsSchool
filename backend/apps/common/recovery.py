@@ -59,6 +59,7 @@ from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.stepup import StepUpRequired, is_fresh
 from apps.audit.services import AuditAction, AuditResult, record
 from apps.common.deletion import purge, restore
 from apps.common.models import SoftDeleteModel
@@ -84,6 +85,27 @@ def recoverable_models() -> dict[str, type[Model]]:
         for model in django_apps.get_models()
         if issubclass(model, SoftDeleteModel) and not model._meta.abstract
     }
+
+
+def _scoped_by_announcement_branch(queryset: QuerySet, user) -> QuerySet:
+    """The centre an announcement belongs to, for the restore guard.
+
+    Reuses `apps.announcements.access._one_centres_notices` — the same rule
+    `manageable_announcements` scopes writes with — rather than the reading
+    rule, which deliberately carves out institution-wide notices (D-130-era
+    comment in that module). Restoring is a write, and an institution-wide
+    notice is still somebody's notice to manage, so an administrator outside
+    its centre gets the same refusal restoring it as editing or archiving it.
+    """
+    from apps.announcements.access import _one_centres_notices
+    from apps.organisation.scoping import actor_branch_id, is_unbounded
+
+    if is_unbounded(user):
+        return queryset
+    branch_id = actor_branch_id(user)
+    if branch_id is None:
+        return queryset.none()
+    return queryset.filter(_one_centres_notices(branch_id))
 
 
 def _scoped_by_performance_subject(queryset: QuerySet, user) -> QuerySet:
@@ -114,6 +136,7 @@ def _scoped_by_performance_subject(queryset: QuerySet, user) -> QuerySet:
 #: silent. An export job belongs to the centre of the person who asked for it,
 #: since that is whose access the worker re-derives the rows from.
 BRANCH_PATHS: dict[str, str | Callable[[QuerySet, Any], QuerySet]] = {
+    "announcements.announcement": _scoped_by_announcement_branch,
     "batches.batch": "branch",
     "batches.batchschedule": "batch__branch",
     "dsr.dsr": "session__batch__branch",
@@ -369,6 +392,12 @@ class PurgeRecordView(APIView):
     anything that is not already deleted, so nothing can be destroyed without
     having first been removed and seen in the bin — two decisions, two audit
     entries, two people if you want it that way.
+
+    Also requires a fresh step-up (SECURITY_DECISIONS.md): the same pattern
+    ``LockPermissionView``/``MfaTotpDisableView`` use — refuse with
+    ``403 step_up_required`` and let the interface open the step-up dialog and
+    retry, before anything about the request (even whether the record exists)
+    is otherwise acted on.
     """
 
     permission_classes = (HasCapability,)
@@ -379,11 +408,15 @@ class PurgeRecordView(APIView):
         request=PurgeSerializer,
         responses={
             204: OpenApiResponse(description="Destroyed."),
+            403: OpenApiResponse(description="Step-up required."),
             404: OpenApiResponse(description="No such deleted record."),
         },
         tags=RECOVERY_TAG,
     )
     def post(self, request, label, record_id):
+        if not is_fresh(request):
+            raise StepUpRequired()
+
         model = _model_or_404(label)
         instance = model.all_objects.dead().filter(pk=record_id).first()
         if instance is None:
