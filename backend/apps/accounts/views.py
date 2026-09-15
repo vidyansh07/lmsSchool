@@ -276,7 +276,7 @@ def _resolve_mfa_target(request) -> tuple[User, str]:
     raise exceptions.NotAuthenticated()
 
 
-class MfaSendEmailCodeView(APIView):
+class MfaSendEmailCodeView(EnforceCSRFMixin, APIView):
     """Email a one-time code (ADR-05) as one of the three MFA factors.
 
     Works two ways, resolved by :func:`_resolve_mfa_target`: against a
@@ -284,7 +284,13 @@ class MfaSendEmailCodeView(APIView):
     ``LoginView``), or against an already-authenticated caller reaching for
     step-up, reusing exactly the send path Phase 4's
     ``StepUpCodeRequestView`` uses. Anonymous is allowed on purpose: a
-    pending session, by construction, is not authenticated yet.
+    pending session, by construction, is not authenticated yet — which is
+    exactly why it needs :class:`EnforceCSRFMixin` explicitly (see that
+    mixin's docstring): DRF only checks CSRF once ``SessionAuthentication``
+    finds a logged-in user, so an anonymous-permitted POST is unprotected by
+    default. Without this, a cross-site page could spam an OTP to a
+    pending-login victim's inbox using nothing but their pending-session
+    cookie.
     """
 
     permission_classes = (AllowAnyPublic,)
