@@ -20,7 +20,10 @@ from .views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     ProfileImageView,
+    RevokeOtherSessionsView,
     RevokeSessionsView,
+    SessionDetailView,
+    SessionListView,
     StepUpCodeRequestView,
     StepUpView,
 )
@@ -32,6 +35,14 @@ urlpatterns = [
     path("login/", LoginView.as_view(), name="login"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("logout-all/", RevokeSessionsView.as_view(), name="logout-all"),
+    # --- Session inventory (ERP Phase 6, ADR-06) ---
+    path("sessions/", SessionListView.as_view(), name="sessions"),
+    path(
+        "sessions/revoke-others/",
+        RevokeOtherSessionsView.as_view(),
+        name="sessions-revoke-others",
+    ),
+    path("sessions/<uuid:session_id>/", SessionDetailView.as_view(), name="sessions-detail"),
     path("step-up/", StepUpView.as_view(), name="step-up"),
     path("step-up/request-code/", StepUpCodeRequestView.as_view(), name="step-up-request-code"),
     # --- MFA (ERP Phase 5, ADR-05) ---

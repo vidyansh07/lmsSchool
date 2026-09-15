@@ -1227,3 +1227,25 @@ dangerous action already opens is additive (`Mode` already reads from the
 same `_CODE_METHODS` map the backend does) and left for a later pass rather
 than grown here without a concrete caller asking for it.
 
+### D-138 · Self-service revoke gets a confirm dialog; the admin one does not — the step-up *is* the confirmation (16 September 2026)
+ERP Phase 6, ADR-06, frontend. Two calls the planning docs left open on the
+two sessions screens. First, `SessionsCard` (the security settings screen's
+own-sessions list) folds the existing "sign out everywhere" card into
+itself rather than sitting beside it as a fourth, near-identical card — one
+"active sessions" section with the list, a per-device "Revoke" (behind a
+plain confirm dialog, since this action needs no step-up and a stray click
+next to a dense list is the failure mode worth guarding against), "sign out
+everywhere else", and the pre-existing "sign out everywhere" at the bottom,
+unchanged in behaviour (`POST logout-all/`, redirects to `/login`). Second,
+`UserSessionsCard` (the admin listing on a user's page) has no equivalent
+confirm step before its "Revoke": clicking it attempts the revoke directly,
+the same shape `MfaSettingsCard`'s "Disable two-factor authentication"
+already uses, and a `403 step_up_required` refusal is what opens
+`StepUpDialog` — proving it is still you *is* the confirmation an
+administrator gets, and a second "are you sure" in front of it would only
+be a click to dismiss before the one that actually matters. Both screens
+share one presentational list, `SessionList`, with a `showCurrentBadge`
+flag off on the admin listing — the API's `is_current` there compares
+against the *admin's* session, not the row it would sit beside, so it is
+never computed for that purpose and must never render as if it were.
+

@@ -264,6 +264,15 @@ class Capability(models.TextChoices):
     # extracted and by whom, so a list of everybody's is an administrative view.
     EXPORT_VIEW_ANY = "export.view_any", _("View any export job")
 
+    # --- Sessions (ERP Phase 6, ADR-06)
+    #
+    # An institution's own security posture, not a day-to-day operation — kept
+    # at the administrator rung on purpose, the same reasoning `POLICY_MANAGE`
+    # already documents. Viewing is separated from revoking so a narrower
+    # custom role could audit sessions without being able to end one.
+    SESSION_VIEW_ANY = "session.view_any", _("View any user's sessions")
+    SESSION_REVOKE_ANY = "session.revoke_any", _("Revoke any user's session")
+
 
 #: Capabilities every authenticated, active user has regardless of role.
 BASE_CAPABILITIES: frozenset[str] = frozenset(
@@ -370,6 +379,8 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.ROLE_MANAGE,
         Capability.PERMISSION_ASSIGN,
         Capability.POLICY_MANAGE,
+        Capability.SESSION_VIEW_ANY,
+        Capability.SESSION_REVOKE_ANY,
     }
 )
 

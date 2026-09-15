@@ -146,6 +146,10 @@ STUDENT_REACHABLE = frozenset(
         "/api/v1/auth/login/",
         "/api/v1/auth/logout/",
         "/api/v1/auth/logout-all/",
+        # Own session inventory (ERP Phase 6, ADR-06) — everybody's own
+        # devices, not staff data.
+        "/api/v1/auth/sessions/",
+        "/api/v1/auth/sessions/revoke-others/",
         "/api/v1/auth/me/",
         "/api/v1/auth/me/email/",
         "/api/v1/auth/me/profile-image/",

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import { ArrowLeft, KeyRound, MailCheck } from "lucide-react";
 
+import { UserSessionsCard } from "@/components/admin/user-sessions-card";
 import { useAuth } from "@/components/auth-provider";
 import { RequireAuth } from "@/components/require-auth";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -407,6 +408,10 @@ function UserAdministration({ userId }: { userId: string }) {
 
       {mayAdminister && user.role !== "superadmin" ? (
         <ScopeGrantsCard userId={user.id} />
+      ) : null}
+
+      {can(Capability.sessionViewAny) ? (
+        <UserSessionsCard userId={user.id} />
       ) : null}
 
       {mayAdminister ? (

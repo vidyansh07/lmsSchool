@@ -64,6 +64,14 @@ class NotificationKind(models.TextChoices):
     MFA_ENROLLED = "mfa.enrolled", _("Two-factor authentication turned on")
     MFA_DISABLED = "mfa.disabled", _("Two-factor authentication turned off")
 
+    # --- Session security events (ERP Phase 6, ADR-06). Always delivered,
+    # same reasoning as the MFA pair above.
+    NEW_DEVICE_LOGIN = "session.new_device", _("Sign-in from a new device")
+    SESSION_REVOKED_BY_ADMIN = (
+        "session.revoked_by_admin",
+        _("A session was ended by an administrator"),
+    )
+
 
 class NotificationCategory(models.TextChoices):
     ACADEMIC = "academic", _("Coursework and results")
@@ -100,6 +108,8 @@ KIND_CATEGORY: dict[str, str] = {
     NotificationKind.CERTIFICATE_ISSUED: NotificationCategory.ADMINISTRATIVE,
     NotificationKind.MFA_ENROLLED: NotificationCategory.SECURITY,
     NotificationKind.MFA_DISABLED: NotificationCategory.SECURITY,
+    NotificationKind.NEW_DEVICE_LOGIN: NotificationCategory.SECURITY,
+    NotificationKind.SESSION_REVOKED_BY_ADMIN: NotificationCategory.SECURITY,
 }
 
 

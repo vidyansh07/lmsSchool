@@ -46,6 +46,10 @@ export const Capability = {
   recordPurge: "record.purge",
   academicConfigure: "academic.configure",
   sessionManageAny: "session.manage_any",
+  // Login sessions (ERP Phase 6, ADR-06) — distinct from `sessionManageAny`
+  // above, which is a class session (attendance) capability.
+  sessionViewAny: "session.view_any",
+  sessionRevokeAny: "session.revoke_any",
   attendanceCorrectAny: "attendance.correct_any",
   attendanceViewAny: "attendance.view_any",
   dsrViewAny: "dsr.view_any",

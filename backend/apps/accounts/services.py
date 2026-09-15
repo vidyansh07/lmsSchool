@@ -32,6 +32,7 @@ from .emails import (
 )
 from .models import AccountToken, TokenPurpose, User, UserRole
 from .roles import can_administer, can_grant_role
+from .sessions import UserSession, hash_session_key
 
 logger = logging.getLogger("grras.security")
 
@@ -449,6 +450,7 @@ def revoke_sessions(*, user: User, actor: User | None = None, reason: str = "") 
     """
     deleted = 0
     user_pk = str(user.pk)
+    revoked_hashes: list[str] = []
     for session in Session.objects.filter(expire_date__gte=timezone.now()).iterator():
         try:
             data = session.get_decoded()
@@ -462,8 +464,18 @@ def revoke_sessions(*, user: User, actor: User | None = None, reason: str = "") 
             )
             continue
         if data.get("_auth_user_id") == user_pk:
+            # Captured before deletion: only the hash is ever kept (rule §13),
+            # and it is what ``UserSession`` (ERP Phase 6, ADR-06) is indexed
+            # by, so the inventory stays truthful the moment the real session
+            # is gone rather than showing a phantom "active" row afterwards.
+            revoked_hashes.append(hash_session_key(session.session_key))
             session.delete()
             deleted += 1
+
+    if revoked_hashes:
+        UserSession.objects.filter(
+            user=user, session_key_hash__in=revoked_hashes, revoked_at__isnull=True
+        ).update(revoked_at=timezone.now())
 
     if deleted:
         record(

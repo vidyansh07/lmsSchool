@@ -26,7 +26,7 @@ from apps.common.mixins import EnforceCSRFMixin
 from apps.common.permissions import AllowAnyPublic, Capability, HasCapability, IsActiveUser
 from apps.common.throttling import AuthEndpointThrottle
 
-from . import mfa, services
+from . import mfa, services, sessions
 from .models import User
 from .serializers import (
     CurrentUserSerializer,
@@ -43,6 +43,7 @@ from .serializers import (
     ProfileImageUploadSerializer,
     RecoveryCodesSerializer,
     SelfUserUpdateSerializer,
+    SessionSerializer,
     StepUpSerializer,
 )
 from .stepup import StepUpRequired, is_fresh
@@ -157,6 +158,7 @@ class LoginView(EnforceCSRFMixin, APIView):
         login(request, user)
         # Fresh session key on privilege change defeats session fixation.
         request.session.cycle_key()
+        sessions.record_login(request=request, user=user)
         return _current_user_response(user)
 
 
@@ -169,7 +171,13 @@ class LogoutView(APIView):
         summary="Sign out", request=None, responses={200: DetailSerializer}, tags=AUTH_TAG
     )
     def post(self, request):
+        # Captured before `logout()` flushes the session and clears its key
+        # (ERP Phase 6, ADR-06): the corresponding `UserSession` row is
+        # stamped revoked so it stops showing as active, without duplicating
+        # what `logout()` and the `user_logged_out` audit receiver already do.
+        session_key = request.session.session_key
         logout(request)
+        sessions.mark_revoked_by_key(session_key)
         return Response({"detail": "Signed out."})
 
 
@@ -189,6 +197,78 @@ class RevokeSessionsView(APIView):
         logout(request)
         revoked = services.revoke_sessions(user=user, actor=user, reason="user_requested")
         return Response({"detail": f"Signed out of {revoked} session(s)."})
+
+
+def _current_session_key_hash(request) -> str | None:
+    session_key = request.session.session_key
+    return sessions.hash_session_key(session_key) if session_key else None
+
+
+class SessionListView(APIView):
+    """My own active sessions (ERP Phase 6, ADR-06), newest activity first."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="List my active sessions",
+        responses={200: SessionSerializer(many=True)},
+        tags=AUTH_TAG,
+    )
+    def get(self, request):
+        rows = sessions.list_active_sessions(user=request.user)
+        context = {"current_session_key_hash": _current_session_key_hash(request)}
+        data = SessionSerializer(rows, many=True, context=context).data
+        return Response(data)
+
+
+class SessionDetailView(APIView):
+    """Revoke one of my own sessions.
+
+    Refuses the session making this very request — ``LogoutView`` is the
+    right endpoint for that, and revoking a session out from under the
+    request that named it would sign the caller out without them clicking
+    "sign out".
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Revoke one of my sessions",
+        request=None,
+        responses={
+            204: None,
+            404: OpenApiResponse(description="No such active session of yours."),
+            409: OpenApiResponse(description="That is your current session; sign out instead."),
+        },
+        tags=AUTH_TAG,
+    )
+    def delete(self, request, session_id):
+        # Queryset-first (rule §2): scoped to the caller's own active
+        # sessions, so another person's session id 404s here rather than
+        # ever reaching the "is this the current one" check below.
+        row = get_object_or_404(sessions.list_active_sessions(user=request.user), pk=session_id)
+        if row.session_key_hash == _current_session_key_hash(request):
+            raise sessions.CurrentSessionRevokeRefused()
+        sessions.revoke_session(session=row, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RevokeOtherSessionsView(APIView):
+    """Sign out of every device except this one."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Sign out of every other session",
+        request=None,
+        responses={200: DetailSerializer},
+        tags=AUTH_TAG,
+    )
+    def post(self, request):
+        revoked = sessions.revoke_other_sessions(
+            user=request.user, current_session_key_hash=_current_session_key_hash(request)
+        )
+        return Response({"detail": f"Signed out of {revoked} other session(s)."})
 
 
 class StepUpView(APIView):
@@ -372,6 +452,7 @@ class MfaVerifyView(EnforceCSRFMixin, APIView):
             login(request, target)
             request.session.cycle_key()
             mfa.clear_pending(request=request)
+            sessions.record_login(request=request, user=target)
         else:
             from .stepup import grant
 

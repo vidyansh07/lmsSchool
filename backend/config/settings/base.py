@@ -9,6 +9,7 @@ weaken a deployed environment.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import environ
@@ -25,12 +26,27 @@ REPO_ROOT = BASE_DIR.parent
 
 env = environ.Env()
 
-# Load a local .env when present (developer convenience). Deployed environments
-# inject real variables into the process environment instead.
-for candidate in (BASE_DIR / ".env", REPO_ROOT / ".env"):
-    if candidate.is_file():
-        env.read_env(str(candidate))
-        break
+# Load a local .env when present (developer convenience) -- but only when the
+# caller hasn't already told us which environment to boot as. A deployed
+# environment (staging/production) and a test run always export DJANGO_ENV
+# explicitly before settings are imported; in that case a dev-only `.env`
+# left over in the repo/worktree root (which itself hardcodes
+# DJANGO_ENV=local, e.g. for a docker-compose stack) must never leak into
+# the already-chosen environment. env.read_env() fills gaps via
+# os.environ.setdefault(), so any key it also happens to set -- an empty
+# MFA_ENCRYPTION_KEY, SECURE_HSTS_SECONDS=0 -- would silently win over
+# config/settings/test.py's or hardened.py's own env.str()/env.int()
+# defaults, since those only apply when the variable is entirely absent.
+# Checking DJANGO_ENV as the runtime supplied it (before this file touches
+# os.environ at all) keeps single-command local usage working -- it's
+# normally unset or "local" there -- while a deployed/test process's own
+# DJANGO_ENV is left completely alone.
+_runtime_django_env = os.environ.get("DJANGO_ENV")
+if _runtime_django_env in (None, "", "local"):
+    for candidate in (BASE_DIR / ".env", REPO_ROOT / ".env"):
+        if candidate.is_file():
+            env.read_env(str(candidate))
+            break
 
 # --- Core ------------------------------------------------------------------
 # Substring that marks a key as a development placeholder. Not a credential:
@@ -118,6 +134,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # After authentication (ERP Phase 6, ADR-06): needs request.user and
+    # request.session already resolved. See the middleware's own docstring.
+    "apps.accounts.middleware.TouchSessionActivityMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.common.middleware.SecurityHeadersMiddleware",

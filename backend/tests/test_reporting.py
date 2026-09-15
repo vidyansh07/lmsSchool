@@ -345,7 +345,9 @@ def test_batch_summaries_do_not_grow_a_query_per_batch(
     # minutes; that cost is the scope resolver's, not this endpoint's, so it
     # is paid once before the measurement.
     api_client_no_csrf.get("/api/v1/dashboards/batches/")
-    with django_assert_max_num_queries(10):
+    # +1 (ERP Phase 6): `TouchSessionActivityMiddleware`'s guarded UPDATE runs
+    # on every authenticated request, not just this endpoint's own queries.
+    with django_assert_max_num_queries(11):
         body = api_client_no_csrf.get("/api/v1/dashboards/batches/").json()
 
     assert body

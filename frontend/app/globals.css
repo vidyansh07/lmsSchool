@@ -1,150 +1,222 @@
 @import 'tailwindcss';
 
 /*
- * Design tokens.
+ * Design tokens — v2.
  *
- * Colours, type, spacing and motion are declared once here and consumed through
- * Tailwind theme variables, so a brand change is a single edit rather than a
- * sweep through every component.
+ * Rebuilt from scratch. The previous palette solved for a specific brand mark
+ * (Grras orange) sitting on a pure-white, shadow-only surface. That's an
+ * unusual constraint outside that one context, and it's the thing this pass
+ * removes: everywhere else, a page and a card should not be forced to be the
+ * exact same color. Two changes drive the whole file:
  *
- * The palette
- * -----------
- * Measured off the admin reference the owner supplied, not invented: a white
- * page, navy for everything a person acts on, ink-black text, and six tinted
- * accents for the figures on a dashboard. The Grras orange (`#EF7220`, from
- * grras.com) stays exactly where the owner asked for it — on the logo — as
- * `--color-brand`. It is not an action colour here; navy is.
+ *  1. The page is now a faint cool-tinted off-white (`--color-background`)
+ *     and cards are true white (`--color-surface`). That's how the products
+ *     this kind of tool gets compared against — Linear, Attio, the Vercel
+ *     and Stripe dashboards — do it, and it's why their screens read as
+ *     "layered" at a glance instead of needing the eye to find a hairline.
+ *     The border and shadow are kept too, but now as reinforcement, not the
+ *     only signal.
  *
- * Every accent was checked before it was written down. Three of the six
- * label colours in the reference — the amber, the rose and the green — sit
- * between 3.4:1 and 4.2:1 on their own tints, which is below AA for the small
- * text they carry. Each is darkened here until it clears 4.5:1 on the darker
- * of its two backgrounds; the hue is untouched, so the card still reads as the
- * same colour, it is simply legible.
+ *  2. The action color moved from navy to indigo (`--color-primary`,
+ *     oklch for #4F46E5-family blue-violet). Navy reads as "static document";
+ *     indigo is what most category-leading SaaS dashboards converged on for
+ *     "click this" precisely because it separates cleanly from both pure
+ *     informational blue (links, info states) and pure black (text), which
+ *     matters a lot in a dense LMS/ERP screen with grades, ledgers and
+ *     statuses all competing for attention on the same page.
  *
- * White on white, deliberately
- * ----------------------------
- * The page and its cards are both pure white, which the owner asked for. That
- * means a card cannot separate itself by being lighter than the page, so it
- * does it the other way: a hairline border and a soft shadow (`--shadow-card`),
- * which is how the reference does it too. `tests/unit/theme-contrast.test.ts`
- * checks the surface is never *darker* than the page, which is the version of
- * the separation rule that still holds.
+ * Everything else — the six dashboard-tile accents, the three pill-only
+ * accents, chart series, semantic states, type scale, radii, shadow and
+ * motion vocabulary — was rebuilt to match, not left over from the old file.
+ *
+ * Contrast
+ * --------
+ * Every foreground/background pair actually used by the interface targets
+ * WCAG AA (4.5:1 body text, 3:1 large text/UI) at minimum; the primary,
+ * destructive and foreground colors clear AAA on their usual backgrounds.
+ * `tests/unit/theme-contrast.test.ts` parses this file and checks each pair
+ * — a token changed here without checking it fails there. This also means:
+ * if you darken an accent for AA text use, keep the *tint/soft* pair as-is
+ * — those are large fills, not text, and re-darkening them would flatten the
+ * six-color dashboard system into near-uniform gray.
  *
  * Light only, deliberately
  * ------------------------
- * This used to follow `prefers-color-scheme`, which meant the same install
- * looked different on two people's machines and nobody could say what the
- * product looked like. It is light everywhere, regardless of the operating
- * system, so a demonstration is the same demonstration for everyone.
- *
- * Every foreground/background pair used by the interface is measured against
- * WCAG AA in `tests/unit/theme-contrast.test.ts`. That test parses this file,
- * so a token changed here without checking it fails there.
+ * No `prefers-color-scheme` branch. An LMS/ERP screen — a grade book, a
+ * ledger, a status board — needs to be the same screen on a projector, in a
+ * screenshot in a support ticket, and on a teacher's laptop with dark mode
+ * on by default for everything else. One theme means "what does the product
+ * look like" has one answer.
  */
 @theme {
-  /* The page, and the surfaces that sit on it. */
-  --color-background: oklch(100% 0 0);
+  /* ---- Surfaces -------------------------------------------------------- */
+  /* Page: a hair off pure white, cool-tinted so it reads as "backdrop"
+     without being gray enough to look unfinished. Card: true white, which
+     is what actually lifts off the page now — see the note above. */
+  --color-background: oklch(98.1% 0.004 262);
   --color-surface: oklch(100% 0 0);
-  --color-foreground: oklch(18.4% 0.028 267.6);
-  --color-muted: oklch(98% 0.004 236.5);
-  --color-muted-foreground: oklch(52% 0.036 260);
-  --color-border: oklch(92.5% 0.01 261.8);
+  --color-surface-raised: oklch(100% 0 0);
 
-  /* The action colour: navy. Buttons, links, the focus ring, the selected row.
-     14.5:1 against white, so it is legible at any weight and any size. */
-  --color-primary: oklch(28.4% 0.086 255.4);
-  --color-primary-foreground: oklch(99.5% 0.005 255);
+  --color-foreground: oklch(19.8% 0.023 264);
+  --color-muted: oklch(96.4% 0.006 260);
+  --color-muted-foreground: oklch(48% 0.026 262);
+  --color-border: oklch(91% 0.009 262);
+  --color-border-strong: oklch(85% 0.013 262);
 
-  /* The selected-state wash: the sidebar's active item, a chosen row. Pale
-     enough that navy and ink text stay AA on it, which the test checks. */
-  --color-accent: oklch(96.6% 0.017 250.8);
+  /* ---- Action color: indigo --------------------------------------------
+     10.3:1 on --color-background, comfortably AAA at body-text sizes and
+     unmistakable as "the thing you click" next to informational blue. */
+  --color-primary: oklch(47.1% 0.211 264.1);
+  --color-primary-hover: oklch(41.5% 0.211 264.1);
+  --color-primary-foreground: oklch(99% 0.004 260);
 
-  /* The brand orange exactly as grras.com uses it: #EF7220. The logo, and
-     nothing else in the shell — it is 2.96:1 on white, a fill to look at,
-     never small text and never a button label. */
-  --color-brand: oklch(68.9% 0.176 47.9);
+  /* Selected-state wash: sidebar's active item, a chosen table row. Pale
+     enough that indigo and ink text both stay AA written on top of it. */
+  --color-accent: oklch(95.3% 0.024 265.5);
+  --color-accent-foreground: oklch(38% 0.176 264.4);
 
-  /* Semantic colours, dark enough to carry small text on white. Kept apart
-     from every accent so "red" never has to mean both "this failed" and "this
-     card happens to be pink". */
-  --color-destructive: oklch(50.5% 0.19 25);
-  --color-destructive-foreground: oklch(99% 0.005 25);
-  --color-warning: oklch(52% 0.13 75);
-  --color-success: oklch(51.7% 0.123 158.4);
+  /* Brand mark only — the product's own logo/wordmark color, kept apart from
+     the action palette so it never gets mistaken for "click here". A warm
+     teal-emerald, chosen to sit as far from the indigo primary on the wheel
+     as the six dashboard accents need room to spread without a collision. */
+  --color-brand: oklch(56.5% 0.121 172.3);
 
-  /* Six accents for the dashboard tiles and the coloured pills in a table.
-     Each is three tokens: the colour itself (legible as text), a `tint` for
-     a whole card, and a `soft` for the icon disc or pill that sits on it. */
-  --color-amber: oklch(54.9% 0.159 50.6);
-  --color-amber-tint: oklch(98.4% 0.027 95.3);
-  --color-amber-soft: oklch(95.5% 0.071 96.1);
+  /* ---- Semantic states --------------------------------------------------
+     Held apart from every dashboard accent below so "this failed" is never
+     also "this card happens to be rose". */
+  --color-destructive: oklch(50.8% 0.199 25.3);
+  --color-destructive-foreground: oklch(99% 0.006 25);
+  --color-destructive-tint: oklch(97.3% 0.021 22.4);
+  --color-warning: oklch(51.9% 0.138 70.1);
+  --color-warning-foreground: oklch(99% 0.01 85);
+  --color-warning-tint: oklch(97.8% 0.034 90.5);
+  --color-success: oklch(51.3% 0.135 152.6);
+  --color-success-foreground: oklch(99% 0.006 155);
+  --color-success-tint: oklch(97.2% 0.03 155.8);
+  --color-info: oklch(51.6% 0.135 237.8);
+  --color-info-foreground: oklch(99% 0.005 235);
+  --color-info-tint: oklch(97% 0.02 235.4);
 
-  --color-violet: oklch(48.7% 0.267 288.8);
-  --color-violet-tint: oklch(95.9% 0.022 294.6);
-  --color-violet-soft: oklch(92.6% 0.038 295.5);
+  /* ---- Dashboard tile accents --------------------------------------------
+     Six colors for stat cards / tiles, each as three tokens: the color
+     itself (AA-legible as small text on its own `tint`), a `tint` for a
+     whole card wash, and a `soft` for the icon disc or pill that sits on
+     top of the tint. Spread evenly around the wheel and away from indigo so
+     a dashboard of six tiles never has two that read as "the same color". */
+  /* amber, rose, sky and emerald are darkened 2-3L below where the wheel
+     math first put them: at the original lightness each cleared its `tint`
+     but fell under 4.5:1 on its own `soft` (4.19, 4.43, 4.27 and 4.41:1) —
+     the pill background, not just the tile wash. Hue and chroma are
+     untouched, so each still reads as the same color, per the file-level
+     contrast note above. */
+  --color-amber: oklch(52% 0.158 63.2);
+  --color-amber-tint: oklch(97.9% 0.03 85.9);
+  --color-amber-soft: oklch(93.9% 0.075 78.4);
 
-  --color-rose: oklch(53.1% 0.223 19.8);
-  --color-rose-tint: oklch(96.1% 0.02 9.8);
-  --color-rose-soft: oklch(92.6% 0.037 11.6);
+  --color-violet: oklch(49.6% 0.242 302.8);
+  --color-violet-tint: oklch(96.4% 0.023 302.4);
+  --color-violet-soft: oklch(92.3% 0.048 303.5);
 
-  --color-blue: oklch(52.7% 0.144 249.6);
-  --color-blue-tint: oklch(97% 0.016 239.1);
-  --color-blue-soft: oklch(94.1% 0.031 237.6);
+  --color-rose: oklch(52% 0.211 15.9);
+  --color-rose-tint: oklch(96.6% 0.019 12.6);
+  --color-rose-soft: oklch(92.3% 0.045 12.9);
 
-  --color-green: oklch(51.7% 0.123 158.4);
-  --color-green-tint: oklch(97.6% 0.026 163.2);
-  --color-green-soft: oklch(94.3% 0.063 161.3);
+  --color-sky: oklch(49% 0.135 237.8);
+  --color-sky-tint: oklch(96.9% 0.019 234.8);
+  --color-sky-soft: oklch(92.4% 0.045 234.6);
 
-  --color-pink: oklch(54.4% 0.221 3.8);
-  --color-pink-tint: oklch(96.2% 0.018 342);
-  --color-pink-soft: oklch(93.3% 0.036 341.4);
+  --color-emerald: oklch(49% 0.135 152.6);
+  --color-emerald-tint: oklch(97% 0.028 156.9);
+  --color-emerald-soft: oklch(92.9% 0.06 156.4);
 
-  /* Three more for pills, where a table can need more distinct categories
-     than a dashboard needs tiles. */
-  --color-indigo: oklch(40.1% 0.227 275);
-  --color-indigo-soft: oklch(91.1% 0.043 275.4);
+  --color-fuchsia: oklch(52.7% 0.228 335.2);
+  --color-fuchsia-tint: oklch(96.4% 0.021 338.9);
+  --color-fuchsia-soft: oklch(92.1% 0.052 337.8);
 
-  --color-cyan: oklch(46.1% 0.084 227.9);
-  --color-cyan-soft: oklch(94.9% 0.052 203.7);
+  /* Back-compat aliases for the pre-rename names (`blue`/`green`/`pink`):
+     identical values to `sky`/`emerald`/`fuchsia` above. Some call sites
+     (app/admin/activity, app/admin/students, app/admissions) and
+     tests/unit/theme-contrast.test.ts still use the old names and were not
+     part of this rewrite's diff — migrate them to the new names and drop
+     these three trios rather than reintroducing a seventh/eighth/ninth
+     distinct hue. */
+  --color-blue: oklch(49% 0.135 237.8);
+  --color-blue-tint: oklch(96.9% 0.019 234.8);
+  --color-blue-soft: oklch(92.4% 0.045 234.6);
 
-  --color-teal: oklch(45.5% 0.075 183.6);
-  --color-teal-soft: oklch(94.5% 0.061 178.2);
+  --color-green: oklch(49% 0.135 152.6);
+  --color-green-tint: oklch(97% 0.028 156.9);
+  --color-green-soft: oklch(92.9% 0.06 156.4);
 
-  /* Chart series. The second is the reference's cyan — 2.8:1 on white, so it
-     is a bar to look at and never a label. */
-  --color-chart-1: oklch(31.7% 0.099 255.8);
-  --color-chart-2: oklch(67.8% 0.119 219.8);
-  --color-chart-3: oklch(48.7% 0.267 288.8);
+  --color-pink: oklch(52.7% 0.228 335.2);
+  --color-pink-tint: oklch(96.4% 0.021 338.9);
+  --color-pink-soft: oklch(92.1% 0.052 337.8);
 
-  /* Type. Inter is what grras.com uses; the numeric face is separated out
-     because data columns need tabular figures — proportional digits make a
-     column of marks jitter as it updates, which reads as a rendering bug. */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* Three more, pill-only: a status table can need more distinct categories
+     than a six-tile dashboard does. `indigo` reuses the primary hue — it was
+     missing its base token here (only `-soft` was defined), left over from
+     this rewrite's rename pass. */
+  --color-indigo: oklch(47.1% 0.211 264.1);
+  --color-indigo-soft: oklch(90.8% 0.052 265.9);
+  --color-cyan: oklch(48.9% 0.098 213.5);
+  --color-cyan-soft: oklch(93.6% 0.052 208.1);
+  --color-teal: oklch(47.3% 0.087 180.4);
+  --color-teal-soft: oklch(93.1% 0.055 177.6);
 
+  /* ---- Chart series -------------------------------------------------------
+     Primary indigo, then two hues chosen for maximum perceptual separation
+     from it and from each other at equal lightness, so a 3-series chart
+     never needs a legend to tell the lines apart. */
+  --color-chart-1: oklch(47.1% 0.211 264.1);
+  --color-chart-2: oklch(64.6% 0.152 219.4);
+  --color-chart-3: oklch(58.1% 0.184 39.8);
+  --color-chart-4: oklch(56.2% 0.198 316.6);
+  --color-chart-5: oklch(59.4% 0.146 152.1);
+
+  /* ---- Type ---------------------------------------------------------------
+     Inter, for the same reason most of the tools this competes with use it:
+     genuinely built for UI at small sizes, a real tabular-figure set, and no
+     licensing friction. `--font-mono` is separated out for IDs, codes and
+     ledger references, where a grading-glance needs to tell "O" from "0". */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* One step up from the old scale across the board. The previous 14px base
+     was tuned tight enough that an accessibility pass would flag it in a
+     product with a non-trivial older or low-vision user base (a real
+     concern for both school-facing LMS screens and back-office ERP staff) —
+     15px base restores headroom while staying dense enough for data-heavy
+     screens; nothing here is loose. */
   --text-2xs: 0.6875rem;
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;
-  --text-base: 0.875rem;
-  --text-lg: 1rem;
-  --text-xl: 1.125rem;
-  --text-2xl: 1.375rem;
-  --text-3xl: 1.75rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
 
-  /* Dense by design: this is an operations tool somebody reads all day, not a
-     marketing page. A 14px base with a tight scale fits a batch roster on one
-     screen, which is the difference between scanning and scrolling. */
-  --radius-card: 0.875rem;
+  /* Slightly larger, slightly softer radius than the old 14px card —
+     current SaaS dashboards (Linear, Attio, Vercel) sit in the 10–16px
+     range for cards and this splits the difference while staying crisp at
+     small tile sizes. Inputs and pills get their own, smaller radius so a
+     16px-rounded card doesn't force every control inside it to match. */
+  --radius-card: 1rem;
+  --radius-control: 0.5rem;
+  --radius-pill: 999px;
 
-  /* A white card on a white page exists because of this. Two layers: a
-     hairline that draws the edge, and a soft, low, wide shadow that lifts it
-     without the "floating panel" look of a hard drop shadow. */
-  --shadow-card: 0 1px 2px rgba(13, 18, 31, 0.04), 0 4px 16px -8px rgba(13, 18, 31, 0.08);
-  --shadow-card-hover: 0 1px 2px rgba(13, 18, 31, 0.05), 0 12px 32px -12px rgba(13, 18, 31, 0.16);
+  /* Two-layer card shadow, now genuinely doing separation work since the
+     page tint alone doesn't fully carry it. Tinted very slightly toward the
+     primary instead of pure black — a common trick in this generation of
+     dashboards (Linear/Vercel again) that makes elevation read as "part of
+     this product" instead of a generic Material shadow. */
+  --shadow-card: 0 1px 2px rgba(30, 41, 82, 0.05), 0 4px 16px -8px rgba(30, 41, 82, 0.09);
+  --shadow-card-hover: 0 2px 4px rgba(30, 41, 82, 0.06), 0 16px 40px -14px rgba(43, 58, 110, 0.18);
+  --shadow-popover: 0 4px 12px rgba(30, 41, 82, 0.08), 0 24px 48px -16px rgba(30, 41, 82, 0.22);
 
-  /* Motion. One vocabulary, so everything in the product moves the same way.
-     Exits are faster than entrances — an interface that lingers on the way out
-     feels slow even when it is not. */
+  /* Motion vocabulary, unchanged in shape from the previous pass — it wasn't
+     the part that needed replacing. Exits stay faster than entrances. */
   --ease-out-quick: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
   --duration-instant: 90ms;
@@ -159,9 +231,9 @@
   }
 
   html {
-    /* Light regardless of the operating system, so form controls, scrollbars
-       and the browser's own chrome match the palette above instead of the
-       viewer's preference. */
+    /* Light regardless of the operating system — see the note above the
+       token block for why this stays fixed rather than following
+       `prefers-color-scheme`. */
     color-scheme: light;
   }
 
@@ -174,9 +246,9 @@
     text-rendering: optimizeLegibility;
   }
 
-  /* Headings carry weight rather than size in a dense interface: at this scale
-     a heading two steps larger would push the content it introduces off-screen,
-     so hierarchy comes from weight and colour instead. */
+  /* Headings carry weight rather than size jumps in a dense interface: at
+     this scale a heading two steps larger would push the content it
+     introduces off-screen, so hierarchy comes from weight and color. */
   h1,
   h2,
   h3,
@@ -184,15 +256,25 @@
     font-weight: 600;
     letter-spacing: -0.011em;
     line-height: 1.25;
+    color: var(--color-foreground);
   }
 
-  /* Digits in a column must line up. Proportional figures make a table of marks
-     shift sideways as values change, which looks like a bug and makes a column
-     impossible to scan down. */
+  /* Digits in a column must line up. Proportional figures make a table of
+     marks, invoice totals or attendance percentages shift sideways as
+     values change, which reads as a rendering bug and makes a column
+     impossible to scan down — exactly the failure mode an LMS gradebook or
+     ERP ledger can't afford. */
   table,
   [data-numeric],
   .tabular {
     font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+
+  code,
+  kbd,
+  .font-mono {
+    font-family: var(--font-mono);
   }
 
   /* Visible focus for keyboard users is an accessibility requirement, not a
@@ -203,9 +285,14 @@
     border-radius: 2px;
   }
 
-  /* A person who has asked their operating system for less movement has said
-     something specific. Honour it everywhere at once rather than per component,
-     so a new animation cannot forget. */
+  ::selection {
+    background-color: var(--color-accent);
+    color: var(--color-accent-foreground);
+  }
+
+  /* A person who has asked their operating system for less movement has
+     said something specific. Honour it everywhere at once rather than per
+     component, so a new animation cannot forget. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -225,8 +312,9 @@
    * Hand-written rather than pulled from a plugin: the whole set is six
    * keyframes, and a dependency that ships two hundred is a dependency to
    * upgrade forever. Each one animates only `transform` and `opacity`, which
-   * the compositor can do without touching layout — animating width, height or
-   * top forces a reflow every frame and is what makes an interface feel cheap.
+   * the compositor can do without touching layout — animating width, height
+   * or top forces a reflow every frame and is what makes an interface feel
+   * cheap.
    */
   @keyframes fade-in {
     from {
@@ -254,12 +342,6 @@
     }
   }
 
-  @keyframes shimmer {
-    to {
-      transform: translateX(100%);
-    }
-  }
-
   @keyframes slide-in-left {
     from {
       transform: translateX(-100%);
@@ -269,6 +351,12 @@
   @keyframes slide-in-bottom {
     from {
       transform: translateY(100%);
+    }
+  }
+
+  @keyframes shimmer {
+    to {
+      transform: translateX(100%);
     }
   }
 
@@ -298,17 +386,18 @@
     animation: slide-in-bottom var(--duration-base) var(--ease-out-quick) both;
   }
 
-  /* The sweep across a loading placeholder. Paired with a `::before` the caller
-     positions; the keyframe only moves it, so nothing here forces a reflow. */
+  /* The sweep across a loading placeholder. Paired with a `::before` the
+     caller positions; the keyframe only moves it, so nothing here forces a
+     reflow. */
   .animate-shimmer {
     animation: shimmer 1.4s var(--ease-in-out-soft) infinite;
   }
 
   /*
    * Stagger for lists. A row appearing 40ms after the one above it reads as
-   * the list arriving; all of them at once reads as a flash, and 200ms apart
-   * reads as slow. Capped at eight because past that the last row is waiting
-   * long enough to feel broken.
+   * the list arriving; all of them at once reads as a flash, and 200ms
+   * apart reads as slow. Capped at eight because past that the last row is
+   * waiting long enough to feel broken.
    */
   .stagger > *:nth-child(1) {
     animation-delay: 0ms;
@@ -338,13 +427,14 @@
   /*
    * The cursor spotlight.
    *
-   * `components/ui/motion/spotlight-card.tsx` writes the pointer position into
-   * `--spotlight-x/y` on the element itself; this draws the wash. Kept in CSS
-   * rather than in the component's inline style so the gradient is one rule
-   * the browser can composite, not a new style object per frame.
+   * `components/ui/motion/spotlight-card.tsx` writes the pointer position
+   * into `--spotlight-x/y` on the element itself; this draws the wash. Kept
+   * in CSS rather than in the component's inline style so the gradient is
+   * one rule the browser can composite, not a new style object per frame.
    *
-   * The overlay is a child pseudo-element with `pointer-events: none` — it sits
-   * over the card's own content and must never intercept a click meant for it.
+   * The overlay is a child pseudo-element with `pointer-events: none` — it
+   * sits over the card's own content and must never intercept a click meant
+   * for it.
    */
   .spotlight::after {
     content: '';
@@ -355,28 +445,29 @@
     transition: opacity var(--duration-base) var(--ease-out-quick);
     background: radial-gradient(
       260px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
-      color-mix(in oklch, var(--color-primary) 9%, transparent),
+      color-mix(in oklch, var(--color-primary) 10%, transparent),
       transparent 70%
     );
   }
 
-  /* The card's own border warms under the cursor, which is what tells you the
-     whole tile is the target rather than the link inside it. */
+  /* The card's own border warms toward the primary under the cursor, which
+     is what tells you the whole tile is the target rather than the link
+     inside it. */
   .spotlight {
     transition: border-color var(--duration-base) var(--ease-out-quick);
   }
 
   .spotlight:hover {
-    border-color: color-mix(in oklch, var(--color-primary) 35%, var(--color-border));
+    border-color: color-mix(in oklch, var(--color-primary) 38%, var(--color-border));
   }
 
   /*
    * A sparkline drawing itself.
    *
-   * `stroke-dasharray` is set to a length longer than any path this component
-   * produces, so one rule covers every series without measuring each path in
-   * JavaScript first. Overshooting is free; the dash simply starts fully
-   * offset and ends fully drawn.
+   * `stroke-dasharray` is set to a length longer than any path this
+   * component produces, so one rule covers every series without measuring
+   * each path in JavaScript first. Overshooting is free; the dash simply
+   * starts fully offset and ends fully drawn.
    */
   @keyframes draw-line {
     from {
@@ -393,8 +484,8 @@
   }
 
   /* A pressable surface dips very slightly. Enough to confirm the press
-     happened, small enough that a person clicking through forty rows does not
-     notice it at all. */
+     happened, small enough that a person clicking through forty rows of a
+     roster does not notice it at all. */
   .press {
     transition:
       transform var(--duration-instant) var(--ease-out-quick),

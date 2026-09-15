@@ -409,6 +409,26 @@ class CredentialActionSerializer(StrictSerializer):
     action = serializers.ChoiceField(choices=("password_reset", "email_verification"))
 
 
+class SessionSerializer(serializers.Serializer):
+    """One entry in a session list (ERP Phase 6, ADR-06).
+
+    Never the raw session key or its hash — those never leave the server
+    (rule §13). ``is_current`` is computed against whichever session made
+    *this* request, passed in through the serializer context.
+    """
+
+    id = serializers.UUIDField(source="pk", read_only=True)
+    device_label = serializers.CharField(read_only=True)
+    ip = serializers.IPAddressField(read_only=True, allow_null=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    last_seen_at = serializers.DateTimeField(read_only=True)
+    is_current = serializers.SerializerMethodField()
+
+    def get_is_current(self, obj) -> bool:
+        current_hash = self.context.get("current_session_key_hash")
+        return bool(current_hash) and obj.session_key_hash == current_hash
+
+
 class UserAuditEntrySerializer(serializers.Serializer):
     """One line of an account's history, shaped for reading.
 

@@ -94,6 +94,9 @@ matches `^[A-Za-z0-9._-]{8,64}$`.
 | `POST` | `login/` | public, rate limited | Identical 401 for every failure reason. On a correct password, when MFA applies (ERP Phase 5, ADR-05): `200 {"mfa_required": true, "methods": [...], "expires_in": 300}` instead of the signed-in user — see "Multi-factor authentication" below |
 | `POST` | `logout/` | authenticated | Ends the current session |
 | `POST` | `logout-all/` | authenticated | Revokes every session, including this one |
+| `GET` | `sessions/` | authenticated | The caller's own active sessions — see "Session management" below |
+| `DELETE` | `sessions/<id>/` | authenticated | Revoke one of the caller's own sessions |
+| `POST` | `sessions/revoke-others/` | authenticated | Revoke every one of the caller's sessions except this one |
 | `GET` | `me/` | authenticated | Current user plus their capability list |
 | `PATCH` | `me/` | authenticated | First name, last name, phone — nothing else |
 | `GET` | `me/email/` | authenticated | Email verification status |
@@ -116,6 +119,8 @@ matches `^[A-Za-z0-9._-]{8,64}$`.
 | `POST` | `<id>/set-active/` | `user.set_active` |
 | `GET` | `<id>/profile-image/` | any authenticated, active user |
 | `DELETE` | `<id>/profile-image/remove/` | `user.update_any` |
+| `GET` | `<id>/sessions/` | `session.view_any` — see "Session management" below |
+| `DELETE` | `<id>/sessions/<session_id>/` | `session.revoke_any`, fresh step-up |
 
 Listing supports `?search=`, `?role=`, `?is_active=`, `?is_email_verified=`,
 `?joined_after=`, `?joined_before=`, `?ordering=` and pagination. Search matches
@@ -531,6 +536,61 @@ call. The frontend's step-up dialog (`components/roles/step-up-dialog.tsx`)
 still offers only password and email code — `POST step-up/` already accepts
 `{method: "totp"|"recovery", code}` from any caller (see D-137), the UI
 addition is left for a later pass.
+
+### Session management — `/api/v1/auth/sessions/…`, `/api/v1/users/<id>/sessions/…` (ERP Phase 6, ADR-06)
+
+`UserSession` is an index over Django's own session table, not a second
+engine — written at every successful login (`LoginView`, and
+`MfaVerifyView`'s login-completion branch), right after
+`django.contrib.auth.login()` and the `cycle_key()` that follows it, since
+the session key is only stable from that point on. Only a SHA-256 hash of
+the key is ever stored (rule §13, same discipline as `OneTimeCode.code_hash`)
+— nothing here can be turned into a working session by reading the database.
+
+| Method | Path | Access | Body / notes |
+| --- | --- | --- | --- |
+| `GET` | `auth/sessions/` | Any active, signed-in user | `200 [{id, device_label, ip, created_at, last_seen_at, is_current}, ...]`, newest `last_seen_at` first. `is_current` compares the request's own session key hash |
+| `DELETE` | `auth/sessions/<id>/` | Any active, signed-in user | Revokes one of the caller's own sessions: deletes the underlying Django session row (signing that device out immediately) and stamps `revoked_at`. `404` for an id that is not the caller's own or already revoked. `409 {"code": "current_session"}` for the session making *this* request — `POST logout/` is the right endpoint for that |
+| `POST` | `auth/sessions/revoke-others/` | Any active, signed-in user | No body. Revokes every one of the caller's sessions except this one. `200 {"detail": "Signed out of N other session(s)."}` |
+| `GET` | `users/<id>/sessions/` | `session.view_any` | Same row shape as above, for the named user. Resolved through the caller's own `visible_accounts`, so a cross-centre id is a `404` |
+| `DELETE` | `users/<id>/sessions/<session_id>/` | `session.revoke_any`, fresh step-up | Same resolution as the `GET` above (a cross-centre id is `404` regardless of step-up state), then `403 step_up_required` without a fresh step-up. On success: `204`, the target user is emailed and the action audited (`session.revoked_by_admin`) |
+
+**Device label.** A small heuristic over the user-agent
+(`apps.accounts.sessions.device_label`) — recognises common browser/OS pairs
+("Chrome on macOS", "Safari on iOS") and falls back to "Unknown device"
+rather than ever showing the raw string, which can carry near-fingerprinting
+detail. The full user-agent is still stored (`UserSession.user_agent`, never
+returned by the API) since new-device detection needs it.
+
+**`last_seen_at`.** Touched by `TouchSessionActivityMiddleware` on every
+authenticated request, but the underlying `UPDATE` is guarded by `WHERE
+last_seen_at < now() − 5 minutes` — a busy session's row is written at most
+once every five minutes, not on every request, even though the guarded
+statement itself still runs each time (accounted for as one more flat
+per-request query in `tests/test_performance.py` and friends, the same way
+the session and user reads already are).
+
+**New-device detection.** At login, if this user has no prior `UserSession`
+(revoked or not — a device seen once and later signed out is still known)
+with the same recognised browser/OS pair from an IP in the same `/24`
+(IPv4) or `/64` (IPv6) as the current request, the login is treated as a new
+device: audited (`session.new_device_detected`) and emailed
+(`session.new_device` — always delivered, bypassing notification
+preferences, same as the MFA security emails).
+
+**Existing session-wide revocation is unchanged and now stays in sync.**
+`POST logout/` and `POST logout-all/` (`apps.accounts.services.
+revoke_sessions`) still delete the underlying Django session row(s) exactly
+as before; both now also stamp the matching `UserSession` row(s)
+`revoked_at` so `GET sessions/` never shows a session that a different
+endpoint already ended. Audit: the two per-session endpoints above use the
+new `session.revoked` / `session.revoked_by_admin` actions; `logout-all/`
+keeps its existing `auth.sessions.revoked`.
+
+Policy keys `session.max_age_hours` (default 12, floor 1, ceiling 168) and
+`session.idle_minutes` (default 0, meaning none) exist in the schema
+registry for a future phase to enforce; this phase does not yet expire a
+session on either basis.
 
 ### Permission locking — `/api/v1/roles/<slug>/permissions/<code>/lock|unlock/` (ERP Phase 2)
 

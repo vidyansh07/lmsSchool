@@ -1,11 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { RequireAuth } from "@/components/require-auth";
 import { MfaSettingsCard } from "@/components/settings/mfa-settings-card";
-import { Alert, AlertTitle } from "@/components/ui/alert";
+import { SessionsCard } from "@/components/settings/sessions-card";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,18 +16,16 @@ import {
 } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { ApiError, fieldErrors } from "@/lib/api";
-import { changePassword, logoutEverywhere } from "@/lib/auth";
+import { fieldErrors } from "@/lib/api";
+import { changePassword } from "@/lib/auth";
 
 function SecuritySettings() {
-  const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [revokeMessage, setRevokeMessage] = useState("");
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -48,22 +46,6 @@ function SecuritySettings() {
       setErrors(fieldErrors(cause));
     } finally {
       setIsSaving(false);
-    }
-  }
-
-  async function onRevoke() {
-    try {
-      const response = await logoutEverywhere();
-      setRevokeMessage(response.detail);
-      // Signing out everywhere includes this browser, so send the user to the
-      // sign-in page rather than leaving a dead session on screen.
-      router.replace("/login");
-    } catch (cause) {
-      setRevokeMessage(
-        cause instanceof ApiError
-          ? cause.message
-          : "Could not sign out of other sessions.",
-      );
     }
   }
 
@@ -140,25 +122,7 @@ function SecuritySettings() {
 
       <MfaSettingsCard />
 
-      <Card className="animate-rise-in">
-        <CardHeader>
-          <CardTitle>Active sessions</CardTitle>
-          <CardDescription>
-            Sign out of every device, including this one. Use this if you think
-            someone else has access to your account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {revokeMessage ? (
-            <Alert variant="info">
-              <AlertTitle>{revokeMessage}</AlertTitle>
-            </Alert>
-          ) : null}
-          <Button variant="destructive" onClick={() => void onRevoke()}>
-            Sign out everywhere
-          </Button>
-        </CardContent>
-      </Card>
+      <SessionsCard />
     </div>
   );
 }

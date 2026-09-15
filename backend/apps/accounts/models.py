@@ -36,6 +36,7 @@ from .managers import UserManager
 from .mfa import MfaDevice, MfaMethod, RecoveryCode
 from .otp import OneTimeCode, OtpPurpose
 from .roles import Capability, UserRole, effective_capabilities, has_capability
+from .sessions import UserSession
 
 __all__ = [
     "AccountToken",
@@ -48,6 +49,7 @@ __all__ = [
     "TokenPurpose",
     "User",
     "UserRole",
+    "UserSession",
 ]
 
 

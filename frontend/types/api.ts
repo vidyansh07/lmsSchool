@@ -2067,3 +2067,20 @@ export interface MfaEnrolResponse {
 export interface RecoveryCodesResponse {
   recovery_codes: string[];
 }
+
+// --- Sessions (ERP Phase 6, ADR-06) ------------------------------------------
+
+/** One entry of `GET /auth/sessions/` or `GET /users/{id}/sessions/`
+ *  (`apps.accounts.serializers.SessionSerializer`). Never the session key or
+ *  its hash — those never leave the server. `device_label` is always a
+ *  recognised "Browser on OS" string or `"Unknown device"`, never the raw
+ *  user-agent. On the admin listing `is_current` is meaningless (it is not
+ *  the caller's own session) and should not be rendered. */
+export interface SessionRow {
+  id: string;
+  device_label: string;
+  ip: string | null;
+  created_at: string;
+  last_seen_at: string;
+  is_current: boolean;
+}

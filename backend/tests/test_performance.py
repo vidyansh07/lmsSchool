@@ -501,7 +501,11 @@ def test_the_batch_summary_counts_without_a_join_explosion(
     # Seven students, all present at every counted class.
     assert row["students"] == Enrollment.objects.filter(batch=batch).count()
     assert row["attendance_percent"] == 100.0
-    assert len(captured.captured_queries) <= 12
+    # 12 plus one: this is the first authenticated request of a fresh session
+    # (no priming call precedes it, unlike its siblings elsewhere), so
+    # `TouchSessionActivityMiddleware` (ERP Phase 6) has no cached marker yet
+    # and checks the database once — its own budget, not this endpoint's.
+    assert len(captured.captured_queries) <= 13
 
 
 # ---------------------------------------------------------------------------

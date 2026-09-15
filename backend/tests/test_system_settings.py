@@ -472,14 +472,16 @@ def test_an_anonymous_caller_is_refused_the_settings(api_client_no_csrf):
 def test_reading_the_settings_costs_one_query(
     django_assert_max_num_queries, api_client_no_csrf, admin_user, settings_row
 ):
-    """Eight, of which exactly one is this endpoint's.
+    """Nine, of which exactly one is this endpoint's.
 
-    The other seven are what every authenticated GET in this suite pays: the
+    The other eight are what every authenticated GET in this suite pays: the
     savepoints `ATOMIC_REQUESTS` opens and releases, the session read, the user
-    read, and the session-expiry touch. What this pins is the difference — the
-    settings row and its `updated_by` are fetched together, and resolving the
-    values in force reuses that row rather than reading the table a second
-    time. Either of those regressing takes it to nine.
+    read, the session-expiry touch, and — since ERP Phase 6 —
+    `TouchSessionActivityMiddleware`'s guarded `UserSession.last_seen_at`
+    update. What this pins is the difference — the settings row and its
+    `updated_by` are fetched together, and resolving the values in force
+    reuses that row rather than reading the table a second time. Either of
+    those regressing takes it to ten.
     """
     api_client_no_csrf.force_login(admin_user)
     # The first request after a cache clear also resolves the caller's role
@@ -487,7 +489,7 @@ def test_reading_the_settings_costs_one_query(
     # the roles cache's, not this endpoint's, so it is paid once before the
     # measurement.
     assert api_client_no_csrf.get(_settings_url()).status_code == 200
-    with django_assert_max_num_queries(8):
+    with django_assert_max_num_queries(9):
         assert api_client_no_csrf.get(_settings_url()).status_code == 200
 
 

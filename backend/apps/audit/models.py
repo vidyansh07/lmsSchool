@@ -33,6 +33,13 @@ class AuditAction(models.TextChoices):
     LOGOUT = "auth.logout", _("Logout")
     SESSIONS_REVOKED = "auth.sessions.revoked", _("Sessions revoked")
 
+    # --- Session inventory (ERP Phase 6, ADR-06). Distinct from
+    # `SESSIONS_REVOKED` above, which is the pre-existing "sign out
+    # everywhere" bulk action; these cover the per-session endpoints.
+    SESSION_REVOKED = "session.revoked", _("Session revoked")
+    SESSION_REVOKED_BY_ADMIN = "session.revoked_by_admin", _("Session revoked by an administrator")
+    SESSION_NEW_DEVICE_DETECTED = "session.new_device_detected", _("New device detected at sign-in")
+
     # --- Credentials. The tokens and passwords themselves are never recorded.
     PASSWORD_CHANGED = "auth.password.changed", _("Password changed")
     PASSWORD_RESET_REQUESTED = "auth.password.reset_requested", _("Password reset requested")

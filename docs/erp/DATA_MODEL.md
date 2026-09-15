@@ -308,7 +308,7 @@ AuditLog (existing) ← every write above
 | Activity | (student, -created_at), (assigned_to, status, due_at), (branch, status), (due_at) partial where status in (planned, assigned, in_progress) |
 | Delivery | (state, next_attempt_at), (recipient, -created_at) |
 | OneTimeCode | (user, purpose, created_at) |
-| UserSession | (user), unique(session_key_hash) |
+| UserSession | (user, revoked_at), unique(session_key_hash) — no separate (user) index: the FK already carries one |
 | AutomationRun | unique(rule, occurrence_key) |
 | Policy | unique(category, key, branch) partial |
 | FormField | unique(version, key) |

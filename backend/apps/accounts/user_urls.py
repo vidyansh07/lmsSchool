@@ -10,6 +10,8 @@ from .user_views import (
     UserCredentialActionView,
     UserDetailView,
     UserListCreateView,
+    UserSessionListView,
+    UserSessionRevokeView,
     UserSetActiveView,
 )
 from .views import AdminProfileImageView, ProfileImageFileView
@@ -27,6 +29,12 @@ urlpatterns = [
     ),
     path("<uuid:user_id>/audit/", UserAuditView.as_view(), name="audit"),
     path("<uuid:user_id>/branch/", UserBranchView.as_view(), name="branch"),
+    path("<uuid:user_id>/sessions/", UserSessionListView.as_view(), name="sessions"),
+    path(
+        "<uuid:user_id>/sessions/<uuid:session_id>/",
+        UserSessionRevokeView.as_view(),
+        name="sessions-revoke",
+    ),
     path(
         "<uuid:user_id>/scope-grants/",
         include((user_scope_urlpatterns, "scope-grants")),

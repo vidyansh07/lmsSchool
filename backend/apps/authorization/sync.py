@@ -60,6 +60,17 @@ CATEGORY_BY_RESOURCE = {
     "saved_filter": "system",
 }
 
+#: Two codes share the "session" resource prefix with the pre-existing class
+#: session capability (`session.manage_any`, category "operations") but the
+#: catalog (Phase 6, ADR-06) puts them under "System" instead — they are
+#: about the security artifact `UserSession`, not a class session. A
+#: resource-keyed lookup can only pick one category per prefix, so these two
+#: exact codes override it.
+CATEGORY_OVERRIDE_BY_CODE = {
+    "session.view_any": "system",
+    "session.revoke_any": "system",
+}
+
 LOCKABLE = frozenset(
     {
         "user.create",
@@ -82,6 +93,7 @@ LOCKABLE = frozenset(
         "permission.assign",
         "permission.lock",
         "policy.manage",
+        "session.revoke_any",
     }
 )
 
@@ -118,10 +130,11 @@ def sync_catalog(apps=None) -> dict[str, int]:
     existing = {row.code: row for row in Permission.objects.all()}
     for code, label in wanted.items():
         resource, _, action = code.partition(".")
+        default_category = CATEGORY_BY_RESOURCE.get(resource, "system")
         fields = {
             "resource": resource,
             "action": action,
-            "category": CATEGORY_BY_RESOURCE.get(resource, "system"),
+            "category": CATEGORY_OVERRIDE_BY_CODE.get(code, default_category),
             "description": label,
             "is_lockable": code in LOCKABLE,
             "is_active": True,

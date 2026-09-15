@@ -20,17 +20,19 @@ from apps.accounts.roles import has_capability
 from apps.common.permissions import Capability, HasCapability
 from apps.organisation.access import resolve_submitted_branch
 
-from . import services
+from . import services, sessions
 from .models import User
 from .serializers import (
     AdminUserCreateSerializer,
     AdminUserDetailSerializer,
     AdminUserUpdateSerializer,
     CredentialActionSerializer,
+    SessionSerializer,
     SetActiveSerializer,
     UserAuditEntrySerializer,
     UserBranchSerializer,
 )
+from .stepup import StepUpRequired, is_fresh
 
 USERS_TAG = ["users"]
 
@@ -360,3 +362,58 @@ class UserAuditView(APIView):
             .order_by("-created_at")[: self.LIMIT]
         )
         return Response(UserAuditEntrySerializer(entries, many=True).data)
+
+
+class UserSessionListView(APIView):
+    """An administrator's view of somebody else's active sessions (ERP Phase
+    6, ADR-06). Read-only; ending one is the sibling revoke endpoint below."""
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.SESSION_VIEW_ANY
+
+    @extend_schema(
+        summary="List a user's active sessions",
+        responses={200: SessionSerializer(many=True)},
+        tags=USERS_TAG,
+    )
+    def get(self, request, user_id):
+        # Resolved out of the scoped queryset (rule §2): a cross-centre id
+        # 404s here rather than confirming a real account exists elsewhere.
+        target = get_object_or_404(_scoped_users(request.user), pk=user_id)
+        rows = sessions.list_active_sessions(user=target)
+        return Response(SessionSerializer(rows, many=True).data)
+
+
+class UserSessionRevokeView(APIView):
+    """An administrator ending somebody else's session (ERP Phase 6, ADR-06).
+
+    Requires a fresh step-up on top of the capability, the same pattern
+    ``MfaTotpDisableView`` uses for another account-security act: refuse with
+    ``403 step_up_required`` and let the interface open the step-up dialog
+    and retry. The target user is audited and emailed.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.SESSION_REVOKE_ANY
+
+    @extend_schema(
+        summary="Revoke a user's session",
+        request=None,
+        responses={
+            204: None,
+            403: OpenApiResponse(description="Step-up required."),
+            404: OpenApiResponse(description="No such active session for that user."),
+        },
+        tags=USERS_TAG,
+    )
+    def delete(self, request, user_id, session_id):
+        # Resolved out of the scoped queryset first (rule §2): a cross-centre
+        # id 404s regardless of the caller's step-up state, rather than the
+        # step-up check answering a fixed 403 for an id that was never
+        # reachable in the first place.
+        target = get_object_or_404(_scoped_users(request.user), pk=user_id)
+        row = get_object_or_404(sessions.list_active_sessions(user=target), pk=session_id)
+        if not is_fresh(request):
+            raise StepUpRequired()
+        sessions.revoke_session(session=row, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
