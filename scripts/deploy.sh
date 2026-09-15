@@ -76,6 +76,10 @@ remote "for i in \$(seq 1 60); do
 done"
 remote "$COMPOSE ps --format '  {{.Service}}\t{{.Status}}'"
 
+# The permission catalog is code (ADR-01); the rows follow it on every deploy.
+echo "▶ 4b/5 permission catalog"
+remote "$COMPOSE exec -T backend python manage.py sync_permissions 2>&1 | tail -1"
+
 if [ "$SEED" = true ]; then
   echo "▶ 5/5 seed: demo accounts"
   remote "$COMPOSE exec -T backend python manage.py seed_demo_data 2>&1 | grep -v grras.audit | tail -3"
