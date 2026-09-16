@@ -91,13 +91,17 @@ export const POLICY_CHOICES: Record<string, string[]> = {
 };
 
 /** The components `performance.weights` carries, mirroring
- *  `apps.policies.schemas.PERFORMANCE_COMPONENTS`. */
+ *  `apps.policies.schemas.PERFORMANCE_COMPONENTS`. `activity` (ERP Phase 12,
+ *  ADR-10) is the sixth: the backend rejects a `PUT` that does not name
+ *  every key here exactly, so this list must stay in lockstep with the
+ *  backend tuple, not just add up to the same components by coincidence. */
 export const PERFORMANCE_COMPONENTS = [
   "attendance",
   "assessment",
   "assignments",
   "projects",
   "progress",
+  "activity",
 ] as const;
 
 export const PERFORMANCE_COMPONENT_LABEL: Record<
@@ -109,6 +113,7 @@ export const PERFORMANCE_COMPONENT_LABEL: Record<
   assignments: "Assignments",
   projects: "Projects",
   progress: "Progress vs. plan",
+  activity: "Activity",
 };
 
 /** Which editor a `category.key` needs, from the resolved value's own shape

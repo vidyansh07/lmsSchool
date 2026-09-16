@@ -95,8 +95,28 @@ def test_student_360_shape(api_client_no_csrf, admin_user, student_profile, enro
         "total_sessions": 0,
         "has_records": False,
     }
-    # Placeholders Phases 12/13/14 fill in — the correct *shape*, neutral data.
-    assert body["performance"] == {"components": [], "overall_score": None}
+    # Real ADR-10 performance data (Phase 12) — a fresh enrolment has touched
+    # nothing but its two published lessons (0% done), so `progress` is the
+    # only measured component and `overall_score` is exactly its value.
+    performance = body["performance"]
+    assert performance["overall_score"] == 0.0
+    components_by_key = {c["key"]: c for c in performance["components"]}
+    assert set(components_by_key) == {
+        "attendance",
+        "assessment",
+        "assignments",
+        "projects",
+        "progress",
+        "activity",
+    }
+    assert components_by_key["progress"]["value"] == 0
+    assert components_by_key["progress"]["weight"] == 1.0
+    assert components_by_key["progress"]["contribution"] == 0.0
+    for key in ("attendance", "assessment", "assignments", "projects", "activity"):
+        assert components_by_key[key]["value"] is None
+        assert components_by_key[key]["contribution"] is None
+        assert components_by_key[key]["sources"] == []
+    # Still placeholders Phases 13/14 fill in — the correct *shape*, neutral data.
     assert body["risk"] == {"level": "none", "triggered": []}
     assert body["next_actions"] == []
     assert body["fee_status"] == student_profile.fee_status
@@ -108,6 +128,58 @@ def test_student_360_shape(api_client_no_csrf, admin_user, student_profile, enro
         "projects": 0,
     }
     assert body["recent_activities"] == []
+
+
+def test_student_360_reflects_completed_scored_activities_in_performance(
+    api_client_no_csrf, admin_user, student_profile, enrollment, trainer_profile
+):
+    """ERP Phase 12: the real performance engine, not the placeholder, once
+    the student has something scored on this enrolment."""
+    from decimal import Decimal
+
+    from django.utils import timezone
+
+    from apps.work.models import Activity, ActivityStatus, ActivityType
+
+    activity_type = ActivityType.objects.create(
+        slug="s360-scored",
+        name="Scored Mock Interview",
+        category="interview",
+        allowed_creator_roles=["admin", "superadmin", "manager", "trainer"],
+        allowed_assignee_roles=["trainer"],
+        performance_weight=Decimal("1.00"),
+    )
+    Activity.objects.create(
+        student=student_profile,
+        enrollment=enrollment,
+        batch=enrollment.batch,
+        branch=enrollment.batch.branch,
+        activity_type=activity_type,
+        title="Scored Mock Interview",
+        status=ActivityStatus.COMPLETED,
+        created_by=admin_user,
+        performed_by=trainer_profile.user,
+        score=Decimal("72"),
+        max_score=Decimal("90"),
+        completed_at=timezone.now(),
+    )
+
+    response = _client(admin_user).get(_url(student_profile))
+    assert response.status_code == 200
+    body = response.json()
+
+    performance = body["performance"]
+    # progress (0%, untouched lessons) and activity (72/90*100 = 80%),
+    # equal default weights: (0 + 80) / 2 = 40.0 — no longer the placeholder.
+    assert performance["overall_score"] == 40.0
+    components_by_key = {c["key"]: c for c in performance["components"]}
+    activity_component = components_by_key["activity"]
+    assert activity_component["value"] == 80.0
+    assert len(activity_component["sources"]) == 1
+    source = activity_component["sources"][0]
+    assert source["type"] == "Scored Mock Interview"
+    assert source["score"] == 80.0
+    assert source["trainer"] == trainer_profile.user.full_name
 
 
 def test_student_360_without_an_enrollment_degrades_to_neutral_values(
@@ -125,6 +197,9 @@ def test_student_360_without_an_enrollment_degrades_to_neutral_values(
     assert body["counsellor"] is None
     assert body["progress"] is None
     assert body["attendance_summary"]["has_records"] is False
+    # No enrolment to compute a performance picture from: the inert
+    # placeholder shape, not an error.
+    assert body["performance"] == {"components": [], "overall_score": None}
     assert body["counts"] == {
         "activities_open": 0,
         "activities_overdue": 0,

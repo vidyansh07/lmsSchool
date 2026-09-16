@@ -435,6 +435,486 @@ class TestStudentPerformanceOverallScore:
         assert result["counts"]["components_measured"] == 2
 
 
+# ---------------------------------------------------------------------------
+# ADR-10 — weighted components, provenance, the activity component
+# ---------------------------------------------------------------------------
+
+
+def _activity_type(**overrides):
+    from apps.work.models import ActivityType
+
+    defaults = {
+        "slug": f"perf-engine-{ActivityType.objects.count()}",
+        "name": "Mock Interview",
+        "category": "interview",
+        "allowed_creator_roles": ["admin", "superadmin", "manager", "trainer"],
+        "allowed_assignee_roles": ["trainer"],
+        "performance_weight": Decimal("1.00"),
+    }
+    defaults.update(overrides)
+    return ActivityType.objects.create(**defaults)
+
+
+def _terminal_activity(
+    *,
+    enrollment,
+    admin_user,
+    activity_type,
+    status=None,
+    score=None,
+    max_score=None,
+    performed_by=None,
+    assigned_to=None,
+    completed_at=None,
+):
+    from apps.work.models import Activity, ActivityStatus
+
+    return Activity.objects.create(
+        student=enrollment.student,
+        enrollment=enrollment,
+        batch=enrollment.batch,
+        branch=enrollment.batch.branch,
+        activity_type=activity_type,
+        title=activity_type.name,
+        status=status or ActivityStatus.COMPLETED,
+        created_by=admin_user,
+        performed_by=performed_by,
+        assigned_to=assigned_to,
+        score=score,
+        max_score=max_score,
+        completed_at=completed_at if completed_at is not None else timezone.now(),
+    )
+
+
+@pytest.mark.django_db
+class TestActivityComponent:
+    def test_none_when_there_are_no_qualifying_activities(self, enrollment):
+        from apps.performance.engine import student_performance
+
+        result = student_performance(enrollment)
+        activity = next(c for c in result["components"] if c["key"] == "activity")
+        assert activity["value"] is None
+        assert activity["contribution"] is None
+        assert activity["sources"] == []
+
+    def test_weighted_mean_by_type_weight(self, enrollment, admin_user, trainer_profile):
+        from apps.performance.engine import student_performance
+
+        heavy = _activity_type(slug="pe-heavy", performance_weight=Decimal("2.00"))
+        light = _activity_type(slug="pe-light", performance_weight=Decimal("1.00"))
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=heavy,
+            score=Decimal("90"),
+            max_score=Decimal("100"),
+            performed_by=trainer_profile.user,
+        )
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=light,
+            score=Decimal("60"),
+            max_score=Decimal("100"),
+            performed_by=trainer_profile.user,
+        )
+
+        result = student_performance(enrollment)
+        activity = next(c for c in result["components"] if c["key"] == "activity")
+        # (90*2 + 60*1) / (2+1) = 80
+        assert activity["value"] == 80.0
+        assert len(activity["sources"]) == 2
+
+    def test_a_zero_weight_type_contributes_nothing(self, enrollment, admin_user, trainer_profile):
+        from apps.performance.engine import student_performance
+
+        scored = _activity_type(slug="pe-scored", performance_weight=Decimal("1.00"))
+        zero = _activity_type(slug="pe-zero", performance_weight=Decimal("0.00"))
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=scored,
+            score=Decimal("70"),
+            max_score=Decimal("100"),
+            performed_by=trainer_profile.user,
+        )
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=zero,
+            score=Decimal("10"),
+            max_score=Decimal("100"),
+            performed_by=trainer_profile.user,
+        )
+
+        result = student_performance(enrollment)
+        activity = next(c for c in result["components"] if c["key"] == "activity")
+        # The zero-weight type's 10% never moves the number at all.
+        assert activity["value"] == 70.0
+        # Provenance still lists both — "what did we look at", not only "what moved it".
+        assert len(activity["sources"]) == 2
+
+    def test_every_qualifying_type_at_zero_weight_is_nothing_to_measure(
+        self, enrollment, admin_user, trainer_profile
+    ):
+        from apps.performance.engine import student_performance
+
+        zero = _activity_type(slug="pe-all-zero", performance_weight=Decimal("0.00"))
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=zero,
+            score=Decimal("50"),
+            max_score=Decimal("100"),
+            performed_by=trainer_profile.user,
+        )
+
+        result = student_performance(enrollment)
+        activity = next(c for c in result["components"] if c["key"] == "activity")
+        assert activity["value"] is None
+        assert activity["contribution"] is None
+
+    def test_under_review_does_not_count_toward_the_component(
+        self, enrollment, admin_user, trainer_profile
+    ):
+        from apps.performance.engine import student_performance
+        from apps.work.models import ActivityStatus
+
+        activity_type = _activity_type(slug="pe-pending", requires_review=True)
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=activity_type,
+            status=ActivityStatus.UNDER_REVIEW,
+            score=Decimal("90"),
+            max_score=Decimal("100"),
+            performed_by=trainer_profile.user,
+        )
+
+        result = student_performance(enrollment)
+        activity = next(c for c in result["components"] if c["key"] == "activity")
+        assert activity["value"] is None
+        assert activity["sources"] == []
+
+    def test_approved_counts_the_same_as_completed(self, enrollment, admin_user, trainer_profile):
+        from apps.performance.engine import student_performance
+        from apps.work.models import ActivityStatus
+
+        activity_type = _activity_type(slug="pe-approved")
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=activity_type,
+            status=ActivityStatus.APPROVED,
+            score=Decimal("40"),
+            max_score=Decimal("80"),
+            performed_by=trainer_profile.user,
+        )
+
+        result = student_performance(enrollment)
+        activity = next(c for c in result["components"] if c["key"] == "activity")
+        assert activity["value"] == 50.0
+
+    def test_an_unscored_activity_type_does_not_qualify(
+        self, enrollment, admin_user, trainer_profile
+    ):
+        from apps.performance.engine import student_performance
+
+        activity_type = _activity_type(slug="pe-unscored")
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=activity_type,
+            score=None,
+            max_score=None,
+            performed_by=trainer_profile.user,
+        )
+
+        result = student_performance(enrollment)
+        activity = next(c for c in result["components"] if c["key"] == "activity")
+        assert activity["value"] is None
+        assert activity["sources"] == []
+
+    def test_sources_carry_type_score_date_and_trainer(
+        self, enrollment, admin_user, trainer_profile
+    ):
+        from apps.performance.engine import student_performance
+
+        activity_type = _activity_type(slug="pe-sourced", name="Sourced Interview")
+        when = timezone.now()
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=activity_type,
+            score=Decimal("45"),
+            max_score=Decimal("90"),
+            performed_by=trainer_profile.user,
+            completed_at=when,
+        )
+
+        result = student_performance(enrollment)
+        activity = next(c for c in result["components"] if c["key"] == "activity")
+        [source] = activity["sources"]
+        assert source["type"] == "Sourced Interview"
+        assert source["score"] == 50.0
+        assert source["date"] == when.isoformat()
+        assert source["trainer"] == trainer_profile.user.full_name
+
+    def test_falls_back_to_assigned_to_when_nobody_performed_it(
+        self, enrollment, admin_user, trainer_profile
+    ):
+        from apps.performance.engine import student_performance
+
+        activity_type = _activity_type(slug="pe-assigned-fallback")
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=activity_type,
+            score=Decimal("30"),
+            max_score=Decimal("60"),
+            performed_by=None,
+            assigned_to=trainer_profile.user,
+        )
+
+        result = student_performance(enrollment)
+        activity = next(c for c in result["components"] if c["key"] == "activity")
+        assert activity["sources"][0]["trainer"] == trainer_profile.user.full_name
+
+
+@pytest.mark.django_db
+class TestWeightedOverallScore:
+    def test_regression_equals_todays_plain_mean_with_default_weights(
+        self, enrollment, batch, admin_user
+    ):
+        """The core regression contract (ADR-10): with equal default weights
+        and no completed activities, the weighted mean must equal exactly
+        what `student_performance` already returned before this phase — the
+        plain mean of whichever components have data. This is deliberately
+        independent of `overall_score`'s own implementation: it recomputes
+        the plain mean from the individual component values and compares."""
+        from apps.performance.engine import student_performance
+
+        sessions = [
+            ClassSession.objects.create(
+                batch=batch,
+                session_date=date.today() - timedelta(days=4 - index),
+                start_time="09:00",
+                end_time="11:00",
+                status=SessionStatus.COMPLETED,
+                created_by=admin_user,
+            )
+            for index in range(4)
+        ]
+        for session in sessions:
+            AttendanceRecord.objects.create(
+                session=session, enrollment=enrollment, status=AttendanceStatus.PRESENT
+            )
+        assessment = Assessment.objects.create(
+            batch=enrollment.batch,
+            course=enrollment.course,
+            title="Weekly Test",
+            category=AssessmentCategory.WEEKLY_TEST,
+            delivery=AssessmentDelivery.OFFLINE,
+            status=AssessmentStatus.PUBLISHED,
+            max_marks=100,
+            created_by=admin_user,
+        )
+        AssessmentResult.objects.create(
+            assessment=assessment,
+            enrollment=enrollment,
+            marks_obtained=80,
+            source=ResultSource.MANUAL,
+        )
+
+        result = student_performance(enrollment)
+        # attendance 100%, assessment 80%, progress 0% (untouched lessons):
+        # three measured components, no activity data at all.
+        measured = [
+            result["attendance"]["percent"],
+            result["assessment"]["average_percent"],
+            result["progress"]["percent"],
+        ]
+        assert all(value is not None for value in measured)
+        assert result["overall_score"] == round(sum(measured) / len(measured), 1)
+        assert result["counts"]["components_measured"] == 3
+
+        activity = next(c for c in result["components"] if c["key"] == "activity")
+        assert activity["value"] is None  # no completed Activities in this fixture
+
+    def test_components_shape_and_contribution_sums_to_overall_score(
+        self, enrollment, batch, admin_user
+    ):
+        from apps.performance.engine import student_performance
+        from apps.policies.schemas import PERFORMANCE_COMPONENTS
+
+        session = ClassSession.objects.create(
+            batch=batch,
+            session_date=date.today() - timedelta(days=1),
+            start_time="09:00",
+            end_time="11:00",
+            status=SessionStatus.COMPLETED,
+            created_by=admin_user,
+        )
+        AttendanceRecord.objects.create(
+            session=session, enrollment=enrollment, status=AttendanceStatus.PRESENT
+        )
+        assessment = Assessment.objects.create(
+            batch=enrollment.batch,
+            course=enrollment.course,
+            title="Weekly Test",
+            category=AssessmentCategory.WEEKLY_TEST,
+            delivery=AssessmentDelivery.OFFLINE,
+            status=AssessmentStatus.PUBLISHED,
+            max_marks=100,
+            created_by=admin_user,
+        )
+        AssessmentResult.objects.create(
+            assessment=assessment,
+            enrollment=enrollment,
+            marks_obtained=80,
+            source=ResultSource.MANUAL,
+        )
+
+        result = student_performance(enrollment)
+        keys = [component["key"] for component in result["components"]]
+        assert keys == list(PERFORMANCE_COMPONENTS)
+        for component in result["components"]:
+            assert component["weight"] == 1.0
+            assert component["label"]
+            # No activities in this fixture: every component's sources is empty.
+            assert component["sources"] == []
+
+        contributions = [
+            component["contribution"]
+            for component in result["components"]
+            if component["contribution"] is not None
+        ]
+        assert round(sum(contributions), 1) == result["overall_score"]
+
+    def test_custom_weights_change_the_overall_score(self, enrollment, batch, admin_user):
+        from apps.performance.engine import student_performance
+        from apps.policies.services import update_policy
+
+        session = ClassSession.objects.create(
+            batch=batch,
+            session_date=date.today() - timedelta(days=1),
+            start_time="09:00",
+            end_time="11:00",
+            status=SessionStatus.COMPLETED,
+            created_by=admin_user,
+        )
+        AttendanceRecord.objects.create(
+            session=session, enrollment=enrollment, status=AttendanceStatus.PRESENT
+        )
+        assessment = Assessment.objects.create(
+            batch=enrollment.batch,
+            course=enrollment.course,
+            title="Weekly Test",
+            category=AssessmentCategory.WEEKLY_TEST,
+            delivery=AssessmentDelivery.OFFLINE,
+            status=AssessmentStatus.PUBLISHED,
+            max_marks=100,
+            created_by=admin_user,
+        )
+        AssessmentResult.objects.create(
+            assessment=assessment,
+            enrollment=enrollment,
+            marks_obtained=80,
+            source=ResultSource.MANUAL,
+        )
+        # attendance 100%, assessment 80%, progress 0% (untouched lessons).
+
+        update_policy(
+            actor=admin_user,
+            category="performance",
+            key="weights",
+            value={
+                "attendance": 3,
+                "assessment": 1,
+                "assignments": 1,
+                "projects": 1,
+                "progress": 1,
+                "activity": 1,
+            },
+            reason="Weight attendance heavily for this test.",
+        )
+
+        result = student_performance(enrollment)
+        # (100*3 + 80*1 + 0*1) / (3+1+1) = 380/5 = 76.0
+        assert result["overall_score"] == 76.0
+        attendance = next(c for c in result["components"] if c["key"] == "attendance")
+        assert attendance["weight"] == 3.0
+
+    def test_a_policy_weight_of_zero_excludes_a_measured_component_without_dividing_by_zero(
+        self, enrollment, batch, admin_user
+    ):
+        """The exact scenario ADR-10 promises for `performance.weights`: an
+        administrator sets one component's *policy* weight to 0 — distinct
+        from `ActivityType.performance_weight`, which is a type-level, not a
+        top-level, weight — while that component still has real measured
+        data. It must keep reporting its own `value` (there is something to
+        show), contribute nothing to `overall_score`, and never raise
+        `ZeroDivisionError` even though its own term in the weighted sum is
+        exactly zero."""
+        from apps.performance.engine import student_performance
+        from apps.policies.services import update_policy
+
+        session = ClassSession.objects.create(
+            batch=batch,
+            session_date=date.today() - timedelta(days=1),
+            start_time="09:00",
+            end_time="11:00",
+            status=SessionStatus.COMPLETED,
+            created_by=admin_user,
+        )
+        AttendanceRecord.objects.create(
+            session=session, enrollment=enrollment, status=AttendanceStatus.PRESENT
+        )
+        assessment = Assessment.objects.create(
+            batch=enrollment.batch,
+            course=enrollment.course,
+            title="Weekly Test",
+            category=AssessmentCategory.WEEKLY_TEST,
+            delivery=AssessmentDelivery.OFFLINE,
+            status=AssessmentStatus.PUBLISHED,
+            max_marks=100,
+            created_by=admin_user,
+        )
+        AssessmentResult.objects.create(
+            assessment=assessment,
+            enrollment=enrollment,
+            marks_obtained=80,
+            source=ResultSource.MANUAL,
+        )
+        # attendance 100%, assessment 80% (measured, but weighted to 0 below),
+        # progress 0% (untouched lessons).
+
+        update_policy(
+            actor=admin_user,
+            category="performance",
+            key="weights",
+            value={
+                "attendance": 1,
+                "assessment": 0,
+                "assignments": 1,
+                "projects": 1,
+                "progress": 1,
+                "activity": 1,
+            },
+            reason="Assessment should not count this term.",
+        )
+
+        result = student_performance(enrollment)
+        # (100*1 + 80*0 + 0*1) / (1+0+1) = 100/2 = 50.0 -- assessment's own
+        # weight-0 term adds neither to the numerator nor to the denominator.
+        assert result["overall_score"] == 50.0
+
+        assessment_component = next(c for c in result["components"] if c["key"] == "assessment")
+        assert assessment_component["weight"] == 0.0
+        assert assessment_component["value"] == 80.0  # still reported: there is data
+        assert assessment_component["contribution"] == 0.0  # but it moved nothing
+
+
 @pytest.mark.django_db
 class TestAttendanceRiskViaEngine:
     def _sessions(self, batch, admin_user, count):
@@ -689,11 +1169,18 @@ class TestStudentPerformanceBulk:
     ):
         from apps.common.request_context import clear_scope
         from apps.performance.engine import student_performance_bulk
+        from apps.policies.resolver import forget_policies
 
         def measure() -> int:
             # Cleared so neither call benefits from the other's cached policy
             # lookup — otherwise the *second* call looks artificially cheaper.
+            # Two layers: `clear_scope` resets the per-request memo both
+            # `apps.academics.policies` and `apps.policies.resolver` keep;
+            # `forget_policies` additionally drops the latter's cross-request
+            # cache (`performance.weights`, ADR-10), which `clear_scope` alone
+            # does not touch.
             clear_scope()
+            forget_policies()
             cohort = Enrollment.objects.filter(batch=batch)
             with CaptureQueriesContext(connection) as captured:
                 student_performance_bulk(cohort)
@@ -1021,6 +1508,183 @@ class TestReviewWriting:
         assert review_id not in {row["id"] for row in listing.data}
         assert PerformanceReview.all_objects.filter(pk=review_id).exists()
         assert not PerformanceReview.objects.filter(pk=review_id).exists()
+
+
+@pytest.mark.django_db
+class TestReviewExtendedFields:
+    """`DATA_MODEL.md`'s extension: `review_type`, `score`, `recommendations`,
+    `next_review_at`, `status`, and `weaknesses` as an alias of `concerns`."""
+
+    def test_new_fields_round_trip_through_create_and_read(
+        self, api_client_no_csrf, manager_user, enrollment
+    ):
+        api_client_no_csrf.force_login(manager_user)
+        next_review = (date.today() + timedelta(days=90)).isoformat()
+        response = api_client_no_csrf.post(
+            "/api/v1/performance/reviews/",
+            _review_payload(
+                student=str(enrollment.student.pk),
+                review_type="quarterly",
+                score="87.5",
+                recommendations="Keep practising mock interviews.",
+                next_review_at=next_review,
+            ),
+            format="json",
+        )
+        assert response.status_code == 201, response.data
+        assert response.data["review_type"] == "quarterly"
+        assert response.data["score"] == "87.5"
+        assert response.data["recommendations"] == "Keep practising mock interviews."
+        assert response.data["next_review_at"] == next_review
+        assert response.data["status"] == "draft"
+
+        review = PerformanceReview.objects.get(pk=response.data["id"])
+        assert review.review_type == "quarterly"
+        assert review.score == Decimal("87.5")
+
+    def test_review_type_and_status_default_when_not_given(
+        self, api_client_no_csrf, manager_user, enrollment
+    ):
+        api_client_no_csrf.force_login(manager_user)
+        response = api_client_no_csrf.post(
+            "/api/v1/performance/reviews/",
+            _review_payload(student=str(enrollment.student.pk)),
+            format="json",
+        )
+        assert response.status_code == 201, response.data
+        assert response.data["review_type"] == "ad_hoc"
+        assert response.data["status"] == "draft"
+        assert response.data["score"] is None
+
+    def test_weaknesses_is_an_alias_of_concerns_on_write(
+        self, api_client_no_csrf, manager_user, enrollment
+    ):
+        api_client_no_csrf.force_login(manager_user)
+        response = api_client_no_csrf.post(
+            "/api/v1/performance/reviews/",
+            _review_payload(
+                student=str(enrollment.student.pk), weaknesses="Struggles with recursion."
+            ),
+            format="json",
+        )
+        assert response.status_code == 201, response.data
+        assert response.data["concerns"] == "Struggles with recursion."
+        assert response.data["weaknesses"] == "Struggles with recursion."
+
+        review = PerformanceReview.objects.get(pk=response.data["id"])
+        assert review.concerns == "Struggles with recursion."
+        assert review.weaknesses == "Struggles with recursion."
+
+    def test_weaknesses_alias_stays_in_sync_on_update(
+        self, api_client_no_csrf, manager_user, enrollment
+    ):
+        api_client_no_csrf.force_login(manager_user)
+        created = api_client_no_csrf.post(
+            "/api/v1/performance/reviews/",
+            _review_payload(student=str(enrollment.student.pk)),
+            format="json",
+        )
+        review_id = created.data["id"]
+
+        response = api_client_no_csrf.patch(
+            f"/api/v1/performance/reviews/{review_id}/",
+            {"weaknesses": "Needs more practice with pointers."},
+            format="json",
+        )
+        assert response.status_code == 200, response.data
+        assert response.data["concerns"] == "Needs more practice with pointers."
+        assert response.data["weaknesses"] == "Needs more practice with pointers."
+
+        review = PerformanceReview.objects.get(pk=review_id)
+        assert review.concerns == "Needs more practice with pointers."
+
+        # And the other direction: updating `concerns` moves `weaknesses` too.
+        response = api_client_no_csrf.patch(
+            f"/api/v1/performance/reviews/{review_id}/",
+            {"concerns": "Now weak on something else."},
+            format="json",
+        )
+        assert response.status_code == 200, response.data
+        assert response.data["weaknesses"] == "Now weak on something else."
+
+    def test_weaknesses_and_concerns_conflicting_is_refused(
+        self, api_client_no_csrf, manager_user, enrollment
+    ):
+        api_client_no_csrf.force_login(manager_user)
+        response = api_client_no_csrf.post(
+            "/api/v1/performance/reviews/",
+            _review_payload(
+                student=str(enrollment.student.pk),
+                concerns="Weak on SQL.",
+                weaknesses="Weak on shell scripting.",
+            ),
+            format="json",
+        )
+        assert response.status_code == 400, response.data
+
+    def test_weaknesses_and_concerns_agreeing_is_accepted(
+        self, api_client_no_csrf, manager_user, enrollment
+    ):
+        api_client_no_csrf.force_login(manager_user)
+        response = api_client_no_csrf.post(
+            "/api/v1/performance/reviews/",
+            _review_payload(
+                student=str(enrollment.student.pk),
+                concerns="Weak on SQL.",
+                weaknesses="Weak on SQL.",
+            ),
+            format="json",
+        )
+        assert response.status_code == 201, response.data
+        assert response.data["concerns"] == "Weak on SQL."
+
+    def test_status_defaults_to_draft_and_moves_through_shared_and_acknowledged(
+        self, api_client_no_csrf, manager_user, enrollment
+    ):
+        """A plain field, not an enforced state machine (no workflow is
+        documented for it) — any of the three values may be set directly."""
+        api_client_no_csrf.force_login(manager_user)
+        created = api_client_no_csrf.post(
+            "/api/v1/performance/reviews/",
+            _review_payload(student=str(enrollment.student.pk)),
+            format="json",
+        )
+        assert created.data["status"] == "draft"
+        review_id = created.data["id"]
+
+        shared = api_client_no_csrf.patch(
+            f"/api/v1/performance/reviews/{review_id}/", {"status": "shared"}, format="json"
+        )
+        assert shared.status_code == 200
+        assert shared.data["status"] == "shared"
+
+        acknowledged = api_client_no_csrf.patch(
+            f"/api/v1/performance/reviews/{review_id}/", {"status": "acknowledged"}, format="json"
+        )
+        assert acknowledged.status_code == 200
+        assert acknowledged.data["status"] == "acknowledged"
+
+    def test_weaknesses_property_reads_and_writes_concerns_at_the_model_level(
+        self, enrollment, admin_user
+    ):
+        from apps.performance import services
+
+        review = services.create_review(
+            actor=admin_user,
+            student=enrollment.student,
+            period_start=date.today() - timedelta(days=10),
+            period_end=date.today(),
+            rating=3,
+            concerns="Initial concern.",
+        )
+        assert review.weaknesses == "Initial concern."
+
+        review.weaknesses = "Updated via the alias."
+        assert review.concerns == "Updated via the alias."
+        review.save(update_fields=["concerns"])
+        review.refresh_from_db()
+        assert review.concerns == "Updated via the alias."
+        assert review.weaknesses == "Updated via the alias."
 
 
 @pytest.mark.django_db

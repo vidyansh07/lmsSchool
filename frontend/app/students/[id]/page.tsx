@@ -69,7 +69,7 @@ import { Stat, StatGrid } from '@/components/manage/stat';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
-import { formatCount, formatPercent, formatRelative, NO_DATA, NOT_AVAILABLE } from '@/lib/format';
+import { formatCount, formatDate, formatNumber, formatPercent, formatRelative, NO_DATA, NOT_AVAILABLE } from '@/lib/format';
 import { FEE_STATUS_LABEL, FEE_STATUS_VARIANT, RISK_LEVEL_LABEL, RISK_LEVEL_VARIANT } from '@/lib/labels';
 import { getStudent360 } from '@/lib/student-360';
 import type { Student360FeedItem, Student360Response } from '@/types/api';
@@ -104,16 +104,40 @@ function ScorePopover({ performance }: { performance: Student360Response['perfor
       <PopoverContent>
         <PopoverHeading>How this score is built</PopoverHeading>
         {hasComponents ? (
-          <ul className="space-y-2 text-sm">
+          <ul className="space-y-3 text-sm">
             {performance.components.map((component) => (
-              <li key={component.key} className="flex items-center justify-between gap-3">
-                <span className="text-muted-foreground">{component.label}</span>
-                <span className="tabular-nums">
-                  {component.value === null ? NOT_AVAILABLE : formatPercent(component.value)}
-                  <span className="ml-1 text-xs text-muted-foreground">
-                    (weight {formatPercent(component.weight * 100, { maximumFractionDigits: 0 })})
+              <li key={component.key}>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">{component.label}</span>
+                  <span className="tabular-nums">
+                    {component.value === null ? NOT_AVAILABLE : formatPercent(component.value)}
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      {/* `weight` is a relative multiplier (`performance.weights`
+                          policy), not a fraction of a whole — components do not
+                          sum to any total, so this is never `formatPercent`. */}
+                      (weight {formatNumber(component.weight, { maximumFractionDigits: 2 })})
+                    </span>
                   </span>
-                </span>
+                </div>
+                {component.sources.length > 0 ? (
+                  <ul className="mt-1.5 space-y-1 border-l border-border pl-3">
+                    {component.sources.map((source, index) => (
+                      // A source carries no id (ADR-10 does not require one),
+                      // so the array position is the only stable key here.
+                      <li key={index} className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                        <span className="truncate">
+                          {source.type}
+                          {source.trainer ? ` · ${source.trainer}` : ''}
+                        </span>
+                        <span className="shrink-0 tabular-nums">
+                          {source.score === null ? NOT_AVAILABLE : formatPercent(source.score)}
+                          {' · '}
+                          {source.date ? formatDate(source.date) : NOT_AVAILABLE}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </li>
             ))}
           </ul>

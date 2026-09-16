@@ -12,7 +12,7 @@ from rest_framework import serializers
 
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
-from .models import Feedback, PerformanceReview, PerformanceSubjectType
+from .models import Feedback, PerformanceReview, PerformanceSubjectType, ReviewStatus, ReviewType
 
 
 class PerformanceReviewSerializer(StrictModelSerializer):
@@ -27,12 +27,18 @@ class PerformanceReviewSerializer(StrictModelSerializer):
     reviewer_name = serializers.CharField(
         source="reviewer.get_full_name", read_only=True, default=None
     )
+    # Not a model field — `PerformanceReview.weaknesses` is a property alias
+    # of `concerns` (`DATA_MODEL.md`: "not renamed; serializer exposes both
+    # names"). Declared explicitly because `ModelSerializer` only infers
+    # fields from real model fields.
+    weaknesses = serializers.CharField(read_only=True)
 
     class Meta:
         model = PerformanceReview
         fields = (
             "id",
             "subject_type",
+            "review_type",
             "student",
             "student_code",
             "student_name",
@@ -42,10 +48,15 @@ class PerformanceReviewSerializer(StrictModelSerializer):
             "period_start",
             "period_end",
             "rating",
+            "score",
             "summary",
             "strengths",
             "concerns",
+            "weaknesses",
             "actions",
+            "recommendations",
+            "next_review_at",
+            "status",
             "snapshot",
             "reviewer",
             "reviewer_name",
@@ -55,18 +66,40 @@ class PerformanceReviewSerializer(StrictModelSerializer):
         read_only_fields = fields
 
 
+def _merge_weaknesses_alias(attrs: dict) -> dict:
+    """`weaknesses` is never stored — fold it into `concerns` before it
+    reaches `services.py`, which only knows the real column. A caller naming
+    both must mean the same thing by them, or this is ambiguous and refused
+    rather than silently picking one."""
+    if "weaknesses" in attrs:
+        weaknesses = attrs.pop("weaknesses")
+        if "concerns" in attrs and attrs["concerns"] != weaknesses:
+            raise serializers.ValidationError(
+                {"weaknesses": ["Conflicts with `concerns` — they are the same field."]}
+            )
+        attrs["concerns"] = weaknesses
+    return attrs
+
+
 class ReviewWriteSerializer(StrictSerializer):
     """Create a review. ``student`` xor ``trainer`` — enforced in the service."""
 
     student = serializers.UUIDField(required=False, allow_null=True)
     trainer = serializers.UUIDField(required=False, allow_null=True)
+    review_type = serializers.ChoiceField(choices=ReviewType.choices, required=False)
     period_start = serializers.DateField()
     period_end = serializers.DateField()
     rating = serializers.IntegerField(min_value=1, max_value=5)
+    score = serializers.DecimalField(
+        max_digits=4, decimal_places=1, required=False, allow_null=True
+    )
     summary = serializers.CharField(max_length=5000, required=False, allow_blank=True)
     strengths = serializers.CharField(max_length=5000, required=False, allow_blank=True)
     concerns = serializers.CharField(max_length=5000, required=False, allow_blank=True)
+    weaknesses = serializers.CharField(max_length=5000, required=False, allow_blank=True)
     actions = serializers.CharField(max_length=5000, required=False, allow_blank=True)
+    recommendations = serializers.CharField(max_length=5000, required=False, allow_blank=True)
+    next_review_at = serializers.DateField(required=False, allow_null=True)
 
     def validate(self, attrs):
         if attrs.get("period_end") and attrs.get("period_start"):
@@ -74,19 +107,30 @@ class ReviewWriteSerializer(StrictSerializer):
                 raise serializers.ValidationError(
                     {"period_end": ["The period cannot end before it starts."]}
                 )
-        return attrs
+        return _merge_weaknesses_alias(attrs)
 
 
 class ReviewUpdateSerializer(StrictSerializer):
     """Edit the judgement. The subject, reviewer and snapshot never change."""
 
+    review_type = serializers.ChoiceField(choices=ReviewType.choices, required=False)
     period_start = serializers.DateField(required=False)
     period_end = serializers.DateField(required=False)
     rating = serializers.IntegerField(min_value=1, max_value=5, required=False)
+    score = serializers.DecimalField(
+        max_digits=4, decimal_places=1, required=False, allow_null=True
+    )
     summary = serializers.CharField(max_length=5000, required=False, allow_blank=True)
     strengths = serializers.CharField(max_length=5000, required=False, allow_blank=True)
     concerns = serializers.CharField(max_length=5000, required=False, allow_blank=True)
+    weaknesses = serializers.CharField(max_length=5000, required=False, allow_blank=True)
     actions = serializers.CharField(max_length=5000, required=False, allow_blank=True)
+    recommendations = serializers.CharField(max_length=5000, required=False, allow_blank=True)
+    next_review_at = serializers.DateField(required=False, allow_null=True)
+    status = serializers.ChoiceField(choices=ReviewStatus.choices, required=False)
+
+    def validate(self, attrs):
+        return _merge_weaknesses_alias(attrs)
 
 
 class FeedbackSerializer(StrictModelSerializer):

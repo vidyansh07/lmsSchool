@@ -521,6 +521,12 @@ SPECTACULAR_SETTINGS = {
         # (`Permission.category` and `AssessmentCategory`/`NotificationCategory`
         # already have their own overrides above).
         "ActivityCategoryEnum": "apps.work.models.ActivityCategory.choices",
+        # ERP Phase 12: `PerformanceReview.status` is the second choice set on
+        # a field named literally `status` with no other context to
+        # disambiguate it (unlike `BatchStatus`/`EnrollmentStatus`/etc, whose
+        # fields are not simply called `status`) — the same "second one
+        # exposes a pre-existing ambiguity" shape as `PaymentMethodEnum` above.
+        "ReviewStatusEnum": "apps.performance.models.ReviewStatus.choices",
     },
     "SWAGGER_UI_SETTINGS": {"persistAuthorization": False},
 }

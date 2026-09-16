@@ -18,7 +18,7 @@ from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError, AuthorityError
 
 from . import access, engine
-from .models import Feedback, PerformanceReview, PerformanceSubjectType
+from .models import Feedback, PerformanceReview, PerformanceSubjectType, ReviewType
 
 #: The only fields `update_risk_thresholds` may touch. Kept as its own list
 #: rather than reusing `apps.academics.models.POLICY_FIELDS` — that list is
@@ -72,10 +72,14 @@ def create_review(
     period_start,
     period_end,
     rating: int,
+    review_type: str = ReviewType.AD_HOC,
+    score=None,
     summary: str = "",
     strengths: str = "",
     concerns: str = "",
     actions: str = "",
+    recommendations: str = "",
+    next_review_at=None,
 ) -> PerformanceReview:
     subject_type = _subject(student=student, trainer=trainer)
     _refuse_self(actor, student=student, trainer=trainer)
@@ -87,10 +91,14 @@ def create_review(
         period_start=period_start,
         period_end=period_end,
         rating=rating,
+        review_type=review_type,
+        score=score,
         summary=summary,
         strengths=strengths,
         concerns=concerns,
         actions=actions,
+        recommendations=recommendations,
+        next_review_at=next_review_at,
         snapshot=_snapshot_for(student=student, trainer=trainer),
         reviewer=actor if getattr(actor, "pk", None) else None,
     )
@@ -119,7 +127,20 @@ def create_review(
 #: reviewer and the snapshot are fixed at creation — see `PerformanceReview`'s
 #: docstring on why the snapshot in particular is never touched again.
 REVIEW_EDITABLE_FIELDS = frozenset(
-    {"period_start", "period_end", "rating", "summary", "strengths", "concerns", "actions"}
+    {
+        "review_type",
+        "period_start",
+        "period_end",
+        "rating",
+        "score",
+        "summary",
+        "strengths",
+        "concerns",
+        "actions",
+        "recommendations",
+        "next_review_at",
+        "status",
+    }
 )
 
 

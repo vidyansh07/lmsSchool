@@ -41,6 +41,26 @@ class PerformanceSubjectType(models.TextChoices):
     TRAINER = "trainer", _("Trainer")
 
 
+class ReviewType(models.TextChoices):
+    MONTHLY = "monthly", _("Monthly")
+    QUARTERLY = "quarterly", _("Quarterly")
+    PROBATION = "probation", _("Probation")
+    AD_HOC = "ad_hoc", _("Ad hoc")
+    PLACEMENT = "placement", _("Placement")
+
+
+class ReviewStatus(models.TextChoices):
+    """A plain lifecycle field, not a state machine — nothing in
+    `DESIGN_DECISIONS.md`/`USER_JOURNEYS.md` describes an enforced
+    draft→shared→acknowledged transition rule (unlike, say,
+    `apps.work.transitions`' activity lifecycle), so `update_review` allows
+    setting any value, the same as `rating` or `summary`."""
+
+    DRAFT = "draft", _("Draft")
+    SHARED = "shared", _("Shared")
+    ACKNOWLEDGED = "acknowledged", _("Acknowledged")
+
+
 def _subject_matches_type(prefix: str = "") -> models.Q:
     """The constraint every subject-typed model here shares.
 
@@ -104,15 +124,37 @@ class PerformanceReview(SoftDeleteBaseModel):
     period_start = models.DateField(_("period start"))
     period_end = models.DateField(_("period end"))
 
+    review_type = models.CharField(
+        _("review type"), max_length=30, choices=ReviewType.choices, default=ReviewType.AD_HOC
+    )
+    status = models.CharField(
+        _("status"), max_length=15, choices=ReviewStatus.choices, default=ReviewStatus.DRAFT
+    )
     rating = models.PositiveSmallIntegerField(
         _("rating"),
         validators=[MinValueValidator(1), MaxValueValidator(5)],
         help_text=_("1 (serious concern) to 5 (excellent)."),
     )
+    score = models.DecimalField(
+        _("score"),
+        max_digits=4,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text=_("A free-form numeric score a reviewer assigns, separate from `rating`."),
+    )
     summary = models.TextField(_("summary"), blank=True)
     strengths = models.TextField(_("strengths"), blank=True)
-    concerns = models.TextField(_("concerns"), blank=True)
+    concerns = models.TextField(
+        _("concerns"),
+        blank=True,
+        help_text=_(
+            "Exposed to callers under both `concerns` and `weaknesses` — see `weaknesses`."
+        ),
+    )
     actions = models.TextField(_("agreed actions"), blank=True)
+    recommendations = models.TextField(_("recommendations"), blank=True)
+    next_review_at = models.DateField(_("next review at"), null=True, blank=True)
 
     snapshot = models.JSONField(
         _("performance snapshot"),
@@ -134,6 +176,18 @@ class PerformanceReview(SoftDeleteBaseModel):
     )
 
     objects, all_objects = soft_delete_managers(PerformanceReviewQuerySet)
+
+    @property
+    def weaknesses(self) -> str:
+        """An alias of `concerns` — not a second column (`DATA_MODEL.md`).
+        Reading or writing `weaknesses` reads or writes the same `concerns`
+        value, so the two can never drift apart the way two independently
+        stored copies of the same text could."""
+        return self.concerns
+
+    @weaknesses.setter
+    def weaknesses(self, value: str) -> None:
+        self.concerns = value
 
     class Meta(SoftDeleteBaseModel.Meta):
         verbose_name = _("performance review")

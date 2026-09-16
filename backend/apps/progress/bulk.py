@@ -122,6 +122,32 @@ class ProgressInputs:
             grouped.setdefault(row.enrollment_id, []).append(row)
         return grouped
 
+    # -- activities (ERP Phase 9/12) -----------------------------------------
+
+    @cached_property
+    def activities_by_enrollment(self) -> dict[Any, list]:
+        """Scored, terminal-for-performance activities per enrolment — the
+        `apps.performance.engine` activity component's own input, fetched once
+        for the whole set exactly like every other group on this class.
+
+        "Terminal for performance purposes" (`ACTIVITY_CATALOG.md`) means
+        `COMPLETED` or `APPROVED` only; `score`/`max_score` both set is what
+        makes an activity scoreable at all (an activity type with no scored
+        form field never qualifies).
+        """
+        from apps.work.models import Activity, ActivityStatus
+
+        grouped: dict[Any, list] = {key: [] for key in self.ids}
+        rows = Activity.objects.filter(
+            enrollment_id__in=self.ids,
+            status__in=(ActivityStatus.COMPLETED, ActivityStatus.APPROVED),
+            score__isnull=False,
+            max_score__isnull=False,
+        ).select_related("activity_type", "performed_by", "assigned_to")
+        for row in rows:
+            grouped.setdefault(row.enrollment_id, []).append(row)
+        return grouped
+
     # -- weekly tests -------------------------------------------------------
 
     @cached_property

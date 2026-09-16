@@ -9,15 +9,17 @@ from .models import Feedback, PerformanceReview
 class PerformanceReviewAdmin(admin.ModelAdmin):
     list_display = (
         "subject_type",
+        "review_type",
         "student",
         "trainer",
         "period_start",
         "period_end",
         "rating",
+        "status",
         "reviewer",
         "deleted_at",
     )
-    list_filter = ("subject_type", "rating", "deleted_at")
+    list_filter = ("subject_type", "review_type", "status", "rating", "deleted_at")
     search_fields = ("student__student_id", "trainer__trainer_id", "summary")
     readonly_fields = ("id", "snapshot", "reviewer", "created_at", "updated_at")
     autocomplete_fields = ("student", "trainer")

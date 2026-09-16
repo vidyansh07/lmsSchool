@@ -25,6 +25,22 @@ answers the same question for many, from the same
 :func:`apps.progress.reports.progress_reports` already uses for cohort
 reporting. Nothing here re-queries per student — the query cost is fixed, not
 proportional to the roster.
+
+Weighted components (ADR-10, ERP Phase 12)
+-------------------------------------------
+``overall_score`` was always the plain mean of whichever of five components
+had data. It is now the weighted mean of those five plus a sixth,
+``activity`` (from :mod:`apps.work`, ERP Phase 9) — weighted by policy
+``performance.weights`` (:mod:`apps.policies.schemas`,
+``PERFORMANCE_COMPONENTS``). With every weight equal, the policy default,
+this is numerically the same computation as before: a component with no
+data is excluded from both the weighted sum and the weight total, the same
+"nothing to measure" rule this module already followed, so a fixture with no
+completed activities gets exactly today's number. ``components`` is the new
+top-level key carrying the breakdown a "why" popover reads: one row per
+component with its own ``weight``, ``value`` and ``contribution`` (the slice
+of ``overall_score`` it is responsible for), so the visible numbers add up to
+the visible total rather than merely looking plausible next to it.
 """
 
 from __future__ import annotations
@@ -34,10 +50,26 @@ from typing import Any
 from django.utils import timezone
 
 from apps.academics.policies import policy_for
+from apps.policies.resolver import policy as resolve_policy
+from apps.policies.schemas import PERFORMANCE_COMPONENTS
 from apps.progress.bulk import ProgressInputs
 from apps.progress.reports import progress_report
 
 from . import risk
+
+#: Display label for each `PERFORMANCE_COMPONENTS` key, in the shape a "why"
+#: popover reads (`{key, label, weight, value, contribution, sources}`).
+#: Kept here, not in `apps.policies.schemas`, because that module is
+#: self-contained and does not know what a component *means* — only its name
+#: and its weight's bounds (see that module's own docstring).
+COMPONENT_LABELS: dict[str, str] = {
+    "attendance": "Attendance",
+    "assessment": "Assessment",
+    "assignments": "Assignments",
+    "projects": "Projects",
+    "progress": "Progress",
+    "activity": "Activity",
+}
 
 
 def _percent(part: int, whole: int) -> int | None:
@@ -112,6 +144,107 @@ def _missed_assignments(enrollment, data: ProgressInputs) -> dict[str, int]:
     }
 
 
+def _activity_component(
+    enrollment, data: ProgressInputs
+) -> tuple[float | None, list[dict[str, Any]]]:
+    """The `activity` component's value and provenance for one enrolment.
+
+    Reads `ProgressInputs.activities_by_enrollment`, already filtered to the
+    two terminal-for-performance statuses with both `score` and `max_score`
+    set (`ACTIVITY_CATALOG.md`) — an activity type with no scored form field
+    never reaches this function at all.
+
+    The value is the weighted mean of each activity's own normalised score
+    (`score / max_score * 100`), weighted by its *type's*
+    `performance_weight` — not a plain average, so a type seeded at weight 0
+    (mentoring, counselling, feedback, per the catalog) truly has no effect,
+    and a heavier type moves the number more than a lighter one. All weights
+    zero (every qualifying activity's type carries no weight, or there are no
+    qualifying activities at all) is "nothing to measure", same as any other
+    component: `None`, never a division by zero and never a fabricated 0.
+
+    `sources` lists every qualifying activity regardless of its type's
+    weight — provenance for the "why" popover is "what did we look at", not
+    only "what moved the number".
+    """
+    activities = data.activities_by_enrollment.get(enrollment.pk, [])
+
+    sources: list[dict[str, Any]] = []
+    weighted_total = 0.0
+    weight_total = 0.0
+    for activity in activities:
+        if not activity.max_score:
+            continue
+        normalised = float(activity.score) * 100 / float(activity.max_score)
+        weight = float(activity.activity_type.performance_weight)
+        person = activity.performed_by or activity.assigned_to
+        sources.append(
+            {
+                "type": activity.activity_type.name,
+                "score": round(normalised, 1),
+                "date": activity.completed_at.isoformat() if activity.completed_at else None,
+                "trainer": person.get_full_name() if person else None,
+            }
+        )
+        weighted_total += normalised * weight
+        weight_total += weight
+
+    value = round(weighted_total / weight_total, 1) if weight_total > 0 else None
+    return value, sources
+
+
+def _weighted_overall(
+    values: dict[str, float | None],
+    weights: dict[str, Any],
+    sources: dict[str, list[dict[str, Any]]] | None = None,
+) -> tuple[list[dict[str, Any]], float | None]:
+    """The ADR-10 shape: one row per `PERFORMANCE_COMPONENTS` key, plus the
+    weighted-mean `overall_score` those rows are built from.
+
+    A component with nothing to measure (`value` is `None`) is excluded from
+    both the weighted sum and the weight total — the exact "nothing to
+    measure" rule the rest of this module already follows, just applied
+    component-by-component instead of value-by-value. With every weight equal
+    (the `performance.weights` policy default) this is arithmetically the
+    same as `sum(measured) / len(measured)`: each weight is the same nonzero
+    constant, so it cancels out of the weighted mean entirely.
+
+    `contribution` is each component's own slice of `overall_score` —
+    `value * weight / (sum of weights of components with data)` — chosen so
+    that summing every component's `contribution` reproduces `overall_score`
+    (up to `round`'s own last-digit rounding), rather than a number that is
+    merely plausible on its own.
+    """
+    sources = sources or {}
+    weight_of = {key: float(weights.get(key, 0)) for key in PERFORMANCE_COMPONENTS}
+    measured = {key: value for key, value in values.items() if value is not None}
+    weight_sum = sum(weight_of[key] for key in measured)
+
+    overall_score = (
+        round(sum(measured[key] * weight_of[key] for key in measured) / weight_sum, 1)
+        if weight_sum > 0
+        else None
+    )
+
+    def _contribution(key: str) -> float | None:
+        if key not in measured or weight_sum <= 0:
+            return None
+        return round(measured[key] * weight_of[key] / weight_sum, 2)
+
+    components = [
+        {
+            "key": key,
+            "label": COMPONENT_LABELS[key],
+            "weight": weight_of[key],
+            "value": values.get(key),
+            "contribution": _contribution(key),
+            "sources": sources.get(key, []),
+        }
+        for key in PERFORMANCE_COMPONENTS
+    ]
+    return components, overall_score
+
+
 def _risk_numbers(enrollment, report: dict[str, Any], data: ProgressInputs) -> dict[str, Any]:
     """The subset of the report, plus the new figures, that the risk rules read."""
     attendance = report["attendance"]
@@ -147,7 +280,7 @@ def student_performance(enrollment, inputs: ProgressInputs | None = None) -> dic
     """
     data = inputs if inputs is not None else ProgressInputs.for_one(enrollment)
     report = progress_report(enrollment, data)
-    policy = policy_for(enrollment.course_id)
+    academic_policy = policy_for(enrollment.course_id)
 
     attendance = report["attendance"]
     tests = report["tests"]
@@ -156,21 +289,30 @@ def student_performance(enrollment, inputs: ProgressInputs | None = None) -> dic
     lessons = report["lessons"]
 
     numbers = _risk_numbers(enrollment, report, data)
-    risk_result = risk.evaluate(numbers, policy)
+    risk_result = risk.evaluate(numbers, academic_policy)
+
+    activity_value, activity_sources = _activity_component(enrollment, data)
 
     # Each component contributes to the overall score only when there was
     # something to measure it from — the same "nothing to measure" rule the
     # risk rules follow. A course with no projects must not drag a student's
-    # score down for a requirement that does not exist.
-    components = [
-        attendance["percent"] if attendance["has_records"] else None,
-        tests["average_percent"],
-        assignments["percent"] if assignments["total"] else None,
-        projects["percent"] if projects["required"] else None,
-        lessons["percent"] if lessons["total"] else None,
-    ]
-    measured = [value for value in components if value is not None]
-    overall_score = round(sum(measured) / len(measured), 1) if measured else None
+    # score down for a requirement that does not exist. Order matches
+    # `PERFORMANCE_COMPONENTS` so `_weighted_overall` sums in the same order
+    # this plain mean always has, which is what keeps the two arithmetically
+    # identical for a fixture with equal weights and no completed activities.
+    component_values: dict[str, float | None] = {
+        "attendance": attendance["percent"] if attendance["has_records"] else None,
+        "assessment": tests["average_percent"],
+        "assignments": assignments["percent"] if assignments["total"] else None,
+        "projects": projects["percent"] if projects["required"] else None,
+        "progress": lessons["percent"] if lessons["total"] else None,
+        "activity": activity_value,
+    }
+    weights = resolve_policy("performance", "weights")
+    components, overall_score = _weighted_overall(
+        component_values, weights, sources={"activity": activity_sources}
+    )
+    measured_count = sum(1 for value in component_values.values() if value is not None)
 
     return {
         "enrollment_id": str(enrollment.pk),
@@ -207,9 +349,10 @@ def student_performance(enrollment, inputs: ProgressInputs | None = None) -> dic
             "variance": numbers["progress"]["variance"],
         },
         "overall_score": overall_score,
+        "components": components,
         "risk": risk_result,
         "counts": {
-            "components_measured": len(measured),
+            "components_measured": measured_count,
             "risk_flags": risk_result["triggered_count"],
         },
     }

@@ -85,7 +85,7 @@ class ActivityTypeCreateSerializer(StrictSerializer):
     form = serializers.CharField(required=False, allow_null=True, default=None, max_length=60)
     requires_review = serializers.BooleanField(required=False, default=False)
     performance_weight = serializers.DecimalField(
-        max_digits=4, decimal_places=2, required=False, default=0
+        max_digits=4, decimal_places=2, required=False, default=0, min_value=0
     )
     risk_effect = serializers.ChoiceField(
         choices=RiskEffect.choices, required=False, default=RiskEffect.NONE
@@ -113,7 +113,9 @@ class ActivityTypePatchSerializer(StrictSerializer):
     )
     form = serializers.CharField(required=False, allow_null=True, max_length=60)
     requires_review = serializers.BooleanField(required=False)
-    performance_weight = serializers.DecimalField(max_digits=4, decimal_places=2, required=False)
+    performance_weight = serializers.DecimalField(
+        max_digits=4, decimal_places=2, required=False, min_value=0
+    )
     risk_effect = serializers.ChoiceField(choices=RiskEffect.choices, required=False)
     reminder_minutes_before = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     next_action = serializers.JSONField(required=False, allow_null=True)

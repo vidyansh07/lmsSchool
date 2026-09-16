@@ -77,6 +77,38 @@ def test_only_activity_type_manage_may_write_the_catalog(manager_user, admin_use
     assert allowed.status_code == 201
 
 
+def test_a_negative_performance_weight_is_refused_on_create_and_patch(admin_user):
+    """`apps.performance.engine` treats every type's `performance_weight` as
+    non-negative when computing the `activity` component's weighted mean
+    (ADR-10); a negative value would flip its sign or drive that mean's
+    denominator toward zero, silently. Refused at the API, not merely left
+    for the engine to mishandle."""
+    client = _client(admin_user)
+    body = {
+        "slug": "negative-weight-type",
+        "name": "Negative Weight",
+        "description": "",
+        "category": "other",
+        "allowed_creator_roles": ["manager"],
+        "allowed_assignee_roles": [],
+        "visible_to_student": False,
+        "performance_weight": "-1.00",
+    }
+    created = client.post(ACTIVITY_TYPES, body, format="json")
+    assert created.status_code == 400, created.json()
+    assert "performance_weight" in created.json()["error"]["details"]
+
+    positive = client.post(ACTIVITY_TYPES, {**body, "performance_weight": "1.00"}, format="json")
+    assert positive.status_code == 201, positive.json()
+
+    patched = client.patch(
+        f"{ACTIVITY_TYPES}{positive.json()['slug']}/",
+        {"performance_weight": "-0.50"},
+        format="json",
+    )
+    assert patched.status_code == 400, patched.json()
+
+
 # ---------------------------------------------------------------------------
 # activities: all/branch/assigned(-by-teaching) tiers
 # ---------------------------------------------------------------------------

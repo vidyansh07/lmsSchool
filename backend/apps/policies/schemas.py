@@ -28,16 +28,23 @@ from typing import Any
 
 from apps.common.exceptions import ApplicationError
 
-#: The components `apps.performance.engine.student_performance` averages
-#: today (attendance, assessment, assignments, projects, progress-vs-plan).
-#: Phase 12 wires `performance.weights` into that calculation without
-#: changing the current plain mean while every weight stays equal.
+#: The components `apps.performance.engine.student_performance` weighs into
+#: `overall_score` (ADR-10). The first five are the ones it already averaged
+#: pre-ERP (attendance, assessment, assignments, projects, progress-vs-plan);
+#: `activity` is Phase 12's addition, read from `apps.work.Activity` via
+#: `ActivityType.performance_weight`. Adding it here is additive: the
+#: `performance.weights` default below (`dict.fromkeys(...)`) picks it up
+#: automatically, and with every weight equal — the default — a fixture with
+#: no completed activities still lands on exactly today's plain mean, since
+#: `activity` then has nothing to measure and is excluded like any other
+#: component with no data.
 PERFORMANCE_COMPONENTS: tuple[str, ...] = (
     "attendance",
     "assessment",
     "assignments",
     "projects",
     "progress",
+    "activity",
 )
 
 POLICY_SCHEMAS: dict[str, dict[str, dict[str, Any]]] = {

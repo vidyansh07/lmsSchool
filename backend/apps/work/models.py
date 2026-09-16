@@ -28,6 +28,7 @@ given.
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -110,9 +111,19 @@ class ActivityType(SoftDeleteBaseModel):
         related_name="activity_types",
     )
     requires_review = models.BooleanField(_("requires review"), default=False)
-    #: 0 = no effect on the performance component. Store only — Phase 12 reads it.
+    #: 0 = no effect on the performance component. Store only — Phase 12 reads
+    #: it as one term of a weighted mean (`apps.performance.engine`), which
+    #: assumes every weight is non-negative; a negative value would flip the
+    #: sign of that mean or drive its denominator through zero, so it is
+    #: rejected here (`MinValueValidator`, both write serializers) and by the
+    #: matching `CheckConstraint` below rather than left for the engine to
+    #: mishandle silently.
     performance_weight = models.DecimalField(
-        _("performance weight"), max_digits=4, decimal_places=2, default=0
+        _("performance weight"),
+        max_digits=4,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0)],
     )
     risk_effect = models.CharField(
         _("risk effect"), max_length=30, choices=RiskEffect.choices, default=RiskEffect.NONE
@@ -142,6 +153,10 @@ class ActivityType(SoftDeleteBaseModel):
                 fields=["slug"],
                 condition=models.Q(deleted_at__isnull=True),
                 name="activity_type_slug_unique",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(performance_weight__gte=0),
+                name="activity_type_performance_weight_non_negative",
             ),
         ]
 

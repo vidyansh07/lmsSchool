@@ -2510,6 +2510,24 @@ export interface TimelineResponse {
  * a fallback label rather than `undefined`/`NaN`.
  */
 
+/**
+ * One activity behind an `activity` performance component's score (ADR-10:
+ * "its sources list each activity (type, score, date, trainer)"). The other
+ * components (attendance, assessment, assignments, projects, progress) are
+ * each a single aggregate percentage with no individual records worth
+ * itemising, so their `sources` stay `[]` — this shape exists for whichever
+ * component actually has per-record data behind its number, which today is
+ * only `activity`.
+ */
+export interface PerformanceComponentSource {
+  /** The activity type's name (`apps.work.ActivityType`, not the fixed
+   *  `ActivityKind` audit-log enum) — free text, not a union. */
+  type: string;
+  score: number | null;
+  date: string | null;
+  trainer: string | null;
+}
+
 /** One weighted input to `performance.overall_score` (ADR-10). Phase 12
  *  (the performance engine) is what actually populates this; until then the
  *  360 endpoint returns an empty list and a null score, and the header shows
@@ -2520,7 +2538,7 @@ export interface Student360PerformanceComponent {
   weight: number;
   value: number | null;
   contribution: number | null;
-  sources: unknown[];
+  sources: PerformanceComponentSource[];
 }
 
 export interface Student360Performance {

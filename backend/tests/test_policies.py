@@ -113,7 +113,15 @@ def test_a_value_within_the_schema_is_accepted(api_client_no_csrf, admin_user):
             "weights",
             {
                 **dict.fromkeys(
-                    ("attendance", "assessment", "assignments", "projects", "progress"), 1
+                    (
+                        "attendance",
+                        "assessment",
+                        "assignments",
+                        "projects",
+                        "progress",
+                        "activity",
+                    ),
+                    1,
                 ),
                 "extra": 1,
             },
@@ -134,7 +142,7 @@ def test_a_value_outside_the_schema_is_refused(
 
 
 @pytest.mark.django_db
-def test_the_weights_dict_accepts_exactly_its_five_components(api_client_no_csrf, admin_user):
+def test_the_weights_dict_accepts_exactly_its_six_components(api_client_no_csrf, admin_user):
     api_client_no_csrf.force_login(admin_user)
     ok = api_client_no_csrf.put(
         _detail("performance", "weights"),
@@ -145,6 +153,7 @@ def test_the_weights_dict_accepts_exactly_its_five_components(api_client_no_csrf
                 "assignments": 1,
                 "projects": 1,
                 "progress": 1,
+                "activity": 1,
             },
             "reason": "Weight attendance more heavily.",
         },
@@ -152,6 +161,25 @@ def test_the_weights_dict_accepts_exactly_its_five_components(api_client_no_csrf
     )
     assert ok.status_code == 200, ok.json()
     assert ok.json()["value"]["attendance"] == "2"
+
+
+@pytest.mark.django_db
+def test_a_stale_weights_row_missing_a_newer_component_is_backfilled_from_the_default():
+    """A `Policy` row saved before `PERFORMANCE_COMPONENTS` grew a new entry
+    (as it did for `activity` in ERP Phase 12) cannot have that key — nothing
+    wrote it, and `validate_value` only runs on a write, not a read. The
+    resolver must not let such a row leave the new component permanently
+    weight-0 forever; it should fall back to the schema default for the
+    missing key alone, keeping every key the row already had."""
+    from apps.policies.schemas import PERFORMANCE_COMPONENTS
+
+    stale = {key: "1" for key in PERFORMANCE_COMPONENTS if key != "activity"}
+    assert "activity" not in stale  # sanity: this is the pre-Phase-12 shape
+    Policy.objects.create(category="performance", key="weights", value=stale)
+
+    resolved = resolved_policy("performance", "weights")
+    assert resolved["activity"] == 1  # the schema default for a key this row never set
+    assert resolved["attendance"] == "1"  # untouched: the row's own value is kept
 
 
 @pytest.mark.django_db

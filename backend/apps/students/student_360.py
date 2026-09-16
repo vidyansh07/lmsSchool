@@ -9,17 +9,19 @@ Kept in its own module rather than `services.py` because this composes a read
 model rather than carrying out a business rule (nothing here writes), the
 same distinction `apps.work.timeline` draws from `apps.work.services`.
 
-**Placeholders, not yet computed** — documented here so nobody "fixes" them
-by guessing a formula ahead of the phase that owns it:
+**`performance`** — ADR-10's weighted components (`{key, label, weight,
+value, contribution, sources}` per component, a weighted `overall_score`),
+computed for real by `apps.performance.engine.student_performance`
+(ERP Phase 12), called on this student's `_most_relevant_enrollment` — the
+same enrolment already resolved below for `batch`/`trainer`/`progress`,
+never a second resolution. A student with no enrolment at all still gets the
+inert `{"components": [], "overall_score": None}` shape rather than an
+error, the same "real state, not a crash" rule every other enrolment-derived
+field on this endpoint already follows.
 
-* `performance` — ADR-10's weighted components (`{key, label, weight, value,
-  contribution, sources}` per component, a weighted `overall_score`). Phase
-  12 (the performance engine) computes this; until then every caller gets
-  `{"components": [], "overall_score": None}` and the header shows "Not yet
-  computed" rather than a fabricated number. Deliberately **not** the
-  existing `apps.performance` app's current (pre-ERP) score: that app
-  predates this contract's shape and Phase 12 is what reshapes it to match
-  ADR-10, not this endpoint.
+**Still placeholders, not yet computed** — documented here so nobody "fixes"
+them by guessing a formula ahead of the phase that owns it:
+
 * `risk` — ADR-11's stored verdict (`RiskState`: `level`, `triggered[]`).
   Phase 13 (the risk engine) computes this; until then every caller gets
   `{"level": "none", "triggered": []}` — a neutral "no signal" rather than an
@@ -194,6 +196,25 @@ def _course_work_counts(user, enrollment: Enrollment | None) -> dict[str, int]:
     return {"assessments": assessments, "assignments": assignments, "projects": projects}
 
 
+_INERT_PERFORMANCE: dict[str, Any] = {"components": [], "overall_score": None}
+
+
+def _performance_for(enrollment: Enrollment | None) -> dict[str, Any]:
+    """ADR-10's `{components, overall_score}` shape, real for a student with
+    an enrolment, inert for one without — never a third shape and never an
+    error. `apps.performance.engine.student_performance` returns a much
+    larger dict (attendance, assessment breakdowns, risk, counts); this
+    endpoint's contract is only the two ADR-10 keys, matching what the
+    frontend's `Student360Performance` type already declares."""
+    if enrollment is None:
+        return dict(_INERT_PERFORMANCE)
+
+    from apps.performance.engine import student_performance
+
+    performance = student_performance(enrollment)
+    return {"components": performance["components"], "overall_score": performance["overall_score"]}
+
+
 def _recent_activities(user, student: StudentProfile) -> list[dict[str, Any]]:
     """The last five activities the caller may see on this student — via
     `apps.work.access.visible_activities`, the same scoping Phase 9's review
@@ -231,8 +252,7 @@ def build(user, student: StudentProfile) -> dict[str, Any]:
         "counsellor": _person_brief(counsellor),
         "progress": course_progress(enrollment) if enrollment else None,
         "attendance_summary": _attendance_summary_for(enrollment),
-        # Phase 12 placeholder — see module docstring.
-        "performance": {"components": [], "overall_score": None},
+        "performance": _performance_for(enrollment),
         # Phase 13 placeholder — see module docstring.
         "risk": {"level": "none", "triggered": []},
         "counts": {**_work_counts(user, student), **_course_work_counts(user, enrollment)},

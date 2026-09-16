@@ -170,6 +170,42 @@ describe('Student360Content', () => {
     expect(within(popover).getByText('Attendance')).toBeInTheDocument();
   });
 
+  it('renders an activity component\'s sources as a per-record breakdown', async () => {
+    getStudent360.mockResolvedValueOnce(
+      student360({
+        performance: {
+          overall_score: 74,
+          components: [
+            { key: 'attendance', label: 'Attendance', weight: 0.4, value: 90, contribution: 36, sources: [] },
+            {
+              key: 'activity',
+              label: 'Activity',
+              weight: 0.6,
+              value: 63,
+              contribution: 38,
+              sources: [
+                { type: 'Mock interview', score: 70, date: '2026-08-01', trainer: 'Tina Trainer' },
+                { type: 'Placement drive', score: 55, date: '2026-08-15', trainer: null },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByText('74%')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('74%'));
+
+    const popover = (await screen.findByText('How this score is built')).closest('div')!;
+    expect(within(popover).getByText('Activity')).toBeInTheDocument();
+    expect(within(popover).getByText(/Mock interview.*Tina Trainer/)).toBeInTheDocument();
+    expect(within(popover).getByText(/Placement drive/)).toBeInTheDocument();
+    // The attendance component here has no sources, so it renders no
+    // breakdown list of its own — only the aggregate row.
+    expect(within(popover).getAllByText('Attendance')).toHaveLength(1);
+  });
+
   it('renders the Phase 13 risk placeholder as a neutral "No risk signals" badge', async () => {
     getStudent360.mockResolvedValueOnce(student360());
     render(<Student360Content studentId="student-1" />);

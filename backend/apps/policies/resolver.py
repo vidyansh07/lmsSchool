@@ -57,13 +57,37 @@ def _load(category: str, key: str, branch_id: Any) -> Any:
     if branch_id is not None:
         row = Policy.objects.filter(category=category, key=key, branch_id=branch_id).first()
         if row is not None:
-            return row.value
+            return _reconcile(schema, row.value)
     row = Policy.objects.filter(
         category=category, key=key, scope=PolicyScope.GLOBAL, branch__isnull=True
     ).first()
     if row is not None:
-        return row.value
+        return _reconcile(schema, row.value)
     return schema["default"]
+
+
+def _reconcile(schema: dict[str, Any], value: Any) -> Any:
+    """Fill in a persisted "weights" value's missing keys from the schema's
+    current default, rather than trusting a `Policy` row saved by an older
+    schema to already carry every key the schema declares today.
+
+    `performance.weights` is a fixed key set validated at write time
+    (:func:`apps.policies.schemas.validate_value`), but that validation runs
+    only when a value is *written*. A row saved before `PERFORMANCE_COMPONENTS`
+    grew a new entry (as it did for `activity` in ERP Phase 12) predates that
+    key entirely, and the engine's `weights.get(key, 0)` would otherwise treat
+    the missing component as permanently weight-0 forever — silently, with no
+    migration or admin-visible warning. Reconciling here, at read time, means
+    every caller sees a complete weight set regardless of when its row was
+    last saved, the same way the schema default already would for a category
+    with no row at all.
+    """
+    if schema.get("type") != "weights" or not isinstance(value, dict):
+        return value
+    default = schema["default"]
+    if set(value) == set(default):
+        return value
+    return {**default, **{key: weight for key, weight in value.items() if key in default}}
 
 
 def forget_policies() -> None:
