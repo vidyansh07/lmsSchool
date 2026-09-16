@@ -1,5 +1,16 @@
 /** Display labels for API enumerations, kept in one place. */
 
+import {
+  Award,
+  CalendarCheck,
+  CircleDot,
+  ClipboardCheck,
+  FileCheck2,
+  FolderKanban,
+  GraduationCap,
+  ListChecks,
+  type LucideIcon,
+} from "lucide-react";
 import type {
   ActivityCategory,
   ActivityKind,
@@ -404,3 +415,44 @@ export const MFA_METHOD_LABEL: Record<MfaMethodName, string> = {
   email: "Email code",
   recovery: "Recovery code",
 };
+
+// --- Student timeline (ERP Phase 10, ADR-09) --------------------------------
+
+/**
+ * `kind` on a `TimelineEntry` is deliberately open-ended (see ADR-09 —
+ * `work/timeline.py` registers one source per app, and a later phase can
+ * register another without a matching frontend release). This maps the
+ * kinds known today to an icon and a label; anything else falls back to a
+ * generic icon and the raw kind string title-cased, so a new source renders
+ * reasonably rather than breaking or falling through an exhaustive switch.
+ */
+export interface TimelineKindMeta {
+  icon: LucideIcon;
+  label: string;
+}
+
+export const TIMELINE_KIND_META: Record<string, TimelineKindMeta> = {
+  enrollment_started: { icon: GraduationCap, label: "Enrolment started" },
+  attendance_day: { icon: CalendarCheck, label: "Attendance" },
+  dsr_submitted: { icon: ClipboardCheck, label: "Daily report submitted" },
+  assessment_result: { icon: FileCheck2, label: "Assessment result" },
+  assignment_submitted: { icon: ListChecks, label: "Assignment submitted" },
+  project_state_changed: { icon: FolderKanban, label: "Project update" },
+  certificate_issued: { icon: Award, label: "Certificate issued" },
+};
+
+/** "some_new_kind" -> "Some New Kind" — the fallback label for a kind this
+ *  file does not know about yet. */
+function titleCaseKind(kind: string): string {
+  return kind
+    .split(/[_\s-]+/)
+    .filter((word) => word.length > 0)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/** Never throws and never returns `undefined` — every `kind` string, known
+ *  or not, resolves to something renderable. */
+export function timelineKindMeta(kind: string): TimelineKindMeta {
+  return TIMELINE_KIND_META[kind] ?? { icon: CircleDot, label: titleCaseKind(kind) || "Event" };
+}

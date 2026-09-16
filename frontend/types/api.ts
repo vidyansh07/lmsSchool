@@ -2462,3 +2462,35 @@ export interface ActivityDetail extends Activity {
   children: string[];
   automation_run: string | null;
 }
+
+/**
+ * One student's composed timeline (Phase 10, ADR-09): each row comes from a
+ * different app's own `visible_*` queryset, so `kind` is open-ended —
+ * `lib/labels.ts::timelineKindMeta` renders any string generically rather
+ * than a frontend needing to know every source app's vocabulary up front.
+ *
+ * `summary` and `href` are typed nullable even though the pinned contract's
+ * shorthand does not spell out `| null` for them: some sources (e.g. an
+ * attendance day) have nothing further to link to, and the standing rule is
+ * never to assume a field the backend can reasonably omit.
+ */
+export interface TimelineActor {
+  id: string;
+  name: string;
+  role: string;
+}
+
+export interface TimelineEntry {
+  id: string;
+  occurred_at: string;
+  kind: string;
+  title: string;
+  summary: string | null;
+  href: string | null;
+  actor: TimelineActor | null;
+}
+
+export interface TimelineResponse {
+  results: TimelineEntry[];
+  next_cursor: string | null;
+}

@@ -52,7 +52,9 @@ urlpatterns = [
         "students/",
         include(
             (
-                student_urls.urlpatterns + work_urls.student_activity_urlpatterns,
+                student_urls.urlpatterns
+                + work_urls.student_activity_urlpatterns
+                + work_urls.student_timeline_urlpatterns,
                 "students",
             )
         ),

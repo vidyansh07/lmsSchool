@@ -7,6 +7,8 @@ it (ADR-08). `student_activity_urlpatterns` is appended to the `students/`
 mount instead of living under its own prefix, the same way
 `apps.dsr.urls.batch_urlpatterns` extends `batches/`; `me_patterns` is
 appended to a top-level `me/` mount alongside `apps.accounts`'s own.
+`student_timeline_urlpatterns` (Phase 10) joins `student_activity_urlpatterns`
+on that same `students/` mount, for the same reason.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from __future__ import annotations
 from django.urls import path
 
 from . import views
+from .timeline_views import StudentTimelineView
 
 app_name = "work"
 
@@ -37,6 +40,14 @@ student_activity_urlpatterns = [
         "<uuid:student_id>/activities/",
         views.StudentActivityListView.as_view(),
         name="student-activities",
+    ),
+]
+
+student_timeline_urlpatterns = [
+    path(
+        "<uuid:student_id>/timeline/",
+        StudentTimelineView.as_view(),
+        name="student-timeline",
     ),
 ]
 
