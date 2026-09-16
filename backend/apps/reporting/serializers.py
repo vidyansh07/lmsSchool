@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.common.serializers import StrictModelSerializer, StrictSerializer
+from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
-from .models import BulkImport, ExportFormat, ExportStatus
+from .models import BulkImport, ExportFormat, ExportStatus, SavedFilter
 
 
 class ColumnSerializer(StrictSerializer):
@@ -416,3 +416,20 @@ class ExportJobSerializer(StrictSerializer):
         path = f"/api/v1/reports/exports/{obj.pk}/download/"
         request = self.context.get("request")
         return request.build_absolute_uri(path) if request is not None else path
+
+
+class SavedFilterSerializer(StrictModelSerializer):
+    """Read representation. `user` is never in the payload: the endpoint is
+    already scoped to `request.user`'s own rows, so echoing it back would
+    only be a way for a client to notice the field exists."""
+
+    class Meta:
+        model = SavedFilter
+        fields = ("id", "screen", "name", "filters", "created_at")
+        read_only_fields = fields
+
+
+class SavedFilterWriteSerializer(StrictSerializer):
+    screen = SafeCharField(max_length=60)
+    name = SafeCharField(max_length=120)
+    filters = serializers.JSONField()

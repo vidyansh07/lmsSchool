@@ -25,7 +25,7 @@ function renderShell() {
 
 describe('AppShell', () => {
   it('provides a skip link, navigation and a main landmark', () => {
-    mockAuth.value = { user: null, isLoading: false, signOut: vi.fn() };
+    mockAuth.value = { user: null, isLoading: false, signOut: vi.fn(), can: () => false };
     renderShell();
 
     expect(screen.getByRole('link', { name: /skip to content/i })).toBeInTheDocument();
@@ -35,13 +35,13 @@ describe('AppShell', () => {
   });
 
   it('shows the environment badge outside production', () => {
-    mockAuth.value = { user: null, isLoading: false, signOut: vi.fn() };
+    mockAuth.value = { user: null, isLoading: false, signOut: vi.fn(), can: () => false };
     renderShell();
     expect(screen.getByLabelText(/environment:/i)).toBeInTheDocument();
   });
 
   it('offers sign-in to a signed-out visitor', () => {
-    mockAuth.value = { user: null, isLoading: false, signOut: vi.fn() };
+    mockAuth.value = { user: null, isLoading: false, signOut: vi.fn(), can: () => false };
     renderShell();
     expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
@@ -52,6 +52,7 @@ describe('AppShell', () => {
       user: { role: 'student', email: 's@example.test', full_name: 'Sam', capabilities: [] },
       isLoading: false,
       signOut: vi.fn(),
+      can: () => false,
     };
     renderShell();
 
@@ -61,19 +62,17 @@ describe('AppShell', () => {
   });
 
   it('shows management links to a user who holds the capabilities', () => {
+    const capabilities = [Capability.userViewAny, Capability.studentViewAny, Capability.trainerViewAny];
     mockAuth.value = {
       user: {
         role: 'admin',
         email: 'a@example.test',
         full_name: 'Amy',
-        capabilities: [
-          Capability.userViewAny,
-          Capability.studentViewAny,
-          Capability.trainerViewAny,
-        ],
+        capabilities,
       },
       isLoading: false,
       signOut: vi.fn(),
+      can: (capability: string) => (capabilities as string[]).includes(capability),
     };
     renderShell();
 

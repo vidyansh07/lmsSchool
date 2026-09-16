@@ -22,13 +22,19 @@
  * from the capability list the server returned; which requests succeed is
  * decided by the server on every call. Hiding a link is a courtesy, never a
  * permission.
+ *
+ * The header's search control opens the command palette (`mod+k`,
+ * DESIGN_DECISIONS.md "Navigation": "Search box in the top bar opens the
+ * palette") rather than linking to a fixed screen as it once did — Phase 11
+ * gives search somewhere real to go.
  */
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { Bell, ChevronRight, LogOut, Menu, Search, Settings } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
+import { CommandPalette } from '@/components/command-palette';
 import {
   navFor,
   STAFF_ROLES,
@@ -42,6 +48,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip } from '@/components/ui/tooltip';
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { env } from '@/lib/env';
 import { cn } from '@/lib/utils';
 
@@ -247,12 +254,12 @@ function Breadcrumb({ groups, active }: { groups: NavGroup[]; active: string | n
 
 function Shell({
   groups,
-  searchHref,
+  onOpenSearch,
   children,
 }: {
   groups: NavGroup[];
-  /** Where the header's search icon goes: the screen this role searches most. */
-  searchHref: string;
+  /** Opens the command palette (Phase 11) — see the module docstring. */
+  onOpenSearch: () => void;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -330,19 +337,18 @@ function Shell({
             </div>
             <Breadcrumb groups={groups} active={active} />
             <div className="ml-auto flex items-center gap-1 sm:gap-2">
-              {/* A destination, not a widget: the product's search lives on the
-                  screens that have something to search, and this takes a
-                  person to the one they most often want. */}
-              <Tooltip content="Search">
+              {/* Opens the command palette (Phase 11) — the tooltip carries
+                  the chord so the shortcut is discoverable without a person
+                  ever having to click this at all. */}
+              <Tooltip content="Search (Ctrl/⌘K)">
                 <Button
-                  asChild
                   variant="ghost"
                   size="sm"
                   className="size-9 p-0 text-muted-foreground"
+                  aria-label="Search"
+                  onClick={onOpenSearch}
                 >
-                  <Link href={searchHref} aria-label="Search">
-                    <Search className="size-[18px]" aria-hidden="true" />
-                  </Link>
+                  <Search className="size-[18px]" aria-hidden="true" />
                 </Button>
               </Tooltip>
               <HeaderAccount />
@@ -378,6 +384,14 @@ function Shell({
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const isStaff = Boolean(user && STAFF_ROLES.includes(user.role));
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // The one place `mod+k` is registered — every page under this shell shares
+  // it, rather than each screen wiring its own copy of the same shortcut.
+  useKeyboardShortcuts(
+    [{ keys: 'mod+k', description: 'Open the command palette', handler: () => setPaletteOpen(true) }],
+    Boolean(user),
+  );
 
   // The student's links are a flat list; give them the one untitled group the
   // sidebar already knows how to draw, so both audiences share one shell.
@@ -398,9 +412,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         Skip to content
       </a>
-      <Shell groups={groups} searchHref={isStaff ? '/admin/students' : '/courses'}>
+      <Shell groups={groups} onOpenSearch={() => setPaletteOpen(true)}>
         {children}
       </Shell>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </>
   );
 }

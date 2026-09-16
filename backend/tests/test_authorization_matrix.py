@@ -229,6 +229,14 @@ STUDENT_REACHABLE = frozenset(
         # Their own fees; every other fee route needs `fee.view_any` or a
         # record that is theirs, and both are covered in `test_fees.py`.
         "/api/v1/fees/me/",
+        # Search and saved filters (ERP Phase 11): `search.global` is in
+        # `BASE_CAPABILITIES` — every role, a student included — and a saved
+        # filter is per-user data with no capability beyond being signed in.
+        # `/search/` with no `q` answers 400, which the sweep above already
+        # allows for a reachable route. What a *hit* may contain is scoped
+        # per source by `apps.search.services`, asserted in `test_search.py`.
+        "/api/v1/search/",
+        "/api/v1/saved-filters/",
     }
 )
 

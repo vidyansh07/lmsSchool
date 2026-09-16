@@ -327,6 +327,18 @@ class AuditAction(models.TextChoices):
     ACTIVITY_REVIEWED = "activity.reviewed", _("Activity reviewed")
     ACTIVITY_DELETED = "activity.deleted", _("Activity deleted")
 
+    # --- Search and saved filters (ERP Phase 11)
+    #
+    # `context` on `SEARCH_PERFORMED` is counts only (types requested, hits
+    # per type) — never the query text or the ids it matched. A free-text
+    # search box can carry anything a caller chose to type, including
+    # something they should not have, and an audit row is readable by anyone
+    # holding `audit.view`; the query itself is exactly the "under any key
+    # name" case the secrets rule already gives OTPs and TOTP secrets.
+    SEARCH_PERFORMED = "search.performed", _("Global search performed")
+    SAVED_FILTER_CREATED = "saved_filter.created", _("Saved filter created")
+    SAVED_FILTER_DELETED = "saved_filter.deleted", _("Saved filter deleted")
+
 
 class AuditResult(models.TextChoices):
     SUCCESS = "success", _("Success")

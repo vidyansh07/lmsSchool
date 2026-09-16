@@ -22,11 +22,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.roles import UserRole, has_capability
+from apps.common.caching import MINUTE, remember
+from apps.common.exceptions import AuthorityError
 from apps.common.permissions import Capability, HasCapability, IsActiveUser, IsOwnerOrHasCapability
 from apps.fees.queries import annotate_student_fee_totals
 from apps.organisation.access import resolve_submitted_branch
 
-from . import access, services
+from . import access, services, student_360
 from .models import StudentProfile
 from .serializers import (
     AdminStudentProfileSerializer,
@@ -288,3 +290,40 @@ class StudentFeeStatusView(APIView):
             note=serializer.validated_data.get("note", ""),
         )
         return Response(AdminStudentProfileSerializer(updated).data)
+
+
+class Student360View(APIView):
+    """`GET /students/{id}/360/` (ERP Phase 11) — one call for the Student 360
+    screen. Permission is exactly `StudentDetailView`'s/
+    `StudentActivityListView`'s rule, reused rather than reinvented:
+    `reachable_students` (branch) narrows first, so a cross-branch id 404s,
+    then `can_view_student` (audience) decides, so a same-branch classmate a
+    student may not read 403s instead of either collapsing into the other.
+
+    Cached for a minute, keyed on `(student, viewer_scope_key)` — never just
+    the student id, or the first caller to warm the cache would leak their
+    view's shape (which activities, which counts) to a caller with a
+    different, narrower reach. See `student_360.viewer_scope_key` for why
+    that key is safe to share within a tier and never across one.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Student 360",
+        responses={200: OpenApiResponse(description="The Student 360 read model.")},
+        tags=STUDENTS_TAG,
+    )
+    def get(self, request, student_id):
+        student = get_object_or_404(access.reachable_students(request.user), pk=student_id)
+        if not access.can_view_student(request.user, student):
+            raise AuthorityError("You do not have authority to see this student.")
+
+        scope_key = student_360.viewer_scope_key(request.user)
+        data = remember(
+            "student:360",
+            (student.pk, scope_key),
+            MINUTE,
+            lambda: student_360.build(request.user, student),
+        )
+        return Response(data)

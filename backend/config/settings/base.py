@@ -120,6 +120,7 @@ LOCAL_APPS = [
     "apps.warnings",
     "apps.requirements",
     "apps.dashboards",
+    "apps.search",
     "apps.audit",
     "apps.health",
 ]
@@ -410,6 +411,11 @@ REST_FRAMEWORK = {
         # brute-forceable, so this bounds bulk checking of a leaked list
         # rather than guessing.
         "certificate_verification": env.str("THROTTLE_RATE_VERIFY", default="30/min"),
+        # Global search (ERP Phase 11): every authenticated caller holds the
+        # capability, so the rate limit is what keeps a command palette's
+        # keystrokes from turning into unbounded query volume across ten
+        # scoped sources.
+        "search": env.str("THROTTLE_RATE_SEARCH", default="30/min"),
     },
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
     "TEST_REQUEST_DEFAULT_FORMAT": "json",

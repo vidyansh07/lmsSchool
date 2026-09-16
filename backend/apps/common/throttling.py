@@ -30,6 +30,26 @@ class AuthEndpointThrottle(ScopedRateThrottle):
         return self.cache_format % {"scope": self.scope, "ident": ident}
 
 
+class SearchThrottle(SimpleRateThrottle):
+    """Global search (scope: ``search``).
+
+    Every authenticated caller holds `search.global` (it is in
+    `BASE_CAPABILITIES`), so this is the one thing standing between a
+    keystroke-triggered command palette and ten scoped-query sources fired a
+    hundred times a minute per account. Keyed on the caller, the same as
+    `BurstThrottle`, since the endpoint always requires authentication.
+    """
+
+    scope = "search"
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            ident = str(request.user.pk)
+        else:
+            ident = self.get_ident(request)
+        return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
 class BurstThrottle(SimpleRateThrottle):
     """The expensive endpoints: exports, bulk imports, import confirmation.
 

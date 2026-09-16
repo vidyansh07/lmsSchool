@@ -306,12 +306,25 @@ class Capability(models.TextChoices):
     ACTIVITY_REVIEW = "activity.review", _("Review a completed activity")
     ACTIVITY_DELETE = "activity.delete", _("Delete an activity")
 
+    # --- Search and productivity (ERP Phase 11)
+    #
+    # A command palette and a search box are things every signed-in person
+    # uses to find their own way around, not a privilege — the contract
+    # (`API_CONTRACTS.md` "Search and productivity") is explicit that this is
+    # "any authenticated user", so it belongs in `BASE_CAPABILITIES` below
+    # rather than in any role's own grant. Authority over *what a hit reveals*
+    # is still enforced per source, inside `apps.search.services`, through
+    # that domain's own `visible_*` — this capability only gates the endpoint
+    # existing for the caller at all.
+    SEARCH_GLOBAL = "search.global", _("Use global search")
+
 
 #: Capabilities every authenticated, active user has regardless of role.
 BASE_CAPABILITIES: frozenset[str] = frozenset(
     {
         Capability.PROFILE_VIEW_OWN,
         Capability.PROFILE_UPDATE_OWN,
+        Capability.SEARCH_GLOBAL,
     }
 )
 

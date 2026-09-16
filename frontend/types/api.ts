@@ -2494,3 +2494,134 @@ export interface TimelineResponse {
   results: TimelineEntry[];
   next_cursor: string | null;
 }
+
+/**
+ * Student 360, search and saved filters (ERP Phase 11).
+ *
+ * `GET /students/{id}/360/` is a pinned contract built in parallel with its
+ * backend, not from a schema read after the fact — the nested shapes below
+ * are this client's best-effort match to `API_CONTRACTS.md`'s prose
+ * ("profile, enrollment, batch, trainer, counsellor, progress …") rather
+ * than a field-for-field transcription of a serializer. Where the wording
+ * did not pin an inner shape, this reuses the closest existing type
+ * (`StudentProfile`, `Enrollment`, `CourseProgress`, the activity engine's
+ * `{id, name}` person brief) instead of inventing a new one, and every
+ * consumer renders through `lib/format.ts` so a genuine mismatch degrades to
+ * a fallback label rather than `undefined`/`NaN`.
+ */
+
+/** One weighted input to `performance.overall_score` (ADR-10). Phase 12
+ *  (the performance engine) is what actually populates this; until then the
+ *  360 endpoint returns an empty list and a null score, and the header shows
+ *  "Not yet computed" rather than a fabricated number. */
+export interface Student360PerformanceComponent {
+  key: string;
+  label: string;
+  weight: number;
+  value: number | null;
+  contribution: number | null;
+  sources: unknown[];
+}
+
+export interface Student360Performance {
+  components: Student360PerformanceComponent[];
+  overall_score: number | null;
+}
+
+/** One rule that fired against this student's numbers (ADR-11). Phase 13
+ *  (the risk engine) is what actually populates `triggered`; until then the
+ *  360 endpoint returns `level: "none"` and an empty list, and the badge
+ *  reads as a neutral "No risk signals" rather than an alarming empty state. */
+export interface Student360RiskTrigger {
+  key: string;
+  label: string;
+  severity: string;
+  detail: string;
+}
+
+export type RiskLevel = "none" | "low" | "medium" | "high" | "critical";
+
+export interface Student360Risk {
+  level: RiskLevel;
+  triggered: Student360RiskTrigger[];
+}
+
+export interface Student360AttendanceSummary {
+  percent: number | null;
+  attended: number | null;
+  total_sessions: number | null;
+  has_records: boolean;
+}
+
+export interface Student360Counts {
+  activities_open: number;
+  activities_overdue: number;
+  assessments: number;
+  assignments: number;
+  projects: number;
+}
+
+/** A row in `recent_activities` (populated today) or `next_actions` (a
+ *  Phase 14/automation placeholder — always `[]` until that phase lands). A
+ *  short, linkable summary, not a full `Activity` or `TimelineEntry`. */
+export interface Student360FeedItem {
+  id: string;
+  title: string;
+  href: string | null;
+  occurred_at?: string | null;
+  due_at?: string | null;
+}
+
+export interface Student360Batch {
+  id: string;
+  code: string;
+  name: string;
+  status?: string;
+}
+
+export interface Student360Response {
+  profile: StudentProfile;
+  enrollment: Enrollment | null;
+  batch: Student360Batch | null;
+  trainer: ActivityPersonBrief | null;
+  counsellor: ActivityPersonBrief | null;
+  progress: CourseProgress | null;
+  attendance_summary: Student360AttendanceSummary;
+  performance: Student360Performance;
+  risk: Student360Risk;
+  counts: Student360Counts;
+  fee_status: FeeStatus;
+  recent_activities: Student360FeedItem[];
+  next_actions: Student360FeedItem[];
+}
+
+/** `GET /search/?q=&types=` (Phase 11) — one row a person can jump straight
+ *  to from the command palette. */
+export interface SearchResultItem {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  href: string;
+}
+
+export interface SearchResultGroup {
+  type: string;
+  label: string;
+  results: SearchResultItem[];
+  total: number;
+}
+
+export interface SearchResponse {
+  groups: SearchResultGroup[];
+}
+
+/** `GET/POST/DELETE /saved-filters/?screen=` (Phase 11) — per user, per
+ *  screen. `filters` is whatever shape that screen's own filter state is;
+ *  it round-trips opaquely through this client. */
+export interface SavedFilter {
+  id: string;
+  screen: string;
+  name: string;
+  filters: Record<string, unknown>;
+  created_at: string;
+}

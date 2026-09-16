@@ -99,6 +99,9 @@ export const Capability = {
   dataExport: "data.export",
   dataImport: "data.import",
   exportViewAny: "export.view_any",
+  // Search and productivity (ERP Phase 11) — `API_CONTRACTS.md`'s
+  // `GET /search/` row: "Any authenticated user (`search.global`)".
+  searchGlobal: "search.global",
 } as const;
 
 export type CapabilityName = (typeof Capability)[keyof typeof Capability];

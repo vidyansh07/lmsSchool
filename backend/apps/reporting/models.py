@@ -226,3 +226,51 @@ class ExportJob(SoftDeleteBaseModel):
 
     def __str__(self) -> str:
         return f"{self.report_key} ({self.format}): {self.status}"
+
+
+# ---------------------------------------------------------------------------
+# Saved filters — ERP Phase 11 (`API_CONTRACTS.md` "Search and productivity",
+# `DATA_MODEL.md` `SavedFilter`)
+# ---------------------------------------------------------------------------
+
+
+class SavedFilter(BaseModel):
+    """A person's own named filter preset for one screen.
+
+    Per-user, not per-role or per-branch: "scope" here means literally one
+    row per owner (`views.py` filters strictly on `user=request.user`, never
+    a `visible_*` capability tier) — this is personal convenience, not
+    organisational data, so nobody else's filter is ever reachable, including
+    an administrator's. Plain `BaseModel` rather than soft-delete: unlike
+    educational history (D-019), a discarded filter preset has no audit or
+    recovery value, and "restorable by default" would be the wrong default
+    for something the owner explicitly asked to remove.
+    """
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="saved_filters",
+        help_text=_("The only person who may see or delete this row."),
+    )
+    #: Names the screen this preset applies to (e.g. "students-list"), a
+    #: client-defined string this app does not otherwise validate — the
+    #: screen owns what a "filter" means for itself.
+    screen = models.CharField(_("screen"), max_length=60)
+    name = models.CharField(_("name"), max_length=120)
+    filters = models.JSONField(_("filters"), default=dict)
+
+    class Meta(BaseModel.Meta):
+        verbose_name = _("saved filter")
+        verbose_name_plural = _("saved filters")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "screen", "name"], name="saved_filter_user_screen_name_unique"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "screen"], name="saved_filter_user_screen_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.screen}) — {self.user_id}"

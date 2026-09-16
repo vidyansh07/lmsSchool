@@ -13,7 +13,7 @@
 
 import Link from 'next/link';
 import { use, useCallback, useEffect, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, ExternalLink } from 'lucide-react';
 
 import { SearchPicker, type PickerOption } from '@/components/admissions/search-picker';
 import { FeeLedger, useStudentFees } from '@/components/fees/fee-ledger';
@@ -377,6 +377,15 @@ export function StudentDetail({ studentId }: { studentId: string }) {
         <Badge variant={FEE_STATUS_VARIANT[student.fee_status]}>
           {FEE_STATUS_LABEL[student.fee_status]}
         </Badge>
+        {/* This record keeps its own fee ledger below and never redirects
+            (DESIGN_DECISIONS.md, "Student 360") — it only links out to the
+            full cross-role profile: activities, timeline, progress, risk. */}
+        <Button asChild variant="outline" size="sm" className="ml-auto">
+          <Link href={`/students/${studentId}`}>
+            <ExternalLink className="size-3.5" aria-hidden="true" />
+            View 360 profile
+          </Link>
+        </Button>
       </div>
 
       <FeeLedger

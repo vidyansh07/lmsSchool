@@ -302,10 +302,17 @@ def test_deactivation_takes_effect_on_the_next_request(api_client_no_csrf, stude
 
 
 def test_students_and_trainers_hold_only_self_service_capabilities():
+    # `search.global` (ERP Phase 11) is in `BASE_CAPABILITIES` — every role,
+    # scoped or not, gets a command palette — so it belongs here alongside
+    # the other two base capabilities, not as evidence of a widened role.
     for role in (UserRole.STUDENT, UserRole.TRAINER):
         capabilities = capabilities_for(role)
         assert capabilities == frozenset(
-            {Capability.PROFILE_VIEW_OWN, Capability.PROFILE_UPDATE_OWN}
+            {
+                Capability.PROFILE_VIEW_OWN,
+                Capability.PROFILE_UPDATE_OWN,
+                Capability.SEARCH_GLOBAL,
+            }
         ), role
 
 
@@ -327,7 +334,9 @@ def test_an_unknown_role_gets_no_management_capabilities():
     """Fail closed: a role added to the enum but not the matrix grants nothing."""
     capabilities = capabilities_for("coordinator")
     assert Capability.USER_VIEW_ANY not in capabilities
-    assert capabilities == frozenset({Capability.PROFILE_VIEW_OWN, Capability.PROFILE_UPDATE_OWN})
+    assert capabilities == frozenset(
+        {Capability.PROFILE_VIEW_OWN, Capability.PROFILE_UPDATE_OWN, Capability.SEARCH_GLOBAL}
+    )
 
 
 @pytest.mark.django_db
@@ -418,7 +427,11 @@ def test_trainers_and_students_still_hold_only_self_service_capabilities():
     """Adding roles must not have widened the scoped ones."""
     for role in (UserRole.STUDENT, UserRole.TRAINER):
         assert capabilities_for(role) == frozenset(
-            {Capability.PROFILE_VIEW_OWN, Capability.PROFILE_UPDATE_OWN}
+            {
+                Capability.PROFILE_VIEW_OWN,
+                Capability.PROFILE_UPDATE_OWN,
+                Capability.SEARCH_GLOBAL,
+            }
         ), role
 
 

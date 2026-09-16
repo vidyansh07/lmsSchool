@@ -3,6 +3,7 @@
 from django.urls import path
 
 from .views import (
+    Student360View,
     StudentDetailView,
     StudentFeeAmountView,
     StudentFeeStatusView,
@@ -17,6 +18,7 @@ urlpatterns = [
     # `me/` is declared before the UUID route so it can never be shadowed.
     path("me/", StudentMeView.as_view(), name="me"),
     path("<uuid:student_id>/", StudentDetailView.as_view(), name="detail"),
+    path("<uuid:student_id>/360/", Student360View.as_view(), name="360"),
     path("<uuid:student_id>/fee-status/", StudentFeeStatusView.as_view(), name="fee-status"),
     path("<uuid:student_id>/fee-amount/", StudentFeeAmountView.as_view(), name="fee-amount"),
 ]

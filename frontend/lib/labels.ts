@@ -32,6 +32,7 @@ import type {
   PolicyCategory,
   Qualification,
   RequirementStatus,
+  RiskLevel,
   UserRole,
 } from "@/types/api";
 
@@ -72,6 +73,28 @@ export const FEE_STATUS_VARIANT: Record<
 export const FEE_STATUS_OPTIONS: { value: FeeStatus; label: string }[] = (
   Object.keys(FEE_STATUS_LABEL) as FeeStatus[]
 ).map((value) => ({ value, label: FEE_STATUS_LABEL[value] }));
+
+/**
+ * The Student 360 header's risk badge (ADR-11, ERP Phase 11). `"none"` is
+ * this endpoint's own placeholder value until Phase 13 (the risk engine)
+ * starts writing real `RiskState` rows — it reads as a neutral "no signal",
+ * never an alarming empty state, per DESIGN_DECISIONS.md's "Student 360".
+ */
+export const RISK_LEVEL_LABEL: Record<RiskLevel, string> = {
+  none: "No risk signals",
+  low: "Low risk",
+  medium: "Medium risk",
+  high: "High risk",
+  critical: "Critical risk",
+};
+
+export const RISK_LEVEL_VARIANT: Record<RiskLevel, "neutral" | "success" | "warning" | "error"> = {
+  none: "neutral",
+  low: "success",
+  medium: "warning",
+  high: "error",
+  critical: "error",
+};
 
 export const QUALIFICATION_LABEL: Record<Qualification, string> = {
   secondary: "Secondary (10th)",

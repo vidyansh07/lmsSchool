@@ -70,3 +70,9 @@ import_urlpatterns = [
     path("<uuid:import_id>/confirm/", views.ImportConfirmView.as_view(), name="import-confirm"),
     path("<uuid:import_id>/reject/", views.ImportRejectView.as_view(), name="import-reject"),
 ]
+
+#: Mounted by `config.api_urls` at `/api/v1/saved-filters/` (ERP Phase 11).
+saved_filter_urlpatterns = [
+    path("", views.SavedFilterListCreateView.as_view(), name="saved-filter-list"),
+    path("<uuid:filter_id>/", views.SavedFilterDetailView.as_view(), name="saved-filter-detail"),
+]

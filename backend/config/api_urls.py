@@ -99,6 +99,8 @@ urlpatterns = [
     path("reports/", include((reporting_urls.report_urlpatterns, "reports"))),
     path("dashboards/", include((reporting_urls.dashboard_urlpatterns, "dashboards"))),
     path("imports/", include((reporting_urls.import_urlpatterns, "imports"))),
+    path("search/", include("apps.search.urls")),
+    path("saved-filters/", include((reporting_urls.saved_filter_urlpatterns, "saved-filters"))),
     # Anonymous by design: verifying a certificate is what the public does
     # with it (§6.8).
     path("verify/", include((certificate_urls.public_urlpatterns, "verify"))),

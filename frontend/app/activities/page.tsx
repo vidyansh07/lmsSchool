@@ -13,18 +13,33 @@
  * (trainer/counsellor scoped to "assigned"), so the same route serves all of
  * them; the backend's queryset — not this route — decides what each of them
  * actually sees.
+ *
+ * Saved filters (ERP Phase 11, DATA_MODEL.md `SavedFilter`,
+ * DESIGN_DECISIONS.md "Search and saved filters"): this is the one screen
+ * that wires the server-side saved-filter API to a real filter bar, and the
+ * one place `useUnsavedChanges` (DESIGN_DECISIONS.md "Unsaved-changes
+ * guard") guards a genuine uncommitted edit — the name typed into the "Save
+ * this filter" popover before Save is clicked. Applying a saved filter is a
+ * safe, reversible read (it only ever sets local filter state, matching
+ * "Caching UX and optimistic UI"'s bar for what may update without a round
+ * trip), so recall does not go through the guard; only losing an
+ * *unsubmitted name* does.
  */
 
 import { useEffect, useState } from "react";
+import { Bookmark } from "lucide-react";
 
 import { RequireAuth } from "@/components/require-auth";
 import { ActivityDrawer } from "@/components/work/activity-drawer";
+import { Confirm } from "@/components/confirm";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 import { Pagination } from "@/components/pagination";
+import { Popover, PopoverContent, PopoverHeading, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableWrapper, Td, Th, Tr } from "@/components/ui/table";
 import { ApiError } from "@/lib/api";
 import { categoryVariant } from "@/components/ui/badge";
@@ -35,8 +50,12 @@ import {
   ACTIVITY_STATUS_LABEL,
   ACTIVITY_STATUS_VARIANT,
 } from "@/lib/labels";
+import { createSavedFilter, deleteSavedFilter, listSavedFilters } from "@/lib/saved-filters";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { listActivities, listActivityTypes } from "@/lib/work";
-import type { Activity, ActivityStatus, ActivityType, Paginated } from "@/types/api";
+import type { Activity, ActivityStatus, ActivityType, Paginated, SavedFilter } from "@/types/api";
+
+const SAVED_FILTER_SCREEN = "activities";
 
 const STATUSES: ActivityStatus[] = [
   "draft",
@@ -71,6 +90,24 @@ const DEFAULT_FILTERS: Filters = {
   page: 1,
 };
 
+/** `SavedFilter.filters` round-trips opaquely (`lib/saved-filters.ts`) — a
+ *  preset saved before a filter was added, or edited by hand through the
+ *  API, is untrusted input here, so every field is re-validated against this
+ *  screen's own vocabulary rather than cast straight to `Filters`. Anything
+ *  unrecognised falls back to its default instead of reaching the UI as
+ *  `undefined`. */
+function parseSavedActivityFilters(raw: Record<string, unknown>): Filters {
+  const status = typeof raw.status === "string" && (STATUSES as string[]).includes(raw.status) ? (raw.status as ActivityStatus) : "";
+  return {
+    status,
+    type: typeof raw.type === "string" ? raw.type : "",
+    assignedTo: typeof raw.assignedTo === "string" ? raw.assignedTo : "",
+    mine: raw.mine === true,
+    overdue: raw.overdue === true,
+    page: 1,
+  };
+}
+
 interface ListState {
   key: string;
   data: Paginated<Activity> | null;
@@ -97,6 +134,89 @@ function ActivitiesWorkspace() {
       cancelled = true;
     };
   }, []);
+
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
+  const [selectedSavedFilterId, setSelectedSavedFilterId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    listSavedFilters(SAVED_FILTER_SCREEN)
+      .then((rows) => {
+        if (!cancelled) setSavedFilters(rows);
+      })
+      .catch(() => {
+        // The saved-filters list is a convenience; its own failure does not
+        // block the activity list below.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function applySavedFilter(id: string) {
+    setSelectedSavedFilterId(id);
+    if (!id) {
+      setFilters(DEFAULT_FILTERS);
+      return;
+    }
+    const saved = savedFilters.find((row) => row.id === id);
+    if (saved) setFilters(parseSavedActivityFilters(saved.filters));
+  }
+
+  async function removeSavedFilter(id: string) {
+    setSavedFilters((current) => current.filter((row) => row.id !== id));
+    if (selectedSavedFilterId === id) setSelectedSavedFilterId("");
+    try {
+      await deleteSavedFilter(id);
+    } catch {
+      // Best-effort: a failed delete leaves the preset usable again on the
+      // next load, which is a safer failure than an error banner over a
+      // screen whose primary purpose is the activity list, not this row.
+    }
+  }
+
+  // "Save this filter" — the one uncommitted edit on this screen worth
+  // guarding: a name typed but not yet saved (DESIGN_DECISIONS.md
+  // "Unsaved-changes guard"). Recalling or clearing a filter is always safe
+  // and reversible, so nothing else here goes through the guard.
+  const [savePopoverOpen, setSavePopoverOpen] = useState(false);
+  const [filterName, setFilterName] = useState("");
+  const [isSavingFilter, setIsSavingFilter] = useState(false);
+  const [saveFilterError, setSaveFilterError] = useState("");
+  const { isPrompting, guard, confirmDiscard, cancelDiscard } = useUnsavedChanges(
+    savePopoverOpen && filterName.trim().length > 0,
+  );
+
+  function resetSaveFilterPopover() {
+    setSavePopoverOpen(false);
+    setFilterName("");
+    setSaveFilterError("");
+  }
+
+  function requestCloseSaveFilterPopover() {
+    guard(resetSaveFilterPopover);
+  }
+
+  async function saveCurrentFilter() {
+    const name = filterName.trim();
+    if (!name) return;
+    setIsSavingFilter(true);
+    setSaveFilterError("");
+    try {
+      const created = await createSavedFilter({
+        screen: SAVED_FILTER_SCREEN,
+        name,
+        filters: filters as unknown as Record<string, unknown>,
+      });
+      setSavedFilters((current) => [...current.filter((row) => row.name !== created.name), created]);
+      setSelectedSavedFilterId(created.id);
+      resetSaveFilterPopover();
+    } catch (cause: unknown) {
+      setSaveFilterError(cause instanceof ApiError ? cause.message : "Could not save this filter.");
+    } finally {
+      setIsSavingFilter(false);
+    }
+  }
 
   const [reloadToken, setReloadToken] = useState(0);
   // `reloadToken` is part of the request identity, not just an effect
@@ -223,6 +343,73 @@ function ActivitiesWorkspace() {
           </Button>
         ) : null}
       </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        <Select
+          aria-label="Saved filters"
+          value={selectedSavedFilterId}
+          onChange={(event) => applySavedFilter(event.target.value)}
+          className="w-56"
+        >
+          <option value="">Saved filters…</option>
+          {savedFilters.map((row) => (
+            <option key={row.id} value={row.id}>
+              {row.name}
+            </option>
+          ))}
+        </Select>
+        {selectedSavedFilterId ? (
+          <Button type="button" variant="ghost" size="sm" onClick={() => removeSavedFilter(selectedSavedFilterId)}>
+            Remove
+          </Button>
+        ) : null}
+        <Popover
+          open={savePopoverOpen}
+          onOpenChange={(open) => (open ? setSavePopoverOpen(true) : requestCloseSaveFilterPopover())}
+        >
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline" size="sm">
+              <Bookmark className="size-3.5" aria-hidden="true" />
+              Save this filter
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent>
+            <PopoverHeading>Save this filter</PopoverHeading>
+            <Field label="Name" htmlFor="save-activity-filter-name" error={saveFilterError || undefined}>
+              <Input
+                id="save-activity-filter-name"
+                autoFocus
+                value={filterName}
+                onChange={(event) => setFilterName(event.target.value)}
+                placeholder="e.g. My overdue reviews"
+              />
+            </Field>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={requestCloseSaveFilterPopover}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={saveCurrentFilter}
+                disabled={!filterName.trim() || isSavingFilter}
+              >
+                {isSavingFilter ? "Saving…" : "Save"}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <Confirm
+        open={isPrompting}
+        title="Discard this filter name?"
+        description="You typed a name for a saved filter but have not saved it yet."
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        onConfirm={confirmDiscard}
+        onCancel={cancelDiscard}
+      />
 
       {state.isLoading ? (
         <LoadingState label="Loading activities…" rows={6} />

@@ -24,8 +24,17 @@
  * visible set and matches by student code, and giving that its own
  * loading/error/retry means a slow or failing feedback fetch never blocks
  * the performance figures above it from rendering.
+ *
+ * The route itself (`/manage/students/[enrollmentId]`) now only redirects to
+ * the Student 360 page's Enrolment tab (DESIGN_DECISIONS.md, "Student 360":
+ * "the manager enrolment page … redirects to the 360 with the Enrolment tab
+ * open (D-128: no dead links)") — Phase 11 gave this data a real home there.
+ * `StudentPerformance` itself stays exactly as it was and is what that tab
+ * embeds (`variant="embedded"` only hides the back-link and the name header
+ * the 360 page already shows once, above every tab).
  */
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
@@ -131,7 +140,17 @@ function StudentFeedbackSection({ studentCode }: { studentCode: string | null })
   );
 }
 
-export function StudentPerformance({ enrollmentId }: { enrollmentId: string }) {
+export function StudentPerformance({
+  enrollmentId,
+  variant = 'standalone',
+}: {
+  enrollmentId: string;
+  /** `'embedded'` drops the "Back to roster" link and the name/status header
+   *  — the Student 360 page's Enrolment tab already shows both once, above
+   *  every tab. Defaults to `'standalone'`, this component's original,
+   *  unit-tested behaviour. */
+  variant?: 'standalone' | 'embedded';
+}) {
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [performance, setPerformance] = useState<StudentPerformanceRow | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
@@ -191,28 +210,32 @@ export function StudentPerformance({ enrollmentId }: { enrollmentId: string }) {
   const studentCode = enrollment.student_code ?? null;
 
   return (
-    <div className="animate-rise-in space-y-6">
-      <Link
-        href={`/manage/batches/${enrollment.batch_id}/students`}
-        className="inline-block text-sm text-muted-foreground hover:text-foreground"
-      >
-        ← Back to roster
-      </Link>
-
-      <div className="space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{fallback(enrollment.student_name, UNKNOWN)}</h1>
-          <Badge variant={ENROLLMENT_STATUS_VARIANT[enrollment.status]}>
-            {ENROLLMENT_STATUS_LABEL[enrollment.status]}
-          </Badge>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          <span className="font-mono text-xs">{fallback(studentCode)}</span> · {fallback(enrollment.course_title)} on{' '}
-          <Link href={`/manage/batches/${enrollment.batch_id}`} className="text-foreground hover:text-primary hover:underline">
-            {fallback(enrollment.batch_name)}
+    <div className={variant === 'standalone' ? 'animate-rise-in space-y-6' : 'space-y-6'}>
+      {variant === 'standalone' ? (
+        <>
+          <Link
+            href={`/manage/batches/${enrollment.batch_id}/students`}
+            className="inline-block text-sm text-muted-foreground hover:text-foreground"
+          >
+            ← Back to roster
           </Link>
-        </p>
-      </div>
+
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight">{fallback(enrollment.student_name, UNKNOWN)}</h1>
+              <Badge variant={ENROLLMENT_STATUS_VARIANT[enrollment.status]}>
+                {ENROLLMENT_STATUS_LABEL[enrollment.status]}
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-mono text-xs">{fallback(studentCode)}</span> · {fallback(enrollment.course_title)} on{' '}
+              <Link href={`/manage/batches/${enrollment.batch_id}`} className="text-foreground hover:text-primary hover:underline">
+                {fallback(enrollment.batch_name)}
+              </Link>
+            </p>
+          </div>
+        </>
+      ) : null}
 
       {!performance ? (
         <EmptyState
@@ -321,6 +344,87 @@ export function StudentPerformance({ enrollmentId }: { enrollmentId: string }) {
   );
 }
 
+/**
+ * D-128, "no dead links": this used to be the whole screen; it now only
+ * resolves which student this enrolment belongs to and hands off to the
+ * Student 360 page's Enrolment tab, which embeds `StudentPerformance` above
+ * (`variant="embedded"`) alongside the rest of that student's record. A
+ * client-side redirect, not `next/navigation`'s server-side `redirect()`
+ * (`app/manage/page.tsx`'s pattern): the destination depends on this
+ * enrolment's `student_id`, which needs the same authenticated API call
+ * every other page in this app makes from the browser, not a server-side
+ * one.
+ */
+function RedirectToStudent360({ enrollmentId }: { enrollmentId: string }) {
+  const router = useRouter();
+  // `reloadToken` makes a retry a genuine new request identity (mirrors
+  // `hooks/use-api.ts`'s `requestKey`): the key changing is what the render
+  // body below reacts to synchronously, and the effect underneath it only
+  // ever calls `setError` from inside a promise callback, never directly in
+  // its own body — the shape `react-hooks/set-state-in-effect` asks for.
+  const [reloadToken, setReloadToken] = useState(0);
+  const key = `${enrollmentId}#${reloadToken}`;
+  const [state, setState] = useState<{ key: string; error: ApiError | null }>({ key, error: null });
+  if (state.key !== key) {
+    setState({ key, error: null });
+  }
+  const error = state.error;
+
+  useEffect(() => {
+    let cancelled = false;
+    getEnrollment(enrollmentId)
+      .then((enrollment) => {
+        if (cancelled) return;
+        if (enrollment.student_id) {
+          router.replace(`/students/${enrollment.student_id}?tab=enrollment`);
+        } else {
+          setState({ key, error: new ApiError(404, 'not_found', 'This enrolment has no linked student record.', '') });
+        }
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setState({
+            key,
+            error: cause instanceof ApiError ? cause : new ApiError(0, 'unknown_error', 'The request failed.', ''),
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  function reload() {
+    setReloadToken((value) => value + 1);
+  }
+
+  if (error) {
+    if (error.status === 404) {
+      return (
+        <EmptyState
+          title="Enrolment not found"
+          description="This enrolment does not exist, or it is not available to you."
+          action={
+            <Button asChild variant="outline">
+              <Link href="/manage/batches">Back to batches</Link>
+            </Button>
+          }
+        />
+      );
+    }
+    return (
+      <ErrorState
+        title="Could not open this student"
+        message={error.message}
+        requestId={error.requestId || undefined}
+        onRetry={reload}
+      />
+    );
+  }
+  return <LoadingState label="Opening student…" rows={4} />;
+}
+
 export default function ManageStudentPerformancePage({
   params,
 }: {
@@ -329,7 +433,7 @@ export default function ManageStudentPerformancePage({
   const { enrollmentId } = use(params);
   return (
     <RequireAuth capability={Capability.performanceViewAny}>
-      <StudentPerformance enrollmentId={enrollmentId} />
+      <RedirectToStudent360 enrollmentId={enrollmentId} />
     </RequireAuth>
   );
 }

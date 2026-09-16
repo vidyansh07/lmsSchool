@@ -35,6 +35,7 @@ from apps.organisation.scoping import scope_to_branch
 
 from . import access, dashboards, exports, importers, metrics, reports, tasks, writers
 from .models import TERMINAL_EXPORT_STATUSES, BulkImport, ExportFormat, ExportJob, ExportStatus
+from .saved_filters import delete_saved_filter, save_filter, visible_saved_filters
 from .serializers import (
     AdminDashboardSerializer,
     BatchOverviewSerializer,
@@ -47,6 +48,8 @@ from .serializers import (
     MetricSerializer,
     ReportDefinitionSerializer,
     ReportPageSerializer,
+    SavedFilterSerializer,
+    SavedFilterWriteSerializer,
     TrainerOverviewSerializer,
     TrainerWorkloadSerializer,
     TrendPointSerializer,
@@ -987,3 +990,62 @@ class ImportRejectView(APIView):
             return _forbidden(request, "You cannot import data.")
         run = importers.reject(run=_import_for(request, import_id), actor=request.user)
         return Response(BulkImportSerializer(run).data)
+
+
+# ---------------------------------------------------------------------------
+# Saved filters — ERP Phase 11. Per-user, never a `visible_*` capability
+# tier: `request.user` is the entire scope, for every role.
+# ---------------------------------------------------------------------------
+
+
+class SavedFilterListCreateView(APIView):
+    """`GET /saved-filters/?screen=` and `POST /saved-filters/`.
+
+    A bare list, not `Paginated`: this is small and scoped to one person and
+    (optionally) one screen. No capability beyond being signed in — this is
+    personal data, not organisational data.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="List my saved filters",
+        parameters=[OpenApiParameter("screen", str, description="Limit to one screen.")],
+        responses={200: SavedFilterSerializer(many=True)},
+        tags=REPORTS_TAG,
+    )
+    def get(self, request):
+        screen = request.query_params.get("screen") or None
+        rows = visible_saved_filters(request.user, screen=screen)
+        return Response(SavedFilterSerializer(rows, many=True).data)
+
+    @extend_schema(
+        summary="Save a filter",
+        request=SavedFilterWriteSerializer,
+        responses={201: SavedFilterSerializer},
+        tags=REPORTS_TAG,
+    )
+    def post(self, request):
+        serializer = SavedFilterWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        row = save_filter(user=request.user, **serializer.validated_data)
+        return Response(SavedFilterSerializer(row).data, status=http_status.HTTP_201_CREATED)
+
+
+class SavedFilterDetailView(APIView):
+    """`DELETE /saved-filters/{id}/` — the owner only. A guessed id belonging
+    to somebody else 404s: it is resolved from `request.user`'s own rows,
+    never from an unscoped lookup checked afterwards."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Delete a saved filter",
+        request=None,
+        responses={204: OpenApiResponse(description="Deleted.")},
+        tags=REPORTS_TAG,
+    )
+    def delete(self, request, filter_id):
+        row = get_object_or_404(visible_saved_filters(request.user), pk=filter_id)
+        delete_saved_filter(user=request.user, saved_filter=row)
+        return Response(status=http_status.HTTP_204_NO_CONTENT)
