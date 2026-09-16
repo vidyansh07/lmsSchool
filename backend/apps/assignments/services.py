@@ -561,6 +561,15 @@ def grade_submission(
         resource_type="assignment",
         resource_id=submission.assignment_id,
     )
+
+    # ERP Phase 13 (ADR-11): a graded submission moves the assignment-risk
+    # rule's numbers (and, via `sync_result_from_submission` above, possibly
+    # the assessment-risk rule's too) — one debounced recompute either way,
+    # `schedule_recompute`'s own cache-key dedup absorbing the overlap.
+    from apps.performance.tasks import schedule_recompute
+
+    transaction.on_commit(lambda: schedule_recompute(submission.enrollment_id))
+
     return submission
 
 

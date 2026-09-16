@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.roles import Capability
 from apps.batches import access as batch_access
+from apps.common.caching import MINUTE, remember
 from apps.common.deletion import soft_delete
 from apps.common.exceptions import ApplicationError
 from apps.common.permissions import HasCapability, IsActiveUser
@@ -379,6 +380,59 @@ class RiskThresholdsView(APIView):
         )
 
 
+class RiskSummaryView(APIView):
+    """`GET /risk/summary/` (ERP Phase 13, ADR-11): counts by level, plus the
+    20 most severe currently-flagged enrolments, scoped to the caller's own
+    authority — a manager-dashboard tile source (`API_CONTRACTS.md`), for
+    somebody who can act on a flagged student, not a student reading about
+    themselves (they already get their own verdict on Student 360).
+
+    No new capability: `access.visible_enrollments_for_performance` is the
+    exact queryset every other performance read in this app already answers
+    "may this caller see this enrolment" through, so a trainer's summary is
+    their own batches' and an admin's is everyone's within their branch — the
+    same reach `BatchPerformanceView` already grants for one batch, never a
+    wider one. The audience check below (staff or a trainer) mirrors
+    `access.can_view_batch_performance`'s own "capability holder or a
+    trainer" rule exactly, rather than inventing a second one — a student
+    holds neither and is refused, the same as every other staff-facing
+    summary in `apps.reporting.views` (`TrainerWorkloadView`,
+    `BatchSummaryView`).
+
+    Cached a minute per caller, matching every other summary/dashboard
+    endpoint in this codebase (`apps.reporting.views.AdminDashboardView`,
+    `ManagerDashboardView`) — `services.risk_summary` is itself three
+    queries, but there is no reason to pay them again on every dashboard
+    refresh within the same minute.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Risk summary",
+        responses={
+            200: OpenApiResponse(
+                description="Counts by level, plus the 20 most severe at-risk enrolments."
+            ),
+            403: OpenApiResponse(description="Not staff-facing for this caller."),
+        },
+        tags=PERFORMANCE_TAG,
+    )
+    def get(self, request):
+        can_see_any = access.can_view_any_performance(request.user)
+        is_trainer = batch_access.trainer_profile(request.user) is not None
+        if not (can_see_any or is_trainer):
+            return _forbidden(request, "This view is staff-facing.")
+
+        data = remember(
+            "performance:risk-summary",
+            (request.user.pk,),
+            MINUTE,
+            lambda: services.risk_summary(request.user),
+        )
+        return Response(data)
+
+
 __all__ = [
     "BatchPerformanceView",
     "FeedbackDetailView",
@@ -387,5 +441,6 @@ __all__ = [
     "MyTrainerPerformanceView",
     "ReviewDetailView",
     "ReviewListView",
+    "RiskSummaryView",
     "RiskThresholdsView",
 ]

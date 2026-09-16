@@ -13,8 +13,17 @@ those tables already owns.
 
 Defaults are chosen to change nothing on the day this ships:
 
-* `risk.*` mirrors `AcademicPolicy`'s four `risk_*` fields' own defaults —
-  additive, not a replacement for the academic table.
+* `risk.*`'s first four keys mirror `AcademicPolicy`'s four `risk_*` fields'
+  own defaults — additive, not a replacement for the academic table; those
+  four fields remain what `apps.performance.risk`'s legacy four rules
+  actually read (`apps.academics.policies.policy_for`), so this mirrored
+  copy alone changing nothing is the point. The four ERP Phase 13 keys
+  (`risk_activity_overdue_count`, `risk_activity_score_percent`,
+  `risk_project_overdue`, `risk_placement_score_percent` — one rule,
+  `activity`, needs two) have no
+  `AcademicPolicy` column to mirror — they are new rules with no "today" to
+  hold equal to, so their defaults are chosen fresh; see each key's own
+  `description` for the reasoning.
 * `performance.weights` is equal across every component `student_performance`
   already computes, which is exactly today's plain mean (ADR-10).
 * `export.retention_days` and `file_upload.max_mb` mirror
@@ -172,6 +181,60 @@ POLICY_SCHEMAS: dict[str, dict[str, dict[str, Any]]] = {
             "max": "100",
             "critical": False,
             "description": "Progress variance % at or above which the progress risk rule fires.",
+        },
+        # --- ERP Phase 13 (ADR-11): no `AcademicPolicy` equivalent, so these
+        # four are the first `risk.*` keys with a genuinely fresh default
+        # rather than a mirrored one.
+        "risk_activity_overdue_count": {
+            "type": "integer",
+            "default": 3,
+            "min": 0,
+            "max": 50,
+            "critical": False,
+            "description": (
+                "Overdue activities past which the activity risk rule fires. Higher than "
+                "risk_missed_assignments' default (2): the activity catalog spans everything "
+                "from a single mock interview to routine, low-stakes mentoring check-ins, so a "
+                "little more tolerance avoids flagging a student the moment one gets away."
+            ),
+        },
+        "risk_activity_score_percent": {
+            "type": "decimal",
+            "default": "50.00",
+            "min": "0",
+            "max": "100",
+            "critical": False,
+            "description": (
+                "Normalised score (score/max_score x 100) below which a student's most recent "
+                "completed or approved activity trips the activity risk rule. Matches "
+                "risk_assessment_average_percent's default — the same half-marks bar, applied "
+                "to the same 0-100 scale an activity's score is normalised onto."
+            ),
+        },
+        "risk_project_overdue": {
+            "type": "integer",
+            "default": 0,
+            "min": 0,
+            "max": 10,
+            "critical": False,
+            "description": (
+                "Overdue, unfinished projects past which the project risk rule fires. 0 means "
+                "any single overdue project triggers it, matching the plain product reading "
+                "('a required project ran past its deadline unfinished') rather than tolerating "
+                "a backlog first; raise it for a course with a deliberately loose project cadence."
+            ),
+        },
+        "risk_placement_score_percent": {
+            "type": "decimal",
+            "default": "50.00",
+            "min": "0",
+            "max": "100",
+            "critical": False,
+            "description": (
+                "Average normalised score on placement-category activities below which the "
+                "placement risk rule fires. Same half-marks bar as risk_activity_score_percent "
+                "and risk_assessment_average_percent, for the same 0-100 scale."
+            ),
         },
     },
     "performance": {

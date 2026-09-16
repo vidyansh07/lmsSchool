@@ -77,6 +77,9 @@ class NotificationKind(models.TextChoices):
     ACTIVITY_COMPLETED = "activity.completed", _("Activity completed")
     ACTIVITY_REMINDER = "activity.reminder", _("Activity due soon")
 
+    # --- Risk engine (ERP Phase 13, ADR-11)
+    RISK_LEVEL_CHANGED = "risk.level_changed", _("Student risk level changed")
+
 
 class NotificationCategory(models.TextChoices):
     ACADEMIC = "academic", _("Coursework and results")

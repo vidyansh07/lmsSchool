@@ -19,13 +19,23 @@ inert `{"components": [], "overall_score": None}` shape rather than an
 error, the same "real state, not a crash" rule every other enrolment-derived
 field on this endpoint already follows.
 
-**Still placeholders, not yet computed** — documented here so nobody "fixes"
-them by guessing a formula ahead of the phase that owns it:
+**`risk`** — ADR-11's verdict: `level` (`none`/`warning`/`critical`) and
+`triggered`, a list of full outcome objects (`{key, label, severity, detail,
+numbers}`, exactly `apps.performance.risk.RiskOutcome.as_dict()`'s shape,
+matching the frontend's `Student360RiskTrigger` type) — read from the same
+`student_performance` call `performance` already made this request, not
+reconstructed from the persisted `RiskState.triggered` (deliberately just
+rule *keys*, per `DATA_MODEL.md`). `apps.performance.services.risk_state_for`
+is still called, for its side effect: it persists a verdict on this
+enrolment's very first read, so a brand-new enrolment's very first Student
+360 view — and `/risk/summary/` right after it — never has to wait on the
+debounced background task (`apps.performance.tasks`) to have already run.
+A student with no enrolment at all gets the same neutral `{"level": "none",
+"triggered": []}` any other enrolment-derived field here degrades to.
 
-* `risk` — ADR-11's stored verdict (`RiskState`: `level`, `triggered[]`).
-  Phase 13 (the risk engine) computes this; until then every caller gets
-  `{"level": "none", "triggered": []}` — a neutral "no signal" rather than an
-  alarming empty state.
+**Still a placeholder, not yet computed** — documented here so nobody
+"fixes" it by guessing a formula ahead of the phase that owns it:
+
 * `next_actions` — Phase 14's automation engine suggests these. Until then,
   always `[]`.
 
@@ -197,22 +207,77 @@ def _course_work_counts(user, enrollment: Enrollment | None) -> dict[str, int]:
 
 
 _INERT_PERFORMANCE: dict[str, Any] = {"components": [], "overall_score": None}
+_INERT_RISK: dict[str, Any] = {"level": "none", "triggered": []}
 
 
-def _performance_for(enrollment: Enrollment | None) -> dict[str, Any]:
-    """ADR-10's `{components, overall_score}` shape, real for a student with
-    an enrolment, inert for one without — never a third shape and never an
-    error. `apps.performance.engine.student_performance` returns a much
-    larger dict (attendance, assessment breakdowns, risk, counts); this
-    endpoint's contract is only the two ADR-10 keys, matching what the
-    frontend's `Student360Performance` type already declares."""
+def _full_performance(enrollment: Enrollment | None) -> dict[str, Any] | None:
+    """`apps.performance.engine.student_performance`'s whole output, computed
+    once per request and shared by `_performance_for` (ADR-10) and
+    `_risk_for` (ADR-11) — never a second engine run for the same enrolment
+    on the same request. `None` for a student with no enrolment at all."""
     if enrollment is None:
-        return dict(_INERT_PERFORMANCE)
+        return None
 
     from apps.performance.engine import student_performance
 
-    performance = student_performance(enrollment)
+    return student_performance(enrollment)
+
+
+def _performance_for(performance: dict[str, Any] | None) -> dict[str, Any]:
+    """ADR-10's `{components, overall_score}` shape, real for a student with
+    an enrolment, inert for one without — never a third shape and never an
+    error. `student_performance` returns a much larger dict (attendance,
+    assessment breakdowns, risk, counts); this endpoint's contract is only
+    the two ADR-10 keys, matching what the frontend's `Student360Performance`
+    type already declares."""
+    if performance is None:
+        return dict(_INERT_PERFORMANCE)
     return {"components": performance["components"], "overall_score": performance["overall_score"]}
+
+
+def _risk_for(enrollment: Enrollment | None, performance: dict[str, Any] | None) -> dict[str, Any]:
+    """ADR-11's `{level, triggered}` shape — `triggered` is a list of full
+    outcome objects (`{key, label, severity, detail, numbers}`), exactly
+    `apps.performance.risk.RiskOutcome.as_dict()`'s shape, matching the
+    frontend's `Student360RiskTrigger` type. Read from `performance["risk"]`
+    (the same `risk.evaluate()` call `_full_performance` already made this
+    request) rather than the persisted `RiskState.triggered` — that field is
+    deliberately just rule *keys* (`DATA_MODEL.md`), and reconstructing
+    `label`/`detail` text from it here would be exactly the "second,
+    hand-maintained copy" `apps.performance.serializers`' own docstring
+    warns against.
+
+    `services.risk_state_for` is still called for its side effect: it
+    persists a `RiskState` row on this enrolment's very first read, so
+    `/risk/summary/` and a background recompute have a verdict to read
+    without waiting on the debounced task — see that function's own
+    docstring. `numbers` may differ from the stored row's by nothing at all
+    (both come from this same instant's `evaluate()` call, deterministically)
+    except in the one-time case where this *is* that first read, and the
+    persisted row is written from a second, separately-gathered
+    `student_performance` call inside `recompute_risk` — a bounded, one-time
+    cost, not a per-request one.
+    """
+    if enrollment is None or performance is None:
+        return dict(_INERT_RISK)
+
+    from apps.performance.services import risk_state_for
+
+    risk_state_for(enrollment)
+
+    risk_result = performance["risk"]
+    triggered = [
+        {
+            "key": outcome["key"],
+            "label": outcome["label"],
+            "severity": outcome["severity"],
+            "detail": outcome["detail"],
+            "numbers": outcome["numbers"],
+        }
+        for outcome in risk_result["outcomes"]
+        if outcome["triggered"]
+    ]
+    return {"level": risk_result["level"], "triggered": triggered}
 
 
 def _recent_activities(user, student: StudentProfile) -> list[dict[str, Any]]:
@@ -243,6 +308,7 @@ def build(user, student: StudentProfile) -> dict[str, Any]:
     batch = enrollment.batch if enrollment else None
     trainer = batch.trainer.user if batch and batch.trainer_id else None
     counsellor = enrollment.created_by if enrollment else None
+    performance = _full_performance(enrollment)
 
     return {
         "profile": profile_serializer(student).data,
@@ -252,9 +318,8 @@ def build(user, student: StudentProfile) -> dict[str, Any]:
         "counsellor": _person_brief(counsellor),
         "progress": course_progress(enrollment) if enrollment else None,
         "attendance_summary": _attendance_summary_for(enrollment),
-        "performance": _performance_for(enrollment),
-        # Phase 13 placeholder — see module docstring.
-        "risk": {"level": "none", "triggered": []},
+        "performance": _performance_for(performance),
+        "risk": _risk_for(enrollment, performance),
         "counts": {**_work_counts(user, student), **_course_work_counts(user, enrollment)},
         "fee_status": student.fee_status,
         "recent_activities": _recent_activities(user, student),

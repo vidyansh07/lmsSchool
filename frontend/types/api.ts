@@ -2546,18 +2546,33 @@ export interface Student360Performance {
   overall_score: number | null;
 }
 
-/** One rule that fired against this student's numbers (ADR-11). Phase 13
- *  (the risk engine) is what actually populates `triggered`; until then the
- *  360 endpoint returns `level: "none"` and an empty list, and the badge
- *  reads as a neutral "No risk signals" rather than an alarming empty state. */
+/** The only two magnitudes a triggered rule can report (`apps.performance.risk`,
+ *  `_severity_for_deficit`/`_severity_for_excess`) — a rule that has not
+ *  triggered never appears in `triggered` at all, so this union never needs
+ *  a `"none"` member of its own. */
+export type RiskSeverity = "warning" | "critical";
+
+/** One rule that fired against this student's numbers — shaped exactly like
+ *  `apps.performance.risk.RiskOutcome.as_dict()` (ADR-11): `key`/`label`
+ *  identify the rule, `severity` is the coarse magnitude the same module
+ *  computes from how far past its threshold the number sits, `detail` is
+ *  the ready-to-read sentence, and `numbers` is the rule's raw inputs
+ *  (value/threshold and friends) for a "details" disclosure — present on the
+ *  real risk engine's response, so it is typed loosely (JSON, not a fixed
+ *  shape per rule) rather than assumed absent. */
 export interface Student360RiskTrigger {
   key: string;
   label: string;
-  severity: string;
+  severity: RiskSeverity;
   detail: string;
+  numbers?: Record<string, string | number | boolean | null>;
 }
 
-export type RiskLevel = "none" | "low" | "medium" | "high" | "critical";
+/** `RiskState.level` (DATA_MODEL.md) — exactly the three values
+ *  `apps.performance.risk` computes with (`NONE`/`WARNING`/`CRITICAL`).
+ *  Phase 11 shipped a wider five-value guess before the risk engine existed;
+ *  this is that guess corrected to the real engine's contract. */
+export type RiskLevel = "none" | "warning" | "critical";
 
 export interface Student360Risk {
   level: RiskLevel;

@@ -34,10 +34,16 @@ from apps.assessments.models import (
 from apps.assignments.models import Assignment, AssignmentStatus
 from apps.attendance.models import AttendanceRecord, AttendanceStatus
 from apps.audit.models import AuditAction, AuditLog
-from apps.common.identifiers import next_assignment_code, next_enrolment_code, next_student_id
+from apps.common.identifiers import (
+    next_assignment_code,
+    next_enrolment_code,
+    next_project_code,
+    next_student_id,
+)
 from apps.enrollments.models import Enrollment, EnrollmentStatus
 from apps.performance import risk
 from apps.performance.models import Feedback, PerformanceReview
+from apps.projects.models import WorkStatus
 from apps.sessions.models import ClassSession, SessionStatus
 from apps.students.models import StudentProfile
 
@@ -66,6 +72,12 @@ def _policy(**overrides) -> SimpleNamespace:
         "risk_assessment_average_percent": Decimal("50.00"),
         "risk_missed_assignments": 2,
         "risk_progress_variance_percent": Decimal("15.00"),
+        # ERP Phase 13 (ADR-11) — the three new rules' thresholds, matching
+        # `apps.policies.schemas`' `"risk"` category defaults.
+        "risk_activity_overdue_count": 3,
+        "risk_activity_score_percent": Decimal("50.00"),
+        "risk_project_overdue": 0,
+        "risk_placement_score_percent": Decimal("50.00"),
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -83,6 +95,11 @@ def _numbers(**overrides) -> dict:
             "variance": -10,
             "has_lessons": True,
         },
+        # ERP Phase 13 (ADR-11) — nothing overdue, nothing scored yet: a
+        # healthy baseline exactly like the four legacy sections above.
+        "activity": {"overdue_count": 0, "last_score": None},
+        "project": {"overdue_count": 0},
+        "placement": {"average_percent": None, "count": 0},
     }
     for key, value in overrides.items():
         base[key] = {**base[key], **value}
@@ -231,17 +248,161 @@ class TestProgressRisk:
         assert outcome.severity == risk.CRITICAL
 
 
+class TestActivityRisk:
+    """Two independent conditions, either one fires it (ADR-11)."""
+
+    def test_not_triggered_when_healthy(self):
+        outcome = risk._activity_risk(_numbers(), _policy())
+        assert outcome.triggered is False
+        assert outcome.severity == risk.NONE
+
+    def test_not_triggered_with_no_completed_activity_yet(self):
+        """No score yet is nothing to measure — the same rule `_academic_risk`
+        follows for a student with no marks recorded."""
+        outcome = risk._activity_risk(
+            _numbers(activity={"overdue_count": 0, "last_score": None}), _policy()
+        )
+        assert outcome.triggered is False
+        assert "No completed or approved activity" in outcome.detail
+
+    def test_triggered_by_overdue_count_alone(self):
+        outcome = risk._activity_risk(
+            _numbers(activity={"overdue_count": 4, "last_score": 90}), _policy()
+        )
+        assert outcome.triggered is True
+        assert "4 activity(ies) overdue" in outcome.detail
+
+    def test_triggered_by_last_score_alone(self):
+        outcome = risk._activity_risk(
+            _numbers(activity={"overdue_count": 0, "last_score": 20}), _policy()
+        )
+        assert outcome.triggered is True
+        assert "below" in outcome.detail
+
+    def test_not_triggered_at_the_overdue_threshold(self):
+        """`risk_activity_overdue_count` is a "past this many" bound, exactly
+        like `_assignment_risk`'s own `>=`-vs-`>` choice for its threshold —
+        except this rule's own docstring and `>` comparison mean the
+        threshold count itself does not yet trigger it."""
+        outcome = risk._activity_risk(
+            _numbers(activity={"overdue_count": 3, "last_score": None}), _policy()
+        )
+        assert outcome.triggered is False
+
+    def test_severity_is_the_worse_of_the_two_when_both_trigger(self):
+        outcome = risk._activity_risk(
+            _numbers(activity={"overdue_count": 20, "last_score": 45}), _policy()
+        )
+        assert outcome.triggered is True
+        assert outcome.severity == risk.CRITICAL  # the overdue count is far past its threshold
+
+    def test_numbers_always_report_both_halves(self):
+        outcome = risk._activity_risk(
+            _numbers(activity={"overdue_count": 1, "last_score": 88}), _policy()
+        )
+        assert outcome.numbers == {
+            "overdue_count": 1,
+            "overdue_threshold": 3,
+            "last_score": 88,
+            "score_threshold": "50.00",
+        }
+
+
+class TestProjectRisk:
+    def test_not_triggered_with_no_overdue_projects(self):
+        outcome = risk._project_risk(_numbers(), _policy())
+        assert outcome.triggered is False
+        assert "No overdue" in outcome.detail
+
+    def test_triggered_by_a_single_overdue_project(self):
+        """The default threshold is 0: any one overdue, unfinished project
+        already trips it (`apps.policies.schemas`' own reasoning)."""
+        outcome = risk._project_risk(_numbers(project={"overdue_count": 1}), _policy())
+        assert outcome.triggered is True
+
+    def test_a_higher_threshold_tolerates_a_small_backlog(self):
+        outcome = risk._project_risk(
+            _numbers(project={"overdue_count": 1}), _policy(risk_project_overdue=2)
+        )
+        assert outcome.triggered is False
+
+    def test_severity_is_critical_well_past_the_threshold(self):
+        outcome = risk._project_risk(_numbers(project={"overdue_count": 5}), _policy())
+        assert outcome.severity == risk.CRITICAL
+
+
+class TestPlacementRisk:
+    def test_not_triggered_with_no_placement_activity_yet(self):
+        """Mirrors `_academic_risk`'s "nothing scored yet" rule exactly."""
+        outcome = risk._placement_risk(_numbers(), _policy())
+        assert outcome.triggered is False
+        assert "No placement activity" in outcome.detail
+
+    def test_not_triggered_at_the_threshold(self):
+        outcome = risk._placement_risk(_numbers(placement={"average_percent": 50}), _policy())
+        assert outcome.triggered is False
+
+    def test_triggered_below_the_threshold(self):
+        outcome = risk._placement_risk(_numbers(placement={"average_percent": 30}), _policy())
+        assert outcome.triggered is True
+
+    def test_severity_is_critical_far_below_the_threshold(self):
+        outcome = risk._placement_risk(_numbers(placement={"average_percent": 5}), _policy())
+        assert outcome.severity == risk.CRITICAL
+
+
+class TestLevelFor:
+    """`level_for`'s none/warning/critical derivation — the max severity
+    among whatever triggered, never a second scoring system."""
+
+    def test_none_when_nothing_triggered(self):
+        outcomes = [
+            risk.RiskOutcome(key="a", label="A", triggered=False, severity=risk.NONE, detail=""),
+        ]
+        assert risk.level_for(outcomes) == risk.NONE
+
+    def test_warning_when_the_worst_triggered_rule_is_a_warning(self):
+        outcomes = [
+            risk.RiskOutcome(key="a", label="A", triggered=True, severity=risk.WARNING, detail=""),
+            risk.RiskOutcome(key="b", label="B", triggered=False, severity=risk.NONE, detail=""),
+        ]
+        assert risk.level_for(outcomes) == risk.WARNING
+
+    def test_critical_when_any_triggered_rule_is_critical(self):
+        outcomes = [
+            risk.RiskOutcome(key="a", label="A", triggered=True, severity=risk.WARNING, detail=""),
+            risk.RiskOutcome(key="b", label="B", triggered=True, severity=risk.CRITICAL, detail=""),
+        ]
+        assert risk.level_for(outcomes) == risk.CRITICAL
+
+    def test_an_untriggered_critical_severity_does_not_count(self):
+        """`severity` on an untriggered outcome is always `NONE` in practice
+        (every rule sets it that way), but `level_for` itself only ever looks
+        at `triggered` outcomes — defence in depth against a rule that got
+        that wrong."""
+        outcomes = [
+            risk.RiskOutcome(
+                key="a", label="A", triggered=False, severity=risk.CRITICAL, detail=""
+            ),
+        ]
+        assert risk.level_for(outcomes) == risk.NONE
+
+
 class TestEvaluate:
     def test_reports_every_rule_even_when_none_are_triggered(self):
         result = risk.evaluate(_numbers(), _policy())
         assert result["at_risk"] is False
         assert result["triggered"] == []
         assert result["triggered_count"] == 0
+        assert result["level"] == risk.NONE
         assert {outcome["key"] for outcome in result["outcomes"]} == {
             "attendance",
             "academic",
             "assignments",
             "progress",
+            "activity",
+            "project",
+            "placement",
         }
 
     def test_at_risk_is_true_when_any_rule_triggers(self):
@@ -249,6 +410,7 @@ class TestEvaluate:
         assert result["at_risk"] is True
         assert result["triggered"] == ["attendance"]
         assert result["triggered_count"] == 1
+        assert result["level"] == risk.CRITICAL
 
     def test_triggered_count_counts_every_rule_that_fires(self):
         result = risk.evaluate(
@@ -1084,6 +1246,136 @@ class TestProgressRiskViaEngine:
         outcome = next(o for o in result["risk"]["outcomes"] if o["key"] == "progress")
         assert outcome["triggered"] is True
         assert result["progress"]["variance"] > 15
+
+
+@pytest.mark.django_db
+class TestActivityRiskViaEngine:
+    def test_overdue_activities_trigger_the_activity_rule(self, enrollment, admin_user):
+        from apps.performance.engine import student_performance
+        from apps.work.models import ActivityStatus
+
+        activity_type = _activity_type(slug="pe-activity-overdue")
+        for _ in range(4):  # past the default threshold of 3
+            _terminal_activity(
+                enrollment=enrollment,
+                admin_user=admin_user,
+                activity_type=activity_type,
+                status=ActivityStatus.OVERDUE,
+            )
+
+        result = student_performance(enrollment)
+        outcome = next(o for o in result["risk"]["outcomes"] if o["key"] == "activity")
+        assert outcome["triggered"] is True
+        assert outcome["numbers"]["overdue_count"] == 4
+
+    def test_a_weak_last_score_triggers_the_activity_rule(self, enrollment, admin_user):
+        from apps.performance.engine import student_performance
+
+        activity_type = _activity_type(slug="pe-activity-weak")
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=activity_type,
+            score=Decimal("20"),
+            max_score=Decimal("100"),
+        )
+
+        result = student_performance(enrollment)
+        outcome = next(o for o in result["risk"]["outcomes"] if o["key"] == "activity")
+        assert outcome["triggered"] is True
+        assert outcome["numbers"]["last_score"] == 20.0
+
+    def test_no_activity_at_all_is_not_a_risk(self, enrollment):
+        from apps.performance.engine import student_performance
+
+        result = student_performance(enrollment)
+        outcome = next(o for o in result["risk"]["outcomes"] if o["key"] == "activity")
+        assert outcome["triggered"] is False
+        assert outcome["numbers"]["overdue_count"] == 0
+        assert outcome["numbers"]["last_score"] is None
+
+
+@pytest.mark.django_db
+class TestProjectRiskViaEngine:
+    def _overdue_student_project(self, enrollment, admin_user, *, status=WorkStatus.IN_PROGRESS):
+        from apps.projects.models import Project, ProjectKind, ProjectStatus, StudentProject
+
+        project = Project.objects.create(
+            code=next_project_code(),
+            course=enrollment.course,
+            title="Capstone",
+            kind=ProjectKind.MAJOR,
+            is_required=True,
+            end_date=date.today() - timedelta(days=3),
+            max_marks=100,
+            status=ProjectStatus.PUBLISHED,
+            created_by=admin_user,
+        )
+        return StudentProject.objects.create(project=project, enrollment=enrollment, status=status)
+
+    def test_an_overdue_unfinished_project_triggers_the_project_rule(self, enrollment, admin_user):
+        from apps.performance.engine import student_performance
+
+        self._overdue_student_project(enrollment, admin_user)
+
+        result = student_performance(enrollment)
+        outcome = next(o for o in result["risk"]["outcomes"] if o["key"] == "project")
+        assert outcome["triggered"] is True
+        assert outcome["numbers"]["overdue_count"] == 1
+
+    def test_a_finished_project_past_its_due_date_is_not_a_risk(self, enrollment, admin_user):
+        """The same "not a risk once it is done" reasoning `_assignment_risk`
+        applies to a submitted assignment — a late finish is not an open one."""
+        from apps.performance.engine import student_performance
+
+        self._overdue_student_project(enrollment, admin_user, status=WorkStatus.COMPLETED)
+
+        result = student_performance(enrollment)
+        outcome = next(o for o in result["risk"]["outcomes"] if o["key"] == "project")
+        assert outcome["triggered"] is False
+        assert outcome["numbers"]["overdue_count"] == 0
+
+
+@pytest.mark.django_db
+class TestPlacementRiskViaEngine:
+    def test_a_weak_placement_average_triggers_the_placement_rule(self, enrollment, admin_user):
+        from apps.performance.engine import student_performance
+
+        placement_type = _activity_type(slug="pe-placement-weak", category="placement")
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=placement_type,
+            score=Decimal("15"),
+            max_score=Decimal("100"),
+        )
+
+        result = student_performance(enrollment)
+        outcome = next(o for o in result["risk"]["outcomes"] if o["key"] == "placement")
+        assert outcome["triggered"] is True
+        assert outcome["numbers"]["percent"] == 15.0
+
+    def test_non_placement_activity_does_not_count_toward_the_placement_rule(
+        self, enrollment, admin_user
+    ):
+        """A weak score on an ordinary (non-placement) activity does not
+        drag the placement rule down — the whole reason this rule exists
+        separately from `activity` (`engine._placement_risk_numbers`)."""
+        from apps.performance.engine import student_performance
+
+        interview_type = _activity_type(slug="pe-placement-unrelated", category="interview")
+        _terminal_activity(
+            enrollment=enrollment,
+            admin_user=admin_user,
+            activity_type=interview_type,
+            score=Decimal("10"),
+            max_score=Decimal("100"),
+        )
+
+        result = student_performance(enrollment)
+        outcome = next(o for o in result["risk"]["outcomes"] if o["key"] == "placement")
+        assert outcome["triggered"] is False
+        assert outcome["numbers"]["percent"] is None
 
 
 # ---------------------------------------------------------------------------

@@ -33,6 +33,7 @@ import type {
   Qualification,
   RequirementStatus,
   RiskLevel,
+  RiskSeverity,
   UserRole,
 } from "@/types/api";
 
@@ -75,24 +76,38 @@ export const FEE_STATUS_OPTIONS: { value: FeeStatus; label: string }[] = (
 ).map((value) => ({ value, label: FEE_STATUS_LABEL[value] }));
 
 /**
- * The Student 360 header's risk badge (ADR-11, ERP Phase 11). `"none"` is
- * this endpoint's own placeholder value until Phase 13 (the risk engine)
- * starts writing real `RiskState` rows — it reads as a neutral "no signal",
- * never an alarming empty state, per DESIGN_DECISIONS.md's "Student 360".
+ * The Student 360 header's risk badge (ADR-11, DATA_MODEL.md's `RiskState`).
+ * `"none"` covers both "the risk engine looked and found nothing" and, for
+ * any student it has not evaluated yet, the same neutral "no signal" — never
+ * an alarming empty state, per DESIGN_DECISIONS.md's "Student 360". The two
+ * triggered levels share their colour with `RISK_SEVERITY_VARIANT` below,
+ * since a `RiskState.level` of `critical` means "at least one triggered rule
+ * is critical", the same magnitude a rule itself reports.
  */
 export const RISK_LEVEL_LABEL: Record<RiskLevel, string> = {
   none: "No risk signals",
-  low: "Low risk",
-  medium: "Medium risk",
-  high: "High risk",
-  critical: "Critical risk",
+  warning: "Warning",
+  critical: "Critical",
 };
 
-export const RISK_LEVEL_VARIANT: Record<RiskLevel, "neutral" | "success" | "warning" | "error"> = {
+export const RISK_LEVEL_VARIANT: Record<RiskLevel, "neutral" | "warning" | "error"> = {
   none: "neutral",
-  low: "success",
-  medium: "warning",
-  high: "error",
+  warning: "warning",
+  critical: "error",
+};
+
+/** A triggered rule's own severity (`RiskOutcome.severity`) — same two
+ *  non-neutral colours as the level badge above, `error` reading as the
+ *  most alarming variant this codebase's `Badge` has (matching the DSR/
+ *  warnings convention elsewhere: `error` for the worst case, `warning` for
+ *  the lesser one). */
+export const RISK_SEVERITY_LABEL: Record<RiskSeverity, string> = {
+  warning: "Warning",
+  critical: "Critical",
+};
+
+export const RISK_SEVERITY_VARIANT: Record<RiskSeverity, "warning" | "error"> = {
+  warning: "warning",
   critical: "error",
 };
 

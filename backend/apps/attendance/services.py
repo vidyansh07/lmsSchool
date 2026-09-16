@@ -172,6 +172,24 @@ def mark_attendance(
             "corrections": corrections,
         },
     )
+
+    # ERP Phase 13 (ADR-11): attendance moves the attendance-risk rule's
+    # numbers for every enrolment actually written, never the whole roster —
+    # a trainer confirming 58 unchanged marks and correcting 2 only recomputes
+    # those 2. Deferred to `transaction.on_commit` so a request that rolls
+    # back after this point schedules nothing.
+    touched_enrollment_ids = {row.enrollment_id for row in created} | {
+        row.enrollment_id for row in updated
+    }
+    if touched_enrollment_ids:
+        from apps.performance.tasks import schedule_recompute
+
+        def _schedule(ids=touched_enrollment_ids) -> None:
+            for enrollment_id in ids:
+                schedule_recompute(enrollment_id)
+
+        transaction.on_commit(_schedule)
+
     return {"created": len(created), "updated": len(updated), "corrections": corrections}
 
 
@@ -227,4 +245,11 @@ def correct_record(
             "reason": reason,
         },
     )
+
+    # ERP Phase 13 (ADR-11): a correction moves the same attendance-risk
+    # numbers a fresh mark would.
+    from apps.performance.tasks import schedule_recompute
+
+    transaction.on_commit(lambda: schedule_recompute(record_row.enrollment_id))
+
     return record_row

@@ -8,6 +8,10 @@ lists below; do not change where they are mounted.
 so every path here takes a leading `<uuid:batch_id>/`, exactly like theirs.
 `student_urlpatterns` is not mounted anywhere yet; nothing here needs it, since
 a student's own performance is reachable through `me/` below.
+
+`risk_urlpatterns` is mounted at the top level (`risk/`, not `performance/
+risk/`) — `API_CONTRACTS.md` pins `GET /risk/summary/` there, ADR-11's
+manager-dashboard tile source.
 """
 
 from django.urls import path
@@ -42,4 +46,7 @@ trainer_urlpatterns = [
         views.BatchPerformanceView.as_view(),
         name="performance-batch",
     ),
+]
+risk_urlpatterns = [
+    path("summary/", views.RiskSummaryView.as_view(), name="performance-risk-summary"),
 ]

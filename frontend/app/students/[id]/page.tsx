@@ -70,13 +70,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
 import { formatCount, formatDate, formatNumber, formatPercent, formatRelative, NO_DATA, NOT_AVAILABLE } from '@/lib/format';
-import { FEE_STATUS_LABEL, FEE_STATUS_VARIANT, RISK_LEVEL_LABEL, RISK_LEVEL_VARIANT } from '@/lib/labels';
+import {
+  FEE_STATUS_LABEL,
+  FEE_STATUS_VARIANT,
+  RISK_LEVEL_LABEL,
+  RISK_LEVEL_VARIANT,
+  RISK_SEVERITY_LABEL,
+  RISK_SEVERITY_VARIANT,
+} from '@/lib/labels';
 import { getStudent360 } from '@/lib/student-360';
-import type { Student360FeedItem, Student360Response } from '@/types/api';
+import type { Student360FeedItem, Student360Response, Student360RiskTrigger } from '@/types/api';
 
-type TabKey = 'overview' | 'activities' | 'timeline' | 'enrollment';
+type TabKey = 'overview' | 'activities' | 'timeline' | 'enrollment' | 'risk';
 const DEFAULT_TAB: TabKey = 'overview';
-const VALID_TABS: TabKey[] = ['overview', 'activities', 'timeline', 'enrollment'];
+const VALID_TABS: TabKey[] = ['overview', 'activities', 'timeline', 'enrollment', 'risk'];
 
 function isTabKey(value: string | null): value is TabKey {
   return value !== null && (VALID_TABS as string[]).includes(value);
@@ -151,7 +158,7 @@ function ScorePopover({ performance }: { performance: Student360Response['perfor
   );
 }
 
-function RiskPopover({ risk }: { risk: Student360Response['risk'] }) {
+function RiskPopover({ risk, onOpenTab }: { risk: Student360Response['risk']; onOpenTab: () => void }) {
   const hasTriggers = risk.triggered.length > 0;
   const badge = (
     <Badge variant={RISK_LEVEL_VARIANT[risk.level]} className="cursor-pointer">
@@ -166,12 +173,22 @@ function RiskPopover({ risk }: { risk: Student360Response['risk'] }) {
         <PopoverHeading>Triggered rules</PopoverHeading>
         <ul className="space-y-2 text-sm">
           {risk.triggered.map((trigger) => (
-            <li key={trigger.key}>
-              <p className="font-medium">{trigger.label}</p>
+            <li key={trigger.key} className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <p className="font-medium">{trigger.label}</p>
+                <Badge variant={RISK_SEVERITY_VARIANT[trigger.severity]}>{RISK_SEVERITY_LABEL[trigger.severity]}</Badge>
+              </div>
               <p className="text-muted-foreground">{trigger.detail}</p>
             </li>
           ))}
         </ul>
+        <button
+          type="button"
+          onClick={onOpenTab}
+          className="mt-2 text-sm text-primary underline-offset-2 hover:underline"
+        >
+          Open the Risk tab for full details
+        </button>
       </PopoverContent>
     </Popover>
   );
@@ -205,7 +222,7 @@ function FeedList({
   );
 }
 
-function Header({ data }: { data: Student360Response }) {
+function Header({ data, onOpenRiskTab }: { data: Student360Response; onOpenRiskTab: () => void }) {
   const name = data.profile.user.full_name || data.profile.user.email;
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -231,7 +248,7 @@ function Header({ data }: { data: Student360Response }) {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <ScorePopover performance={data.performance} />
-        <RiskPopover risk={data.risk} />
+        <RiskPopover risk={data.risk} onOpenTab={onOpenRiskTab} />
       </div>
     </div>
   );
@@ -335,6 +352,62 @@ function EnrollmentTab({ data }: { data: Student360Response }) {
   return <StudentPerformance enrollmentId={data.enrollment.id} variant="embedded" />;
 }
 
+// One triggered rule's row, plus a collapsible "numbers" disclosure — a
+// native <details>/<summary> rather than a new primitive: this codebase's
+// `components/ui/*` has no collapsible yet, and this is the only place that
+// needs one, for one purpose (showing the raw inputs a rule computed from).
+function RiskOutcomeRow({ trigger }: { trigger: Student360RiskTrigger }) {
+  const numberEntries = trigger.numbers ? Object.entries(trigger.numbers) : [];
+  return (
+    <li className="space-y-1.5 border-b border-border py-3 last:border-b-0">
+      <div className="flex items-center gap-2">
+        <p className="font-medium text-foreground">{trigger.label}</p>
+        <Badge variant={RISK_SEVERITY_VARIANT[trigger.severity]}>{RISK_SEVERITY_LABEL[trigger.severity]}</Badge>
+      </div>
+      <p className="text-sm text-muted-foreground">{trigger.detail}</p>
+      {numberEntries.length > 0 ? (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer select-none hover:text-foreground">Numbers</summary>
+          <dl className="mt-1.5 space-y-1 border-l border-border pl-3">
+            {numberEntries.map(([key, value]) => (
+              <div key={key} className="flex items-center justify-between gap-3">
+                <dt className="capitalize">{key.replace(/_/g, ' ')}</dt>
+                <dd className="tabular-nums text-foreground">{value === null ? NOT_AVAILABLE : String(value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      ) : null}
+    </li>
+  );
+}
+
+function RiskTab({ data }: { data: Student360Response }) {
+  const { level, triggered } = data.risk;
+  return (
+    <Card>
+      <CardContent className="space-y-4 pt-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-foreground">Current risk level</p>
+          <Badge variant={RISK_LEVEL_VARIANT[level]}>{RISK_LEVEL_LABEL[level]}</Badge>
+        </div>
+        {triggered.length === 0 ? (
+          <p className="border-t border-border pt-4 text-sm text-muted-foreground">
+            No risk signals. None of the risk rules (attendance, assessment average, missed assignments, course
+            progress) are currently triggered for this student.
+          </p>
+        ) : (
+          <ul className="border-t border-border">
+            {triggered.map((trigger) => (
+              <RiskOutcomeRow key={trigger.key} trigger={trigger} />
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // Exported (not just the default page below) so the unit test can render it
 // directly with a plain `studentId` prop — `app/manage/students/
 // [enrollmentId]/page.tsx`'s `StudentPerformance` is the same convention,
@@ -436,7 +509,7 @@ export function Student360Content({ studentId }: { studentId: string }) {
         </span>
       </nav>
 
-      <Header data={data} />
+      <Header data={data} onOpenRiskTab={() => setTab('risk')} />
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)}>
         <TabsList>
@@ -444,6 +517,7 @@ export function Student360Content({ studentId }: { studentId: string }) {
           <TabsTrigger value="activities">Activities</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="enrollment">Enrolment</TabsTrigger>
+          <TabsTrigger value="risk">Risk</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -457,6 +531,9 @@ export function Student360Content({ studentId }: { studentId: string }) {
         </TabsContent>
         <TabsContent value="enrollment">
           <EnrollmentTab data={data} />
+        </TabsContent>
+        <TabsContent value="risk">
+          <RiskTab data={data} />
         </TabsContent>
       </Tabs>
     </div>

@@ -2132,12 +2132,21 @@ def test_scoping_the_manager_dashboard_did_not_turn_it_into_a_query_per_row(
     django_assert_max_num_queries,
 ):
     """A budget, because the obvious way to scope a set of counts is to walk
-    them. 35 is the measured cost plus headroom; it is a ceiling on a fixed set
+    them. 45 is the measured cost plus headroom; it is a ceiling on a fixed set
     of grouped counts, not a licence for one query per batch. `test_performance`
     holds the growth half of this for the admin dashboard through `assert_flat`.
+
+    Raised from 35 for ERP Phase 13 (ADR-11): the risk rollup this dashboard
+    already computed (`apps.reporting.dashboards._risk_rollup`, via
+    `student_performance_bulk`) now resolves four more policy keys
+    (`risk_activity_overdue_count` and friends, `apps.policies.schemas`'
+    `"risk"` category) through the generic policy resolver on a cold cache —
+    a fixed, request-scoped cost (`apps.policies.resolver.policy`'s own
+    per-request memoisation), not one that grows with the roster, so the
+    ceiling moves once and stays a ceiling rather than an exact count.
     """
     api_client_no_csrf.force_login(manager_user)
-    with django_assert_max_num_queries(35):
+    with django_assert_max_num_queries(45):
         response = api_client_no_csrf.get(_manager_dashboard_url())
     assert response.status_code == 200, response.data
 

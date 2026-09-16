@@ -142,6 +142,7 @@ urlpatterns = [
     path("attendance/", include((attendance_urls.attendance_patterns, "attendance"))),
     path("dsr/", include((dsr_urls.urlpatterns, "dsr"))),
     path("performance/", include((performance_urls.urlpatterns, "performance"))),
+    path("risk/", include((performance_urls.risk_urlpatterns, "risk"))),
     path("schedules/", include((batch_urls.schedule_patterns, "schedules"))),
     path(
         "enrollments/",

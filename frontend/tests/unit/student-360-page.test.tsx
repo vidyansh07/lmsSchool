@@ -213,20 +213,76 @@ describe('Student360Content', () => {
     expect(await screen.findByText('No risk signals')).toBeInTheDocument();
   });
 
-  it('renders a real risk level and its triggered rules once Phase 13 supplies them', async () => {
+  it('renders a real risk level and its triggered rules once the risk engine supplies them', async () => {
     getStudent360.mockResolvedValueOnce(
       student360({
         risk: {
-          level: 'high',
-          triggered: [{ key: 'attendance_low', label: 'Low attendance', severity: 'high', detail: '52% attended' }],
+          level: 'critical',
+          triggered: [
+            {
+              key: 'attendance',
+              label: 'Attendance',
+              severity: 'critical',
+              detail: '52% attended, below the 75% risk threshold.',
+              numbers: { percent: 52, threshold: '75' },
+            },
+          ],
         },
       }),
     );
     render(<Student360Content studentId="student-1" />);
 
-    expect(await screen.findByText('High risk')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('High risk'));
-    expect(await screen.findByText('52% attended')).toBeInTheDocument();
+    expect(await screen.findByText('Critical')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Critical'));
+    expect(await screen.findByText('52% attended, below the 75% risk threshold.')).toBeInTheDocument();
+  });
+
+  it('renders the Risk tab with the triggered rule, its severity and its numbers', async () => {
+    searchParams.value = 'tab=risk';
+    getStudent360.mockResolvedValueOnce(
+      student360({
+        risk: {
+          level: 'warning',
+          triggered: [
+            {
+              key: 'academic',
+              label: 'Assessment average',
+              severity: 'warning',
+              detail: '58% average, below the 60% risk threshold.',
+              numbers: { percent: 58, threshold: '60' },
+            },
+          ],
+        },
+      }),
+    );
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByText('Current risk level')).toBeInTheDocument();
+    expect(screen.getByText('Assessment average')).toBeInTheDocument();
+    expect(screen.getByText('58% average, below the 60% risk threshold.')).toBeInTheDocument();
+    // The raw numbers sit behind a "Numbers" disclosure rather than being
+    // shown by default.
+    expect(screen.getByText('Numbers')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Numbers'));
+    expect(screen.getByText('58')).toBeInTheDocument();
+  });
+
+  it('renders the Risk tab\'s "no risk signals" copy unchanged for a `none` level', async () => {
+    searchParams.value = 'tab=risk';
+    getStudent360.mockResolvedValueOnce(student360());
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByText('Current risk level')).toBeInTheDocument();
+    expect(screen.getAllByText('No risk signals').length).toBeGreaterThan(0);
+  });
+
+  it('switches to the Risk tab via `?tab=risk` like the other tabs', async () => {
+    getStudent360.mockResolvedValue(student360());
+    render(<Student360Content studentId="student-1" />);
+    await screen.findByRole('heading', { name: 'Asha Rao' });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Risk' }));
+    expect(push).toHaveBeenCalledWith('/students/student-1?tab=risk');
   });
 
   it('defaults to the Overview tab and switches tabs by pushing `?tab=`', async () => {

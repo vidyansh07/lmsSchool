@@ -186,11 +186,48 @@ class ProgressInputs:
 
     @cached_property
     def student_projects(self) -> dict[Any, list]:
+        """`select_related("project")` added for ERP Phase 13's project risk
+        rule (`apps.performance.engine._project_risk_numbers`), which reads
+        `row.project.end_date` for every row — without it, that would be one
+        query per distinct project touched instead of the one this class
+        exists to guarantee. Purely additive: every existing reader of this
+        group already only reads fields `select_related` does not change."""
         from apps.projects.models import StudentProject
 
         grouped: dict[Any, list] = {key: [] for key in self.ids}
-        for row in StudentProject.objects.filter(enrollment_id__in=self.ids):
+        for row in StudentProject.objects.filter(enrollment_id__in=self.ids).select_related(
+            "project"
+        ):
             grouped.setdefault(row.enrollment_id, []).append(row)
+        return grouped
+
+    # -- activities, by student (ERP Phase 13) -------------------------------
+
+    @cached_property
+    def overdue_activity_counts(self) -> dict[Any, int]:
+        """Per-student count of currently `OVERDUE` activities, gathered once
+        for the whole cohort in one query — `apps.performance.risk`'s
+        activity rule input (`apps.performance.engine._activity_risk_numbers`).
+
+        Grouped by *student*, not by enrolment: `Activity.enrollment` is
+        nullable (a placement call logged before an enrolment exists is
+        still that student's overdue work), so a student's overdue workload
+        is a fact about them, not about one course run — matching the task
+        note to "filter by student" rather than by enrolment here.
+        """
+        from django.db.models import Count
+
+        from apps.work.models import Activity, ActivityStatus
+
+        student_ids = {enrollment.student_id for enrollment in self.enrollments}
+        grouped: dict[Any, int] = dict.fromkeys(student_ids, 0)
+        rows = (
+            Activity.objects.filter(student_id__in=student_ids, status=ActivityStatus.OVERDUE)
+            .values_list("student_id")
+            .annotate(count=Count("id"))
+        )
+        for student_id, count in rows:
+            grouped[student_id] = count
         return grouped
 
     # -- final examination --------------------------------------------------

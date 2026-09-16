@@ -245,6 +245,67 @@ def _weighted_overall(
     return components, overall_score
 
 
+def _activity_risk_numbers(enrollment, data: ProgressInputs) -> dict[str, Any]:
+    """ERP Phase 13's activity-rule input: this enrolment's student's overdue
+    activity count, and the most recently completed/approved scored
+    activity's normalised score.
+
+    Overdue count is student-wide (`ProgressInputs.overdue_activity_counts`,
+    per the task note "filter by student" — `Activity.enrollment` is
+    nullable). The last score reads `activities_by_enrollment` — the same
+    group `_activity_component` already reads for the performance
+    component — so it is scoped to *this* enrolment's own body of scored
+    work, not mixed with a different course the same student may have taken.
+    """
+    activities = data.activities_by_enrollment.get(enrollment.pk, [])
+    scored = [activity for activity in activities if activity.max_score]
+    last = max(
+        scored, key=lambda activity: activity.completed_at or activity.created_at, default=None
+    )
+    last_score = (
+        round(float(last.score) * 100 / float(last.max_score), 1) if last is not None else None
+    )
+    return {
+        "overdue_count": data.overdue_activity_counts.get(enrollment.student_id, 0),
+        "last_score": last_score,
+    }
+
+
+def _placement_risk_numbers(enrollment, data: ProgressInputs) -> dict[str, Any]:
+    """ERP Phase 13's placement-rule input: the average normalised score of
+    this enrolment's placement-category (`ActivityType.category ==
+    "placement"`, `ACTIVITY_CATALOG.md`) activities, narrowed from the same
+    `activities_by_enrollment` group the activity component and rule read —
+    no second query."""
+    from apps.work.models import ActivityCategory
+
+    placement_activities = [
+        activity
+        for activity in data.activities_by_enrollment.get(enrollment.pk, [])
+        if activity.max_score and activity.activity_type.category == ActivityCategory.PLACEMENT
+    ]
+    if not placement_activities:
+        return {"average_percent": None, "count": 0}
+    total = sum(
+        float(activity.score) * 100 / float(activity.max_score) for activity in placement_activities
+    )
+    return {
+        "average_percent": round(total / len(placement_activities), 1),
+        "count": len(placement_activities),
+    }
+
+
+def _project_risk_numbers(enrollment, data: ProgressInputs) -> dict[str, Any]:
+    """ERP Phase 13's project-rule input: how many of this enrolment's
+    projects are overdue and still unfinished, calling `StudentProject.mark_late`
+    itself — the one place that "past its own due date" comparison is made —
+    rather than a second copy of its date check, over the already-batched
+    `ProgressInputs.student_projects` group."""
+    rows = data.student_projects.get(enrollment.pk, [])
+    overdue = sum(1 for row in rows if not row.is_finished and row.mark_late())
+    return {"overdue_count": overdue}
+
+
 def _risk_numbers(enrollment, report: dict[str, Any], data: ProgressInputs) -> dict[str, Any]:
     """The subset of the report, plus the new figures, that the risk rules read."""
     attendance = report["attendance"]
@@ -270,7 +331,41 @@ def _risk_numbers(enrollment, report: dict[str, Any], data: ProgressInputs) -> d
             "variance": variance,
             "has_lessons": has_lessons,
         },
+        # ERP Phase 13 (ADR-11) additions — see each helper's own docstring.
+        "activity": _activity_risk_numbers(enrollment, data),
+        "project": _project_risk_numbers(enrollment, data),
+        "placement": _placement_risk_numbers(enrollment, data),
     }
+
+
+#: `apps.policies.schemas`' `"risk"` category keys the ERP Phase 13 rules read,
+#: paired with the `EffectivePolicy` attribute name `apps.performance.risk`
+#: expects them under (matching the legacy four fields' own names) — see
+#: `_risk_policy_for`.
+_RISK_POLICY_KEYS: tuple[str, ...] = (
+    "risk_activity_overdue_count",
+    "risk_activity_score_percent",
+    "risk_project_overdue",
+    "risk_placement_score_percent",
+)
+
+
+def _risk_policy_for(academic_policy) -> Any:
+    """`apps.performance.risk`'s rules read their thresholds off one object's
+    attributes, whatever its concrete type — `EffectivePolicy` in production,
+    a bare `SimpleNamespace` in that module's own pure-function tests. The
+    legacy four rules' thresholds live on `AcademicPolicy`
+    (`academic_policy` already carries them); the three new rules' live in
+    the generic policy system instead (ADR-11: "Rule thresholds live in
+    policy category `risk`" — there is no `AcademicPolicy` column for them).
+    This merges both into one such object so `risk.evaluate` never has to
+    know two different rules read their thresholds from two different
+    places — it stays exactly as pure as it was before this phase.
+    """
+    from types import SimpleNamespace
+
+    extra = {key: resolve_policy("risk", key) for key in _RISK_POLICY_KEYS}
+    return SimpleNamespace(**academic_policy.as_dict(), **extra)
 
 
 def student_performance(enrollment, inputs: ProgressInputs | None = None) -> dict[str, Any]:
@@ -289,7 +384,7 @@ def student_performance(enrollment, inputs: ProgressInputs | None = None) -> dic
     lessons = report["lessons"]
 
     numbers = _risk_numbers(enrollment, report, data)
-    risk_result = risk.evaluate(numbers, academic_policy)
+    risk_result = risk.evaluate(numbers, _risk_policy_for(academic_policy))
 
     activity_value, activity_sources = _activity_component(enrollment, data)
 

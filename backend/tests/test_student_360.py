@@ -273,6 +273,16 @@ def test_student_360_flat(api_client_no_csrf, admin_user, student_profile, enrol
     client = _client(admin_user)
     url = _url(student_profile)
 
+    # `risk` (ERP Phase 13) computes and stores a `RiskState` on this
+    # enrolment's very first read (`apps.performance.services.risk_state_for`)
+    # — a one-time cost, not a per-request one. Warmed here, before either
+    # measurement, so both `measure()` calls below hit the cheap
+    # "already computed" path and this test keeps proving what it says: cost
+    # does not grow with data volume, not "a cold cache is as cheap as a warm
+    # one".
+    cache.clear()
+    client.get(url)
+
     def measure() -> int:
         cache.clear()
         with CaptureQueriesContext(connection) as captured:

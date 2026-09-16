@@ -27,9 +27,11 @@ from __future__ import annotations
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from apps.common.models import (
+    BaseModel,
     SoftDeleteBaseModel,
     SoftDeleteQuerySet,
     soft_delete_managers,
@@ -293,3 +295,86 @@ class Feedback(SoftDeleteBaseModel):
     def __str__(self) -> str:
         who = self.student_id or self.trainer_id
         return f"Feedback for {self.subject_type} {who}"
+
+
+class RiskLevel(models.TextChoices):
+    """Matches `apps.performance.risk`'s own `NONE`/`WARNING`/`CRITICAL`
+    string constants exactly — this is the Django-choices mirror of those,
+    not a second vocabulary."""
+
+    NONE = "none", _("None")
+    WARNING = "warning", _("Warning")
+    CRITICAL = "critical", _("Critical")
+
+
+class RiskState(BaseModel):
+    """The one live verdict for an enrolment (ADR-11).
+
+    Deliberately not a history table: a `OneToOneField` to `Enrollment`
+    holds only the current computation, and `previous_level`/
+    `previous_triggered` — overwritten together, in the same write, every
+    time a recompute changes anything — *are* the history. Reading "what did
+    this look like before" only ever needs one step back, which is exactly
+    what a Risk tab or a change notification needs ("this student just
+    became critical") and all a second table would give beyond that is rows
+    nothing reads.
+
+    `numbers` is not `apps.performance.risk.evaluate`'s whole `outcomes`
+    list (that would duplicate `label`/`detail` text derivable from `level`
+    and `triggered` at render time) — it is `{rule_key: outcome.numbers}`,
+    the raw figures each rule measured, triggered or not, so a screen can
+    show "attendance 62% (threshold 75%)" under a rule without re-running
+    the engine.
+
+    Not soft-deletable: it has no independent lifecycle of its own to
+    delete — it lives and dies with the `Enrollment` it verdicts (`CASCADE`),
+    the same reasoning `ActivityHistory` gives for skipping soft delete on an
+    append-only-by-nature record, just applied to a row that overwrites in
+    place instead of appending.
+    """
+
+    enrollment = models.OneToOneField(
+        "enrollments.Enrollment",
+        on_delete=models.CASCADE,
+        related_name="risk_state",
+    )
+    level = models.CharField(
+        _("level"), max_length=10, choices=RiskLevel.choices, default=RiskLevel.NONE
+    )
+    triggered = models.JSONField(
+        _("triggered rules"),
+        default=list,
+        blank=True,
+        help_text=_("Rule keys currently triggered, e.g. ['attendance', 'assignments']."),
+    )
+    numbers = models.JSONField(
+        _("numbers"),
+        default=dict,
+        blank=True,
+        help_text=_("Per-rule numeric evidence: `{rule_key: {...}}`. See the class docstring."),
+    )
+    computed_at = models.DateTimeField(_("computed at"), default=timezone.now)
+    previous_level = models.CharField(
+        _("previous level"),
+        max_length=10,
+        choices=RiskLevel.choices,
+        default="",
+        blank=True,
+        help_text=_(
+            "Empty until the second computation — there is no 'before' for the first. Never "
+            "`null` on a `CharField` (DJ001); `''` is not a valid `RiskLevel` choice, so it "
+            "cannot collide with a real, computed `RiskLevel.NONE` ('none')."
+        ),
+    )
+    previous_triggered = models.JSONField(_("previously triggered rules"), null=True, blank=True)
+
+    class Meta:
+        verbose_name = _("risk state")
+        verbose_name_plural = _("risk states")
+        ordering = ("-computed_at",)
+        indexes = [
+            models.Index(fields=["level", "-computed_at"], name="riskstate_level_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.enrollment_id}: {self.level}"

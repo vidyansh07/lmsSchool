@@ -266,6 +266,7 @@ class AuditAction(models.TextChoices):
     REVIEW_UPDATED = "review.updated", _("Performance review updated")
     FEEDBACK_RECORDED = "feedback.recorded", _("Feedback recorded")
     RISK_THRESHOLDS_UPDATED = "risk.thresholds.updated", _("Risk thresholds changed")
+    RISK_RECOMPUTED = "risk.recomputed", _("Risk recomputed")
 
     # --- Exports as background jobs
     EXPORT_QUEUED = "export.queued", _("Export queued")

@@ -357,6 +357,14 @@ def record_result(
         },
         durable=False,
     )
+
+    # ERP Phase 13 (ADR-11): a result moves the assessment-risk rule's
+    # numbers. Deferred to `transaction.on_commit` so a rolled-back write
+    # never schedules a recompute for a mark that was never actually saved.
+    from apps.performance.tasks import schedule_recompute
+
+    transaction.on_commit(lambda: schedule_recompute(enrollment.pk))
+
     return result, created
 
 
