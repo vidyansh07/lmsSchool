@@ -250,6 +250,17 @@ class Capability(models.TextChoices):
     POLICY_VIEW = "policy.view", _("View policy settings")
     POLICY_MANAGE = "policy.manage", _("Change policy settings")
 
+    # --- Dynamic forms (ERP Phase 8)
+    #
+    # Same rung as `policy.view`/`policy.manage`, per `PERMISSION_CATALOG.md`:
+    # a counsellor also holds `form.view` (unlike `policy.view`, which the
+    # counsellor does not) because a form's shape is builder configuration a
+    # counsellor needs to read to know what a submission will ask, not a
+    # security setting. Building/publishing a form stays with the
+    # administrator rung.
+    FORM_VIEW = "form.view", _("View form definitions")
+    FORM_MANAGE = "form.manage", _("Build, publish and unpublish forms")
+
     # --- Reporting and data tools
     #
     # A trainer holds neither. They can read reports about the batches they
@@ -355,6 +366,7 @@ _MANAGER_CAPABILITIES = frozenset(
         Capability.DATA_EXPORT,
         Capability.DATA_IMPORT,
         Capability.POLICY_VIEW,
+        Capability.FORM_VIEW,
     }
 )
 
@@ -381,6 +393,7 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.POLICY_MANAGE,
         Capability.SESSION_VIEW_ANY,
         Capability.SESSION_REVOKE_ANY,
+        Capability.FORM_MANAGE,
     }
 )
 

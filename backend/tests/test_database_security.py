@@ -154,6 +154,11 @@ def test_every_foreign_key_is_declared_to_the_database():
         ("audit_auditlog", "request_id"),
         ("notifications_notification", "resource_id"),
         ("django_admin_log", "object_id"),
+        # `FormResponse.object_id` is the other half of a `GenericForeignKey`
+        # (Phase 8): it names a row in whichever table `content_type` points
+        # at, so no single foreign key could express it — the same shape as
+        # `django_admin_log.object_id` above.
+        ("forms_formresponse", "object_id"),
     }
     unexpected = {(table, column) for table, column in rows} - allowed
     assert not unexpected, f"columns that look like keys but are not: {sorted(unexpected)}"

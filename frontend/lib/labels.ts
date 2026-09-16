@@ -8,6 +8,9 @@ import type {
   PermissionScope,
   FeePlanStatus,
   FeeStatus,
+  FormDefinitionStatus,
+  FormFieldType,
+  FormVersionStatus,
   InstitutionKind,
   PaymentMethod,
   PolicyCategory,
@@ -203,6 +206,71 @@ export const POLICY_CATEGORY_LABEL: Record<PolicyCategory, string> = {
   approval: "Approval",
   file_upload: "File upload",
   notification: "Notification",
+};
+
+// --- Forms / form builder (ERP Phase 8) --------------------------------------
+
+export const FORM_FIELD_TYPE_LABEL: Record<FormFieldType, string> = {
+  text: "Text",
+  textarea: "Long text",
+  number: "Number",
+  decimal: "Decimal",
+  date: "Date",
+  datetime: "Date & time",
+  boolean: "Yes / no",
+  select: "Dropdown",
+  multiselect: "Multi-select",
+  radio: "Radio buttons",
+  checkbox: "Checkboxes",
+  email: "Email",
+  phone: "Phone",
+  url: "URL",
+  file: "File",
+  image: "Image",
+  richtext: "Rich text",
+  relation: "Relation",
+};
+
+export const FORM_FIELD_TYPE_OPTIONS: { value: FormFieldType; label: string }[] =
+  (Object.keys(FORM_FIELD_TYPE_LABEL) as FormFieldType[]).map((value) => ({
+    value,
+    label: FORM_FIELD_TYPE_LABEL[value],
+  }));
+
+/** Field types whose `options` is a `{value,label}` choice list. */
+export const FORM_FIELD_CHOICE_TYPES: readonly FormFieldType[] = [
+  "select",
+  "multiselect",
+  "radio",
+  "checkbox",
+];
+
+export const FORM_VERSION_STATUS_LABEL: Record<FormVersionStatus, string> = {
+  draft: "Draft",
+  published: "Published",
+  archived: "Archived",
+};
+
+export const FORM_VERSION_STATUS_VARIANT: Record<
+  FormVersionStatus,
+  "neutral" | "success" | "warning" | "error"
+> = {
+  draft: "warning",
+  published: "success",
+  archived: "neutral",
+};
+
+export const FORM_DEFINITION_STATUS_LABEL: Record<FormDefinitionStatus, string> = {
+  active: "Active",
+  archived: "Archived",
+};
+
+export const FORM_DEFINITION_STATUS_VARIANT: Record<
+  FormDefinitionStatus,
+  "neutral" | "success" | "warning" | "error"
+> = {
+  active: "success",
+  archived: "neutral",
 };
 
 // --- MFA (ERP Phase 5, ADR-05) ------------------------------------------------

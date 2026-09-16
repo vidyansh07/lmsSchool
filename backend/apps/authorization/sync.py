@@ -94,6 +94,7 @@ LOCKABLE = frozenset(
         "permission.lock",
         "policy.manage",
         "session.revoke_any",
+        "form.manage",
     }
 )
 

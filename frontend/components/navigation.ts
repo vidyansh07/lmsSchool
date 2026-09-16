@@ -397,6 +397,12 @@ export const STAFF_NAV: NavGroup[] = [
         capability: Capability.policyView,
       },
       {
+        href: "/admin/forms",
+        label: "Forms",
+        icon: FileText,
+        capability: Capability.formManage,
+      },
+      {
         href: "/admin/settings",
         label: "Settings",
         icon: SlidersHorizontal,
@@ -683,6 +689,12 @@ export const ADMIN_NAV: NavGroup[] = [
         label: "Policies",
         icon: ToggleLeft,
         capability: Capability.policyView,
+      },
+      {
+        href: "/admin/forms",
+        label: "Forms",
+        icon: FileText,
+        capability: Capability.formManage,
       },
       {
         href: "/admin/branches",

@@ -298,6 +298,19 @@ class AuditAction(models.TextChoices):
     BRANCH_UPDATED = "branch.updated", _("Branch updated")
     USER_BRANCH_CHANGED = "user.branch_changed", _("Account moved between branches")
 
+    # --- Dynamic forms (ERP Phase 8)
+    #
+    # `form.version_created`, `form.published` and `form.unpublished` are the
+    # three the phase's API contract names explicitly.
+    # `form.definition_created` and `form.fields_replaced` are added
+    # alongside them so every state change is audited (rule 5), not just the
+    # three the contract calls out by name.
+    FORM_DEFINITION_CREATED = "form.definition_created", _("Form definition created")
+    FORM_VERSION_CREATED = "form.version_created", _("Form version created")
+    FORM_FIELDS_REPLACED = "form.fields_replaced", _("Form version's fields replaced")
+    FORM_PUBLISHED = "form.published", _("Form version published")
+    FORM_UNPUBLISHED = "form.unpublished", _("Form version unpublished")
+
 
 class AuditResult(models.TextChoices):
     SUCCESS = "success", _("Success")

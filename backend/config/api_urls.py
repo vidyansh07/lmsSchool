@@ -24,6 +24,7 @@ from apps.discussions import urls as discussion_urls
 from apps.dsr import urls as dsr_urls
 from apps.enrollments import urls as enrollment_urls
 from apps.exams import urls as exam_urls
+from apps.forms import urls as forms_urls
 from apps.learning import urls as learning_urls
 from apps.notifications import urls as notification_urls
 from apps.organisation import urls as organisation_urls
@@ -75,6 +76,7 @@ urlpatterns = [
     path("academics/", include((academics_urls.urlpatterns, "academics"))),
     path("settings/", include((configuration_urls.urlpatterns, "settings"))),
     path("policies/", include((policies_urls.urlpatterns, "policies"))),
+    path("forms/", include((forms_urls.urlpatterns, "forms"))),
     path("projects/", include((project_urls.project_urlpatterns, "projects"))),
     path("completions/", include((progress_urls.completion_urlpatterns, "completions"))),
     path("certificates/", include((certificate_urls.certificate_urlpatterns, "certificates"))),

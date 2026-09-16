@@ -90,6 +90,7 @@ LOCAL_APPS = [
     "apps.authorization",
     "apps.configuration",
     "apps.policies",
+    "apps.forms",
     "apps.students",
     "apps.trainers",
     "apps.courses",

@@ -82,6 +82,9 @@ export const Capability = {
   permissionLock: "permission.lock",
   policyView: "policy.view",
   policyManage: "policy.manage",
+  // Dynamic forms / form builder (ERP Phase 8).
+  formView: "form.view",
+  formManage: "form.manage",
   discussionModerateAny: "discussion.moderate_any",
   reportViewAny: "report.view_any",
   dataExport: "data.export",

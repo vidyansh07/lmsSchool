@@ -2096,3 +2096,157 @@ export interface SessionRow {
   last_seen_at: string;
   is_current: boolean;
 }
+
+// --- Forms / form builder (ERP Phase 8) --------------------------------------
+
+/** The entity a `FormDefinition` attaches to (`DATA_MODEL.md` §4). */
+export type FormEntity = "activity" | "student" | "registration" | "review";
+
+export type FormDefinitionStatus = "active" | "archived";
+
+export type FormVersionStatus = "draft" | "published" | "archived";
+
+/** The 17 field types a `FormField` may take. */
+export type FormFieldType =
+  | "text"
+  | "textarea"
+  | "number"
+  | "decimal"
+  | "date"
+  | "datetime"
+  | "boolean"
+  | "select"
+  | "multiselect"
+  | "radio"
+  | "checkbox"
+  | "email"
+  | "phone"
+  | "url"
+  | "file"
+  | "image"
+  | "richtext"
+  | "relation";
+
+/** One choice for a `select`/`multiselect`/`radio` field. */
+export interface FormFieldOption {
+  value: string;
+  label: string;
+}
+
+/** The target model a `relation` field resolves against. */
+export type FormFieldRelationModel = "student" | "trainer" | "batch";
+
+export interface FormFieldRelationOptions {
+  model: FormFieldRelationModel;
+}
+
+/** `options` on a field: a choice list for select-like types, or a relation
+ *  target for `relation`. Every other type leaves this empty. */
+export type FormFieldOptions = FormFieldOption[] | FormFieldRelationOptions | null;
+
+/** `validation` on a field — which keys apply depends on `type`
+ *  (`FORM_CATALOG.md` "Validation rules"). Every key is optional. */
+export interface FormFieldValidation {
+  min?: number;
+  max?: number;
+  min_length?: number;
+  max_length?: number;
+  min_items?: number;
+  max_items?: number;
+  pattern?: string;
+  /** File/image types: an allow-list of extensions or MIME types. */
+  accept?: string[];
+  max_mb?: number;
+}
+
+export interface FormField {
+  id: string;
+  key: string;
+  label: string;
+  help: string;
+  type: FormFieldType;
+  required: boolean;
+  order: number;
+  group: string;
+  options: FormFieldOptions;
+  validation: FormFieldValidation;
+  visible_to_student: boolean;
+  /** When set, this field's numeric value feeds the activity score
+   *  (e.g. `"score"`). Null on every field that does not. */
+  performance_key: string | null;
+}
+
+/** A field as sent back to the server on a full replace — no `id` for a new
+ *  row (the server assigns one), the existing `id` to keep one in place. */
+export interface FormFieldInput {
+  id?: string;
+  key: string;
+  label: string;
+  help: string;
+  type: FormFieldType;
+  required: boolean;
+  order: number;
+  group: string;
+  options: FormFieldOptions;
+  validation: FormFieldValidation;
+  visible_to_student: boolean;
+  performance_key: string | null;
+}
+
+/** The summary embedded in `FormDefinition.published_version` /
+ *  `.draft_version`. */
+export interface FormVersionRef {
+  id: string;
+  number: number;
+  schema_hash: string;
+  field_count: number;
+}
+
+/** One row of `FormDefinition.versions` (the version history). */
+export interface FormVersionSummary {
+  id: string;
+  number: number;
+  status: FormVersionStatus;
+  schema_hash: string;
+  field_count: number;
+  published_at: string | null;
+  published_by: string | null;
+}
+
+/** `GET /forms/` row and `POST /forms/` response. */
+export interface FormDefinitionSummary {
+  slug: string;
+  name: string;
+  entity: FormEntity;
+  status: FormDefinitionStatus;
+  published_version: FormVersionRef | null;
+  draft_version: FormVersionRef | null;
+}
+
+/** `GET /forms/{slug}/` — the definition plus its full version history. */
+export interface FormDefinitionDetail extends FormDefinitionSummary {
+  versions: FormVersionSummary[];
+}
+
+/** `GET /forms/{slug}/versions/{n}/` and the response of
+ *  `POST /forms/{slug}/versions/` and `PUT .../fields/`. */
+export interface FormVersionDetail {
+  id: string;
+  number: number;
+  status: FormVersionStatus;
+  fields: FormField[];
+}
+
+/** `POST /forms/{slug}/preview/` — `200` always answers this shape; a
+ *  failing preview is a `400` (`ApiError` with `details`), never a `200`
+ *  with populated `errors`. */
+export interface FormPreviewResult {
+  errors: Record<string, string[]>;
+}
+
+/** `GET /forms/published/{slug}/` — the fields a renderer needs, nothing
+ *  admin-only. */
+export interface PublishedForm {
+  version: number;
+  fields: FormField[];
+}
