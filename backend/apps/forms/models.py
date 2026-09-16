@@ -168,6 +168,15 @@ class FormVersion(BaseModel):
     def __str__(self) -> str:
         return f"{self.definition_id} v{self.number}"
 
+    def performance_field(self) -> FormField | None:
+        """The one field this version derives a numeric score from — the
+        field flagged with a non-empty `performance_key` — or `None` if none
+        is. `apps.work.services._extract_score` (deriving the score) and
+        `apps.work.serializers.ActivityDetailSerializer` (deciding whether a
+        student caller may see it) both call this, so "which field is the
+        score field" has exactly one definition."""
+        return self.fields.exclude(performance_key="").order_by("order").first()
+
 
 class FormField(BaseModel):
     """One field on a version. Full-replaced by `services.set_fields`, never

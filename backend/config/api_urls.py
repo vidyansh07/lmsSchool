@@ -35,6 +35,8 @@ from apps.projects import urls as project_urls
 from apps.questions import urls as question_urls
 from apps.reporting import urls as reporting_urls
 from apps.sessions import urls as session_urls
+from apps.students import urls as student_urls
+from apps.work import urls as work_urls
 
 app_name = "v1"
 
@@ -46,7 +48,15 @@ urlpatterns = [
     path("recovery/", include("apps.common.recovery_urls")),
     path("users/", include("apps.accounts.user_urls")),
     path("branches/", include((organisation_urls.urlpatterns, "branches"))),
-    path("students/", include("apps.students.urls")),
+    path(
+        "students/",
+        include(
+            (
+                student_urls.urlpatterns + work_urls.student_activity_urlpatterns,
+                "students",
+            )
+        ),
+    ),
     path(
         "trainers/",
         include((reporting_urls.trainer_rollup_urlpatterns, "trainer-rollups")),
@@ -150,4 +160,7 @@ urlpatterns = [
     ),
     path("calendar/", include((dashboard_urls.calendar_patterns, "calendar"))),
     path("dashboard/", include((dashboard_urls.dashboard_patterns, "dashboard"))),
+    path("activity-types/", include((work_urls.activity_type_patterns, "activity-types"))),
+    path("activities/", include((work_urls.activity_patterns, "activities"))),
+    path("me/", include((work_urls.me_patterns, "work-me"))),
 ]

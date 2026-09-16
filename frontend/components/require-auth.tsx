@@ -22,9 +22,14 @@ import type { CapabilityName } from '@/lib/capabilities';
 export function RequireAuth({
   children,
   capability,
+  roles,
 }: {
   children: ReactNode;
   capability?: CapabilityName;
+  /** Roles that pass regardless of `capability` — for a role whose reach is
+   * resolved per-record on the backend rather than granted as a capability
+   * (e.g. a trainer's own activities; see `apps/work/access.py`). */
+  roles?: string[];
 }) {
   const { user, isLoading, can } = useAuth();
   const router = useRouter();
@@ -36,7 +41,8 @@ export function RequireAuth({
   if (isLoading) return <LoadingState label="Checking your session…" rows={4} />;
   if (!user) return <LoadingState label="Redirecting to sign in…" rows={2} />;
 
-  if (capability && !can(capability)) {
+  const roleAllowed = Boolean(roles?.includes(user.role));
+  if (capability && !can(capability) && !roleAllowed) {
     return (
       <EmptyState
         title="You do not have access to this page"

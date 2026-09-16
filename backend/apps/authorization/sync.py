@@ -45,6 +45,7 @@ CATEGORY_BY_RESOURCE = {
     "permission": "configuration",
     "policy": "configuration",
     "form": "configuration",
+    "activity_type": "configuration",
     "automation": "configuration",
     "announcement": "communication",
     "requirement": "communication",
@@ -95,6 +96,7 @@ LOCKABLE = frozenset(
         "policy.manage",
         "session.revoke_any",
         "form.manage",
+        "activity_type.manage",
     }
 )
 

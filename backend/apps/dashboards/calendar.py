@@ -38,6 +38,7 @@ class EventKind:
     EXAM = "exam"
     PROJECT_DUE = "project_due"
     ANNOUNCEMENT = "announcement"
+    ACTIVITY_DUE = "activity_due"
 
 
 @dataclass(frozen=True)
@@ -331,6 +332,54 @@ def project_events(user, start: date, end: date) -> list[CalendarEvent]:
     return events
 
 
+def _activity_events(user, start: date, end: date) -> list[CalendarEvent]:
+    """Activity due dates (ERP Phase 9). Resolves its own access control
+    through `apps.work.access` — the same `visible_activities`/
+    `student_visible_activities` functions the list endpoint uses — never a
+    raw unscoped query."""
+    from apps.work import access as work_access
+    from apps.work.models import OPEN_STATUSES
+
+    window_start = datetime.combine(start, time.min, tzinfo=ZoneInfo("UTC"))
+    window_end = datetime.combine(end, time.max, tzinfo=ZoneInfo("UTC"))
+
+    student = work_access.caller_student_profile(user)
+    rows = (
+        work_access.student_visible_activities(student)
+        if student is not None
+        else work_access.visible_activities(user)
+    )
+    rows = rows.filter(
+        due_at__isnull=False,
+        due_at__gte=window_start,
+        due_at__lte=window_end,
+        status__in=OPEN_STATUSES,
+    ).select_related("activity_type", "batch", "batch__course")
+
+    events: list[CalendarEvent] = []
+    for activity in rows:
+        batch = activity.batch
+        events.append(
+            CalendarEvent(
+                kind=EventKind.ACTIVITY_DUE,
+                title=f"Due: {activity.title}",
+                start=activity.due_at,
+                end=activity.due_at,
+                batch_id=str(batch.pk) if batch else None,
+                batch_code=batch.code if batch else "",
+                course_id=str(batch.course_id) if batch else None,
+                course_title=batch.course.title if batch else "",
+                metadata={
+                    "activity_id": str(activity.pk),
+                    "activity_type": activity.activity_type.slug,
+                    "status": activity.status,
+                    "student_id": str(activity.student_id),
+                },
+            )
+        )
+    return events
+
+
 EVENT_SOURCES: list[Callable[[Any, date, date], list[CalendarEvent]]] = [
     class_events,
     batch_milestone_events,
@@ -338,6 +387,7 @@ EVENT_SOURCES: list[Callable[[Any, date, date], list[CalendarEvent]]] = [
     assessment_events,
     exam_events,
     project_events,
+    _activity_events,
 ]
 
 

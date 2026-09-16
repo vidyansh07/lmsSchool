@@ -311,6 +311,22 @@ class AuditAction(models.TextChoices):
     FORM_PUBLISHED = "form.published", _("Form version published")
     FORM_UNPUBLISHED = "form.unpublished", _("Form version unpublished")
 
+    # --- Activity engine (ERP Phase 9)
+    #
+    # `activity.created`, `activity.completed` and `activity.reviewed` are
+    # the three `API_CONTRACTS.md` names explicitly; `activity.transitioned`
+    # covers every other lifecycle move (plan, assign, start, cancel,
+    # reopen — including the system-driven OVERDUE/MISSED ones, actor null)
+    # so every state change is audited (rule 5), and `activity_type.*` cover
+    # the catalog's own CRUD.
+    ACTIVITY_TYPE_CREATED = "activity_type.created", _("Activity type created")
+    ACTIVITY_TYPE_UPDATED = "activity_type.updated", _("Activity type updated")
+    ACTIVITY_CREATED = "activity.created", _("Activity created")
+    ACTIVITY_TRANSITIONED = "activity.transitioned", _("Activity status changed")
+    ACTIVITY_COMPLETED = "activity.completed", _("Activity completed")
+    ACTIVITY_REVIEWED = "activity.reviewed", _("Activity reviewed")
+    ACTIVITY_DELETED = "activity.deleted", _("Activity deleted")
+
 
 class AuditResult(models.TextChoices):
     SUCCESS = "success", _("Success")

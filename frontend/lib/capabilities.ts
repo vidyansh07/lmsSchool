@@ -85,6 +85,15 @@ export const Capability = {
   // Dynamic forms / form builder (ERP Phase 8).
   formView: "form.view",
   formManage: "form.manage",
+  // The activity engine (ERP Phase 9) — `PERMISSION_CATALOG.md`'s
+  // `activity.*` and `activity_type.manage` rows.
+  activityTypeManage: "activity_type.manage",
+  activityViewAny: "activity.view_any",
+  activityCreate: "activity.create",
+  activityAssign: "activity.assign",
+  activityComplete: "activity.complete",
+  activityReview: "activity.review",
+  activityDelete: "activity.delete",
   discussionModerateAny: "discussion.moderate_any",
   reportViewAny: "report.view_any",
   dataExport: "data.export",

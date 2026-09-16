@@ -1,7 +1,12 @@
 /** Display labels for API enumerations, kept in one place. */
 
 import type {
+  ActivityCategory,
   ActivityKind,
+  ActivityPriority,
+  ActivityRiskEffect,
+  ActivityStatus,
+  ActivityTypeStatus,
   MatrixCell,
   MfaMethodName,
   PermissionCategory,
@@ -272,6 +277,125 @@ export const FORM_DEFINITION_STATUS_VARIANT: Record<
   active: "success",
   archived: "neutral",
 };
+
+// --- Activities / the work engine (ERP Phase 9) ------------------------------
+
+/** Colour-coded by what the status means for the person looking at the row:
+ *  the two terminal-for-performance statuses read as done, the three that
+ *  need attention as a warning, everything else as ordinary in-flight work
+ *  (`ACTIVITY_CATALOG.md` "Lifecycle (§25)"). Keyed by the model's actual
+ *  lowercase wire values (`apps.work.models.ActivityStatus`), not the
+ *  upper-cased prose shorthand `API_CONTRACTS.md` uses for the same twelve
+ *  names. */
+export const ACTIVITY_STATUS_LABEL: Record<ActivityStatus, string> = {
+  draft: "Draft",
+  planned: "Planned",
+  assigned: "Assigned",
+  in_progress: "In progress",
+  completed: "Completed",
+  missed: "Missed",
+  overdue: "Overdue",
+  cancelled: "Cancelled",
+  reopened: "Reopened",
+  under_review: "Under review",
+  approved: "Approved",
+  requires_action: "Requires action",
+};
+
+export const ACTIVITY_STATUS_VARIANT: Record<
+  ActivityStatus,
+  "neutral" | "success" | "warning"
+> = {
+  draft: "neutral",
+  planned: "neutral",
+  assigned: "neutral",
+  in_progress: "neutral",
+  completed: "success",
+  missed: "warning",
+  overdue: "warning",
+  cancelled: "neutral",
+  reopened: "neutral",
+  under_review: "neutral",
+  approved: "success",
+  requires_action: "warning",
+};
+
+export const ACTIVITY_PRIORITY_LABEL: Record<ActivityPriority, string> = {
+  low: "Low",
+  normal: "Normal",
+  high: "High",
+  urgent: "Urgent",
+};
+
+export const ACTIVITY_PRIORITY_VARIANT: Record<
+  ActivityPriority,
+  "neutral" | "warning" | "error"
+> = {
+  low: "neutral",
+  normal: "neutral",
+  high: "warning",
+  urgent: "error",
+};
+
+export const ACTIVITY_CATEGORY_LABEL: Record<ActivityCategory, string> = {
+  interview: "Interview",
+  mentoring: "Mentoring",
+  counselling: "Counselling",
+  review: "Review",
+  placement: "Placement",
+  feedback: "Feedback",
+  warning: "Warning",
+  follow_up: "Follow-up",
+  other: "Other",
+};
+
+export const ACTIVITY_CATEGORY_OPTIONS: { value: ActivityCategory; label: string }[] =
+  (Object.keys(ACTIVITY_CATEGORY_LABEL) as ActivityCategory[]).map((value) => ({
+    value,
+    label: ACTIVITY_CATEGORY_LABEL[value],
+  }));
+
+export const ACTIVITY_TYPE_STATUS_LABEL: Record<ActivityTypeStatus, string> = {
+  active: "Active",
+  disabled: "Disabled",
+};
+
+export const ACTIVITY_TYPE_STATUS_VARIANT: Record<
+  ActivityTypeStatus,
+  "neutral" | "success" | "warning" | "error"
+> = {
+  active: "success",
+  disabled: "neutral",
+};
+
+export const ACTIVITY_RISK_EFFECT_LABEL: Record<ActivityRiskEffect, string> = {
+  none: "No effect",
+  score_below_threshold: "Score below threshold",
+};
+
+/**
+ * The five statuses a person can drive an activity to via
+ * `POST /activities/{id}/transition/` (`apps/work/transitions.py`'s
+ * `TRANSITIONS` table — every other lifecycle move is system-only, or goes
+ * through `/complete/` or `/review/` instead; see `lib/work.ts`'s
+ * `legalTransitions`, which computes which of these apply to a given
+ * activity). Keyed by the transition's `to` value, exactly what the
+ * transition body's `to` field takes.
+ */
+export const ACTIVITY_TRANSITION_LABEL: Partial<Record<ActivityStatus, string>> = {
+  planned: "Plan",
+  assigned: "Assign",
+  in_progress: "Start",
+  cancelled: "Cancel",
+  reopened: "Reopen",
+};
+
+/** Transitions whose lifecycle rule requires a reason/note
+ *  (`transitions.py`'s `Edge.requires_note`). */
+export const ACTIVITY_TRANSITION_REQUIRES_NOTE: ReadonlySet<ActivityStatus> = new Set([
+  "cancelled",
+  "reopened",
+]);
 
 // --- MFA (ERP Phase 5, ADR-05) ------------------------------------------------
 

@@ -19,6 +19,7 @@ import {
   Layers,
   LibraryBig,
   ListChecks,
+  ListTodo,
   Megaphone,
   MessagesSquare,
   Palette,
@@ -185,6 +186,13 @@ export const STAFF_NAV: NavGroup[] = [
     // that is the job: looking at how a batch or a trainer is doing.
     title: "Review",
     items: [
+      {
+        href: "/activities",
+        label: "Activities",
+        icon: ListTodo,
+        capability: Capability.activityViewAny,
+        roles: ["trainer"],
+      },
       {
         href: "/manage/batches",
         label: "Batch review",
@@ -403,6 +411,12 @@ export const STAFF_NAV: NavGroup[] = [
         capability: Capability.formManage,
       },
       {
+        href: "/admin/activity-types",
+        label: "Activity types",
+        icon: ClipboardCheck,
+        capability: Capability.activityTypeManage,
+      },
+      {
         href: "/admin/settings",
         label: "Settings",
         icon: SlidersHorizontal,
@@ -481,6 +495,12 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     title: "Manager's work",
     items: [
+      {
+        href: "/activities",
+        label: "Activities",
+        icon: ListTodo,
+        capability: Capability.activityViewAny,
+      },
       {
         href: "/dsr",
         label: "Daily reports",
@@ -695,6 +715,12 @@ export const ADMIN_NAV: NavGroup[] = [
         label: "Forms",
         icon: FileText,
         capability: Capability.formManage,
+      },
+      {
+        href: "/admin/activity-types",
+        label: "Activity types",
+        icon: ClipboardCheck,
+        capability: Capability.activityTypeManage,
       },
       {
         href: "/admin/branches",

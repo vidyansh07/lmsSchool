@@ -2213,12 +2213,27 @@ export interface FormVersionSummary {
   published_by: string | null;
 }
 
-/** `GET /forms/` row and `POST /forms/` response. */
+/** `GET /forms/` row and `POST /forms/` response.
+ *
+ *  `id` and `created_at` are real fields of the backend's
+ *  `FormDefinitionSerializer` that this hand-written type previously left
+ *  out; added here (Phase 9) because `ActivityType.form` is a form
+ *  definition *id* (a `UUIDField` on `ActivityTypeCreateSerializer`/
+ *  `ActivityTypePatchSerializer`), not the slug this type otherwise keys
+ *  everything by — the activity-types form picker needs `id` to submit a
+ *  valid value. Purely additive; nothing existing destructures this type in
+ *  a way an extra field could break. */
 export interface FormDefinitionSummary {
+  /** Optional only so Phase 8's existing fixtures (predating this field)
+   *  keep typechecking; the real API always sends it. A caller that needs
+   *  it to submit a value (the activity-types form picker) filters out any
+   *  row where it is missing rather than assume it. */
+  id?: string;
   slug: string;
   name: string;
   entity: FormEntity;
   status: FormDefinitionStatus;
+  created_at?: string;
   published_version: FormVersionRef | null;
   draft_version: FormVersionRef | null;
 }
@@ -2249,4 +2264,201 @@ export interface FormPreviewResult {
 export interface PublishedForm {
   version: number;
   fields: FormField[];
+}
+
+// --- Activities / the work engine (ERP Phase 9) ------------------------------
+//
+// `DATA_MODEL.md` §5, `ACTIVITY_CATALOG.md`, `API_CONTRACTS.md` "Activities
+// (Phase 9-10)" — checked directly against `backend/apps/work/{models,
+// serializers,views,transitions}.py`, built in parallel in this same
+// worktree, since the prose contract left several shapes ambiguous or
+// abbreviated. Points resolved that way, not from the prose alone:
+//   - `ActivityStatus`'s wire values are the model's lowercase
+//     `TextChoices` values ("draft", "in_progress", …), not the
+//     upper-cased names `API_CONTRACTS.md`/the phase brief use as prose
+//     shorthand for the twelve members.
+//   - `assigned_to`/`created_by`/`performed_by`/`reviewed_by`/a history
+//     row's `actor` are `{id, name}` briefs — `serializers._user_summary`.
+//   - The list row's type reference is keyed `type`, not `activity_type`
+//     (`ActivityListSerializer.type`), and carries `id` too; the row also
+//     carries `completed_at`, `batch`, `created_by` and `counts`, none of
+//     which the abbreviated contract in the phase brief mentioned.
+//   - There is no `available_transitions` field on the detail response —
+//     confirmed absent from `ActivityDetailSerializer`. The lifecycle graph
+//     (`apps/work/transitions.py`) is pure data with no HTTP surface, so the
+//     transition action bar computes legal moves itself via
+//     `lib/work.ts`'s `legalTransitions`, transcribed from that module
+//     (the person-drivable edges only — system-only moves, and
+//     `UNDER_REVIEW`'s two edges, which `POST .../review/` owns instead of
+//     the generic `/transition/` verb set the phase brief describes, are
+//     excluded).
+//   - `ActivityDetail.form` is `{version, fields}`, not bare `{fields}`;
+//     `form_values` defaults to `{}`, never `null`; `children` is a list of
+//     activity ids (`get_children`), not embedded `Activity` rows.
+//   - `ActivityType.form` reads back as `{id, slug}`, but every write
+//     (`ActivityTypeCreateSerializer`/`...PatchSerializer`) takes the
+//     `FormDefinition`'s *id* — a `UUIDField`, not its slug.
+
+/** The twelve statuses of `ACTIVITY_CATALOG.md` "Lifecycle (§25)", spelled
+ *  exactly as `apps.work.models.ActivityStatus`'s `TextChoices` values. */
+export type ActivityStatus =
+  | "draft"
+  | "planned"
+  | "assigned"
+  | "in_progress"
+  | "completed"
+  | "missed"
+  | "overdue"
+  | "cancelled"
+  | "reopened"
+  | "under_review"
+  | "approved"
+  | "requires_action";
+
+export type ActivityPriority = "low" | "normal" | "high" | "urgent";
+
+/** `ActivityType.category` (`DATA_MODEL.md` §5). */
+export type ActivityCategory =
+  | "interview"
+  | "mentoring"
+  | "counselling"
+  | "review"
+  | "placement"
+  | "feedback"
+  | "warning"
+  | "follow_up"
+  | "other";
+
+export type ActivityResult = "pass" | "fail" | "mixed" | "n/a";
+
+export type ActivityTypeStatus = "active" | "disabled";
+
+export type ActivityRiskEffect = "none" | "score_below_threshold";
+
+/** `ActivityType.next_action` — a system rule the automation engine runs on
+ *  completion (Phase 14 executes it; this phase only stores and shows it). */
+export interface ActivityNextAction {
+  when: string;
+  threshold?: number;
+  create_type: string;
+  assign_to: "same_assignee" | "batch_trainer" | "creator";
+  notify?: string[];
+}
+
+/** `GET /activity-types/` row, `POST` body/response, `PATCH
+ *  /activity-types/{slug}/` body/response. `slug` is immutable after
+ *  creation — every other column may change. */
+export interface ActivityType {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  category: ActivityCategory;
+  allowed_creator_roles: UserRole[];
+  allowed_assignee_roles: UserRole[];
+  visible_to_student: boolean;
+  default_duration_minutes: number | null;
+  /** The pinned `FormDefinition`, or null for no form. Read-only shape —
+   *  writing this type takes `form` as a bare id (a `FormDefinitionSummary
+   *  .id`), see `lib/work.ts`'s `ActivityTypeInput`. */
+  form: { id: string; slug: string } | null;
+  requires_review: boolean;
+  /** decimal(4,2) as the API's decimal string; `"0.00"` = no effect. */
+  performance_weight: string;
+  risk_effect: ActivityRiskEffect;
+  reminder_minutes_before: number | null;
+  next_action: ActivityNextAction | null;
+  is_system: boolean;
+  status: ActivityTypeStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+/** The `type` reference embedded in an `Activity` list row/detail
+ *  (`ActivityListSerializer.type` / `serializers._type_summary`). */
+export interface ActivityTypeBrief {
+  id: string;
+  slug: string;
+  name: string;
+  category: ActivityCategory;
+}
+
+/** A person reference embedded in an activity or a history row — assignee,
+ *  creator, performer, reviewer, actor (`serializers._user_summary`). */
+export interface ActivityPersonBrief {
+  id: string;
+  name: string;
+}
+
+export interface ActivityStudentBrief {
+  id: string;
+  name: string;
+  student_id: string;
+}
+
+/** `batch` on an `Activity` — denormalised from its enrollment
+ *  (`serializers._batch_summary`). */
+export interface ActivityBatchBrief {
+  id: string;
+  code: string;
+  name: string;
+}
+
+/** `GET /activities/` row, `GET /students/{id}/activities/` row, `GET
+ *  /me/activities/` row (`ActivityListSerializer`). Never carries form
+ *  values — those are detail-only. */
+export interface Activity {
+  id: string;
+  title: string;
+  status: ActivityStatus;
+  priority: ActivityPriority;
+  planned_at: string | null;
+  due_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  student: ActivityStudentBrief;
+  type: ActivityTypeBrief;
+  batch: ActivityBatchBrief | null;
+  assigned_to: ActivityPersonBrief | null;
+  created_by: ActivityPersonBrief | null;
+  counts: { history: number };
+}
+
+export interface ActivityHistoryEntry {
+  id: string;
+  from_status: ActivityStatus | null;
+  to_status: ActivityStatus;
+  actor: ActivityPersonBrief | null;
+  note: string;
+  changes: Record<string, unknown>;
+  created_at: string;
+}
+
+/** `GET /activities/{id}/` (`ActivityDetailSerializer`), and the 200 body of
+ *  `POST .../transition/`, `POST .../complete/`, `POST .../review/`,
+ *  `PATCH /activities/{id}/`, `DELETE /activities/{id}/`. */
+export interface ActivityDetail extends Activity {
+  performed_by: ActivityPersonBrief | null;
+  reviewed_by: ActivityPersonBrief | null;
+  started_at: string | null;
+  reviewed_at: string | null;
+  duration_minutes: number | null;
+  result: ActivityResult;
+  score: string | null;
+  max_score: string | null;
+  summary: string;
+  review_note: string;
+  student_visible: boolean;
+  /** The pinned form version's fields, or null when the type has no form. */
+  form: { version: number; fields: FormField[] } | null;
+  /** The submitted response's values — `{}` before completion, staff see
+   *  every field, a student caller sees only `visible_to_student` fields
+   *  (filtered server-side, never by this client). */
+  form_values: Record<string, unknown>;
+  history: ActivityHistoryEntry[];
+  parent: string | null;
+  /** Ids only (`get_children`) — a follow-on activity a `next_action` rule
+   *  created, not embedded rows. Nothing in this phase resolves them. */
+  children: string[];
+  automation_run: string | null;
 }

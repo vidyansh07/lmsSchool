@@ -115,6 +115,7 @@ LOCAL_APPS = [
     "apps.exams",
     "apps.enrollments",
     "apps.fees",
+    "apps.work",
     "apps.activity",
     "apps.warnings",
     "apps.requirements",
@@ -321,6 +322,20 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=8, minute=0, day_of_week="mon"),
         "options": {"expires": 3600},
     },
+    # Activity engine (ERP Phase 9): OVERDUE/MISSED are system-only
+    # transitions, so something has to notice the clock — this is that
+    # something. Every ten minutes is frequent enough that "overdue" means
+    # roughly what it says without sweeping the whole table every request.
+    "work-mark-overdue": {
+        "task": "work.mark_overdue",
+        "schedule": env.int("WORK_OVERDUE_INTERVAL_SECONDS", default=600),
+        "options": {"expires": 540},
+    },
+    "work-reminders": {
+        "task": "work.reminders",
+        "schedule": env.int("WORK_REMINDER_INTERVAL_SECONDS", default=600),
+        "options": {"expires": 540},
+    },
 }
 
 # Malware scanning for uploads. `disabled` until a scanner is provisioned;
@@ -432,6 +447,11 @@ SPECTACULAR_SETTINGS = {
         "UserRoleEnum": "apps.accounts.roles.UserRole.choices",
         "PermissionScopeEnum": "apps.authorization.models.PermissionScope.choices",
         "RoleStatusEnum": "apps.authorization.models.RoleStatus.choices",
+        # `Permission.category` was the only field named `category` with no
+        # override before ERP Phase 9 added a second (`ActivityType.category`,
+        # below) — one unresolved choice set of a given name never collides
+        # with anything, so this one had gone unnoticed until it had company.
+        "PermissionCategoryEnum": "apps.authorization.models.PermissionCategory.choices",
         "PolicyScopeEnum": "apps.policies.models.PolicyScope.choices",
         "FeeStatusEnum": "apps.students.models.FeeStatus.choices",
         "QualificationEnum": "apps.students.models.Qualification.choices",
@@ -491,6 +511,10 @@ SPECTACULAR_SETTINGS = {
         # by more than one fee-related component — that happened to resolve
         # cleanly by luck while it was the only choice set of that name.
         "PaymentMethodEnum": "apps.fees.models.PaymentMethod.choices",
+        # ERP Phase 9: the third choice set on a field named `category`
+        # (`Permission.category` and `AssessmentCategory`/`NotificationCategory`
+        # already have their own overrides above).
+        "ActivityCategoryEnum": "apps.work.models.ActivityCategory.choices",
     },
     "SWAGGER_UI_SETTINGS": {"persistAuthorization": False},
 }

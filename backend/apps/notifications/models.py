@@ -72,6 +72,11 @@ class NotificationKind(models.TextChoices):
         _("A session was ended by an administrator"),
     )
 
+    # --- Activity engine (ERP Phase 9)
+    ACTIVITY_ASSIGNED = "activity.assigned", _("Activity assigned to you")
+    ACTIVITY_COMPLETED = "activity.completed", _("Activity completed")
+    ACTIVITY_REMINDER = "activity.reminder", _("Activity due soon")
+
 
 class NotificationCategory(models.TextChoices):
     ACADEMIC = "academic", _("Coursework and results")
@@ -110,6 +115,9 @@ KIND_CATEGORY: dict[str, str] = {
     NotificationKind.MFA_DISABLED: NotificationCategory.SECURITY,
     NotificationKind.NEW_DEVICE_LOGIN: NotificationCategory.SECURITY,
     NotificationKind.SESSION_REVOKED_BY_ADMIN: NotificationCategory.SECURITY,
+    NotificationKind.ACTIVITY_ASSIGNED: NotificationCategory.SCHEDULE,
+    NotificationKind.ACTIVITY_COMPLETED: NotificationCategory.ACADEMIC,
+    NotificationKind.ACTIVITY_REMINDER: NotificationCategory.SCHEDULE,
 }
 
 

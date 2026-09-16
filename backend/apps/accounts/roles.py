@@ -284,6 +284,28 @@ class Capability(models.TextChoices):
     SESSION_VIEW_ANY = "session.view_any", _("View any user's sessions")
     SESSION_REVOKE_ANY = "session.revoke_any", _("Revoke any user's session")
 
+    # --- Activity engine (ERP Phase 9, PERMISSION_CATALOG.md)
+    #
+    # `activity_type.manage` sits at the administrator rung, same as
+    # `form.manage` beside it — building the catalog is configuration, not a
+    # day-to-day operation. The six `activity.*` rights below are Operations:
+    # a manager and a counsellor both hold view/create/complete (their
+    # day-to-day work with students), a counsellor does not hold
+    # assign/review/delete (mirroring the manager/counsellor split
+    # `_COUNSELLOR_CAPABILITIES` already draws elsewhere), and a trainer holds
+    # view_any/create/complete with no configured scope — which floors to
+    # `assigned` (`apps.authorization.scopes.SCOPE_FLOOR`) the same way every
+    # other trainer capability in this table does, so "a trainer may create,
+    # complete and see activities for their own students" needs no special
+    # case, just an entry in this table.
+    ACTIVITY_TYPE_MANAGE = "activity_type.manage", _("Build the activity catalog")
+    ACTIVITY_VIEW_ANY = "activity.view_any", _("View any activity")
+    ACTIVITY_CREATE = "activity.create", _("Create an activity")
+    ACTIVITY_ASSIGN = "activity.assign", _("Assign an activity")
+    ACTIVITY_COMPLETE = "activity.complete", _("Complete an activity")
+    ACTIVITY_REVIEW = "activity.review", _("Review a completed activity")
+    ACTIVITY_DELETE = "activity.delete", _("Delete an activity")
+
 
 #: Capabilities every authenticated, active user has regardless of role.
 BASE_CAPABILITIES: frozenset[str] = frozenset(
@@ -367,6 +389,12 @@ _MANAGER_CAPABILITIES = frozenset(
         Capability.DATA_IMPORT,
         Capability.POLICY_VIEW,
         Capability.FORM_VIEW,
+        Capability.ACTIVITY_VIEW_ANY,
+        Capability.ACTIVITY_CREATE,
+        Capability.ACTIVITY_ASSIGN,
+        Capability.ACTIVITY_COMPLETE,
+        Capability.ACTIVITY_REVIEW,
+        Capability.ACTIVITY_DELETE,
     }
 )
 
@@ -394,6 +422,7 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.SESSION_VIEW_ANY,
         Capability.SESSION_REVOKE_ANY,
         Capability.FORM_MANAGE,
+        Capability.ACTIVITY_TYPE_MANAGE,
     }
 )
 
@@ -418,6 +447,17 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
 #: narrowing rather than an oversight.
 #:
 #: Superseded: D-106, under which the counsellor held nothing academic.
+#:
+#: `PERMISSION_CATALOG.md`'s own `activity.review`/`activity.delete` rows
+#: show no counsellor tick, read in isolation — but D-130 is the later,
+#: binding word on this pairing ("both can do both, only the sidebar
+#: differs"), enforced by
+#: `tests/test_counsellor_rbac.py::test_a_counsellor_holds_everything_a_manager_does`
+#: for exactly the four exclusions below and no others. Narrowing a
+#: *custom* counsellor-kind role to exclude review/delete (the catalog's
+#: "Placement coordinator" example narrows differently) stays available
+#: through the role builder; the system counsellor role does not start
+#: pre-narrowed there.
 _COUNSELLOR_CAPABILITIES = _MANAGER_CAPABILITIES - frozenset(
     {
         Capability.TRAINER_CREATE,
@@ -441,7 +481,12 @@ ROLE_CAPABILITIES: dict[str, frozenset[str]] = {
     UserRole.COUNSELLOR: BASE_CAPABILITIES | _COUNSELLOR_CAPABILITIES,
     # Trainers and students hold no global management capability. What they may
     # touch comes from per-record assignment, which is the whole point of
-    # §16's "trainer only assigned batches/content".
+    # §16's "trainer only assigned batches/content" — including activities
+    # (ERP Phase 9): a trainer's reach there is resolved per record in
+    # `apps.work.access`, the same shape `apps.dsr.access`/`apps.batches.access`
+    # already use, rather than a capability grant — granting one here would
+    # make a trainer's capability set a strict superset of a student's, which
+    # `test_the_scoped_roles_sit_below_the_ladder` exists specifically to catch.
     UserRole.TRAINER: BASE_CAPABILITIES,
     UserRole.STUDENT: BASE_CAPABILITIES,
 }
