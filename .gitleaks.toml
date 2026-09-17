@@ -50,4 +50,10 @@ regexes = [
   # Fake DSNs used in tests and documentation.
   '''postgres://user:pass@db\.example\.com''',
   '''postgres://grras:CHANGE_ME@''',
+  # `FAKE_MFA_ENCRYPTION_KEY` in backend/tests/test_security_config.py — a
+  # syntactically valid Fernet key generated only to load `production`
+  # settings in a subprocess test (ERP Phase 5); never a real deployment's
+  # MFA_ENCRYPTION_KEY. Fixed value, not a template, so it is matched exactly
+  # rather than by shape (ERP Phase 24 secret-scan sweep).
+  '''3P8O9bNX1ebAYT8WeIHLP4mWS7fFAi-KEMfOf_HI0YE=''',
 ]

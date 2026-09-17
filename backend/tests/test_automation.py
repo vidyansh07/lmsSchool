@@ -779,6 +779,60 @@ class TestSaveTimePermissionCheck:
         assert rule.status == "active"
 
 
+class TestActivateChecksTheActivatorsOwnAuthority:
+    """ERP Phase 24 security sweep (§54 "privilege escalation").
+
+    `services.activate_rule` deliberately re-checks `_require_author_
+    permissions` against the *activator*, not `rule.created_by` — its own
+    docstring explains why: activating is the act that actually lets a
+    rule's actions start running, so it is the activator's own authority
+    being spent. Before this test, nothing in the suite ever called
+    `activate_rule` for any actor at all, so this exact, already-fixed
+    escalation path (`automation.manage` alone letting someone flip on a
+    draft whose actions they could never themselves have authorized) had no
+    regression test standing behind it.
+    """
+
+    def test_activating_someone_elses_draft_without_its_actions_permission_is_refused(
+        self, admin_user, trainer
+    ):
+        rule = services.create_rule(
+            actor=admin_user,
+            name="Needs communication.send to activate",
+            trigger="ACTIVITY_COMPLETED",
+            actions=[
+                {
+                    "type": "send_notification",
+                    "params": {"to": "student", "kind": "activity.completed", "title": "x"},
+                }
+            ],
+        )
+        assert rule.status == "draft"
+
+        with pytest.raises(AuthorityError):
+            services.activate_rule(rule=rule, actor=trainer)
+
+        rule.refresh_from_db()
+        assert rule.status == "draft"
+
+    def test_the_original_author_activating_their_own_rule_still_works(self, admin_user):
+        rule = services.create_rule(
+            actor=admin_user,
+            name="Author activates their own rule",
+            trigger="ACTIVITY_COMPLETED",
+            actions=[
+                {
+                    "type": "send_notification",
+                    "params": {"to": "student", "kind": "activity.completed", "title": "x"},
+                }
+            ],
+        )
+
+        activated = services.activate_rule(rule=rule, actor=admin_user)
+
+        assert activated.status == "active"
+
+
 class TestListCreateViewOverHTTP:
     """A real `client.get(url)` through the DRF view layer, not just a
     `services.*` call: this is the exact gap that let

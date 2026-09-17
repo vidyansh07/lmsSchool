@@ -3,11 +3,12 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from apps.accounts.models import UserRole
+from apps.common.serializers import StrictSerializer
 
 from .services import KIND_LABELS
 
 
-class FeedQuerySerializer(serializers.Serializer):
+class FeedQuerySerializer(StrictSerializer):
     since = serializers.DateField(required=False)
     until = serializers.DateField(required=False)
     actor = serializers.UUIDField(required=False)
@@ -42,7 +43,7 @@ class FeedEntrySerializer(serializers.Serializer):
     context = serializers.JSONField()
 
 
-class ScorecardQuerySerializer(serializers.Serializer):
+class ScorecardQuerySerializer(StrictSerializer):
     period = serializers.ChoiceField(choices=["today", "week", "month", "custom"], default="today")
     since = serializers.DateField(required=False)
     until = serializers.DateField(required=False)

@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, IntegerField, When
 from django.utils import timezone
 
@@ -376,15 +376,31 @@ def recompute_risk(*, enrollment) -> RiskState:
         # the "no previous verdict at all" the model's own docstring
         # promises — set explicitly rather than left to field defaults, so
         # this reads the same whichever one changes later.
-        state = RiskState.objects.create(
-            enrollment=enrollment,
-            level=new_level,
-            triggered=new_triggered,
-            numbers=numbers,
-            computed_at=now,
-            previous_level="",
-            previous_triggered=None,
-        )
+        #
+        # `select_for_update()` above locks a row that already exists; a
+        # brand-new enrolment has none yet, so it acquires nothing, and this
+        # function's own docstring names two callers (the debounced Celery
+        # task and the synchronous `student_360` fallback) that can both
+        # reach a first-ever computation at once. The `RiskState.enrollment`
+        # `OneToOneField` is the real guard in that race — caught here as a
+        # savepoint-scoped `IntegrityError` rather than left to escape as an
+        # unhandled 500, with a plain retry: the other caller's row is now
+        # committed and visible, so re-running this function from scratch
+        # finds it and takes the ordinary update branch below instead
+        # (ERP Phase 24 concurrency sweep).
+        try:
+            with transaction.atomic():
+                state = RiskState.objects.create(
+                    enrollment=enrollment,
+                    level=new_level,
+                    triggered=new_triggered,
+                    numbers=numbers,
+                    computed_at=now,
+                    previous_level="",
+                    previous_triggered=None,
+                )
+        except IntegrityError:
+            return recompute_risk(enrollment=enrollment)
     else:
         existing.previous_level = existing.level
         existing.previous_triggered = existing.triggered

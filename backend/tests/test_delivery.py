@@ -188,6 +188,52 @@ class TestDeliveryLogExcludesOtp:
         assert api_client_no_csrf.get(DELIVERIES_URL).status_code == 403
 
 
+class TestRetryAndCancelAreBranchScoped:
+    """ERP Phase 24 security sweep (§54 "IDOR"): `GET /deliveries/` was
+    already proven branch-scoped above, but nothing exercised the two
+    id-taking mutations on the same model — `_delivery_for` resolves both
+    through the identical `scope_to_branch(..., path="recipient__branch")`
+    queryset, so a manager at branch B naming branch A's delivery id must
+    get the same 404 an outright guess would, and the delivery must be left
+    untouched."""
+
+    def test_retrying_another_branchs_failed_delivery_is_a_404_and_leaves_it_alone(
+        self, manager_user, other_branch_manager, api_client_no_csrf
+    ):
+        delivery = _delivery(state=DeliveryState.FAILED, recipient=other_branch_manager)
+
+        api_client_no_csrf.force_login(manager_user)
+        response = api_client_no_csrf.post(f"{DELIVERIES_URL}{delivery.pk}/retry/")
+
+        assert response.status_code == 404
+        delivery.refresh_from_db()
+        assert delivery.state == DeliveryState.FAILED
+
+    def test_cancelling_another_branchs_queued_delivery_is_a_404_and_leaves_it_alone(
+        self, manager_user, other_branch_manager, api_client_no_csrf
+    ):
+        delivery = _delivery(state=DeliveryState.QUEUED, recipient=other_branch_manager)
+
+        api_client_no_csrf.force_login(manager_user)
+        response = api_client_no_csrf.post(f"{DELIVERIES_URL}{delivery.pk}/cancel/")
+
+        assert response.status_code == 404
+        delivery.refresh_from_db()
+        assert delivery.state == DeliveryState.QUEUED
+
+    def test_the_same_centres_manager_can_still_retry_their_own_delivery(
+        self, manager_user, api_client_no_csrf
+    ):
+        delivery = _delivery(state=DeliveryState.FAILED, recipient=manager_user)
+
+        api_client_no_csrf.force_login(manager_user)
+        response = api_client_no_csrf.post(f"{DELIVERIES_URL}{delivery.pk}/retry/")
+
+        assert response.status_code == 200
+        delivery.refresh_from_db()
+        assert delivery.state == DeliveryState.QUEUED
+
+
 # ---------------------------------------------------------------------------
 # Manual send: confirm_count is always recomputed server-side
 # ---------------------------------------------------------------------------
