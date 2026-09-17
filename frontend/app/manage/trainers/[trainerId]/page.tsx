@@ -2,17 +2,20 @@
 
 /**
  * One trainer, in full — performance figures, the reviews written about
- * them, and the feedback their own students left. The client asked for the
- * student-feedback piece by name, so it is its own section here rather than
- * folded into "reviews": a review is a manager's periodic judgement with a
- * rating attached, a piece of feedback is a student's own remark, and
- * collapsing the two would make it impossible to tell which is which when
- * reading the page.
+ * them, the feedback their own students left, and (Phase 17) a "Work" tab
+ * for a manager's oversight of that trainer's own activity queue. The client
+ * asked for the student-feedback piece by name, so it is its own section
+ * here rather than folded into "reviews": a review is a manager's periodic
+ * judgement with a rating attached, a piece of feedback is a student's own
+ * remark, and collapsing the two would make it impossible to tell which is
+ * which when reading the page.
  *
- * Writing a review happens inline, on this same page — see
- * `components/manage/review-form.tsx` for why a seven-field form is still an
- * inline action here rather than a separate screen: this page *is* the full
- * screen the brief reserves multi-field actions for.
+ * Reviews are read and written through `ReviewsPanel`/`ReviewDialog`
+ * (`components/manage/reviews-panel.tsx`), against the actual performance
+ * register (`GET/POST/PATCH /performance/reviews/`) — not the lean
+ * `overview.reviews` projection `trainer_overview` bakes for a quick read,
+ * which has no `review_type`/`score`/`recommendations`/`next_review_at`/
+ * `status` to edit.
  */
 import Link from 'next/link';
 import { use, useCallback, useEffect, useState } from 'react';
@@ -20,13 +23,14 @@ import { AlertTriangle } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
 import { Stat, StatGrid } from '@/components/manage/stat';
-import { TrainerReviewForm } from '@/components/manage/review-form';
+import { ReviewsPanel } from '@/components/manage/reviews-panel';
+import { TrainerWorkTab } from '@/components/manage/trainer-work-tab';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
 import { fallback, formatDate, formatNumber, formatPercent, NO_DATA, UNKNOWN } from '@/lib/format';
@@ -111,7 +115,7 @@ export function TrainerDetail({ trainerId }: { trainerId: string }) {
   }
 
   if (!overview) return null;
-  const { trainer, batches, students, submission, completion, outcomes, pending, reviews, student_feedback } = overview;
+  const { trainer, batches, students, submission, completion, outcomes, pending, student_feedback } = overview;
 
   return (
     <div className="animate-rise-in space-y-6">
@@ -128,138 +132,144 @@ export function TrainerDetail({ trainerId }: { trainerId: string }) {
 
       <TrainerAttentionBanner overview={overview} />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Workload</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <StatGrid>
-            <Stat label="Batches" value={formatNumber(batches.total)} />
-            <Stat label="Active batches" value={formatNumber(batches.active)} />
-            <Stat label="Students" value={formatNumber(students.total)} />
-            <Stat
-              label="Students at risk"
-              value={formatNumber(students.at_risk)}
-              tone={students.at_risk > 0 ? 'error' : 'default'}
-            />
-          </StatGrid>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="work">Work</TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Submission</CardTitle>
-          <CardDescription>How reliably classes and daily status reports are recorded.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <StatGrid>
-            <Stat label="Attendance taken" value={formatPercent(submission.attendance_rate, { fallbackLabel: NO_DATA })} />
-            <Stat label="DSR submitted" value={formatPercent(submission.dsr_rate, { fallbackLabel: NO_DATA })} />
-            <Stat label="DSR approved on first review" value={formatPercent(submission.dsr_approval_rate, { fallbackLabel: NO_DATA })} />
-          </StatGrid>
-        </CardContent>
-      </Card>
+        <TabsContent value="overview">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Workload</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StatGrid>
+                  <Stat label="Batches" value={formatNumber(batches.total)} />
+                  <Stat label="Active batches" value={formatNumber(batches.active)} />
+                  <Stat label="Students" value={formatNumber(students.total)} />
+                  <Stat
+                    label="Students at risk"
+                    value={formatNumber(students.at_risk)}
+                    tone={students.at_risk > 0 ? 'error' : 'default'}
+                  />
+                </StatGrid>
+              </CardContent>
+            </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Completion</CardTitle>
-          <CardDescription>How much of the required work on this trainer&rsquo;s batches is done.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <StatGrid>
-            <Stat label="Assessments" value={formatPercent(completion.assessments, { fallbackLabel: NO_DATA })} />
-            <Stat label="Assignments" value={formatPercent(completion.assignments, { fallbackLabel: NO_DATA })} />
-            <Stat label="Projects" value={formatPercent(completion.projects, { fallbackLabel: NO_DATA })} />
-          </StatGrid>
-        </CardContent>
-      </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Submission</CardTitle>
+                <CardDescription>How reliably classes and daily status reports are recorded.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <StatGrid>
+                  <Stat label="Attendance taken" value={formatPercent(submission.attendance_rate, { fallbackLabel: NO_DATA })} />
+                  <Stat label="DSR submitted" value={formatPercent(submission.dsr_rate, { fallbackLabel: NO_DATA })} />
+                  <Stat label="DSR approved on first review" value={formatPercent(submission.dsr_approval_rate, { fallbackLabel: NO_DATA })} />
+                </StatGrid>
+              </CardContent>
+            </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Student outcomes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <StatGrid>
-            <Stat label="Average student score" value={formatPercent(outcomes.student_average_score, { fallbackLabel: NO_DATA })} />
-            <Stat label="Average student attendance" value={formatPercent(outcomes.student_attendance_percent, { fallbackLabel: NO_DATA })} />
-          </StatGrid>
-        </CardContent>
-      </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Completion</CardTitle>
+                <CardDescription>How much of the required work on this trainer&rsquo;s batches is done.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <StatGrid>
+                  <Stat label="Assessments" value={formatPercent(completion.assessments, { fallbackLabel: NO_DATA })} />
+                  <Stat label="Assignments" value={formatPercent(completion.assignments, { fallbackLabel: NO_DATA })} />
+                  <Stat label="Projects" value={formatPercent(completion.projects, { fallbackLabel: NO_DATA })} />
+                </StatGrid>
+              </CardContent>
+            </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pending work</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <StatGrid>
-            <Stat label="DSR to submit" value={formatNumber(pending.dsr_to_submit)} />
-            <Stat label="Assignments to grade" value={formatNumber(pending.assignments_to_grade)} />
-            <Stat label="Projects to review" value={formatNumber(pending.projects_to_review)} />
-            <Stat label="Overdue" value={formatNumber(pending.overdue)} tone={pending.overdue > 0 ? 'error' : 'default'} />
-          </StatGrid>
-        </CardContent>
-      </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Student outcomes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StatGrid>
+                  <Stat label="Average student score" value={formatPercent(outcomes.student_average_score, { fallbackLabel: NO_DATA })} />
+                  <Stat label="Average student attendance" value={formatPercent(outcomes.student_attendance_percent, { fallbackLabel: NO_DATA })} />
+                </StatGrid>
+              </CardContent>
+            </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Performance reviews</CardTitle>
-          <CardDescription>What managers have formally recorded about this trainer.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {reviews.length === 0 ? (
-            <EmptyState title="No reviews yet" description="Nobody has recorded a review for this trainer." />
-          ) : (
-            <ul className="stagger divide-y divide-border rounded-[var(--radius-card)] border border-border">
-              {reviews.map((review) => (
-                <li
-                  key={review.id}
-                  className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-muted/40"
-                  data-testid="trainer-review"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-medium">
-                      {formatDate(review.period_start)} – {formatDate(review.period_end)}
-                    </p>
-                    <Badge>{review.rating} / 5</Badge>
-                  </div>
-                  <p className="text-sm">{fallback(review.summary, NO_DATA)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    By {fallback(review.reviewer, UNKNOWN)} · {formatDate(review.created_at)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-          {can(Capability.reviewManageAny) ? <TrainerReviewForm trainerId={trainerId} onSaved={load} /> : null}
-        </CardContent>
-      </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Pending work</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <StatGrid>
+                  <Stat label="DSR to submit" value={formatNumber(pending.dsr_to_submit)} />
+                  <Stat label="Assignments to grade" value={formatNumber(pending.assignments_to_grade)} />
+                  <Stat label="Projects to review" value={formatNumber(pending.projects_to_review)} />
+                  <Stat label="Overdue" value={formatNumber(pending.overdue)} tone={pending.overdue > 0 ? 'error' : 'default'} />
+                </StatGrid>
+              </CardContent>
+            </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Student feedback</CardTitle>
-          <CardDescription>What this trainer&rsquo;s own students have said about them.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {student_feedback.length === 0 ? (
-            <EmptyState title="No feedback yet" description="No student has left feedback for this trainer." />
-          ) : (
-            <ul className="stagger divide-y divide-border rounded-[var(--radius-card)] border border-border">
-              {student_feedback.map((item) => (
-                <li
-                  key={item.id}
-                  className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-muted/40"
-                  data-testid="student-feedback"
-                >
-                  <p className="text-sm">{fallback(item.body, NO_DATA)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {fallback(item.batch_code)} · {formatDate(item.created_at)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Performance reviews</CardTitle>
+                <CardDescription>What managers have formally recorded about this trainer.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ReviewsPanel
+                  subjectType="trainer"
+                  subjectId={trainerId}
+                  canManage={can(Capability.reviewManageAny)}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Student feedback</CardTitle>
+                <CardDescription>What this trainer&rsquo;s own students have said about them.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {student_feedback.length === 0 ? (
+                  <EmptyState title="No feedback yet" description="No student has left feedback for this trainer." />
+                ) : (
+                  <ul className="stagger divide-y divide-border rounded-[var(--radius-card)] border border-border">
+                    {student_feedback.map((item) => (
+                      <li
+                        key={item.id}
+                        className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-muted/40"
+                        data-testid="student-feedback"
+                      >
+                        <p className="text-sm">{fallback(item.body, NO_DATA)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {fallback(item.batch_code)} · {formatDate(item.created_at)}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="work">
+          <Card>
+            <CardHeader>
+              <CardTitle>Work</CardTitle>
+              <CardDescription>
+                This trainer&rsquo;s own activity queue — open one to inspect it or, once it is under
+                review, act on it.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <TrainerWorkTab trainerId={trainerId} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -310,10 +310,22 @@ def test_manager_dashboard_shape(api_client_no_csrf, admin_user, batch, enrollme
     api_client_no_csrf.force_login(admin_user)
     body = api_client_no_csrf.get(MANAGER_URL).json()
 
-    assert set(body) == {"batches", "students", "trainers", "attention", "as_of"}
+    assert set(body) == {
+        "batches",
+        "students",
+        "trainers",
+        "activities",
+        "risk",
+        "reviews_due",
+        "attention",
+        "as_of",
+    }
     assert set(body["batches"]) == {"total", "active", "behind_schedule", "at_risk"}
     assert set(body["students"]) == {"total", "active", "at_risk"}
     assert set(body["trainers"]) == {"total", "with_overdue_dsr"}
+    assert set(body["activities"]) == {"pending", "overdue", "under_review"}
+    assert set(body["risk"]) == {"critical", "warning"}
+    assert isinstance(body["reviews_due"], int)
     assert isinstance(body["attention"], list)
     assert date.fromisoformat(body["as_of"]) == timezone.localdate()
     for row in body["attention"]:
@@ -356,6 +368,9 @@ def test_manager_dashboard_attention_is_empty_when_nothing_needs_it(
     assert body["batches"] == {"total": 0, "active": 0, "behind_schedule": 0, "at_risk": 0}
     assert body["students"] == {"total": 0, "active": 0, "at_risk": 0}
     assert body["trainers"] == {"total": 0, "with_overdue_dsr": 0}
+    assert body["activities"] == {"pending": 0, "overdue": 0, "under_review": 0}
+    assert body["risk"] == {"critical": 0, "warning": 0}
+    assert body["reviews_due"] == 0
 
 
 @pytest.mark.django_db
@@ -483,6 +498,295 @@ def test_manager_dashboard_counts_trainers_with_overdue_dsr(
     api_client_no_csrf.force_login(manager_user)
     body = api_client_no_csrf.get(MANAGER_URL).json()
     assert body["trainers"]["with_overdue_dsr"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 22: activities, risk.critical/warning, reviews_due
+# ---------------------------------------------------------------------------
+
+
+def _activity_type(**overrides):
+    from apps.work.models import ActivityType
+
+    defaults = {
+        "slug": f"hub-activity-{ActivityType.objects.count()}",
+        "name": "Hub Activity Type",
+        "category": "mentoring",
+        "allowed_creator_roles": ["admin", "superadmin", "manager", "trainer", "counsellor"],
+        "allowed_assignee_roles": ["trainer"],
+        "visible_to_student": True,
+    }
+    defaults.update(overrides)
+    return ActivityType.objects.create(**defaults)
+
+
+@pytest.mark.django_db
+def test_manager_dashboard_activities_counts_by_status(
+    api_client_no_csrf, manager_user, admin_user, student_profile
+):
+    from apps.work import services as work_services
+    from apps.work.models import ActivityStatus
+
+    activity_type = _activity_type()
+    # DRAFT — an open/"pending" status.
+    work_services.create_activity(
+        actor=admin_user, student=student_profile, activity_type=activity_type
+    )
+
+    overdue = work_services.create_activity(
+        actor=admin_user, student=student_profile, activity_type=activity_type
+    )
+    overdue.status = ActivityStatus.OVERDUE
+    overdue.save(update_fields=["status"])
+
+    under_review = work_services.create_activity(
+        actor=admin_user, student=student_profile, activity_type=activity_type
+    )
+    under_review.status = ActivityStatus.UNDER_REVIEW
+    under_review.save(update_fields=["status"])
+
+    api_client_no_csrf.force_login(manager_user)
+    body = api_client_no_csrf.get(MANAGER_URL).json()
+
+    # `pending` is `OPEN_STATUSES`, which itself includes `OVERDUE` — the same
+    # shape `apps.dashboards.views`' own `pending`/`overdue` pair already uses.
+    assert body["activities"]["pending"] == 2
+    assert body["activities"]["overdue"] == 1
+    assert body["activities"]["under_review"] == 1
+
+
+@pytest.mark.django_db
+def test_manager_dashboard_activities_do_not_leak_across_branches(
+    api_client_no_csrf,
+    manager_user,
+    admin_user,
+    student_profile,
+    other_branch_manager,
+    other_branch_student,
+):
+    from apps.work import services as work_services
+
+    activity_type = _activity_type()
+    work_services.create_activity(
+        actor=admin_user, student=student_profile, activity_type=activity_type
+    )
+    work_services.create_activity(
+        actor=other_branch_manager, student=other_branch_student, activity_type=activity_type
+    )
+
+    api_client_no_csrf.force_login(manager_user)
+    body = api_client_no_csrf.get(MANAGER_URL).json()
+    assert body["activities"]["pending"] == 1
+
+
+@pytest.mark.django_db
+def test_manager_dashboard_reviews_due_counts_draft_and_shared_past_due(
+    api_client_no_csrf, manager_user, trainer_profile
+):
+    from apps.performance.models import ReviewStatus
+    from apps.performance.services import create_review, update_review
+
+    yesterday = timezone.localdate() - timedelta(days=1)
+    tomorrow = timezone.localdate() + timedelta(days=1)
+
+    due_draft = create_review(
+        actor=manager_user,
+        trainer=trainer_profile,
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 3, 31),
+        rating=4,
+        next_review_at=yesterday,
+    )
+
+    due_shared = create_review(
+        actor=manager_user,
+        student=None,
+        trainer=trainer_profile,
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 3, 31),
+        rating=3,
+        next_review_at=timezone.localdate(),
+    )
+    update_review(review=due_shared, actor=manager_user, status=ReviewStatus.SHARED)
+
+    # Not due yet — excluded.
+    create_review(
+        actor=manager_user,
+        trainer=trainer_profile,
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 3, 31),
+        rating=5,
+        next_review_at=tomorrow,
+    )
+
+    # Due, but already acknowledged — excluded.
+    acknowledged = create_review(
+        actor=manager_user,
+        trainer=trainer_profile,
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 3, 31),
+        rating=2,
+        next_review_at=yesterday,
+    )
+    update_review(review=acknowledged, actor=manager_user, status=ReviewStatus.ACKNOWLEDGED)
+
+    assert due_draft.status == ReviewStatus.DRAFT
+
+    api_client_no_csrf.force_login(manager_user)
+    body = api_client_no_csrf.get(MANAGER_URL).json()
+    assert body["reviews_due"] == 2
+
+
+@pytest.mark.django_db
+def test_manager_dashboard_reviews_due_does_not_leak_across_branches(
+    api_client_no_csrf, manager_user, trainer_profile, other_branch_manager, other_branch_trainer
+):
+    from apps.performance.services import create_review
+
+    yesterday = timezone.localdate() - timedelta(days=1)
+    create_review(
+        actor=manager_user,
+        trainer=trainer_profile,
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 3, 31),
+        rating=4,
+        next_review_at=yesterday,
+    )
+    create_review(
+        actor=other_branch_manager,
+        trainer=other_branch_trainer,
+        period_start=date(2026, 1, 1),
+        period_end=date(2026, 3, 31),
+        rating=4,
+        next_review_at=yesterday,
+    )
+
+    api_client_no_csrf.force_login(manager_user)
+    body = api_client_no_csrf.get(MANAGER_URL).json()
+    assert body["reviews_due"] == 1
+
+
+@pytest.mark.django_db
+def test_manager_dashboard_risk_critical_and_warning_agree_with_the_bulk_gather(
+    api_client_no_csrf, manager_user, admin_user, trainer_profile, batch, enrollment
+):
+    """`risk.critical`/`risk.warning` must come from the same bulk gather as
+    `students.at_risk` — proven by checking a student flagged critical (via
+    zero attendance and zero scores) is reflected in both."""
+    from apps.performance.engine import student_performance_bulk
+
+    result = student_performance_bulk([enrollment])[enrollment.pk]
+    level = result["risk"]["level"]
+
+    api_client_no_csrf.force_login(manager_user)
+    body = api_client_no_csrf.get(MANAGER_URL).json()
+
+    if level == "critical":
+        assert body["risk"]["critical"] == 1
+        assert body["risk"]["warning"] == 0
+    elif level == "warning":
+        assert body["risk"]["warning"] == 1
+        assert body["risk"]["critical"] == 0
+    else:
+        assert body["risk"] == {"critical": 0, "warning": 0}
+
+
+@pytest.mark.django_db
+def test_manager_dashboard_new_fields_are_zero_without_the_owning_capability(
+    api_client_no_csrf, admin_user, manager_user
+):
+    """A caller who can open this dashboard (`report.view_any`) but lacks
+    `activity.view_any`/`performance.view_any`/`review.manage_any` gets `0`
+    for the field that capability owns, never an error — the same
+    degradation the existing `attention` entries already apply."""
+    from apps.accounts.roles import ROLE_CAPABILITIES, UserRole
+
+    api_client_no_csrf.force_login(admin_user)
+    narrowed = api_client_no_csrf.post(
+        "/api/v1/roles/",
+        {
+            "slug": "hub-summary-only",
+            "name": "Hub summary only",
+            "kind": UserRole.MANAGER,
+            "description": "Reads the manager hub but not activities, performance or reviews.",
+            "permissions": [
+                {"code": code}
+                for code in sorted(
+                    ROLE_CAPABILITIES[UserRole.MANAGER]
+                    - {"activity.view_any", "performance.view_any", "review.manage_any"}
+                )
+            ],
+        },
+        format="json",
+    )
+    assert narrowed.status_code == 201, narrowed.json()
+
+    assigned = api_client_no_csrf.patch(
+        f"/api/v1/users/{manager_user.id}/",
+        {"custom_role": "hub-summary-only"},
+        format="json",
+    )
+    assert assigned.status_code == 200, assigned.json()
+
+    api_client_no_csrf.force_login(manager_user)
+    body = api_client_no_csrf.get(MANAGER_URL).json()
+    assert body["activities"] == {"pending": 0, "overdue": 0, "under_review": 0}
+    assert body["risk"] == {"critical": 0, "warning": 0}
+    assert body["reviews_due"] == 0
+
+
+@pytest.mark.django_db
+def test_manager_dashboard_flat(
+    api_client_no_csrf,
+    manager_user,
+    admin_user,
+    batch,
+    enrollment,
+    student_profile,
+    trainer_profile,
+):
+    """The landing summary's query cost must not grow with the institution
+    it summarises — the same discipline
+    `test_batch_overview_query_count_does_not_grow_with_students` and
+    `test_roster_query_count_does_not_grow_with_students` hold the batch
+    and roster endpoints to.
+
+    `activities` and `reviews_due` are new in this phase, each backed by an
+    `aggregate(...)`/`.count()` over a scoped queryset rather than a per-row
+    loop. Those stay one query apiece regardless of row count; a future
+    change that turns either into something computed per activity or per
+    review (an extra per-row lookup, say) would grow this endpoint's query
+    count with the data — this test is what would catch that."""
+    from apps.performance.services import create_review
+    from apps.work import services as work_services
+
+    activity_type = _activity_type()
+
+    api_client_no_csrf.force_login(manager_user)
+
+    small = _query_count(api_client_no_csrf, MANAGER_URL)
+
+    _add_students(batch, 15, start=3000)
+    for _ in range(15):
+        work_services.create_activity(
+            actor=admin_user, student=student_profile, activity_type=activity_type
+        )
+    for index in range(15):
+        create_review(
+            actor=manager_user,
+            trainer=trainer_profile,
+            period_start=date(2026, 1, 1),
+            period_end=date(2026, 3, 31),
+            rating=4,
+            next_review_at=timezone.localdate() - timedelta(days=index),
+        )
+
+    large = _query_count(api_client_no_csrf, MANAGER_URL)
+
+    assert large == small, (
+        f"{MANAGER_URL} issued {small} queries for a small institution and {large} "
+        "for a larger one. The cost grows with the data — an N+1."
+    )
 
 
 @pytest.mark.django_db

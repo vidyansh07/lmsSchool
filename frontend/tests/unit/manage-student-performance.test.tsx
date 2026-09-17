@@ -19,6 +19,15 @@ vi.mock('@/lib/manage', async () => {
   return { ...actual, getBatchPerformance, listFeedback };
 });
 
+const listReviews = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/performance', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/performance')>('@/lib/performance');
+  return { ...actual, listReviews };
+});
+
+const useAuth = vi.hoisted(() => vi.fn());
+vi.mock('@/components/auth-provider', () => ({ useAuth }));
+
 function enrollment(overrides: Partial<Enrollment> = {}): Enrollment {
   return {
     id: 'enrol-1',
@@ -66,6 +75,8 @@ beforeEach(() => {
   getEnrollment.mockReset();
   getBatchPerformance.mockReset();
   listFeedback.mockReset().mockResolvedValue([]);
+  listReviews.mockReset().mockResolvedValue([]);
+  useAuth.mockReset().mockReturnValue({ can: () => true });
 });
 
 describe('StudentPerformance', () => {

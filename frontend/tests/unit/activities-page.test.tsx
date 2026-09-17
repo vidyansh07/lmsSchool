@@ -24,8 +24,10 @@ vi.mock("@/components/work/activity-drawer", () => ({
 
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock("@/components/auth-provider", () => ({ useAuth }));
+const searchParams = vi.hoisted(() => ({ value: new URLSearchParams() }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => searchParams.value,
 }));
 
 function row(overrides: Partial<Activity> = {}): Activity {
@@ -63,6 +65,7 @@ function paginated(results: Activity[]): Paginated<Activity> {
 beforeEach(() => {
   vi.clearAllMocks();
   listActivityTypes.mockResolvedValue({ results: [] });
+  searchParams.value = new URLSearchParams();
   useAuth.mockReturnValue({
     user: { id: "u1", role: "manager", capabilities: ["activity.view_any"] },
     isLoading: false,
@@ -83,6 +86,24 @@ describe("ActivitiesPage", () => {
     expect(
       await screen.findByText("No activities match these filters"),
     ).toBeInTheDocument();
+  });
+
+  it("opens already filtered to the status named in the URL (the dashboard's own drill-down)", async () => {
+    searchParams.value = new URLSearchParams("status=under_review");
+    listActivities.mockResolvedValue(paginated([]));
+    render(<ActivitiesPage />);
+    await waitFor(() =>
+      expect(listActivities).toHaveBeenCalledWith(expect.objectContaining({ status: "under_review" })),
+    );
+    expect(screen.getByRole("combobox", { name: "Status" })).toHaveValue("under_review");
+  });
+
+  it("ignores a status in the URL that is not one this screen recognises", async () => {
+    searchParams.value = new URLSearchParams("status=not-a-real-status");
+    listActivities.mockResolvedValue(paginated([]));
+    render(<ActivitiesPage />);
+    await waitFor(() => expect(listActivities).toHaveBeenCalledOnce());
+    expect(listActivities).toHaveBeenCalledWith(expect.objectContaining({ status: undefined }));
   });
 
   it("shows an error state with a retry that re-fetches", async () => {

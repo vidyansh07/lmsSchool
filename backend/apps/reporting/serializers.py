@@ -118,6 +118,26 @@ class ManagerDashboardTrainersSerializer(StrictSerializer):
     with_overdue_dsr = serializers.IntegerField()
 
 
+class ManagerDashboardActivitiesSerializer(StrictSerializer):
+    """Phase 18 — the institution's activity queue, not the manager's own
+    work: `pending`/`overdue`/`under_review` counts over
+    `apps.work.access.visible_activities`. Zero, not absent, for a caller
+    without `activity.view_any`."""
+
+    pending = serializers.IntegerField()
+    overdue = serializers.IntegerField()
+    under_review = serializers.IntegerField()
+
+
+class ManagerDashboardRiskSerializer(StrictSerializer):
+    """Phase 18 — `critical`/`warning` student counts from the same
+    `_risk_rollup` bulk gather `batches.at_risk`/`students.at_risk` already
+    read; never a second risk computation."""
+
+    critical = serializers.IntegerField()
+    warning = serializers.IntegerField()
+
+
 class ManagerDashboardSerializer(StrictSerializer):
     """The two hubs' landing summary — a KPI strip that summarises the
     drill-down screens beneath it, and the manager's attention queue."""
@@ -125,6 +145,9 @@ class ManagerDashboardSerializer(StrictSerializer):
     batches = ManagerDashboardBatchesSerializer()
     students = ManagerDashboardStudentsSerializer()
     trainers = ManagerDashboardTrainersSerializer()
+    activities = ManagerDashboardActivitiesSerializer()
+    risk = ManagerDashboardRiskSerializer()
+    reviews_due = serializers.IntegerField()
     attention = AttentionItemSerializer(many=True)
     as_of = serializers.CharField()
 

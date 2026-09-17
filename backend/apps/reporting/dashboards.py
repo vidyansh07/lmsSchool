@@ -243,17 +243,32 @@ def _risk_rollup(active_enrollments) -> dict[str, int]:
     for the manager dashboard, one batch for a batch overview, one trainer's
     batches for a trainer overview. What counts as "active" is the caller's
     decision; this only ever reads what it is handed.
+
+    `critical_students`/`warning_students` are the same bulk gather's
+    `risk.level` field, counted by student rather than by enrolment — the
+    same "distinct student ids, not enrolment rows" shape `at_risk_students`
+    already uses. Phase 18's manager dashboard reads these rather than
+    running `student_performance_bulk` a second time for the same figure.
     """
     from apps.performance.engine import student_performance_bulk
+    from apps.performance.models import RiskLevel
 
     rows = list(active_enrollments.select_related("course", "batch"))
     bulk = student_performance_bulk(rows)
     at_risk_student_ids = {row.student_id for row in rows if bulk[row.pk]["risk"]["at_risk"]}
     at_risk_batch_ids = {row.batch_id for row in rows if bulk[row.pk]["risk"]["at_risk"]}
+    critical_student_ids = {
+        row.student_id for row in rows if bulk[row.pk]["risk"]["level"] == RiskLevel.CRITICAL
+    }
+    warning_student_ids = {
+        row.student_id for row in rows if bulk[row.pk]["risk"]["level"] == RiskLevel.WARNING
+    }
     return {
         "active_students": len({row.student_id for row in rows}),
         "at_risk_students": len(at_risk_student_ids),
         "at_risk_batches": len(at_risk_batch_ids),
+        "critical_students": len(critical_student_ids),
+        "warning_students": len(warning_student_ids),
     }
 
 
@@ -466,15 +481,34 @@ def manager_dashboard(user) -> dict[str, Any]:
     design, and a summary counting classes, students and trainers that the page
     below cannot show is not a summary of anything — it is another centre's
     figures, on a screen that looks entirely normal.
+
+    `activities`, `risk.critical`/`risk.warning` and `reviews_due` (Phase 18)
+    follow the same per-capability degradation `attention` already uses, just
+    as top-level fields rather than queue entries: a caller without
+    `activity.view_any` gets `activities: {0, 0, 0}` rather than a 403 or an
+    absent key, because this dashboard is one screen shared by every capability
+    tier that may open it, and a missing key is exactly the "undefined to the
+    UI" the standing rules forbid. `activities` reads
+    `apps.work.access.visible_activities` — the manager's own institutional
+    reach, not narrowed to the activities they personally created or hold, the
+    way `apps.dashboards.views`' "my own work" tiles are; a manager oversees
+    this queue, they do not personally work it. `reviews_due` is a distinct
+    count from `activities.under_review`: the former is
+    `apps.performance.models.PerformanceReview` rows awaiting the subject's
+    acknowledgement, the latter is Phase 9's activity-review workflow, and nothing
+    here merges the two.
     """
     from apps.accounts.roles import Capability, has_capability
     from apps.batches.models import BatchStatus
     from apps.dsr import access as dsr_access
     from apps.dsr.models import DSRStatus
     from apps.enrollments.models import EnrollmentStatus
-    from apps.performance.models import PerformanceReview, PerformanceSubjectType
+    from apps.performance import access as performance_access
+    from apps.performance.models import PerformanceReview, PerformanceSubjectType, ReviewStatus
     from apps.students import access as students_access
     from apps.trainers import access as trainers_access
+    from apps.work import access as work_access
+    from apps.work.models import OPEN_STATUSES, ActivityStatus
 
     from . import access
 
@@ -485,6 +519,29 @@ def manager_dashboard(user) -> dict[str, Any]:
     active_batches = batches.filter(status=BatchStatus.ACTIVE)
     behind_ids = _behind_schedule_batch_ids(active_batches)
     risk = _risk_rollup(access.visible_enrollments(user).filter(status=EnrollmentStatus.ACTIVE))
+
+    if has_capability(user, Capability.ACTIVITY_VIEW_ANY):
+        activity_counts = work_access.visible_activities(user).aggregate(
+            pending=Count("id", filter=Q(status__in=OPEN_STATUSES)),
+            overdue=Count("id", filter=Q(status=ActivityStatus.OVERDUE)),
+            under_review=Count("id", filter=Q(status=ActivityStatus.UNDER_REVIEW)),
+        )
+    else:
+        activity_counts = {"pending": 0, "overdue": 0, "under_review": 0}
+
+    if has_capability(user, Capability.PERFORMANCE_VIEW_ANY) or has_capability(
+        user, Capability.REVIEW_MANAGE_ANY
+    ):
+        reviews_due = (
+            performance_access.visible_reviews(user)
+            .filter(
+                next_review_at__lte=today,
+                status__in=(ReviewStatus.DRAFT, ReviewStatus.SHARED),
+            )
+            .count()
+        )
+    else:
+        reviews_due = 0
 
     attention: list[dict[str, Any]] = []
 
@@ -558,6 +615,8 @@ def manager_dashboard(user) -> dict[str, Any]:
                 }
             )
 
+    performance_visible = has_capability(user, Capability.PERFORMANCE_VIEW_ANY)
+
     return {
         "batches": {
             "total": batches.count(),
@@ -574,6 +633,16 @@ def manager_dashboard(user) -> dict[str, Any]:
             "total": trainers.count(),
             "with_overdue_dsr": _overdue_dsr_trainer_count(batches),
         },
+        "activities": {
+            "pending": activity_counts["pending"],
+            "overdue": activity_counts["overdue"],
+            "under_review": activity_counts["under_review"],
+        },
+        "risk": {
+            "critical": risk["critical_students"] if performance_visible else 0,
+            "warning": risk["warning_students"] if performance_visible else 0,
+        },
+        "reviews_due": reviews_due,
         "attention": attention,
         "as_of": today.isoformat(),
     }

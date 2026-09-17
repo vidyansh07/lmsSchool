@@ -5,16 +5,55 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TrainerDetail } from '@/app/manage/trainers/[trainerId]/page';
 import { ApiError } from '@/lib/api';
 import type { TrainerOverview } from '@/lib/manage';
+import type { PerformanceReview } from '@/types/api';
 
 const getTrainerOverview = vi.hoisted(() => vi.fn());
-const createTrainerReview = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/manage', async () => {
   const actual = await vi.importActual<typeof import('@/lib/manage')>('@/lib/manage');
-  return { ...actual, getTrainerOverview, createTrainerReview };
+  return { ...actual, getTrainerOverview };
+});
+
+const listReviews = vi.hoisted(() => vi.fn());
+const createReview = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/performance', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/performance')>('@/lib/performance');
+  return { ...actual, listReviews, createReview };
 });
 
 const mockAuth = vi.hoisted(() => ({ value: { can: () => true } as { can: (capability: string) => boolean } }));
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => mockAuth.value }));
+
+function review(overrides: Partial<PerformanceReview> = {}): PerformanceReview {
+  return {
+    id: 'review-1',
+    subject_type: 'trainer',
+    review_type: 'monthly',
+    student: null,
+    student_code: null,
+    student_name: null,
+    trainer: 'trainer-1',
+    trainer_code: 'GRS-T-001',
+    trainer_name: 'Tina Trainer',
+    period_start: '2026-06-01',
+    period_end: '2026-06-30',
+    rating: 4,
+    score: null,
+    summary: 'Consistently strong.',
+    strengths: '',
+    concerns: '',
+    weaknesses: '',
+    actions: '',
+    recommendations: '',
+    next_review_at: null,
+    status: 'shared',
+    snapshot: {},
+    reviewer: 'user-1',
+    reviewer_name: 'Manager One',
+    created_at: '2026-07-01T00:00:00Z',
+    updated_at: '2026-07-01T00:00:00Z',
+    ...overrides,
+  };
+}
 
 function overview(overrides: Partial<TrainerOverview> = {}): TrainerOverview {
   return {
@@ -46,7 +85,9 @@ function overview(overrides: Partial<TrainerOverview> = {}): TrainerOverview {
 
 beforeEach(() => {
   getTrainerOverview.mockReset();
-  createTrainerReview.mockReset();
+  listReviews.mockReset();
+  listReviews.mockResolvedValue([review()]);
+  createReview.mockReset();
   mockAuth.value = { can: () => true };
 });
 
@@ -59,16 +100,26 @@ describe('TrainerDetail', () => {
     expect(screen.getByText('95%')).toBeInTheDocument();
   });
 
-  it('renders the reviews written about this trainer', async () => {
+  it('renders the reviews written about this trainer, from the real register', async () => {
     getTrainerOverview.mockResolvedValue(overview());
     render(<TrainerDetail trainerId="trainer-1" />);
     await waitFor(() => expect(screen.getByText('Consistently strong.')).toBeInTheDocument());
     expect(screen.getByText('4 / 5')).toBeInTheDocument();
     expect(screen.getByText(/Manager One/)).toBeInTheDocument();
+    expect(listReviews).toHaveBeenCalledOnce();
+  });
+
+  it('scopes the reviews list to this trainer only, not every visible review', async () => {
+    listReviews.mockResolvedValue([review({ id: 'review-1', trainer: 'trainer-1' }), review({ id: 'review-2', trainer: 'trainer-2', summary: 'About someone else.' })]);
+    getTrainerOverview.mockResolvedValue(overview());
+    render(<TrainerDetail trainerId="trainer-1" />);
+    await waitFor(() => expect(screen.getByText('Consistently strong.')).toBeInTheDocument());
+    expect(screen.queryByText('About someone else.')).not.toBeInTheDocument();
   });
 
   it('says plainly when there are no reviews yet', async () => {
-    getTrainerOverview.mockResolvedValue(overview({ reviews: [] }));
+    listReviews.mockResolvedValue([]);
+    getTrainerOverview.mockResolvedValue(overview());
     render(<TrainerDetail trainerId="trainer-1" />);
     await waitFor(() => expect(screen.getByText('No reviews yet')).toBeInTheDocument());
   });
@@ -90,32 +141,27 @@ describe('TrainerDetail', () => {
     getTrainerOverview.mockResolvedValue(overview());
     render(<TrainerDetail trainerId="trainer-1" />);
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Tina Trainer' })).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /write a review/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /new review/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
   });
 
-  it('writes a review inline and reloads the trainer afterwards', async () => {
+  it('writes a review inline and reloads the reviews list afterwards', async () => {
     getTrainerOverview.mockResolvedValue(overview());
-    createTrainerReview.mockResolvedValue({
-      id: 'review-2',
-      period_start: '2026-07-01',
-      period_end: '2026-07-31',
-      rating: 5,
-      summary: 'Great month.',
-      reviewer_name: 'Manager One',
-      created_at: '2026-08-01T00:00:00Z',
-    });
+    createReview.mockResolvedValue(
+      review({ id: 'review-2', period_start: '2026-07-01', period_end: '2026-07-31', rating: 5, summary: 'Great month.' }),
+    );
     const user = userEvent.setup();
     render(<TrainerDetail trainerId="trainer-1" />);
-    await waitFor(() => expect(screen.getByRole('button', { name: /write a review/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /new review/i })).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /write a review/i }));
+    await user.click(screen.getByRole('button', { name: /new review/i }));
     await user.type(screen.getByLabelText('Period start', { exact: false }), '2026-07-01');
     await user.type(screen.getByLabelText('Period end', { exact: false }), '2026-07-31');
     await user.click(screen.getByRole('radio', { name: '5' }));
     await user.click(screen.getByRole('button', { name: /save review/i }));
 
-    await waitFor(() => expect(createTrainerReview).toHaveBeenCalledWith(expect.objectContaining({ trainer: 'trainer-1' })));
-    await waitFor(() => expect(getTrainerOverview).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(createReview).toHaveBeenCalledWith(expect.objectContaining({ trainer: 'trainer-1' })));
+    await waitFor(() => expect(listReviews).toHaveBeenCalledTimes(2));
   });
 
   it('shows a not-found state for a trainer that does not exist or is not visible', async () => {

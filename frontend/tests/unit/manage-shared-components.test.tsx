@@ -15,6 +15,9 @@ function dashboard(overrides: Partial<ManagerDashboard> = {}): ManagerDashboard 
     students: { total: 100, active: 90, at_risk: 5 },
     trainers: { total: 12, with_overdue_dsr: 1 },
     attention: [],
+    activities: { pending: 4, overdue: 2, under_review: 3 },
+    risk: { critical: 2, warning: 6 },
+    reviews_due: 5,
     as_of: '2026-09-07',
     ...overrides,
   };
@@ -124,5 +127,43 @@ describe('ManagerAttentionStrip', () => {
     render(<ManagerAttentionStrip />);
     const link = screen.getByRole('link', { name: /Batches behind schedule/ });
     expect(link).toHaveAttribute('href', '/manage/batches?status=active');
+  });
+
+  it('renders the activities/risk/reviews_due figures as real counts, each linking to its own list', async () => {
+    mockUseApi.mockReturnValue({ data: dashboard(), error: null, isLoading: false, reload: vi.fn() });
+    render(<ManagerAttentionStrip />);
+
+    expect(screen.getByText('Activities awaiting review')).toBeInTheDocument();
+    expect(await screen.findByText('3')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Activities awaiting review/ })).toHaveAttribute(
+      'href',
+      '/activities?status=under_review',
+    );
+
+    expect(screen.getByText('Critical risk flags')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Critical risk flags/ })).toHaveAttribute(
+      'href',
+      '/manage/batches?attention=at_risk',
+    );
+
+    expect(screen.getByText('Reviews due')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Reviews due/ })).toHaveAttribute('href', '/manage/reviews');
+  });
+
+  it('renders zero, never a blank or NaN, when the caller has nothing to count', async () => {
+    mockUseApi.mockReturnValue({
+      data: dashboard({
+        activities: { pending: 0, overdue: 0, under_review: 0 },
+        risk: { critical: 0, warning: 0 },
+        reviews_due: 0,
+      }),
+      error: null,
+      isLoading: false,
+      reload: vi.fn(),
+    });
+    render(<ManagerAttentionStrip />);
+    expect(screen.queryByText('NaN')).not.toBeInTheDocument();
+    expect(screen.queryByText('undefined')).not.toBeInTheDocument();
+    expect(await screen.findAllByText('0')).not.toHaveLength(0);
   });
 });

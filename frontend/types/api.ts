@@ -2503,6 +2503,61 @@ export interface ActivityDetail extends Activity {
   automation_run: string | null;
 }
 
+// --- Performance reviews (ERP Phase 12; authoring UI added Phase 17) --------
+//
+// `PerformanceReviewSerializer` (`apps/performance/serializers.py`) — every
+// field below is `read_only` there, so this is the one shape shared by both
+// a read (`GET /performance/reviews/`, `GET /performance/reviews/{id}/`) and
+// what a write echoes back. The write payloads (`ReviewWriteSerializer`,
+// `ReviewUpdateSerializer`) are narrower and live in `lib/performance.ts`
+// next to the calls that use them, not here, matching how `CreateActivityFromDsrPayload`
+// above sits beside its own endpoint rather than duplicating this file's
+// read shape.
+
+export type PerformanceSubjectType = 'student' | 'trainer';
+
+export type ReviewType = 'monthly' | 'quarterly' | 'probation' | 'ad_hoc' | 'placement';
+
+/** A plain lifecycle field, not an enforced state machine — `update_review`
+ *  allows setting any value, same as `rating` or `summary`. */
+export type ReviewStatus = 'draft' | 'shared' | 'acknowledged';
+
+/**
+ * One performance review, exactly as `PerformanceReviewSerializer` returns
+ * it. `weaknesses` is not a second column — it is `PerformanceReview
+ * .concerns` under its other name (`DATA_MODEL.md`: "not renamed; serializer
+ * exposes both"), so a form binds to whichever name it prefers and never
+ * sends both with different values (the write serializers reject that).
+ */
+export interface PerformanceReview {
+  id: string;
+  subject_type: PerformanceSubjectType;
+  review_type: ReviewType;
+  student: string | null;
+  student_code: string | null;
+  student_name: string | null;
+  trainer: string | null;
+  trainer_code: string | null;
+  trainer_name: string | null;
+  period_start: string;
+  period_end: string;
+  rating: number;
+  score: string | null;
+  summary: string;
+  strengths: string;
+  concerns: string;
+  weaknesses: string;
+  actions: string;
+  recommendations: string;
+  next_review_at: string | null;
+  status: ReviewStatus;
+  snapshot: Record<string, unknown>;
+  reviewer: string | null;
+  reviewer_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // --- DSR extensions (ERP Phase 15: create-activity, change history) -------
 //
 // The DSR model itself and its read/write payloads live entirely in

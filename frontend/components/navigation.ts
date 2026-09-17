@@ -207,6 +207,12 @@ export const STAFF_NAV: NavGroup[] = [
         capability: Capability.performanceViewAny,
       },
       {
+        href: "/manage/reviews",
+        label: "Reviews due",
+        icon: ClipboardCheck,
+        capability: Capability.performanceViewAny,
+      },
+      {
         href: "/dsr",
         label: "Daily reports",
         icon: FileText,
@@ -524,6 +530,12 @@ export const ADMIN_NAV: NavGroup[] = [
         href: "/manage/batches",
         label: "Batch review",
         icon: Layers,
+        capability: Capability.performanceViewAny,
+      },
+      {
+        href: "/manage/reviews",
+        label: "Reviews due",
+        icon: ClipboardCheck,
         capability: Capability.performanceViewAny,
       },
       {

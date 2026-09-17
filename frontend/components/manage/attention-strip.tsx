@@ -4,19 +4,26 @@
  * The one KPI strip both hubs share, sitting above the table on each.
  *
  * The brief this answers to is specific: a summary of the page below it, not
- * a destination in its own right — so the headline figures here are plain
- * `KpiTile`s with nowhere to click, and only the named exceptions in
- * `attention` (a batch behind schedule, a trainer with an overdue report) are
- * links, because those are the one thing on this strip actually worth
- * drilling into. Nobody navigates to a number; people navigate to a named
- * problem.
+ * a destination in its own right — so the original four headline figures
+ * here are plain `KpiTile`s with nowhere to click, and only the named
+ * exceptions in `attention` (a batch behind schedule, a trainer with an
+ * overdue report) are links, because those are the one thing on this strip
+ * actually worth drilling into. Nobody navigates to a number; people
+ * navigate to a named problem.
+ *
+ * ERP Phase 18 adds three more figures — `activities`, `risk`,
+ * `reviews_due` — that break this rule on purpose: each of them *is* a named
+ * problem already ("activities awaiting your review", "critical-risk
+ * flags", "reviews due"), so they carry `href` and render as the same
+ * `StatCard` the four originals use, just with its already-supported link
+ * affordance turned on rather than a new tile shape invented for them.
  *
  * Self-fetching rather than fed by props: both hub pages want the exact same
  * data, and a component that loads itself means neither page carries the
  * loading/error wiring for a summary the page below it doesn't otherwise
  * need.
  */
-import { AlertTriangle, CalendarClock, ClipboardX, Layers } from 'lucide-react';
+import { AlertTriangle, CalendarClock, ClipboardCheck, ClipboardX, ListChecks, Layers } from 'lucide-react';
 
 import { AlertList, type AlertItem, type AlertSeverity } from '@/components/alert-list';
 import { ErrorState, LoadingState } from '@/components/states';
@@ -91,6 +98,36 @@ export function ManagerAttentionStrip() {
       hint: 'No report filed for a past class',
       deltaIntent: 'down-is-good' as const,
     },
+    {
+      label: 'Activities awaiting review',
+      accent: 'blue' as const,
+      value: data.activities.under_review,
+      icon: ListChecks,
+      hint: `${data.activities.pending} pending · ${data.activities.overdue} overdue`,
+      deltaIntent: 'down-is-good' as const,
+      href: '/activities?status=under_review',
+    },
+    {
+      label: 'Critical risk flags',
+      accent: 'rose' as const,
+      value: data.risk.critical,
+      icon: AlertTriangle,
+      hint: `${data.risk.warning} warning-level`,
+      deltaIntent: 'down-is-good' as const,
+      // The exact href the existing `students_at_risk` attention entry
+      // already links to (`apps/reporting/dashboards.py::manager_dashboard`)
+      // — one drill-down target for "at risk", not a second one.
+      href: '/manage/batches?attention=at_risk',
+    },
+    {
+      label: 'Reviews due',
+      accent: 'violet' as const,
+      value: data.reviews_due,
+      icon: ClipboardCheck,
+      hint: 'Performance reviews due for action',
+      deltaIntent: 'down-is-good' as const,
+      href: '/manage/reviews',
+    },
   ];
 
   return (
@@ -105,6 +142,7 @@ export function ManagerAttentionStrip() {
               hint={figure.hint}
               deltaIntent={figure.deltaIntent}
               accent={figure.accent}
+              href={'href' in figure ? figure.href : undefined}
             />
           </BentoTile>
         ))}

@@ -23,7 +23,8 @@
  * deliberately absent from the counsellor role.
  */
 
-import { apiFetch } from './api';
+import { apiFetch, apiMutate } from './api';
+import type { PerformanceReview, ReviewStatus, ReviewType } from '@/types/api';
 
 /** A single risk rule's verdict — mirrors `apps.performance.risk.RiskOutcome`. */
 export interface PerformanceRiskOutcome {
@@ -119,4 +120,74 @@ export async function getMyPerformance(): Promise<StudentPerformanceEntry[]> {
  */
 export async function listMyFeedback(): Promise<PerformanceFeedback[]> {
   return apiFetch<PerformanceFeedback[]>('/api/v1/performance/feedback/');
+}
+
+// --- Performance reviews (`ReviewListView`/`ReviewDetailView`, Phase 12) ---
+//
+// The register a manager writes to — `PerformanceReview` (`types/api.ts`).
+// `list`/`create` share one endpoint the same way `Feedback` does, and for
+// the same reason `listFeedback` in `lib/manage.ts` reads the whole visible
+// set rather than filtering server-side: `ReviewListView.get` takes no query
+// parameters at all yet, so a caller narrows to one subject client-side, on
+// `student`/`trainer` (uuid) — never by trusting a `student_code`/
+// `trainer_code` string alone, which is a display field, not an id.
+
+/** `ReviewWriteSerializer` — `student` xor `trainer` (enforced in the
+ *  service, not here); `period_start`/`period_end`/`rating` are the only
+ *  fields that endpoint actually requires. `weaknesses` and `concerns` are
+ *  the same underlying column (`_merge_weaknesses_alias`) — send one, not
+ *  both with different values. */
+export interface ReviewWritePayload {
+  student?: string;
+  trainer?: string;
+  review_type?: ReviewType;
+  period_start: string;
+  period_end: string;
+  rating: number;
+  score?: string | null;
+  summary?: string;
+  strengths?: string;
+  weaknesses?: string;
+  actions?: string;
+  recommendations?: string;
+  next_review_at?: string | null;
+}
+
+/** `ReviewUpdateSerializer` — every field optional; the subject, reviewer
+ *  and snapshot never change once written. */
+export type ReviewUpdatePayload = Partial<Omit<ReviewWritePayload, 'student' | 'trainer'>> & {
+  status?: ReviewStatus;
+};
+
+/**
+ * Every review the caller may see (`access.visible_reviews`) — everyone's
+ * for a role holding `review.manage_any`/`performance.view_any`, or only
+ * their own as a subject. Newest period first, matching the endpoint's own
+ * ordering.
+ */
+export async function listReviews(): Promise<PerformanceReview[]> {
+  return apiFetch<PerformanceReview[]>('/api/v1/performance/reviews/');
+}
+
+export async function getReview(reviewId: string): Promise<PerformanceReview> {
+  return apiFetch<PerformanceReview>(`/api/v1/performance/reviews/${reviewId}/`);
+}
+
+/** `review.manage_any` required — refused with a 403 (surfaced as an
+ *  `ApiError`) for anyone else, same as every other manager-only write. */
+export async function createReview(payload: ReviewWritePayload): Promise<PerformanceReview> {
+  return apiMutate<PerformanceReview>('/api/v1/performance/reviews/', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export async function updateReview(
+  reviewId: string,
+  payload: ReviewUpdatePayload,
+): Promise<PerformanceReview> {
+  return apiMutate<PerformanceReview>(`/api/v1/performance/reviews/${reviewId}/`, {
+    method: 'PATCH',
+    body: payload,
+  });
 }

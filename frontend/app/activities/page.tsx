@@ -26,7 +26,8 @@
  * *unsubmitted name* does.
  */
 
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { Bookmark } from "lucide-react";
 
 import { RequireAuth } from "@/components/require-auth";
@@ -115,8 +116,27 @@ interface ListState {
   isLoading: boolean;
 }
 
+/**
+ * The dashboard's `activities.under_review` tile (and any other future
+ * link into this screen) opens `/activities?status=under_review` — a plain
+ * status filter is the one URL entry point this screen supports on load,
+ * matching `?attention=…` on the batches/trainers hubs
+ * (`app/manage/trainers/page.tsx`). Anything not in this screen's own
+ * `STATUSES` vocabulary is ignored rather than reaching `listActivities` as
+ * an unvalidated string, the same rule `parseSavedActivityFilters` already
+ * applies to a saved filter's `status`.
+ */
+function initialFiltersFromParams(params: URLSearchParams): Filters {
+  const status = params.get("status");
+  return {
+    ...DEFAULT_FILTERS,
+    status: status && (STATUSES as string[]).includes(status) ? (status as ActivityStatus) : "",
+  };
+}
+
 function ActivitiesWorkspace() {
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState<Filters>(() => initialFiltersFromParams(searchParams));
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [types, setTypes] = useState<ActivityType[]>([]);
 
@@ -506,7 +526,9 @@ function ActivitiesWorkspace() {
 export default function ActivitiesPage() {
   return (
     <RequireAuth capability={Capability.activityViewAny} roles={["trainer"]}>
-      <ActivitiesWorkspace />
+      <Suspense fallback={<LoadingState label="Loading activities…" rows={6} />}>
+        <ActivitiesWorkspace />
+      </Suspense>
     </RequireAuth>
   );
 }

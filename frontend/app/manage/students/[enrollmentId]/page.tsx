@@ -38,6 +38,8 @@ import { useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
+import { useAuth } from '@/components/auth-provider';
+import { ReviewsPanel } from '@/components/manage/reviews-panel';
 import { Stat, StatGrid } from '@/components/manage/stat';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
@@ -151,6 +153,7 @@ export function StudentPerformance({
    *  unit-tested behaviour. */
   variant?: 'standalone' | 'embedded';
 }) {
+  const { can } = useAuth();
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [performance, setPerformance] = useState<StudentPerformanceRow | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
@@ -208,6 +211,7 @@ export function StudentPerformance({
 
   if (!enrollment) return null;
   const studentCode = enrollment.student_code ?? null;
+  const studentId = enrollment.student_id ?? null;
 
   return (
     <div className={variant === 'standalone' ? 'animate-rise-in space-y-6' : 'space-y-6'}>
@@ -330,6 +334,23 @@ export function StudentPerformance({
           </Card>
         </>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Performance reviews</CardTitle>
+          <CardDescription>What managers have formally recorded about this student.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {studentId ? (
+            <ReviewsPanel subjectType="student" subjectId={studentId} canManage={can(Capability.reviewManageAny)} />
+          ) : (
+            <EmptyState
+              title="Reviews are not available here"
+              description="This view has no linked student record to record a review against."
+            />
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

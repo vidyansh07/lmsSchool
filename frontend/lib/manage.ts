@@ -65,6 +65,26 @@ export interface ManagerDashboard {
   students: { total: number; active: number; at_risk: number };
   trainers: { total: number; with_overdue_dsr: number };
   attention: ManagerAttentionItem[];
+  /**
+   * Composed from Phase 9's own activity engine (`apps.work.access
+   * .visible_activities`) — every figure on this dashboard is queryset-first,
+   * and this is no exception. `under_review` is the actionable subset a
+   * manager can approve/`requires_action` on (Phase 9's review panel);
+   * `pending`/`overdue` are informational context beside it. Always a real
+   * integer, 0 when the caller lacks `activity.view_any` or there is
+   * genuinely nothing to count — never `null`/`undefined`.
+   */
+  activities: { pending: number; overdue: number; under_review: number };
+  /**
+   * Severity counts from Phase 13's risk engine (`apps.performance.risk`),
+   * not a second definition of "at risk": `students.at_risk` above already
+   * counts distinct flagged students; this is the same underlying flags
+   * split by the severity the engine itself assigns each one.
+   */
+  risk: { critical: number; warning: number };
+  /** Count of `PerformanceReview`s (Phase 12) due for this caller's scope —
+   *  0 when the caller lacks `performance.view_any`. */
+  reviews_due: number;
   as_of: string;
 }
 

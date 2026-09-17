@@ -36,6 +36,8 @@ import type {
   PolicyCategory,
   Qualification,
   RequirementStatus,
+  ReviewStatus,
+  ReviewType,
   RiskLevel,
   RiskSeverity,
   UserRole,
@@ -590,3 +592,31 @@ export const AUTOMATION_RUN_STATUS_VARIANT: Record<
   skipped: "warning",
   failed: "error",
 };
+
+export const REVIEW_TYPE_LABEL: Record<ReviewType, string> = {
+  monthly: "Monthly",
+  quarterly: "Quarterly",
+  probation: "Probation",
+  ad_hoc: "Ad hoc",
+  placement: "Placement",
+};
+
+export const REVIEW_TYPE_OPTIONS: { value: ReviewType; label: string }[] = (
+  Object.keys(REVIEW_TYPE_LABEL) as ReviewType[]
+).map((value) => ({ value, label: REVIEW_TYPE_LABEL[value] }));
+
+export const REVIEW_STATUS_LABEL: Record<ReviewStatus, string> = {
+  draft: "Draft",
+  shared: "Shared",
+  acknowledged: "Acknowledged",
+};
+
+export const REVIEW_STATUS_VARIANT: Record<ReviewStatus, "neutral" | "success" | "warning"> = {
+  draft: "neutral",
+  shared: "warning",
+  acknowledged: "success",
+};
+
+export const REVIEW_STATUS_OPTIONS: { value: ReviewStatus; label: string }[] = (
+  Object.keys(REVIEW_STATUS_LABEL) as ReviewStatus[]
+).map((value) => ({ value, label: REVIEW_STATUS_LABEL[value] }));
