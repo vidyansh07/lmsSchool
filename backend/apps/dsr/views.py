@@ -14,7 +14,10 @@ same question `visible_dsrs` would have answered had the row already existed.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import django_filters
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status as http_status
@@ -23,15 +26,27 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.roles import Capability, has_capability
+from apps.audit.models import AuditLog
 from apps.batches import access as batch_access
 from apps.common.deletion import soft_delete
+from apps.common.exceptions import ApplicationError
 from apps.common.permissions import IsActiveUser
 from apps.courses.models import Module
+from apps.enrollments.models import Enrollment, EnrollmentStatus
 from apps.sessions import access as session_access
+from apps.students import access as students_access
+from apps.work.serializers import ActivityDetailSerializer
 
 from . import access, services
 from .models import DSR
-from .serializers import DSRDeleteSerializer, DSRReviewSerializer, DSRSerializer, DSRWriteSerializer
+from .serializers import (
+    DSRCreateActivitySerializer,
+    DSRDeleteSerializer,
+    DSRHistorySerializer,
+    DSRReviewSerializer,
+    DSRSerializer,
+    DSRWriteSerializer,
+)
 
 DSR_TAG = ["dsr"]
 
@@ -367,3 +382,105 @@ class BatchDSRListView(ListAPIView):
     @extend_schema(summary="Daily status reports for a batch", tags=DSR_TAG)
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
+
+
+class DSRCreateActivityView(APIView):
+    """ "Create an activity from this class" (IMPLEMENTATION_PLAN.md, row 15).
+
+    A convenience wrapper, not a new creation path: it resolves the report's
+    own batch/course context and the caller-named student's enrolment on
+    that batch, then calls `apps.work.services.create_activity` directly —
+    the real, validated function, inheriting its own allowed-role and scope
+    checks unchanged. Nothing here duplicates that validation, and nothing
+    here writes its own audit row: `create_activity` already writes one.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Create an activity from a daily status report",
+        request=DSRCreateActivitySerializer,
+        responses={201: ActivityDetailSerializer},
+        tags=DSR_TAG,
+    )
+    def post(self, request, dsr_id):
+        dsr = _dsr_for(request, dsr_id)
+        # The same authority `access.py` already grants over this exact
+        # report: the trainer whose class it is (regardless of status — this
+        # is not an edit to the report itself), or a reviewer who may act on
+        # it.
+        if not (
+            access.can_write_dsr(request.user, dsr, ignore_status=True)
+            or access.can_review_dsr(request.user, dsr)
+        ):
+            return _forbidden(request, "You cannot create an activity from this report.")
+
+        serializer = DSRCreateActivitySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        student = get_object_or_404(
+            students_access.visible_students(request.user), pk=data["student"]
+        )
+        enrollment = (
+            Enrollment.objects.filter(
+                student=student,
+                batch=dsr.batch,
+                status__in=(EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED),
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if enrollment is None:
+            raise ApplicationError(
+                {"student": ["This student is not enrolled in this class's batch."]}
+            )
+
+        from apps.work import access as work_access
+        from apps.work import services as work_services
+        from apps.work.models import ActivityType
+
+        activity_type = get_object_or_404(ActivityType.objects.all(), slug=data["activity_type"])
+        due_at = None
+        if data.get("due_in_days") is not None:
+            due_at = timezone.now() + timedelta(days=data["due_in_days"])
+
+        activity = work_services.create_activity(
+            actor=request.user,
+            student=student,
+            activity_type=activity_type,
+            enrollment=enrollment,
+            title=data.get("title") or None,
+            due_at=due_at,
+        )
+        detail = get_object_or_404(work_access.visible_activities(request.user), pk=activity.pk)
+        return Response(
+            ActivityDetailSerializer(detail, context={"as_student": False}).data,
+            status=http_status.HTTP_201_CREATED,
+        )
+
+
+class DSRHistoryView(APIView):
+    """Every audited change to one report, newest first.
+
+    `docs/erp/DATA_MODEL.md`'s "ChangeHistory" note: no table of its own, a
+    queryset over `AuditLog` filtered by `resource_type`/`resource_id`.
+    Gated exactly like the report's own detail view — the same
+    `visible_dsrs` queryset `_dsr_for` already resolves against.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="A daily status report's change history",
+        responses={200: DSRHistorySerializer(many=True)},
+        tags=DSR_TAG,
+    )
+    def get(self, request, dsr_id):
+        dsr = _dsr_for(request, dsr_id)
+        rows = (
+            AuditLog.objects.filter(resource_type="dsr", resource_id=str(dsr.pk))
+            .select_related("actor")
+            .order_by("-created_at")
+        )
+        return Response(DSRHistorySerializer(rows, many=True).data)

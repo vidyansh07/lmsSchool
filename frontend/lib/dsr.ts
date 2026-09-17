@@ -31,7 +31,14 @@ import { getSession, recordSessionTopic, type SessionTopicStatus } from './acade
 import { apiFetch, apiMutate, queryString } from './api';
 import { NOT_AVAILABLE } from './format';
 import type { ListQuery } from './people';
-import type { AttendanceStatus, ClassSession, Paginated } from '@/types/api';
+import type {
+  ActivityDetail,
+  AttendanceStatus,
+  ClassSession,
+  CreateActivityFromDsrPayload,
+  DsrHistoryEntry,
+  Paginated,
+} from '@/types/api';
 
 /**
  * `HH:MM` from a session's `HH:MM:SS` wall-clock string, or the app's
@@ -223,6 +230,31 @@ export type DSRListItem = DSR & { id: string };
  */
 export function listDsr(query: ListQuery = {}): Promise<Paginated<DSRListItem>> {
   return apiFetch<Paginated<DSRListItem>>(`/api/v1/dsr/${queryString(query)}`);
+}
+
+// --- Activities and history spun off a report (ERP Phase 15) ---------------
+
+/**
+ * Create a follow-on activity (a mentoring session, a warning, a placement
+ * call…) directly off one class's report, without leaving this screen to
+ * hunt down the student in the activities workspace. Returns the same shape
+ * `POST /api/v1/activities/` does (`lib/work.ts::createActivity`) — this is
+ * a different creation path into the same engine, not a parallel one.
+ */
+export async function createActivityFromDsr(
+  dsrId: string,
+  payload: CreateActivityFromDsrPayload,
+): Promise<ActivityDetail> {
+  return apiMutate<ActivityDetail>(`/api/v1/dsr/${dsrId}/create-activity/`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+/** Every recorded change to one report — submit, review decisions, edits —
+ *  newest first, exactly as `GET /api/v1/dsr/{id}/history/` orders it. */
+export async function getDsrHistory(dsrId: string): Promise<DsrHistoryEntry[]> {
+  return apiFetch<DsrHistoryEntry[]>(`/api/v1/dsr/${dsrId}/history/`);
 }
 
 // --- Local draft (autosave fallback) ----------------------------------------

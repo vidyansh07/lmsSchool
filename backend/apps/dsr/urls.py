@@ -8,8 +8,10 @@ from django.urls import path
 
 from .views import (
     BatchDSRListView,
+    DSRCreateActivityView,
     DSRDeleteView,
     DSRDetailView,
+    DSRHistoryView,
     DSRListView,
     DSRReopenView,
     DSRReviewView,
@@ -24,6 +26,8 @@ urlpatterns: list = [
     path("<uuid:dsr_id>/submit/", DSRSubmitView.as_view(), name="submit"),
     path("<uuid:dsr_id>/review/", DSRReviewView.as_view(), name="review"),
     path("<uuid:dsr_id>/delete/", DSRDeleteView.as_view(), name="delete"),
+    path("<uuid:dsr_id>/create-activity/", DSRCreateActivityView.as_view(), name="create-activity"),
+    path("<uuid:dsr_id>/history/", DSRHistoryView.as_view(), name="history"),
 ]
 
 batch_urlpatterns: list = [

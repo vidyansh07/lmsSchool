@@ -25,6 +25,8 @@
  */
 import { useId } from 'react';
 
+import { DsrCreateActivity } from '@/components/teaching/dsr-create-activity';
+import { DsrHistory } from '@/components/teaching/dsr-history';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -69,6 +71,24 @@ function DraftStatus({
     );
   }
   return null;
+}
+
+/**
+ * "Create activity from this class" plus the change-history toggle — common
+ * to both the editable and read-only renders below, since a report a manager
+ * has already reviewed is exactly when a follow-on activity or "how did this
+ * get approved" question comes up. Absent while `dsr.id` is `null`: an
+ * unsaved preview (see `DSR`'s own docstring) has nothing yet for either
+ * endpoint to attach to.
+ */
+function DsrFollowUp({ dsrId, batchId }: { dsrId: string | null; batchId: string }) {
+  if (!dsrId) return null;
+  return (
+    <div className="space-y-3 border-t border-border pt-3">
+      <DsrCreateActivity dsrId={dsrId} batchId={batchId} />
+      <DsrHistory dsrId={dsrId} />
+    </div>
+  );
 }
 
 export interface DsrPanelProps {
@@ -120,6 +140,7 @@ export function DsrPanel({
             </Alert>
           ) : null}
           <p>{fallback(dsr.actual_topic, NO_DATA)}</p>
+          <DsrFollowUp dsrId={dsr.id} batchId={dsr.batch} />
         </CardContent>
       </Card>
     );
@@ -239,6 +260,8 @@ export function DsrPanel({
             onChange={(event) => onChange({ student_concerns: event.target.value })}
           />
         </Field>
+
+        <DsrFollowUp dsrId={dsr.id} batchId={dsr.batch} />
       </CardContent>
     </Card>
   );

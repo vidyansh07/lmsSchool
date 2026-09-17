@@ -254,15 +254,22 @@ def update_dsr(*, dsr: DSR, actor: User, force: bool = False, **fields: Any) -> 
     if not force and dsr.status not in EDITABLE_STATUSES:
         raise ConflictError({"status": ["This report can no longer be edited."]})
 
-    changed: list[str] = []
+    # `{field: {"from": ..., "to": ...}}`, the same shape
+    # `apps.fees.services.update_fee_plan` and `apps.authorization.services`
+    # already write for their own edits — this is what
+    # `docs/erp/DATA_MODEL.md`'s "ChangeHistory" note means by "the shape the
+    # fee, settings and DSR services already write": a `GET /dsr/{id}/history/`
+    # renders exactly this per row.
+    changes: dict[str, dict[str, str]] = {}
     for field, value in fields.items():
         if field not in WRITABLE_FIELDS:
             continue
-        if getattr(dsr, field) != value:
+        old_value = getattr(dsr, field)
+        if old_value != value:
+            changes[field] = {"from": str(old_value), "to": str(value)}
             setattr(dsr, field, value)
-            changed.append(field)
 
-    if not changed:
+    if not changes:
         return dsr
 
     _validate(dsr)
@@ -273,7 +280,7 @@ def update_dsr(*, dsr: DSR, actor: User, force: bool = False, **fields: Any) -> 
         actor=actor,
         resource_type="dsr",
         resource_id=dsr.pk,
-        context={"fields": changed},
+        context={"changes": changes},
         durable=False,
     )
     return dsr
@@ -391,4 +398,31 @@ def review_dsr(*, dsr: DSR, actor: User, decision: str, comments: str = "") -> D
         context={"from": previous, "to": decision},
         durable=False,
     )
+
+    if decision == DSRStatus.REJECTED:
+        _notify_rejected(dsr)
     return dsr
+
+
+def _notify_rejected(dsr: DSR) -> None:
+    """Tell the trainer their report was turned back, and why.
+
+    The same shape `apps.performance.services._notify_risk_changed` and
+    `apps.work.services.review_activity` use for their own review-style
+    notifications: one recipient, a title naming what changed, the reason in
+    the body so there is something to act on.
+    """
+    from apps.notifications.models import NotificationKind
+    from apps.notifications.services import notify
+
+    if not dsr.trainer.user_id:
+        return
+    notify(
+        recipient=dsr.trainer.user,
+        kind=NotificationKind.DSR_REJECTED,
+        title=f"Report rejected: {dsr.batch.code} on {dsr.report_date.isoformat()}",
+        body=dsr.manager_comments,
+        link_path=f"/dsr/{dsr.pk}",
+        resource_type="dsr",
+        resource_id=dsr.pk,
+    )

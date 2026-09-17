@@ -1223,3 +1223,231 @@ def test_the_trainer_can_reopen_through_the_api(
 
     assert response.status_code == 200, response.data
     assert response.data["status"] == DSRStatus.DRAFT
+
+
+# ---------------------------------------------------------------------------
+# dsr.rejected notification
+# ---------------------------------------------------------------------------
+
+
+def _create_activity_url(dsr) -> str:
+    return f"/api/v1/dsr/{dsr.id}/create-activity/"
+
+
+def _history_url(dsr) -> str:
+    return f"/api/v1/dsr/{dsr.id}/history/"
+
+
+def _make_activity_type(**overrides):
+    from apps.work.models import ActivityType
+
+    defaults = {
+        "slug": f"dsr-test-type-{ActivityType.objects.count()}",
+        "name": "DSR Test Type",
+        "category": "mentoring",
+        "allowed_creator_roles": ["manager", "trainer"],
+        "allowed_assignee_roles": ["trainer"],
+        "visible_to_student": True,
+        "requires_review": False,
+    }
+    defaults.update(overrides)
+    return ActivityType.objects.create(**defaults)
+
+
+@pytest.mark.django_db
+def test_rejecting_notifies_the_trainer_with_the_reason(manager_user, submitted_dsr):
+    from apps.notifications.models import Notification, NotificationKind
+
+    review_dsr(
+        dsr=submitted_dsr,
+        actor=manager_user,
+        decision=DSRStatus.REJECTED,
+        comments="Numbers don't match the register.",
+    )
+
+    notification = Notification.objects.filter(
+        recipient=submitted_dsr.trainer.user, kind=NotificationKind.DSR_REJECTED
+    ).latest("created_at")
+    assert "Numbers don't match the register." in notification.body
+    assert submitted_dsr.batch.code in notification.title
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("decision", [DSRStatus.APPROVED, DSRStatus.UNDER_REVIEW])
+def test_non_rejection_decisions_do_not_send_the_rejected_notification(
+    manager_user, submitted_dsr, decision
+):
+    from apps.notifications.models import Notification, NotificationKind
+
+    review_dsr(dsr=submitted_dsr, actor=manager_user, decision=decision)
+
+    assert not Notification.objects.filter(
+        recipient=submitted_dsr.trainer.user, kind=NotificationKind.DSR_REJECTED
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_revision_required_does_not_send_the_rejected_notification(manager_user, submitted_dsr):
+    from apps.notifications.models import Notification, NotificationKind
+
+    review_dsr(
+        dsr=submitted_dsr, actor=manager_user, decision=DSRStatus.REVISION_REQUIRED, comments="Fix."
+    )
+
+    assert not Notification.objects.filter(
+        recipient=submitted_dsr.trainer.user, kind=NotificationKind.DSR_REJECTED
+    ).exists()
+
+
+# ---------------------------------------------------------------------------
+# Create an activity from a report
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_create_activity_refuses_a_student_not_enrolled_in_this_batch(
+    api_client_no_csrf, manager_user, submitted_dsr, other_student_profile
+):
+    """`other_student_profile` is real and in the manager's branch (so it is
+    visible and this is not a 404), but is not enrolled anywhere near this
+    class's batch — the enrolment check itself must refuse it."""
+    activity_type = _make_activity_type()
+    api_client_no_csrf.force_login(manager_user)
+
+    response = api_client_no_csrf.post(
+        _create_activity_url(submitted_dsr),
+        {"activity_type": activity_type.slug, "student": str(other_student_profile.id)},
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert "student" in response.data["error"]["details"]
+
+
+@pytest.mark.django_db
+def test_create_activity_routes_through_the_real_service_and_enforces_its_allowlist(
+    api_client_no_csrf, trainer_profile, submitted_dsr, student_profile, enrollment
+):
+    """A trainer whose role is outside the type's own `allowed_creator_roles`
+    is refused exactly as `apps.work.services.create_activity` would refuse
+    them directly — proving this endpoint did not bypass that check."""
+    activity_type = _make_activity_type(allowed_creator_roles=["manager"])
+    api_client_no_csrf.force_login(trainer_profile.user)
+
+    response = api_client_no_csrf.post(
+        _create_activity_url(submitted_dsr),
+        {"activity_type": activity_type.slug, "student": str(student_profile.id)},
+        format="json",
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_create_activity_succeeds_for_an_enrolled_student_and_an_allowed_type(
+    api_client_no_csrf, trainer_profile, submitted_dsr, student_profile, enrollment
+):
+    from apps.work.models import Activity
+
+    activity_type = _make_activity_type()
+    api_client_no_csrf.force_login(trainer_profile.user)
+
+    response = api_client_no_csrf.post(
+        _create_activity_url(submitted_dsr),
+        {
+            "activity_type": activity_type.slug,
+            "student": str(student_profile.id),
+            "title": "Follow up on today's class",
+            "due_in_days": 3,
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201, response.data
+    activity = Activity.objects.get(pk=response.data["id"])
+    assert activity.student_id == student_profile.pk
+    assert activity.batch_id == submitted_dsr.batch_id
+    assert activity.enrollment_id == enrollment.pk
+    assert activity.title == "Follow up on today's class"
+    assert activity.created_by_id == trainer_profile.user_id
+
+
+@pytest.mark.django_db
+def test_create_activity_is_refused_to_an_unrelated_trainer(
+    api_client_no_csrf, trainer_profile_two, submitted_dsr, student_profile, enrollment
+):
+    activity_type = _make_activity_type()
+    api_client_no_csrf.force_login(trainer_profile_two.user)
+
+    response = api_client_no_csrf.post(
+        _create_activity_url(submitted_dsr),
+        {"activity_type": activity_type.slug, "student": str(student_profile.id)},
+        format="json",
+    )
+
+    assert response.status_code in (403, 404)
+
+
+@pytest.mark.django_db
+def test_a_manager_reviewing_the_report_can_also_create_an_activity_from_it(
+    api_client_no_csrf, manager_user, submitted_dsr, student_profile, enrollment
+):
+    activity_type = _make_activity_type()
+    api_client_no_csrf.force_login(manager_user)
+
+    response = api_client_no_csrf.post(
+        _create_activity_url(submitted_dsr),
+        {"activity_type": activity_type.slug, "student": str(student_profile.id)},
+        format="json",
+    )
+
+    assert response.status_code == 201, response.data
+
+
+# ---------------------------------------------------------------------------
+# History
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_history_lists_edits_and_a_rejection_newest_first(
+    api_client_no_csrf, trainer_profile, manager_user, draft_dsr
+):
+    update_dsr(dsr=draft_dsr, actor=trainer_profile.user, teaching_notes="First pass.")
+    dsr = submit_dsr(dsr=draft_dsr, actor=trainer_profile.user)
+    dsr = review_dsr(
+        dsr=dsr, actor=manager_user, decision=DSRStatus.REJECTED, comments="Redo the counts."
+    )
+
+    api_client_no_csrf.force_login(trainer_profile.user)
+    response = api_client_no_csrf.get(_history_url(dsr))
+
+    assert response.status_code == 200, response.data
+    actions = [row["action"] for row in response.data]
+    timestamps = [row["created_at"] for row in response.data]
+    assert timestamps == sorted(timestamps, reverse=True)
+    assert AuditAction.DSR_REJECTED in actions
+    assert AuditAction.DSR_UPDATED in actions
+    assert AuditAction.DSR_SUBMITTED in actions
+
+    rejected_row = next(row for row in response.data if row["action"] == AuditAction.DSR_REJECTED)
+    assert rejected_row["context"]["to"] == DSRStatus.REJECTED
+
+    updated_row = next(row for row in response.data if row["action"] == AuditAction.DSR_UPDATED)
+    assert updated_row["context"]["changes"]["teaching_notes"]["to"] == "First pass."
+
+
+@pytest.mark.django_db
+def test_history_is_refused_to_a_caller_outside_the_reports_visibility(
+    api_client_no_csrf, trainer_profile_two, draft_dsr
+):
+    api_client_no_csrf.force_login(trainer_profile_two.user)
+    response = api_client_no_csrf.get(_history_url(draft_dsr))
+    assert response.status_code in (403, 404)
+
+
+@pytest.mark.django_db
+def test_history_404s_for_a_student(api_client_no_csrf, student_profile, draft_dsr):
+    api_client_no_csrf.force_login(student_profile.user)
+    response = api_client_no_csrf.get(_history_url(draft_dsr))
+    assert response.status_code in (403, 404)

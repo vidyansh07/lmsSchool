@@ -2463,6 +2463,40 @@ export interface ActivityDetail extends Activity {
   automation_run: string | null;
 }
 
+// --- DSR extensions (ERP Phase 15: create-activity, change history) -------
+//
+// The DSR model itself and its read/write payloads live entirely in
+// `lib/dsr.ts`, not here (see that module's own docstring for why) — these
+// two additions follow the app-wide convention of keeping API shapes in this
+// file instead, since neither one is a DSR field, but the request/response
+// shape of a DSR-scoped endpoint.
+
+/** `POST /dsr/{id}/create-activity/` request body. `title`/`due_in_days` are
+ *  optional — the backend fills in a sensible default title from the
+ *  activity type, and `due_in_days` only matters when the type wants a due
+ *  date at all. */
+export interface CreateActivityFromDsrPayload {
+  activity_type: string;
+  student: string;
+  title?: string;
+  due_in_days?: number;
+}
+
+/** `GET /dsr/{id}/history/` row — every state change already recorded via
+ *  `apps.audit.services.record()` (DSR submit/review/etc.), replayed here for
+ *  display. `context.changes`, when present, is `{field: {from, to}}`, the
+ *  same shape `apps.dsr.services` already writes into its audit context for
+ *  an edit; other actions (submit, approve, reject) carry whatever other
+ *  keys that action's own `record()` call put there, which this phase does
+ *  not need to know about beyond a change map. */
+export interface DsrHistoryEntry {
+  id: string;
+  action: string;
+  actor: ActivityPersonBrief | null;
+  context: Record<string, unknown>;
+  created_at: string;
+}
+
 /**
  * One student's composed timeline (Phase 10, ADR-09): each row comes from a
  * different app's own `visible_*` queryset, so `kind` is open-ended —

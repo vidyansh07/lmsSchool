@@ -133,3 +133,38 @@ class DSRDeleteSerializer(StrictSerializer):
     see `apps.common.deletion.soft_delete`."""
 
     reason = SafeCharField(max_length=255)
+
+
+class DSRCreateActivitySerializer(StrictSerializer):
+    """ "Create an activity from this class" — a convenience wrapper around
+    `apps.work.services.create_activity`, not a second creation path. The
+    caller picks the student (from this class's own batch) and which kind of
+    activity; everything else `create_activity` itself already validates
+    (allowed creator/assignee roles, scope) applies unchanged."""
+
+    activity_type = serializers.CharField(max_length=60)
+    student = serializers.UUIDField()
+    title = SafeCharField(max_length=160, required=False, allow_blank=True, default="")
+    due_in_days = serializers.IntegerField(
+        required=False, allow_null=True, default=None, min_value=0
+    )
+
+
+class DSRHistorySerializer(serializers.Serializer):
+    """One `AuditLog` row about this report — the "ChangeHistory" view
+    `docs/erp/DATA_MODEL.md` describes: no table of its own, a queryset over
+    `AuditLog` filtered by `resource_type`/`resource_id`, rendering
+    `context["changes"]` (`{field: {from, to}}`) the way `update_dsr` and
+    `review_dsr` already write it. Same shape `ActivityHistorySerializer`
+    gives its own staff callers — id, actor, what happened, when."""
+
+    id = serializers.UUIDField(read_only=True)
+    action = serializers.CharField(read_only=True)
+    actor = serializers.SerializerMethodField()
+    context = serializers.JSONField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+    def get_actor(self, entry) -> dict | None:
+        if entry.actor_id is None:
+            return {"id": None, "name": entry.actor_label} if entry.actor_label else None
+        return {"id": str(entry.actor_id), "name": entry.actor.get_full_name()}

@@ -88,6 +88,9 @@ class NotificationKind(models.TextChoices):
     ACTIVITY_OVERDUE = "activity.overdue", _("Activity overdue")
     PROJECT_OVERDUE = "project.overdue", _("Project overdue")
 
+    # --- Daily status reports (ERP Phase 15)
+    DSR_REJECTED = "dsr.rejected", _("Daily status report rejected")
+
 
 class NotificationCategory(models.TextChoices):
     ACADEMIC = "academic", _("Coursework and results")
@@ -132,6 +135,7 @@ KIND_CATEGORY: dict[str, str] = {
     NotificationKind.RISK_LEVEL_CHANGED: NotificationCategory.ACADEMIC,
     NotificationKind.ACTIVITY_OVERDUE: NotificationCategory.SCHEDULE,
     NotificationKind.PROJECT_OVERDUE: NotificationCategory.SCHEDULE,
+    NotificationKind.DSR_REJECTED: NotificationCategory.ACADEMIC,
 }
 
 

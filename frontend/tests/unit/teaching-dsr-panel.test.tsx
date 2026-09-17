@@ -1,9 +1,30 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DsrPanel } from '@/components/teaching/dsr-panel';
+import { ApiError } from '@/lib/api';
 import type { DSR, DSRWritePayload } from '@/lib/dsr';
+import type { ActivityDetail, DsrHistoryEntry, RosterEntry } from '@/types/api';
+
+const getBatchRoster = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/batches', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/batches')>('@/lib/batches');
+  return { ...actual, getBatchRoster };
+});
+
+const listActivityTypes = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/work', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/work')>('@/lib/work');
+  return { ...actual, listActivityTypes };
+});
+
+const createActivityFromDsr = vi.hoisted(() => vi.fn());
+const getDsrHistory = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/dsr', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/dsr')>('@/lib/dsr');
+  return { ...actual, createActivityFromDsr, getDsrHistory };
+});
 
 function dsr(overrides: Partial<DSR> = {}): DSR {
   return {
@@ -88,6 +109,66 @@ function renderPanel(overrides: {
   );
   return { onChange, record };
 }
+
+function rosterEntry(overrides: Partial<RosterEntry> = {}): RosterEntry {
+  return {
+    id: 'enrollment-1',
+    code: 'ENR-1',
+    student_id: 'student-1',
+    student_code: 'GRS-S-001',
+    full_name: 'Sam Student',
+    email: 'sam@example.com',
+    status: 'active',
+    enrolled_at: '2026-01-01',
+    ...overrides,
+  };
+}
+
+function activityDetail(overrides: Partial<ActivityDetail> = {}): ActivityDetail {
+  return {
+    id: 'activity-1',
+    title: 'Mentoring session',
+    status: 'planned',
+    priority: 'normal',
+    planned_at: null,
+    due_at: null,
+    completed_at: null,
+    created_at: '2026-09-07T10:00:00Z',
+    student: { id: 'student-1', name: 'Sam Student', student_id: 'GRS-S-001' },
+    type: { id: 'type-1', slug: 'mentoring', name: 'Mentoring', category: 'mentoring' },
+    batch: null,
+    assigned_to: null,
+    created_by: null,
+    counts: { history: 0 },
+    performed_by: null,
+    reviewed_by: null,
+    started_at: null,
+    reviewed_at: null,
+    duration_minutes: null,
+    result: 'n/a',
+    score: null,
+    max_score: null,
+    summary: '',
+    review_note: '',
+    student_visible: false,
+    form: null,
+    form_values: {},
+    history: [],
+    parent: null,
+    children: [],
+    automation_run: null,
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  getBatchRoster.mockReset().mockResolvedValue([rosterEntry()]);
+  listActivityTypes.mockReset().mockResolvedValue({
+    results: [{ id: 'type-1', slug: 'mentoring', name: 'Mentoring', category: 'mentoring' }],
+  });
+  createActivityFromDsr.mockReset();
+  getDsrHistory.mockReset().mockResolvedValue([]);
+});
 
 describe('DsrPanel — editable draft', () => {
   it('shows the live counts passed in as props, not a stale snapshot on the DSR object', () => {
@@ -194,5 +275,113 @@ describe('DsrPanel — no longer editable', () => {
   it('falls back cleanly when a locked report has no topic recorded', () => {
     renderPanel({ dsrOverrides: { status: 'submitted', is_editable: false, actual_topic: '' } });
     expect(screen.getByText('No data')).toBeInTheDocument();
+  });
+});
+
+describe('DsrPanel — follow-up (create activity, history)', () => {
+  it('offers neither action for an unsaved preview with no id yet', () => {
+    renderPanel({ dsrOverrides: { id: null } });
+    expect(screen.queryByRole('button', { name: 'Create activity from this class' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View history' })).not.toBeInTheDocument();
+  });
+
+  it('validates student and activity type before submitting', async () => {
+    const user = userEvent.setup();
+    renderPanel({ dsrOverrides: { id: 'dsr-1' } });
+
+    await user.click(screen.getByRole('button', { name: 'Create activity from this class' }));
+    await waitFor(() => expect(getBatchRoster).toHaveBeenCalledWith('batch-1'));
+    await user.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    expect(screen.getByText('Choose a student.')).toBeInTheDocument();
+    expect(screen.getByText('Choose an activity type.')).toBeInTheDocument();
+    expect(createActivityFromDsr).not.toHaveBeenCalled();
+  });
+
+  it('creates the activity and shows a link to it on success', async () => {
+    const user = userEvent.setup();
+    createActivityFromDsr.mockResolvedValue(activityDetail());
+    renderPanel({ dsrOverrides: { id: 'dsr-1' } });
+
+    await user.click(screen.getByRole('button', { name: 'Create activity from this class' }));
+    await waitFor(() => expect(screen.getByRole('option', { name: /Sam Student/ })).toBeInTheDocument());
+
+    // `Field`'s required asterisk (`ui/field.tsx`) is part of the label's
+    // own accessible name with no separating space, and the panel's other
+    // "Student concerns" field would also match a plain `exact: false`
+    // lookup for "Student" — the literal trailing `*` is the simplest
+    // unambiguous match.
+    await user.selectOptions(screen.getByLabelText('Student*'), 'student-1');
+    await user.selectOptions(screen.getByLabelText('Activity type*'), 'mentoring');
+    await user.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    expect(createActivityFromDsr).toHaveBeenCalledWith('dsr-1', {
+      student: 'student-1',
+      activity_type: 'mentoring',
+      title: undefined,
+      due_in_days: undefined,
+    });
+    await waitFor(() => expect(screen.getByText('Activity created.')).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: 'Mentoring session' })).toHaveAttribute(
+      'href',
+      '/activities?id=activity-1',
+    );
+  });
+
+  it('surfaces a server error on a failed submission without losing the picked values', async () => {
+    const user = userEvent.setup();
+    createActivityFromDsr.mockRejectedValue(
+      new ApiError(400, 'validation_error', 'Could not create the activity.', 'req-1'),
+    );
+    renderPanel({ dsrOverrides: { id: 'dsr-1' } });
+
+    await user.click(screen.getByRole('button', { name: 'Create activity from this class' }));
+    await waitFor(() => expect(screen.getByRole('option', { name: /Sam Student/ })).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Student*'), 'student-1');
+    await user.selectOptions(screen.getByLabelText('Activity type*'), 'mentoring');
+    await user.click(screen.getByRole('button', { name: 'Create activity' }));
+
+    await waitFor(() => expect(screen.getByText('Could not create the activity.')).toBeInTheDocument());
+    expect(screen.getByLabelText('Student*')).toHaveValue('student-1');
+  });
+
+  it('renders a mixed history — an edit and a rejection with its comment visible', async () => {
+    const user = userEvent.setup();
+    const entries: DsrHistoryEntry[] = [
+      {
+        id: 'h-2',
+        action: 'dsr.rejected',
+        actor: { id: 'mgr-1', name: 'Mira Manager' },
+        context: { from: 'submitted', to: 'rejected', comments: 'Attendance numbers do not add up.' },
+        created_at: '2026-09-07T12:00:00Z',
+      },
+      {
+        id: 'h-1',
+        action: 'dsr.updated',
+        actor: { id: 'trainer-1', name: 'Tina Trainer' },
+        context: { changes: { actual_topic: { from: 'Linux basics', to: 'Linux basics, day 2' } } },
+        created_at: '2026-09-07T09:15:00Z',
+      },
+    ];
+    getDsrHistory.mockResolvedValue(entries);
+    renderPanel({ dsrOverrides: { id: 'dsr-1' } });
+
+    await user.click(screen.getByRole('button', { name: 'View history' }));
+    await waitFor(() => expect(getDsrHistory).toHaveBeenCalledWith('dsr-1'));
+
+    expect(await screen.findByText('Rejected')).toBeInTheDocument();
+    expect(screen.getByText('Mira Manager', { exact: false })).toBeInTheDocument();
+    expect(screen.getByText(/Attendance numbers do not add up\./)).toBeInTheDocument();
+    expect(screen.getByText('Report updated')).toBeInTheDocument();
+    expect(screen.getByText(/Linux basics → Linux basics, day 2/)).toBeInTheDocument();
+  });
+
+  it('renders an empty history state cleanly', async () => {
+    const user = userEvent.setup();
+    getDsrHistory.mockResolvedValue([]);
+    renderPanel({ dsrOverrides: { id: 'dsr-1' } });
+
+    await user.click(screen.getByRole('button', { name: 'View history' }));
+    expect(await screen.findByText('No changes recorded yet.')).toBeInTheDocument();
   });
 });
