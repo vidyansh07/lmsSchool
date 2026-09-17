@@ -111,7 +111,10 @@ services:
         mc alias set staging http://storage:9000 "$$AWS_ACCESS_KEY_ID" "$$AWS_SECRET_ACCESS_KEY"
         mc mb --ignore-existing "staging/$$AWS_STORAGE_BUCKET_NAME"
         mc anonymous set none "staging/$$AWS_STORAGE_BUCKET_NAME"
-        echo "bucket $$AWS_STORAGE_BUCKET_NAME ready and private"
+        # So an overwrite or delete is recoverable for 30 days independent of
+        # scripts/backup-media.sh's own mirror (docs/erp/BACKUP_AND_RECOVERY.md).
+        mc version enable "staging/$$AWS_STORAGE_BUCKET_NAME"
+        echo "bucket $$AWS_STORAGE_BUCKET_NAME ready, private, and versioned"
 
   backend:
     build:

@@ -16,23 +16,26 @@ at the end records each real restore.
 
 ## What the ERP adds
 
-### Object storage backup (Phase 23)
+### Object storage backup (Phase 23 — built and scratch-tested)
 `scripts/backup-media.sh [local|staging] [--verify]`:
-- `mc mirror --overwrite --remove=false` (MinIO) or `aws s3 sync`
-  (S3) from the application bucket to `backups/media/` on the host, then
-  to `s3://$BACKUP_S3_BUCKET/media/` when configured.
-- `--verify` picks 20 random objects, downloads them from the backup and
-  compares SHA-256 with the source listing.
+- `mc mirror --overwrite --remove=false` from the application bucket
+  (MinIO in this stack, reusing `storage-init`'s own alias/credentials
+  pattern) to `backups/media/` on the host, then `aws s3 sync` to
+  `s3://$BACKUP_S3_BUCKET/media/` when that variable is configured — it is
+  not yet, same as the database's off-host copy above.
+- `--verify` picks 20 random objects, reads each from the live bucket and
+  from the backup copy, and compares SHA-256.
 - Cron: 02:30 daily; verify 03:30 Sundays; same retention.
-- Bucket versioning is enabled by `storage-init` so an overwrite or delete
-  is recoverable for 30 days independent of the mirror.
+- Bucket versioning is enabled by `storage-init` (`mc version enable`) so an
+  overwrite or delete is recoverable for 30 days independent of the mirror.
 
 ### Configuration backup
 Roles, permissions, policies, forms, activity types, automations and
 templates are rows — they are in the database dump. In addition,
-`manage.py export_configuration > config-<date>.json` (Phase 23) writes
-them as a reviewable file nightly to `backups/config/`, so a bad
-configuration change can be diffed and reverted without a full restore.
+`manage.py export_configuration > config-<date>.json` (Phase 23 — built)
+writes them as a reviewable file nightly (02:15, cron) to `backups/config/`,
+so a bad configuration change can be diffed and reverted without a full
+restore.
 
 ### Encryption
 Dumps at rest on the host are on an encrypted volume (EBS default); the S3
@@ -55,7 +58,7 @@ in the db container) — recorded as a follow-up, not part of this programme.
 
 1. Stop the application containers (`backend`, `worker`, `beat`), leave `db`.
 2. Pick the dump: newest `backups/<db>-<stamp>.dump` or the S3 copy.
-3. Restore to a **scratch** database first: `scripts/backup.sh staging --verify --from <file>` (Phase 23 adds `--from`) and read the row counts and sequences.
+3. Restore to a **scratch** database first: `scripts/backup.sh staging --verify --from <file>` (`--from`, Phase 23, restores that named file instead of taking a fresh dump) and read the row counts and sequences.
 4. If they match expectation, `pg_restore --clean --if-exists` into the live database **inside a maintenance window**, then `manage.py migrate` (no-op unless the dump predates the release), then `manage.py sync_permissions`.
 5. Start the containers; `scripts/verify_demo.sh staging`; sign in; open the activity review to confirm the last audited action is the one expected.
 6. Record the drill below.
