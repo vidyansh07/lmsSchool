@@ -9,12 +9,14 @@ import type {
   BatchListRow,
   CourseListRow,
   Enrollment,
+  StudentDuplicateMatch,
   StudentListRow,
   StudentProfile,
   TrainerListRow,
 } from '@/types/api';
 
 const createStudent = vi.hoisted(() => vi.fn());
+const checkDuplicates = vi.hoisted(() => vi.fn());
 const listStudents = vi.hoisted(() => vi.fn());
 const listTrainers = vi.hoisted(() => vi.fn());
 const listCourses = vi.hoisted(() => vi.fn());
@@ -24,7 +26,7 @@ const assignBatchTrainer = vi.hoisted(() => vi.fn());
 const enrolStudent = vi.hoisted(() => vi.fn());
 
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => ({ user: null, can: () => false }) }));
-vi.mock('@/lib/people', () => ({ createStudent, listStudents, listTrainers }));
+vi.mock('@/lib/people', () => ({ createStudent, checkDuplicates, listStudents, listTrainers }));
 vi.mock('@/lib/courses', () => ({ listCourses }));
 vi.mock('@/lib/batches', () => ({ listBatches, createBatch, assignBatchTrainer, enrolStudent }));
 
@@ -168,6 +170,7 @@ function emptyPage<T>(): { count: number; page: number; page_size: number; total
 
 beforeEach(() => {
   createStudent.mockReset();
+  checkDuplicates.mockReset().mockResolvedValue({ results: [] as StudentDuplicateMatch[] });
   listStudents.mockReset().mockResolvedValue({ ...emptyPage<StudentListRow>(), results: [] });
   listTrainers.mockReset().mockResolvedValue({ ...emptyPage<TrainerListRow>(), results: [trainer()] });
   listCourses.mockReset().mockResolvedValue({ ...emptyPage<CourseListRow>(), results: [COURSE] });
@@ -220,91 +223,101 @@ async function goToConfirmWithExistingBatch(user: ReturnType<typeof userEvent.se
   await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
 }
 
+function existingMatch(overrides: Partial<StudentDuplicateMatch> = {}): StudentDuplicateMatch {
+  return {
+    id: 'existing-1',
+    name: 'Jane Existing',
+    student_id: 'GRS-S-00099',
+    batch_code: 'MERN-02',
+    created_at: '2026-08-03T00:00:00Z',
+    ...overrides,
+  };
+}
+
 describe('RegistrationWizard — duplicate detection', () => {
-  it('warns before the student can be submitted', async () => {
+  it('warns before the student can be submitted, via the disclosure-safe duplicates endpoint', async () => {
     const user = userEvent.setup();
-    listStudents.mockResolvedValue({
-      ...emptyPage<StudentListRow>(),
-      results: [
-        {
-          id: 'existing-1',
-          student_id: 'GRS-S-00099',
-          user_id: 'u99',
-          email: 'jane@example.com',
-          full_name: 'Jane Existing',
-          city: '',
-          qualification: '',
-          fee_status: 'pending',
-          is_active: true,
-          is_email_verified: true,
-          created_at: '2026-01-01',
-        },
-      ],
-    });
+    checkDuplicates.mockResolvedValue({ results: [existingMatch()] });
     render(<RegistrationWizard />);
     await fillStudentStep(user);
 
     await waitFor(() => expect(screen.getByTestId('duplicate-warning')).toBeInTheDocument());
     expect(screen.getByText(/Jane Existing/)).toBeInTheDocument();
+    expect(checkDuplicates).toHaveBeenCalledWith(
+      expect.objectContaining({ email: 'jane@example.com' }),
+    );
+    // Never the plain, unscoped student search — that would defeat the whole
+    // point of a disclosure-safe check.
+    expect(listStudents).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /next: choose a course/i })).toBeDisabled();
   });
 
   it('offers to open the existing record', async () => {
     const user = userEvent.setup();
-    listStudents.mockResolvedValue({
-      ...emptyPage<StudentListRow>(),
-      results: [
-        {
-          id: 'existing-1',
-          student_id: 'GRS-S-00099',
-          user_id: 'u99',
-          email: 'jane@example.com',
-          full_name: 'Jane Existing',
-          city: '',
-          qualification: '',
-          fee_status: 'pending',
-          is_active: true,
-          is_email_verified: true,
-          created_at: '2026-01-01',
-        },
-      ],
-    });
+    checkDuplicates.mockResolvedValue({ results: [existingMatch()] });
     render(<RegistrationWizard />);
     await fillStudentStep(user);
     await waitFor(() => expect(screen.getByTestId('duplicate-warning')).toBeInTheDocument());
-    expect(screen.getByRole('link', { name: 'Open this record' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open that record' })).toHaveAttribute(
       'href',
       '/admissions/existing-1',
     );
   });
 
-  it('lets the counsellor continue past the warning for a genuine coincidence', async () => {
+  it('keeps "continue registering" disabled until a reason is typed, then carries it through to the final submit', async () => {
+    createStudent.mockResolvedValue(student());
+    assignBatchTrainer.mockResolvedValue({});
+    enrolStudent.mockResolvedValue(enrollment());
     const user = userEvent.setup();
-    listStudents.mockResolvedValue({
-      ...emptyPage<StudentListRow>(),
-      results: [
-        {
-          id: 'existing-1',
-          student_id: 'GRS-S-00099',
-          user_id: 'u99',
-          email: 'jane@example.com',
-          full_name: 'Jane Existing',
-          city: '',
-          qualification: '',
-          fee_status: 'pending',
-          is_active: true,
-          is_email_verified: true,
-          created_at: '2026-01-01',
-        },
-      ],
-    });
+    checkDuplicates.mockResolvedValue({ results: [existingMatch()] });
     render(<RegistrationWizard />);
     await fillStudentStep(user);
     await waitFor(() => expect(screen.getByTestId('duplicate-warning')).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: /continue registering/i }));
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Course' })).toBeInTheDocument(),
+
+    const continueButton = screen.getByRole('button', { name: /continue registering/i });
+    expect(continueButton).toBeDisabled();
+    await user.click(continueButton);
+    // Still on the student step — nothing was created yet, and the wizard
+    // did not advance without a reason.
+    expect(screen.getByRole('button', { name: /next: choose a course/i })).toBeInTheDocument();
+
+    await user.type(
+      screen.getByLabelText(/this is a different person/i),
+      'Different phone owner, confirmed by ID.',
     );
+    expect(continueButton).toBeEnabled();
+    await user.click(continueButton);
+
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+    await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Trainer' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /assign a trainer later/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /confirm and enrol/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
+
+    // The reason is only sent now, bundled with the rest of the
+    // registration — never at the moment it was typed.
+    await waitFor(() => expect(createStudent).toHaveBeenCalledOnce());
+    expect(createStudent).toHaveBeenCalledWith(
+      expect.objectContaining({ override_reason: 'Different phone owner, confirmed by ID.' }),
+    );
+  });
+
+  it('does not send an override reason for a registration that never showed a duplicate', async () => {
+    createStudent.mockResolvedValue(student());
+    assignBatchTrainer.mockResolvedValue({});
+    enrolStudent.mockResolvedValue(enrollment());
+    const user = userEvent.setup();
+    await goToConfirmWithExistingBatch(user);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Trainer' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /assign a trainer later/i }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /confirm and enrol/i })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
+
+    await waitFor(() => expect(createStudent).toHaveBeenCalledOnce());
+    expect(createStudent.mock.calls[0]?.[0]).not.toHaveProperty('override_reason');
   });
 
   it('does not warn once the email is too short to search on', async () => {
@@ -312,7 +325,7 @@ describe('RegistrationWizard — duplicate detection', () => {
     render(<RegistrationWizard />);
     await user.type(screen.getByLabelText('Email', { exact: false }), 'jo');
     await user.type(screen.getByLabelText('First name', { exact: false }), 'Jo');
-    expect(listStudents).not.toHaveBeenCalled();
+    expect(checkDuplicates).not.toHaveBeenCalled();
   });
 });
 
@@ -446,8 +459,8 @@ describe('RegistrationWizard — confirming', () => {
     createStudent.mockResolvedValue(student());
     assignBatchTrainer.mockResolvedValue({});
     enrolStudent.mockResolvedValue(enrollment());
-    // The referrer search and the duplicate check share `listStudents`; the
-    // duplicate check searches by the *new* email, which matches nothing here.
+    // Only the referrer search uses `listStudents` now — the duplicate check
+    // is a separate call (`checkDuplicates`) that defaults to no matches.
     listStudents.mockImplementation(async ({ search }: { search?: string } = {}) =>
       search === 'Priya'
         ? { ...emptyPage<StudentListRow>(), count: 1, results: [referrerRow()] }

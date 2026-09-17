@@ -97,7 +97,15 @@ urlpatterns = [
     path("discussions/", include((discussion_urls.discussion_urlpatterns, "discussions"))),
     path("learning/", include((learning_urls.urlpatterns, "learning"))),
     path("reports/", include((reporting_urls.report_urlpatterns, "reports"))),
-    path("dashboards/", include((reporting_urls.dashboard_urlpatterns, "dashboards"))),
+    path(
+        "dashboards/",
+        include(
+            (
+                reporting_urls.dashboard_urlpatterns + dashboard_urls.counsellor_urlpatterns,
+                "dashboards",
+            )
+        ),
+    ),
     path("imports/", include((reporting_urls.import_urlpatterns, "imports"))),
     path("search/", include("apps.search.urls")),
     path("saved-filters/", include((reporting_urls.saved_filter_urlpatterns, "saved-filters"))),

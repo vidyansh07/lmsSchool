@@ -17,6 +17,7 @@ from rest_framework import serializers
 
 from apps.accounts.serializers import UserSerializer
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
+from apps.work.models import ActivityPriority
 
 from .models import MIN_FEE_AMOUNT, FeeStatus, InstitutionKind, Qualification, StudentProfile
 
@@ -214,6 +215,11 @@ class StudentCreateSerializer(StrictSerializer):
         required=False,
         allow_null=True,
     )
+    # Phase 17 (`USER_JOURNEYS.md` §4.2): required by `services.create_student`
+    # only when its own re-check of `email`/`phone` finds a candidate the
+    # counsellor was shown and chose to proceed past — sent by the wizard
+    # only when that warning actually appeared, omitted otherwise.
+    override_reason = SafeCharField(max_length=500, required=False, allow_blank=True, default="")
 
     def validate_email(self, value: str) -> str:
         from apps.accounts.models import User
@@ -222,6 +228,46 @@ class StudentCreateSerializer(StrictSerializer):
         if User.objects.filter(email__iexact=normalised).exists():
             raise serializers.ValidationError("An account with this email already exists.")
         return normalised
+
+
+class StudentDuplicateSerializer(serializers.Serializer):
+    """One row of `services.find_duplicate_candidates` — the shape
+    ``USER_JOURNEYS.md`` §4.2's example text names verbatim: "Possible
+    existing student found: Rahul Verma, GRS-S-00042, MERN-02, registered
+    3 Aug"."""
+
+    id = serializers.UUIDField(source="pk", read_only=True)
+    name = serializers.SerializerMethodField()
+    student_id = serializers.CharField(read_only=True)
+    batch_code = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField(read_only=True)
+
+    @extend_schema_field(serializers.CharField())
+    def get_name(self, obj: StudentProfile) -> str:
+        return obj.user.full_name or obj.user.email
+
+    @extend_schema_field(serializers.CharField())
+    def get_batch_code(self, obj: StudentProfile) -> str:
+        # The most recent enrolment's batch, if the match has one at all — a
+        # registration still pending a batch is a real match too, and "" (not
+        # `null`) is what the wizard's own display already treats as "no
+        # batch to show" (`components/admissions/duplicate-match.tsx`).
+        latest = max(obj.enrollments.all(), key=lambda e: e.created_at, default=None)
+        return latest.batch.code if latest is not None else ""
+
+
+class StudentDuplicatesResponseSerializer(serializers.Serializer):
+    results = StudentDuplicateSerializer(many=True, read_only=True)
+
+
+class FollowUpCreateSerializer(StrictSerializer):
+    """ "Plan a follow-up" (`USER_JOURNEYS.md` §4.3). ``channel`` is
+    deliberately absent — see `views.StudentFollowUpView`."""
+
+    due_at = serializers.DateTimeField()
+    priority = serializers.ChoiceField(
+        choices=ActivityPriority.choices, required=False, allow_null=True, default=None
+    )
 
 
 class FeeAmountUpdateSerializer(StrictSerializer):

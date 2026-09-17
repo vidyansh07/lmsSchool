@@ -2,9 +2,12 @@
 
 import { apiFetch, apiMutate, queryString } from './api';
 import type {
+  ActivityDetail,
+  ActivityPriority,
   AdminUser,
   FeeStatus,
   Paginated,
+  StudentDuplicatesResponse,
   StudentListRow,
   StudentProfile,
   TrainerListRow,
@@ -131,8 +134,50 @@ export async function createStudent(payload: {
   profile?: Record<string, unknown>;
   /** Rupees, minimum 1000. Omit or `null` when no fee was agreed yet. */
   fee_amount?: string | number | null;
+  /**
+   * Required by the server whenever the registration wizard showed a
+   * duplicate match and the counsellor chose "this is a different person"
+   * (ERP Phase 17, `USER_JOURNEYS.md` §4.2) — captured in the wizard's own
+   * state at the duplicate-check step and only sent here, with the rest of
+   * the registration, at the final "Register" submit. Omit when no
+   * duplicate was ever shown.
+   */
+  override_reason?: string;
 }): Promise<StudentProfile> {
   return apiMutate<StudentProfile>('/api/v1/students/', { method: 'POST', body: payload });
+}
+
+/**
+ * `GET /api/v1/students/duplicates/` — a read, not a search: it exists only
+ * to warn a counsellor mid-registration, and, like global search
+ * (Phase 11), never discloses a student outside the caller's own reach.
+ * `email` and `phone` are each enough alone; `name` narrows further. Empty
+ * `results` on a real match just outside scope looks identical to no match
+ * at all — that is the point, not a bug to work around client-side.
+ */
+export async function checkDuplicates(query: {
+  email?: string;
+  phone?: string;
+  name?: string;
+}): Promise<StudentDuplicatesResponse> {
+  return apiFetch<StudentDuplicatesResponse>(`/api/v1/students/duplicates/${queryString(query)}`);
+}
+
+/**
+ * `POST /api/v1/students/{id}/follow-ups/` — the counsellor's "Plan a
+ * follow-up" action on a student's record (`USER_JOURNEYS.md` §4.3). The
+ * server routes this through the same `apps.work.services.create_activity`
+ * every other activity-creation path uses; the response is the same
+ * `ActivityDetail` shape `POST /activities/` returns.
+ */
+export async function createFollowUp(
+  studentId: string,
+  payload: { due_at: string; priority?: ActivityPriority },
+): Promise<ActivityDetail> {
+  return apiMutate<ActivityDetail>(`/api/v1/students/${studentId}/follow-ups/`, {
+    method: 'POST',
+    body: payload,
+  });
 }
 
 /** Set or clear (`null`) the fee agreed with a student. */

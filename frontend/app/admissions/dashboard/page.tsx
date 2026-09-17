@@ -30,11 +30,33 @@
  *
  * Everything else here is a composition of list endpoints that already
  * exist, documented at each fetch below rather than as a wall of prose here.
+ *
+ * ERP Phase 17 adds `GET /api/v1/dashboards/counsellor/` (`lib/dashboards
+ * .ts::getCounsellorDashboard`), one call in place of several for the
+ * figures it now computes server-side: registered today, pending
+ * registrations, and two genuinely new ones this page had no way to show
+ * before (follow-ups due/overdue, unassigned batch/trainer). It carries no
+ * rows, though, only counts — so every panel below that needs an actual
+ * list (batches to watch, students awaiting enrolment, the fees corner,
+ * recent activity) keeps its own fetch exactly as before. "Registered this
+ * week" also stays on the old recent-window computation, since the new
+ * endpoint has no weekly figure to replace it with.
  */
 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarRange, Clock, PlusCircle, Rocket, UploadCloud, UserPlus } from 'lucide-react';
+import {
+  AlertTriangle,
+  CalendarClock,
+  CalendarRange,
+  Clock,
+  PlusCircle,
+  Rocket,
+  UploadCloud,
+  UserPlus,
+  Users,
+  UserX,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 import { BatchWatchlist } from '@/components/counsellor/batches-panel';
@@ -51,9 +73,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api';
 import { listBatches, listEnrollments } from '@/lib/batches';
 import { Capability } from '@/lib/capabilities';
+import { getCounsellorDashboard } from '@/lib/dashboards';
 import { getFeesOverview } from '@/lib/fees';
 import { listStudents } from '@/lib/people';
-import type { BatchListRow, Enrollment, FeesOverview, StudentListRow } from '@/types/api';
+import type {
+  BatchListRow,
+  CounsellorDashboard,
+  Enrollment,
+  FeesOverview,
+  StudentListRow,
+} from '@/types/api';
 
 /**
  * One dashboard section's load state, independent of every other section's —
@@ -128,12 +157,6 @@ function startOfWeekIso(reference: Date): string {
   return monday.toISOString();
 }
 
-function startOfDayIso(reference: Date): string {
-  const midnight = new Date(reference);
-  midnight.setHours(0, 0, 0, 0);
-  return midnight.toISOString();
-}
-
 /**
  * How many of `students` were registered at or after `sinceIso`.
  *
@@ -203,6 +226,15 @@ function KpiTileSection({
 }
 
 export function AdmissionsDashboardContent() {
+  // The single-call summary (ERP Phase 17): wherever its figures cover what
+  // the older N-call pattern below computed by hand, this wins — see the KPI
+  // row. It does not carry the actual rows any panel needs to list (a
+  // student, a batch, an enrolment), so those panels keep their own fetches.
+  const dashboard = useDashboardSection<CounsellorDashboard | null>(
+    () => getCounsellorDashboard(),
+    null,
+  );
+
   const recentStudents = useDashboardSection(
     () =>
       listStudents({ ordering: '-created_at', page_size: REGISTRATION_WINDOW }).then(
@@ -256,7 +288,9 @@ export function AdmissionsDashboardContent() {
   );
 
   const now = new Date();
-  const registeredToday = countRegisteredSince(recentStudents.data, startOfDayIso(now));
+  // "Registered this week" has no figure on the new endpoint (only
+  // `new_students_today`), so it is still computed from the recent-window
+  // fetch below, the same approximation `countRegisteredSince` always was.
   const registeredThisWeek = countRegisteredSince(recentStudents.data, startOfWeekIso(now));
   const startingSoonCount = batches.data.filter((batch) => batch.status === 'upcoming').length;
 
@@ -299,9 +333,9 @@ export function AdmissionsDashboardContent() {
           <KpiTileSection
             label="Registered today"
             accent="blue"
-            value={registeredToday}
-            isLoading={recentStudents.isLoading}
-            failed={Boolean(recentStudents.error)}
+            value={dashboard.data?.new_students_today ?? 0}
+            isLoading={dashboard.isLoading}
+            failed={Boolean(dashboard.error)}
             icon={UserPlus}
             hint="New students on the books"
             href="/admissions"
@@ -321,11 +355,11 @@ export function AdmissionsDashboardContent() {
         </BentoTile>
         <BentoTile span={3} index={2}>
           <KpiTileSection
-            label="Pending confirmation"
+            label="Pending registrations"
             accent="amber"
-            value={pending.data.count}
-            isLoading={pending.isLoading}
-            failed={Boolean(pending.error)}
+            value={dashboard.data?.pending_registrations ?? 0}
+            isLoading={dashboard.isLoading}
+            failed={Boolean(dashboard.error)}
             icon={Clock}
             hint="Waiting on a decision"
           />
@@ -339,6 +373,54 @@ export function AdmissionsDashboardContent() {
             failed={Boolean(batches.error)}
             icon={Rocket}
             hint="Seats still to fill"
+            href="/admissions/batches"
+          />
+        </BentoTile>
+        <BentoTile span={3} index={4}>
+          <KpiTileSection
+            label="Follow-ups due"
+            accent="blue"
+            value={dashboard.data?.follow_ups_due ?? 0}
+            isLoading={dashboard.isLoading}
+            failed={Boolean(dashboard.error)}
+            icon={CalendarClock}
+            hint="Planned, not yet done"
+            href="/activities"
+          />
+        </BentoTile>
+        <BentoTile span={3} index={5}>
+          <KpiTileSection
+            label="Follow-ups overdue"
+            accent="amber"
+            value={dashboard.data?.follow_ups_overdue ?? 0}
+            isLoading={dashboard.isLoading}
+            failed={Boolean(dashboard.error)}
+            icon={AlertTriangle}
+            hint="Past their due date"
+            href="/activities"
+          />
+        </BentoTile>
+        <BentoTile span={3} index={6}>
+          <KpiTileSection
+            label="Unassigned batch"
+            accent="violet"
+            value={dashboard.data?.unassigned_batch ?? 0}
+            isLoading={dashboard.isLoading}
+            failed={Boolean(dashboard.error)}
+            icon={Users}
+            hint="Registered, no batch yet"
+            href="/admissions"
+          />
+        </BentoTile>
+        <BentoTile span={3} index={7}>
+          <KpiTileSection
+            label="Unassigned trainer"
+            accent="green"
+            value={dashboard.data?.unassigned_trainer ?? 0}
+            isLoading={dashboard.isLoading}
+            failed={Boolean(dashboard.error)}
+            icon={UserX}
+            hint="Batches with nobody teaching them"
             href="/admissions/batches"
           />
         </BentoTile>

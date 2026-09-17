@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
+from django.db.models import Q, QuerySet
 from django.utils import timezone
 
 from apps.accounts.models import User, UserRole
@@ -15,7 +16,50 @@ from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
 from apps.common.identifiers import next_student_id
 
+from . import access
 from .models import MIN_FEE_AMOUNT, StudentProfile
+
+#: How many candidate matches `find_duplicate_candidates` returns. A
+#: mid-registration "does anyone match?" warning needs a short list to show,
+#: not every row an ambiguous shared phone number might turn up.
+DUPLICATE_MATCH_LIMIT = 5
+
+
+def find_duplicate_candidates(
+    *, user: User, email: str = "", phone: str = ""
+) -> QuerySet[StudentProfile]:
+    """Existing students who exact-match ``email`` or ``phone``, narrowed to
+    what ``user`` may see.
+
+    ``USER_JOURNEYS.md`` §4.2: "as soon as email or phone is complete, the
+    wizard asks the server does anyone match?" — an *exact* match only, never
+    fuzzy or similarity matching; the journey asks whether this exact contact
+    information is already on file, not who looks similar.
+
+    Scoped through :func:`apps.students.access.visible_students` — the same
+    queryset the admissions list and Student 360 already resolve through —
+    rather than a fresh unscoped query, so a match outside the caller's own
+    reach (another branch, or a record this role cannot see at all) is not
+    returned at all, never a redacted stub. A false negative here (a real
+    duplicate the caller cannot see) is the correct, safe failure mode; a
+    caller who is not otherwise allowed to see that student learning it
+    exists is not.
+
+    Email and phone live on the linked ``User`` (``apps.accounts.models``),
+    not on ``StudentProfile`` itself.
+    """
+    email = (email or "").strip().lower()
+    phone = (phone or "").strip()
+    if not email and not phone:
+        return StudentProfile.objects.none()
+
+    condition = Q()
+    if email:
+        condition |= Q(user__email__iexact=email)
+    if phone:
+        condition |= Q(user__phone=phone)
+
+    return access.visible_students(user).filter(condition).order_by("-created_at")
 
 
 @transaction.atomic
@@ -31,6 +75,7 @@ def create_student(
     password: str | None = None,
     send_invitation: bool = True,
     fee_amount: Decimal | None = None,
+    override_reason: str = "",
 ) -> StudentProfile:
     """Create the user account and the student profile as one unit.
 
@@ -46,9 +91,33 @@ def create_student(
 
     The centre is resolved once and written to both halves, so an account and
     its profile can never disagree about where somebody is.
+
+    ``override_reason`` is Phase 17's duplicate-check override
+    (``USER_JOURNEYS.md`` §4.2): the same disclosure-safe
+    :func:`find_duplicate_candidates` check the registration wizard's own
+    warning step used is re-run here, from the server's own record of
+    ``email``/``phone`` rather than trusting a client-supplied "a duplicate
+    was shown" flag — a client that skips straight to this call, or edits the
+    contact fields after the warning was shown, is held to the identical
+    rule. When that recheck finds a candidate, a reason is required to
+    proceed and is recorded against the resulting profile; when it finds
+    none, the field is not needed at all and nothing is audited by it. There
+    is no new column on ``StudentProfile`` for this — it is audit-only.
     """
     if fee_amount is not None:
         _check_fee_amount(fee_amount, actor=actor)
+
+    duplicates = list(find_duplicate_candidates(user=actor, email=email, phone=phone))
+    if duplicates and not override_reason.strip():
+        raise ApplicationError(
+            {
+                "override_reason": [
+                    "A possible existing student was found. Say why this is a "
+                    "different person to continue."
+                ]
+            }
+        )
+
     branch = resolve_branch_for_new_record(actor=actor, branch=branch)
     user = create_user(
         email=email,
@@ -74,6 +143,19 @@ def create_student(
         profile.fee_amount_updated_by = actor
     profile.full_clean(exclude=["user", "student_id", "branch"])
     profile.save()
+
+    if duplicates:
+        record(
+            action=AuditAction.STUDENT_DUPLICATE_OVERRIDDEN,
+            actor=actor,
+            resource_type="student",
+            resource_id=profile.pk,
+            context={
+                "student_id": profile.student_id,
+                "reason": override_reason.strip(),
+                "matched_student_ids": [str(candidate.pk) for candidate in duplicates],
+            },
+        )
 
     record(
         action=AuditAction.STUDENT_CREATED,

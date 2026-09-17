@@ -45,6 +45,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { errorMessage, fieldErrors } from '@/lib/api';
 import { assignBatchTrainer, createBatch, enrolStudent, listBatches } from '@/lib/batches';
 import { formatDate, isoDaysFromNow, isoToday } from '@/lib/batch-labels';
@@ -53,7 +54,14 @@ import { listCourses } from '@/lib/courses';
 import { recordPayment, setEnrollmentFee } from '@/lib/fees';
 import { PAYMENT_METHOD_LABEL, PAYMENT_METHOD_OPTIONS, QUALIFICATION_OPTIONS } from '@/lib/labels';
 import { formatCurrency } from '@/lib/format';
-import { createStudent, ensureTeachingProfile, listStudents, listTrainers, listUsers } from '@/lib/people';
+import {
+  checkDuplicates,
+  createStudent,
+  ensureTeachingProfile,
+  listStudents,
+  listTrainers,
+  listUsers,
+} from '@/lib/people';
 import type {
   AdminUser,
   BatchDetail,
@@ -61,6 +69,7 @@ import type {
   CourseListRow,
   Enrollment,
   PaymentMethod,
+  StudentDuplicateMatch,
   StudentListRow,
   StudentProfile,
   TrainerListRow,
@@ -131,9 +140,14 @@ export function RegistrationWizard() {
   const [referrerLoading, setReferrerLoading] = useState(false);
   const [referrer, setReferrer] = useState<StudentListRow | null>(null);
   const [studentErrors, setStudentErrors] = useState<Record<string, string>>({});
-  const [duplicates, setDuplicates] = useState<StudentListRow[]>([]);
+  const [duplicates, setDuplicates] = useState<StudentDuplicateMatch[]>([]);
   const [duplicateChecking, setDuplicateChecking] = useState(false);
   const [acknowledgedDuplicate, setAcknowledgedDuplicate] = useState(false);
+  // Why this is a different person, typed at the duplicate-check step and
+  // held here — nothing is sent anywhere until the wizard's final "Register"
+  // step, per `USER_JOURNEYS.md` §4.2, which submits it alongside the rest
+  // of the registration as `override_reason`.
+  const [overrideReason, setOverrideReason] = useState('');
   const [createdStudent, setCreatedStudent] = useState<StudentProfile | null>(null);
 
   // --- Step 2: course ----------------------------------------------------
@@ -195,27 +209,48 @@ export function RegistrationWizard() {
     goToStep(next);
   }
 
-  // Duplicate detection: search as the identifying fields are typed, before
-  // there is anything to submit. `user__phone` is not currently one of the
-  // fields `/api/v1/students/` searches on, so a phone-only match will not
-  // surface until that is added server-side — this still checks it, on the
-  // chance the number also appears elsewhere on the record, and email (which
-  // *is* indexed for search, and unique besides) is the reliable half of this.
+  // Duplicate detection: once email or phone is complete, ask the
+  // disclosure-safe `/students/duplicates/` endpoint (`lib/people
+  // .ts::checkDuplicates`) — never a plain student search, which would leak
+  // a match outside the counsellor's own reach. `useDebouncedValue` is the
+  // same debounce hook `app/teaching/today/page.tsx` already uses, rather
+  // than a fresh inline timer for this one field.
   // The empty-query case is left to render time (see `duplicateQuery` and
   // `visibleDuplicates` below) rather than reset here, so nothing sets state
   // synchronously from inside the effect body itself.
+  const debouncedEmail = useDebouncedValue(email, 350);
+  const debouncedPhone = useDebouncedValue(phone, 350);
   useEffect(() => {
-    const query = email.trim().length >= 3 ? email.trim() : phone.trim().length >= 4 ? phone.trim() : '';
-    if (!query) return;
+    const emailQuery = debouncedEmail.trim();
+    const phoneQuery = debouncedPhone.trim();
+    if (emailQuery.length < 3 && phoneQuery.length < 4) return;
+    let cancelled = false;
+    // A zero-delay timer, not a bare call: `setDuplicateChecking(true)` below
+    // is still a `setState` reachable from this effect's body, and this
+    // repo's lint config (rightly) refuses that even when the value being
+    // debounced already moved via `useDebouncedValue` above — see the
+    // identical pattern on every other search effect in this file.
     const timer = setTimeout(() => {
       setDuplicateChecking(true);
-      listStudents({ search: query, page_size: 5 })
-        .then((page) => setDuplicates(page.results))
-        .catch(() => setDuplicates([]))
-        .finally(() => setDuplicateChecking(false));
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [email, phone]);
+      checkDuplicates({
+        email: emailQuery.length >= 3 ? emailQuery : undefined,
+        phone: phoneQuery.length >= 4 ? phoneQuery : undefined,
+      })
+        .then((response) => {
+          if (!cancelled) setDuplicates(response.results);
+        })
+        .catch(() => {
+          if (!cancelled) setDuplicates([]);
+        })
+        .finally(() => {
+          if (!cancelled) setDuplicateChecking(false);
+        });
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [debouncedEmail, debouncedPhone]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -310,7 +345,8 @@ export function RegistrationWizard() {
     goPastStudentDetails();
   }
 
-  function onContinuePastDuplicate() {
+  function onContinuePastDuplicate(reason: string) {
+    setOverrideReason(reason);
     setAcknowledgedDuplicate(true);
     if (email.trim() && firstName.trim()) goPastStudentDetails();
   }
@@ -463,6 +499,10 @@ export function RegistrationWizard() {
       // which the API stores as null, not as a fee of nothing.
       fee_amount: feeAmount.trim() === '' ? null : feeAmount.trim(),
       ...(branchId ? { branch: branchId } : {}),
+      // Only present when the wizard actually showed a duplicate match and
+      // the counsellor typed a reason to proceed anyway — nothing is sent
+      // for a registration that never triggered the check.
+      ...(overrideReason.trim() ? { override_reason: overrideReason.trim() } : {}),
     });
     setCreatedStudent(created);
     return created;
@@ -605,6 +645,7 @@ export function RegistrationWizard() {
     setStudentErrors({});
     setDuplicates([]);
     setAcknowledgedDuplicate(false);
+    setOverrideReason('');
     setCreatedStudent(null);
     setPaidNow('1000');
     setPaidMethod('cash');
@@ -670,6 +711,7 @@ export function RegistrationWizard() {
                     onChange={(event) => {
                       setEmail(event.target.value);
                       setAcknowledgedDuplicate(false);
+                      setOverrideReason('');
                     }}
                   />
                 </Field>
@@ -679,6 +721,7 @@ export function RegistrationWizard() {
                     onChange={(event) => {
                       setPhone(event.target.value);
                       setAcknowledgedDuplicate(false);
+                      setOverrideReason('');
                     }}
                   />
                 </Field>
@@ -791,7 +834,7 @@ export function RegistrationWizard() {
               {duplicateChecking ? (
                 <p className="text-xs text-muted-foreground">Checking for existing students…</p>
               ) : null}
-              <DuplicateMatch matches={visibleDuplicates} onContinueAnyway={onContinuePastDuplicate} />
+              <DuplicateMatch matches={visibleDuplicates} onConfirmDifferentPerson={onContinuePastDuplicate} />
 
               <Button type="submit" disabled={visibleDuplicates.length > 0 && !acknowledgedDuplicate}>
                 Next: choose a course

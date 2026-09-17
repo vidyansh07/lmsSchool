@@ -21,15 +21,18 @@ from rest_framework.views import APIView
 
 from apps.batches import access as batch_access
 from apps.batches.models import BatchStatus
-from apps.common.permissions import IsActiveUser
+from apps.common.caching import MINUTE, remember
+from apps.common.permissions import Capability, HasCapability, IsActiveUser
 from apps.enrollments.models import ACCESS_GRANTING_STATUSES, Enrollment, EnrollmentStatus
 from apps.enrollments.services import course_progress
+from apps.students import access as students_access
 from apps.work import access as work_access
-from apps.work.models import OPEN_STATUSES, ActivityStatus
+from apps.work.models import OPEN_STATUSES, ActivityCategory, ActivityStatus
 
 from .calendar import MAX_RANGE_DAYS, events_for
 from .serializers import (
     CalendarResponseSerializer,
+    CounsellorDashboardSerializer,
     StudentDashboardSerializer,
     TrainerDashboardSerializer,
 )
@@ -313,3 +316,94 @@ class TrainerDashboardView(APIView):
                 },
             }
         )
+
+
+def _counsellor_dashboard(user) -> dict:
+    """ERP Phase 17 (`USER_JOURNEYS.md` §4.1, `API_CONTRACTS.md` verbatim
+    field names) — every count taken from the same access-layer queryset the
+    counsellor's own list screens already use, never a second, unscoped
+    definition of "mine".
+    """
+    from apps.warnings import services as warnings_services
+
+    today = timezone.localdate()
+
+    students = students_access.visible_students(user)
+    new_students_today = students.filter(created_at__date=today).count()
+    # "Registered, not yet placed on any batch" — the same underlying
+    # condition `apps.warnings.services._admissions_warnings` raises its
+    # `not_enrolled` warning from, minus that warning's week-old threshold:
+    # this tile is a live count, not an escalation.
+    unassigned_batch = students.filter(enrollments__isnull=True).count()
+
+    # `EnrollmentStatus.PENDING` is this codebase's existing "awaiting its
+    # next step" concept — the same status
+    # `app/admissions/dashboard/page.tsx`'s pre-Phase-17 "Pending
+    # confirmation" tile already fetches via `listEnrollments({status:
+    # 'pending'})`, not a fresh definition of "pending".
+    pending_registrations = (
+        batch_access.visible_enrollments(user).filter(status=EnrollmentStatus.PENDING).count()
+    )
+
+    # The exact condition `apps.warnings.services._batch_warnings` already
+    # raises its `batch_no_trainer` warning from, reused rather than
+    # redefined so the tile and that warning can never disagree about what
+    # "no trainer" means.
+    unassigned_trainer = (
+        batch_access.visible_batches(user)
+        .filter(status__in=(BatchStatus.UPCOMING, BatchStatus.ACTIVE), trainer__isnull=True)
+        .count()
+    )
+
+    # This counsellor's own follow-up work queue (rule 2: queryset-first,
+    # never a raw `Activity.objects` count) — the identical
+    # `Q(assigned_to=user) | Q(created_by=user)` filter Phase 16's
+    # `TrainerDashboardView.work` above uses for "my work", layered on
+    # `visible_activities` and narrowed to the follow-up category.
+    own_follow_ups = work_access.visible_activities(user).filter(
+        Q(assigned_to=user) | Q(created_by=user), activity_type__category=ActivityCategory.FOLLOW_UP
+    )
+    follow_up_counts = own_follow_ups.aggregate(
+        due=Count("id", filter=Q(status__in=OPEN_STATUSES) & ~Q(status=ActivityStatus.OVERDUE)),
+        overdue=Count("id", filter=Q(status=ActivityStatus.OVERDUE)),
+    )
+
+    return {
+        "new_students_today": new_students_today,
+        "pending_registrations": pending_registrations,
+        "follow_ups_due": follow_up_counts["due"] or 0,
+        "follow_ups_overdue": follow_up_counts["overdue"] or 0,
+        "unassigned_batch": unassigned_batch,
+        "unassigned_trainer": unassigned_trainer,
+        "warnings": warnings_services.cached_warnings_for(user),
+    }
+
+
+class CounsellorDashboardView(APIView):
+    """What a counsellor needs on opening `/admissions/dashboard`
+    (`USER_JOURNEYS.md` §4.1) — one call replacing the five or six separate,
+    ad-hoc list fetches the page made before Phase 17.
+
+    Cached for a minute per caller, the same shape `AdminDashboardView`/
+    `ManagerDashboardView` (`apps.reporting.views`) already use:
+    `remember()` keyed on the user's own id, with no explicit invalidation —
+    those two dashboards do not invalidate on write either, and a
+    minute-stale count here is the same acceptable cost.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.STUDENT_CREATE
+
+    @extend_schema(
+        summary="Counsellor dashboard",
+        responses={200: CounsellorDashboardSerializer},
+        tags=DASHBOARD_TAG,
+    )
+    def get(self, request):
+        data = remember(
+            "dashboard:counsellor",
+            (request.user.pk,),
+            MINUTE,
+            lambda: _counsellor_dashboard(request.user),
+        )
+        return Response(data)

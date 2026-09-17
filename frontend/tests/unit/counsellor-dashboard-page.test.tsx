@@ -5,20 +5,41 @@
  * in this test suite) and the capability gate on the default export.
  */
 import { render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AdmissionsDashboardPage, { AdmissionsDashboardContent } from '@/app/admissions/dashboard/page';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
-import type { BatchListRow, Enrollment, Paginated, StudentListRow } from '@/types/api';
+import type {
+  BatchListRow,
+  CounsellorDashboard,
+  Enrollment,
+  Paginated,
+  StudentListRow,
+} from '@/types/api';
 
 const listStudents = vi.hoisted(() => vi.fn());
 const listBatches = vi.hoisted(() => vi.fn());
 const listEnrollments = vi.hoisted(() => vi.fn());
+const getCounsellorDashboard = vi.hoisted(() => vi.fn());
 const useAuthMock = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
+
+function counsellorDashboard(overrides: Partial<CounsellorDashboard> = {}): CounsellorDashboard {
+  return {
+    new_students_today: 0,
+    pending_registrations: 0,
+    follow_ups_due: 0,
+    follow_ups_overdue: 0,
+    unassigned_batch: 0,
+    unassigned_trainer: 0,
+    warnings: [],
+    ...overrides,
+  };
+}
 
 vi.mock('@/lib/people', () => ({ listStudents }));
 vi.mock('@/lib/batches', () => ({ listBatches, listEnrollments }));
+vi.mock('@/lib/dashboards', () => ({ getCounsellorDashboard }));
 vi.mock('@/lib/fees', () => ({
   getFeesOverview: () =>
     Promise.resolve({
@@ -131,15 +152,48 @@ function cardFor(titleText: string | RegExp): HTMLElement {
   return card as HTMLElement;
 }
 
+/** A `StatCard` KPI tile, found by its plain-text label (`StatCard` renders
+ *  the label as a `<span>`, not a heading, unlike the `Card`/`CardTitle`
+ *  tiles `cardFor` above locates). */
+function kpiTileFor(labelText: string | RegExp): HTMLElement {
+  const label = screen.getByText(labelText);
+  const tile = label.parentElement?.parentElement;
+  if (!tile) throw new Error(`Could not locate the KPI tile for "${String(labelText)}"`);
+  return tile as HTMLElement;
+}
+
+/**
+ * The number inside a KPI tile, read off `NumberTicker`'s `aria-label`
+ * rather than its visible text: the visible figure counts up over ~900ms
+ * (`components/ui/motion/number-ticker.tsx`), so asserting on it directly
+ * would be a real, if usually-fast-enough, race — the `aria-label` carries
+ * the final value from the very first render, unanimated, precisely so a
+ * screen reader (and this test) never has to catch it mid-count.
+ */
+function kpiValue(tile: HTMLElement, value: number): void {
+  expect(tile.querySelector(`[aria-label="${value}"]`)).toBeInTheDocument();
+}
+
 function mockEmptyPipeline() {
   listStudents.mockResolvedValue(paginated<StudentListRow>([]));
   listEnrollments.mockImplementation((query: Record<string, unknown> = {}) =>
     Promise.resolve(paginated<Enrollment>([], query.status === 'pending' ? 0 : 0)),
   );
   listBatches.mockResolvedValue(paginated<BatchListRow>([]));
+  getCounsellorDashboard.mockResolvedValue(counsellorDashboard());
 }
 
 describe('AdmissionsDashboardContent', () => {
+  // Every test below exercises `listStudents`/`listEnrollments`/`listBatches`
+  // directly; `getCounsellorDashboard` is a separate, additive fetch
+  // (ERP Phase 17) that most of them do not care about, so it gets one
+  // shared default here rather than repeating it in each test body — the
+  // handful that do care (loading, the KPI values themselves) override it
+  // explicitly.
+  beforeEach(() => {
+    getCounsellorDashboard.mockResolvedValue(counsellorDashboard());
+  });
+
   it('puts "Register a student" first among the quick actions, reachable immediately', async () => {
     mockEmptyPipeline();
     render(<AdmissionsDashboardContent />);
@@ -251,11 +305,51 @@ describe('AdmissionsDashboardContent', () => {
     listStudents.mockReturnValue(new Promise(() => {}));
     listEnrollments.mockReturnValue(new Promise(() => {}));
     listBatches.mockReturnValue(new Promise(() => {}));
+    getCounsellorDashboard.mockReturnValue(new Promise(() => {}));
 
     render(<AdmissionsDashboardContent />);
     const bodyText = document.body.textContent ?? '';
     expect(bodyText).not.toMatch(/undefined/);
     expect(bodyText).not.toMatch(/\bNaN\b/);
+  });
+
+  it('shows the new-registrations and follow-up figures from the counsellor dashboard endpoint', async () => {
+    mockEmptyPipeline();
+    getCounsellorDashboard.mockResolvedValue(
+      counsellorDashboard({
+        new_students_today: 4,
+        pending_registrations: 7,
+        follow_ups_due: 3,
+        follow_ups_overdue: 2,
+        unassigned_batch: 5,
+        unassigned_trainer: 1,
+      }),
+    );
+
+    render(<AdmissionsDashboardContent />);
+
+    // Wait for the dashboard fetch to resolve before locating any tile by
+    // its label — the KPI row renders a loading skeleton (no label text at
+    // all) until then.
+    await screen.findByText(/registered today/i);
+
+    kpiValue(kpiTileFor(/registered today/i), 4);
+    kpiValue(kpiTileFor(/pending registrations/i), 7);
+    kpiValue(kpiTileFor(/follow-ups due/i), 3);
+    kpiValue(kpiTileFor(/follow-ups overdue/i), 2);
+    kpiValue(kpiTileFor(/unassigned batch/i), 5);
+    kpiValue(kpiTileFor(/unassigned trainer/i), 1);
+  });
+
+  it('falls back to "not available" for the dashboard KPIs when the endpoint fails, without breaking the rest of the page', async () => {
+    mockEmptyPipeline();
+    getCounsellorDashboard.mockRejectedValue(new ApiError(500, 'server_error', 'Dashboard is down.', 'req-9'));
+
+    render(<AdmissionsDashboardContent />);
+
+    expect(await screen.findAllByText(/not available/i)).not.toHaveLength(0);
+    // A KPI backed by a different, healthy fetch still renders its number.
+    kpiValue(kpiTileFor(/registered this week/i), 0);
   });
 });
 

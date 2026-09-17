@@ -159,6 +159,25 @@ export interface StudentListRow {
   created_at: string;
 }
 
+/**
+ * `GET /api/v1/students/duplicates/?email=&phone=&name=` (ERP Phase 17) — a
+ * disclosure-sensitive read: the server returns only students the caller may
+ * already see, so an empty `results` means either "nobody matches" or
+ * "somebody matches but is out of your scope" and this client can never tell
+ * which, by design (see `docs/erp/USER_JOURNEYS.md` §4.2).
+ */
+export interface StudentDuplicateMatch {
+  id: string;
+  name: string;
+  student_id: string;
+  batch_code: string;
+  created_at: string;
+}
+
+export interface StudentDuplicatesResponse {
+  results: StudentDuplicateMatch[];
+}
+
 export interface TrainerProfile {
   id: string;
   trainer_id: string;
@@ -1636,6 +1655,23 @@ export interface TrainerWorkload {
   projects_to_review: number;
   upcoming_tests: number;
   upcoming_exams: number;
+}
+
+/** `GET /api/v1/dashboards/counsellor/` (ERP Phase 17), §6 of
+ *  `USER_JOURNEYS.md`. `warnings` is the same `StaffWarning` shape
+ *  `GET /warnings/` returns; the loading contract in that section still has
+ *  the counsellor dashboard load its warnings strip from `/warnings/`
+ *  directly (as every other staff dashboard does, via `WarningsStrip`), so
+ *  this field exists for callers with no separate warnings fetch of their
+ *  own rather than replacing that strip here. */
+export interface CounsellorDashboard {
+  new_students_today: number;
+  pending_registrations: number;
+  follow_ups_due: number;
+  follow_ups_overdue: number;
+  unassigned_batch: number;
+  unassigned_trainer: number;
+  warnings: StaffWarning[];
 }
 
 export interface BatchSummary {

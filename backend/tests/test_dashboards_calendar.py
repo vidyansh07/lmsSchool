@@ -414,6 +414,193 @@ def test_the_trainer_dashboard_work_is_empty_for_a_non_trainer(api_client_no_csr
 
 
 # ---------------------------------------------------------------------------
+# Counsellor dashboard (ERP Phase 17)
+# ---------------------------------------------------------------------------
+
+COUNSELLOR_DASHBOARD = "/api/v1/dashboards/counsellor/"
+_TEST_PASSWORD = "correct-horse-battery-staple"
+
+
+@pytest.mark.django_db
+def test_the_counsellor_dashboard_scopes_every_count_to_its_own_branch(
+    api_client_no_csrf,
+    admin_user,
+    counsellor_user,
+    student_profile,
+    enrollment,
+    other_student_profile,
+    batch,
+    upcoming_batch,
+    unbounded_superadmin,
+    other_branch,
+    other_branch_student,
+    other_branch_batch,
+):
+    from apps.batches.services import create_batch
+    from apps.enrollments.models import EnrollmentStatus
+    from apps.enrollments.services import enrol_student
+    from apps.students.services import create_student
+
+    # A third student in the counsellor's own branch, mid-registration: an
+    # enrolment exists but is still `pending`.
+    pending_student = create_student(
+        email="pending.one@example.test",
+        first_name="Pending",
+        last_name="One",
+        actor=admin_user,
+        password=_TEST_PASSWORD,
+        send_invitation=False,
+    )
+    enrol_student(
+        student=pending_student, batch=batch, actor=admin_user, status=EnrollmentStatus.PENDING
+    )
+
+    # A second, unstaffed batch at the counsellor's own centre — `batch` and
+    # `upcoming_batch` both already have a trainer.
+    create_batch(
+        actor=admin_user,
+        name="Unstaffed cohort",
+        course=upcoming_batch.course,
+        start_date=upcoming_batch.start_date,
+        end_date=upcoming_batch.end_date,
+        capacity=10,
+    )
+
+    api_client_no_csrf.force_login(counsellor_user)
+    body = api_client_no_csrf.get(COUNSELLOR_DASHBOARD).json()
+
+    # `student_profile`, `other_student_profile` and `pending_student`: three
+    # students registered today in this branch, none at the other one.
+    assert body["new_students_today"] == 3
+    # Only `pending_student`'s enrolment is `pending`; `enrollment` (on
+    # `student_profile`) is active, and the other branch's is irrelevant.
+    assert body["pending_registrations"] == 1
+    # Only `other_student_profile` has no enrolment at all — `student_profile`
+    # has `enrollment`, `pending_student` has its pending one.
+    assert body["unassigned_batch"] == 1
+    # Only the freshly created "Unstaffed cohort" batch has no trainer.
+    assert body["unassigned_trainer"] == 1
+    assert isinstance(body["warnings"], list)
+
+
+@pytest.mark.django_db
+def test_the_counsellor_dashboard_isolates_follow_up_work_between_counsellors(
+    api_client_no_csrf, admin_user, counsellor_user, branch, student_profile, enrollment
+):
+    from apps.accounts.models import User, UserRole
+    from apps.work import services as work_services
+    from apps.work.models import Activity, ActivityStatus, ActivityType
+
+    other_counsellor = User.objects.create_user(
+        email="other.counsellor@example.test",
+        password=_TEST_PASSWORD,
+        first_name="Other",
+        last_name="Counsellor",
+        role=UserRole.COUNSELLOR,
+        branch=branch,
+    )
+    follow_up_type = ActivityType.objects.get(slug="follow-up")
+
+    # This counsellor's own: one due, one overdue.
+    work_services.create_activity(
+        actor=counsellor_user,
+        student=student_profile,
+        activity_type=follow_up_type,
+        enrollment=enrollment,
+        assigned_to=counsellor_user,
+        due_at=timezone.now() + timedelta(days=1),
+    )
+    overdue = work_services.create_activity(
+        actor=counsellor_user,
+        student=student_profile,
+        activity_type=follow_up_type,
+        enrollment=enrollment,
+        assigned_to=counsellor_user,
+        due_at=timezone.now() - timedelta(days=1),
+    )
+    overdue.status = ActivityStatus.OVERDUE
+    overdue.save(update_fields=["status"])
+
+    # The other counsellor's own — must never appear in the first
+    # counsellor's counts.
+    work_services.create_activity(
+        actor=other_counsellor,
+        student=student_profile,
+        activity_type=follow_up_type,
+        enrollment=enrollment,
+        assigned_to=other_counsellor,
+        due_at=timezone.now(),
+    )
+    # A different category entirely, assigned to this counsellor — must not
+    # be counted as a follow-up.
+    counselling_type = ActivityType.objects.filter(category="counselling").first()
+    if counselling_type is not None:
+        work_services.create_activity(
+            actor=admin_user,
+            student=student_profile,
+            activity_type=counselling_type,
+            enrollment=enrollment,
+            assigned_to=counsellor_user,
+            due_at=timezone.now(),
+        )
+
+    api_client_no_csrf.force_login(counsellor_user)
+    body = api_client_no_csrf.get(COUNSELLOR_DASHBOARD).json()
+
+    assert body["follow_ups_due"] == 1
+    assert body["follow_ups_overdue"] == 1
+    assert Activity.objects.filter(assigned_to=other_counsellor).count() == 1  # sanity
+
+
+@pytest.mark.django_db
+def test_the_counsellor_dashboard_is_zero_but_not_null_with_nothing_going_on(
+    api_client_no_csrf, counsellor_user
+):
+    api_client_no_csrf.force_login(counsellor_user)
+    body = api_client_no_csrf.get(COUNSELLOR_DASHBOARD).json()
+    warnings = body.pop("warnings")
+
+    assert body == {
+        "new_students_today": 0,
+        "pending_registrations": 0,
+        "follow_ups_due": 0,
+        "follow_ups_overdue": 0,
+        "unassigned_batch": 0,
+        "unassigned_trainer": 0,
+    }
+    # Not asserted empty: an unrelated, pre-existing warning
+    # (`email_unverified`, since `counsellor_user` never verified) is real
+    # and correct to show — only that the field is a measured list, never
+    # `null`.
+    assert isinstance(warnings, list)
+
+
+@pytest.mark.django_db
+def test_the_counsellor_dashboard_is_refused_to_a_non_counsellor(api_client_no_csrf, enrollment):
+    """Gated on `student.create`, per `API_CONTRACTS.md` §6 — a student
+    holds no such thing."""
+    api_client_no_csrf.force_login(enrollment.student.user)
+    response = api_client_no_csrf.get(COUNSELLOR_DASHBOARD)
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_the_counsellor_dashboard_costs_a_bounded_number_of_queries(
+    api_client_no_csrf, counsellor_user, student_profile, enrollment, django_assert_max_num_queries
+):
+    # Looser than the trainer dashboard's own budget: this one also embeds
+    # `warnings[]` (`API_CONTRACTS.md`), computed by
+    # `apps.warnings.services.cached_warnings_for` over several independent
+    # sources — the same cost `GET /warnings/` already carries on its own,
+    # not a regression this endpoint introduced. What matters here is that
+    # the number is flat and finite, not that it is small.
+    api_client_no_csrf.force_login(counsellor_user)
+    with django_assert_max_num_queries(60):
+        assert api_client_no_csrf.get(COUNSELLOR_DASHBOARD).status_code == 200
+
+
+# ---------------------------------------------------------------------------
 # Progress
 # ---------------------------------------------------------------------------
 

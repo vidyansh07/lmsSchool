@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -27,6 +27,7 @@ from apps.common.exceptions import AuthorityError
 from apps.common.permissions import Capability, HasCapability, IsActiveUser, IsOwnerOrHasCapability
 from apps.fees.queries import annotate_student_fee_totals
 from apps.organisation.access import resolve_submitted_branch
+from apps.work.serializers import ActivityDetailSerializer
 
 from . import access, services, student_360
 from .models import StudentProfile
@@ -35,7 +36,10 @@ from .serializers import (
     AdminStudentUpdateSerializer,
     FeeAmountUpdateSerializer,
     FeeStatusUpdateSerializer,
+    FollowUpCreateSerializer,
     StudentCreateSerializer,
+    StudentDuplicateSerializer,
+    StudentDuplicatesResponseSerializer,
     StudentListSerializer,
     StudentProfileSerializer,
     StudentSelfUpdateSerializer,
@@ -122,11 +126,127 @@ class StudentListCreateView(ListCreateAPIView):
         profile_fields = data.pop("profile", None) or {}
         # The service re-checks that this actor may quote a fee; the view's
         # capability is `student.create`, which is not the same permission.
+        # It also re-runs its own duplicate check against `email`/`phone`
+        # (Phase 17) rather than trusting `override_reason`'s mere presence.
         branch = resolve_submitted_branch(request.user, data.pop("branch", None))
         profile = services.create_student(
             actor=request.user, branch=branch, profile_fields=profile_fields, **data
         )
         return Response(AdminStudentProfileSerializer(profile).data, status=status.HTTP_201_CREATED)
+
+
+class StudentDuplicatesView(APIView):
+    """ "Does anyone match?" — `USER_JOURNEYS.md` §4.2, asked by the
+    registration wizard as soon as email or phone is complete.
+
+    A read, not a search: resolved entirely through
+    `services.find_duplicate_candidates`, which narrows through
+    `access.visible_students` — the same disclosure-safe queryset Phase 11's
+    global search and the Student 360 route both go through — so a match
+    outside the caller's own reach (another branch, or simply a record this
+    role cannot see) is not returned at all, never a redacted stub. Gated on
+    `student.create`, the same capability the registration wizard itself
+    requires to reach this step — never a laxer, separate gate for what is,
+    in effect, a way to probe for a student's existence.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.STUDENT_CREATE
+
+    @extend_schema(
+        summary="Check for a matching student mid-registration",
+        parameters=[
+            OpenApiParameter("email", str, required=False),
+            OpenApiParameter("phone", str, required=False),
+            OpenApiParameter(
+                "name",
+                str,
+                required=False,
+                description=(
+                    "Accepted for the wizard's own contract; matching is exact "
+                    "email/phone only (never by name — see the journey's own wording)."
+                ),
+            ),
+        ],
+        responses={200: StudentDuplicatesResponseSerializer},
+        tags=STUDENTS_TAG,
+    )
+    def get(self, request):
+        matches = services.find_duplicate_candidates(
+            user=request.user,
+            email=request.query_params.get("email", ""),
+            phone=request.query_params.get("phone", ""),
+        )[: services.DUPLICATE_MATCH_LIMIT]
+        return Response({"results": StudentDuplicateSerializer(matches, many=True).data})
+
+
+class StudentFollowUpView(APIView):
+    """ "Plan a follow-up" on a student's record (`USER_JOURNEYS.md` §4.3).
+
+    A thin wrapper around `apps.work.services.create_activity` — the same
+    shape `apps.dsr.views.DSRCreateActivityView` uses for its own "create an
+    activity from this class" action (Phase 15) — never a direct
+    `Activity.objects.create()`, so this inherits that function's own
+    allowed-creator/-assignee-role and scope checks unchanged, and its own
+    audit write.
+
+    ``channel`` is deliberately absent from this endpoint's body. The seeded
+    ``follow-up-note`` form (`FORM_CATALOG.md`) already has a required
+    `channel` field, captured when the follow-up is later completed through
+    Phase 9's existing form pipeline — the point at which a channel is
+    actually known, not before the call has even happened. Adding a second,
+    earlier `channel` field here would be a field the data model was never
+    given, not a shortcut around it.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Plan a follow-up for a student",
+        request=FollowUpCreateSerializer,
+        responses={201: ActivityDetailSerializer},
+        tags=STUDENTS_TAG,
+    )
+    def post(self, request, student_id):
+        student = get_object_or_404(access.visible_students(request.user), pk=student_id)
+
+        serializer = FollowUpCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        from apps.enrollments.models import Enrollment
+        from apps.work import access as work_access
+        from apps.work import services as work_services
+        from apps.work.models import ActivityType
+
+        # The student's own most recent enrolment, whatever its status — a
+        # follow-up is not scoped to one class the way `DSRCreateActivityView`'s
+        # is, and a student still awaiting a batch has none at all, which
+        # `create_activity` already handles by falling back to the student's
+        # own branch.
+        enrollment = Enrollment.objects.filter(student=student).order_by("-created_at").first()
+        activity_type = get_object_or_404(ActivityType.objects.all(), slug="follow-up")
+
+        activity = work_services.create_activity(
+            actor=request.user,
+            student=student,
+            activity_type=activity_type,
+            enrollment=enrollment,
+            # Self-assigned to whoever is planning it. `create_activity`'s own
+            # `validate_assignee` still enforces the type's allowed-assignee
+            # roles unchanged — a manager may create a follow-up (the
+            # catalog's creator list) but is not one of its assignees, so a
+            # manager calling this endpoint is refused here exactly as
+            # `POST /activities/` would refuse the same assignment.
+            assigned_to=request.user,
+            due_at=data["due_at"],
+            priority=data.get("priority"),
+        )
+        detail = get_object_or_404(work_access.visible_activities(request.user), pk=activity.pk)
+        return Response(
+            ActivityDetailSerializer(detail, context={"as_student": False}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class StudentDetailView(RetrieveUpdateAPIView):

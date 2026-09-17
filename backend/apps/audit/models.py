@@ -101,6 +101,15 @@ class AuditAction(models.TextChoices):
     STUDENT_UPDATED = "student.updated", _("Student profile updated")
     STUDENT_FEE_STATUS_CHANGED = "student.fee_status.changed", _("Student fee status changed")
     STUDENT_FEE_AMOUNT_CHANGED = "student.fee_amount.changed", _("Student fee amount changed")
+    # ERP Phase 17: no new schema on `StudentProfile` for the duplicate-check
+    # override — a reason typed at registration, when a possible existing
+    # student was shown and the counsellor said "this is a different
+    # person". Audit-only, written by `apps.students.services.create_student`
+    # at the point registration actually proceeds past a matched duplicate.
+    STUDENT_DUPLICATE_OVERRIDDEN = (
+        "student.duplicate_overridden",
+        _("Registered past a possible duplicate match"),
+    )
     FEE_PLAN_SET = "fee.plan.set", _("Fee agreed")
     FEE_PLAN_UPDATED = "fee.plan.updated", _("Fee changed")
     FEE_NEXT_DUE_SET = "fee.next_due.set", _("Next payment expected")

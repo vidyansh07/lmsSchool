@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from apps.warnings.views import WarningSerializer
+
 
 class CalendarEventSerializer(serializers.Serializer):
     kind = serializers.CharField(read_only=True)
@@ -100,3 +102,19 @@ class TrainerDashboardSerializer(serializers.Serializer):
     courses = TrainerCourseSerializer(many=True, read_only=True)
     #: Phase 15: `{pending, overdue}` — always measured, never `null`.
     work = TrainerWorkSerializer(read_only=True)
+
+
+class CounsellorDashboardSerializer(serializers.Serializer):
+    """ERP Phase 17 (`API_CONTRACTS.md`, verbatim field names) — every count
+    scoped to the calling counsellor's own reach, never `null`."""
+
+    new_students_today = serializers.IntegerField(read_only=True)
+    pending_registrations = serializers.IntegerField(read_only=True)
+    follow_ups_due = serializers.IntegerField(read_only=True)
+    follow_ups_overdue = serializers.IntegerField(read_only=True)
+    unassigned_batch = serializers.IntegerField(read_only=True)
+    unassigned_trainer = serializers.IntegerField(read_only=True)
+    #: The same shape `GET /warnings/` returns, reused rather than
+    #: redeclared — `apps.warnings.services.cached_warnings_for` is the one
+    #: source for both.
+    warnings = WarningSerializer(many=True, read_only=True)
