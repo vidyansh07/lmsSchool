@@ -23,6 +23,7 @@ report_urlpatterns = [
     path("metrics/attendance-trend/", views.AttendanceTrendView.as_view(), name="report-trend"),
     path("exports/", include(export_urlpatterns)),
     path("<slug:key>/", views.ReportView.as_view(), name="report-run"),
+    path("<slug:key>/count/", views.ReportCountView.as_view(), name="report-count"),
     path("<slug:key>/export/", views.ReportExportView.as_view(), name="report-export"),
 ]
 

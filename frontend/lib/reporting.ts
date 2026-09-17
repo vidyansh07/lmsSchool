@@ -10,6 +10,7 @@ import type {
   ExportFormat,
   ExportJob,
   LmsMetric,
+  QueuedExportFormat,
   ReportDefinition,
   ReportPage,
   TrainerWorkload,
@@ -33,8 +34,22 @@ export async function runReport(key: string, filters: ReportFilters = {}): Promi
 }
 
 /**
+ * The preflight for the export confirmation dialog: how many rows this
+ * exact, currently-filtered report would export. Always asked of the
+ * server — never computed client-side — for the same reason
+ * `previewCommunicationCount` is (`components/communication/manual-send.tsx`):
+ * the number a person confirms must be the number the server will actually
+ * produce, not a stale or differently-scoped guess.
+ */
+export async function getReportCount(key: string, filters: ReportFilters = {}): Promise<number> {
+  const page = await apiFetch<{ rows: number }>(`/api/v1/reports/${key}/count/${queryString(filters)}`);
+  return page.rows;
+}
+
+/**
  * A plain link, not a fetch: the backend streams the CSV as an attachment and
- * re-checks the export capability on that request.
+ * re-checks the export capability on that request. `print` returns HTML
+ * (with a print stylesheet) instead of a file.
  */
 export function reportExportUrl(
   key: string,
@@ -50,7 +65,7 @@ export function reportExportUrl(
 /** Queue a report to be rendered off the request; a notification says when it is ready. */
 export async function queueExport(payload: {
   report_key: string;
-  format: ExportFormat;
+  format: QueuedExportFormat;
   batch?: string;
   course?: string;
   student?: string;

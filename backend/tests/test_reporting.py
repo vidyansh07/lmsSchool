@@ -820,6 +820,55 @@ def a_bit_of_everything(
     )
     dsr = start_dsr(session=reported, actor=enrollment.batch.trainer.user)
     submit_dsr(dsr=dsr, actor=enrollment.batch.trainer.user)
+
+    # ERP Phase 20's three new reports: one row of each, so they are not
+    # exercised only against an empty table.
+    from apps.automation.models import (
+        AutomationRule,
+        AutomationRuleStatus,
+        AutomationRun,
+        AutomationRunStatus,
+        AutomationTrigger,
+    )
+    from apps.communication.models import Delivery, DeliveryState, MessageChannel
+    from apps.work.models import ActivityType
+    from apps.work.services import create_activity
+
+    activity_type, _ = ActivityType.objects.get_or_create(
+        slug="reported-activity-type",
+        defaults={
+            "name": "Reported activity type",
+            "category": "mentoring",
+            "allowed_creator_roles": ["admin"],
+        },
+    )
+    create_activity(
+        actor=admin_user,
+        student=student_profile,
+        activity_type=activity_type,
+        enrollment=enrollment,
+        title="Reported activity",
+    )
+
+    Delivery.objects.create(
+        channel=MessageChannel.IN_APP,
+        recipient=student_profile.user,
+        state=DeliveryState.SENT,
+        attempts=1,
+    )
+
+    rule = AutomationRule.objects.create(
+        name="Reported rule",
+        trigger=AutomationTrigger.ACTIVITY_COMPLETED,
+        status=AutomationRuleStatus.ACTIVE,
+    )
+    AutomationRun.objects.create(
+        rule=rule,
+        trigger=AutomationTrigger.ACTIVITY_COMPLETED,
+        occurrence_key="reported-occurrence",
+        status=AutomationRunStatus.RAN,
+    )
+
     return enrollment
 
 

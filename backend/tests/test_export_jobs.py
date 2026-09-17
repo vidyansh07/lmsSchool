@@ -785,6 +785,310 @@ def test_row_count_checksum_and_size_are_recorded_for_every_completed_job(
     assert job.original_filename.endswith(".xlsx")
 
 
+# ---------------------------------------------------------------------------
+# Phase 20: the count preflight
+# ---------------------------------------------------------------------------
+
+
+def _count_url(key: str) -> str:
+    return f"/api/v1/reports/{key}/count/"
+
+
+def _export_url(key: str) -> str:
+    return f"/api/v1/reports/{key}/export/"
+
+
+@pytest.mark.django_db
+def test_count_matches_the_rows_the_export_actually_produces(
+    api_client_no_csrf, admin_user, enrollment
+):
+    """The one thing this endpoint must never do: disagree with the export
+    it is a preflight for. Both numbers come from the same request cycle so
+    a flaky, time-dependent report could not make them agree by accident.
+    """
+    api_client_no_csrf.force_login(admin_user)
+    count_response = api_client_no_csrf.get(_count_url("student_progress"))
+    assert count_response.status_code == 200
+    counted_rows = count_response.json()["rows"]
+    assert counted_rows >= 1
+
+    export_response = api_client_no_csrf.get(_export_url("student_progress"))
+    assert export_response.status_code == 200
+    body = b"".join(export_response.streaming_content).decode("utf-8")
+    exported_rows = list(csv.reader(io.StringIO(body)))[1:]  # drop the header
+    assert len(exported_rows) == counted_rows
+
+
+@pytest.mark.django_db
+def test_count_is_forbidden_for_a_trainer(api_client_no_csrf, trainer_profile, enrollment):
+    api_client_no_csrf.force_login(trainer_profile.user)
+    response = api_client_no_csrf.get(_count_url("student_progress"))
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_count_404s_for_an_unknown_report(api_client_no_csrf, admin_user):
+    api_client_no_csrf.force_login(admin_user)
+    assert api_client_no_csrf.get(_count_url("not-a-real-report")).status_code == 404
+
+
+@pytest.mark.django_db
+def test_count_respects_the_same_batch_filter_as_the_export(
+    api_client_no_csrf, admin_user, batch, enrollment
+):
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.get(_count_url("attendance"), {"batch": str(batch.pk)})
+    assert response.status_code == 200
+    assert response.json()["rows"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 20: the print format
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_print_format_returns_html_not_a_downloadable_file(
+    api_client_no_csrf, admin_user, enrollment
+):
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.get(_export_url("student_progress"), {"as": "print"})
+    assert response.status_code == 200
+    assert response["Content-Type"].startswith("text/html")
+    assert response["Content-Disposition"] == "inline"
+    body = response.content.decode("utf-8")
+    assert body.startswith("<!doctype html>")
+    assert "@media print" in body
+    assert "<table>" in body
+
+
+@pytest.mark.django_db
+def test_print_format_still_requires_the_export_capability(
+    api_client_no_csrf, trainer_profile, enrollment
+):
+    api_client_no_csrf.force_login(trainer_profile.user)
+    response = api_client_no_csrf.get(_export_url("student_progress"), {"as": "print"})
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_an_unknown_as_value_is_still_rejected(api_client_no_csrf, admin_user, enrollment):
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.get(_export_url("student_progress"), {"as": "doc"})
+    assert response.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Phase 20: the three new reports, and that each is scoped correctly
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_work_activities_report_only_shows_activities_from_the_callers_branch(
+    api_client_no_csrf,
+    manager_user,
+    unbounded_superadmin,
+    enrollment,
+    other_branch_enrollment,
+):
+    """`manager_user` is bounded to `branch` (unlike an admin, who — per the
+    owner's 14 September 2026 amendment to D-129, "admin sees every centre" —
+    is unbounded and would see both). An activity created against
+    `other_branch_enrollment` (a different centre) must never appear in a
+    bounded caller's report, even though both activities share the same
+    activity type.
+    """
+    from apps.work.models import ActivityStatus, ActivityType
+    from apps.work.services import create_activity
+
+    activity_type = ActivityType.objects.create(
+        slug="test-report-type",
+        name="Report Test Type",
+        category="mentoring",
+        allowed_creator_roles=["manager"],
+    )
+    mine = create_activity(
+        actor=manager_user,
+        student=enrollment.student,
+        activity_type=activity_type,
+        enrollment=enrollment,
+        title="My branch's activity",
+    )
+    create_activity(
+        actor=unbounded_superadmin,
+        student=other_branch_enrollment.student,
+        activity_type=activity_type,
+        enrollment=other_branch_enrollment,
+        title="The other branch's activity",
+    )
+
+    api_client_no_csrf.force_login(manager_user)
+    response = api_client_no_csrf.get(_export_url("work_activities"))
+    assert response.status_code == 200
+    body = b"".join(response.streaming_content).decode("utf-8")
+    assert enrollment.student.student_id in body
+    assert other_branch_enrollment.student.student_id not in body
+    assert mine.status == ActivityStatus.DRAFT
+
+
+@pytest.mark.django_db
+def test_deliveries_report_only_shows_deliveries_to_the_callers_branch(
+    api_client_no_csrf, manager_user, unbounded_superadmin, student_profile, other_branch_student
+):
+    """`manager_user` is bounded to `branch` — unlike an admin, who is
+    unbounded per the owner's amendment to D-129 and would see both."""
+    from apps.communication.models import Delivery, DeliveryState, MessageChannel
+
+    mine = Delivery.objects.create(
+        channel=MessageChannel.IN_APP,
+        recipient=student_profile.user,
+        state=DeliveryState.SENT,
+        attempts=1,
+    )
+    other = Delivery.objects.create(
+        channel=MessageChannel.IN_APP,
+        recipient=other_branch_student.user,
+        state=DeliveryState.SENT,
+        attempts=1,
+    )
+
+    api_client_no_csrf.force_login(manager_user)
+    response = api_client_no_csrf.get(_export_url("deliveries"))
+    assert response.status_code == 200
+    body = b"".join(response.streaming_content).decode("utf-8")
+    assert student_profile.user.get_full_name() in body
+    assert other_branch_student.user.get_full_name() not in body
+    assert mine.pk != other.pk
+
+
+@pytest.mark.django_db
+def test_deliveries_report_never_leaks_an_otp_send(api_client_no_csrf, admin_user, student_profile):
+    """Phase 19's own design (D-051, `apps.communication.services`'s module
+    docstring): an OTP send never creates a `Delivery` row at all — it goes
+    through `apps.accounts.otp.send_email_code` directly, never through
+    `create_deliveries`. So this report needs no extra filtering to keep an
+    OTP's variables out; it holds because there is never a row to filter.
+    Sending a real code and then checking the report stays honest about
+    that, rather than trusting the docstring's claim on its own.
+    """
+    from apps.accounts.otp import OtpPurpose, send_email_code
+    from apps.communication.models import Delivery
+
+    send_email_code(user=student_profile.user, purpose=OtpPurpose.STEP_UP)
+    assert not Delivery.objects.filter(recipient=student_profile.user).exists()
+
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.get(_export_url("deliveries"))
+    assert response.status_code == 200
+    body = b"".join(response.streaming_content).decode("utf-8")
+    assert student_profile.user.get_full_name() not in body
+
+
+@pytest.mark.django_db
+def test_deliveries_report_is_forbidden_without_the_communication_capability(
+    trainer_profile, student_profile
+):
+    """The "deliveries" branch of `_queryset_for_user` gates on
+    `communication.view_any` itself, in addition to whatever
+    `ReportExportView`'s own two outer gates (`report.view_any`,
+    `data.export`) already enforce.
+
+    Under the current role model every stock role that clears those two
+    outer gates (manager, counsellor, admin, superadmin — D-130 put the
+    counsellor beside the manager, "both can do both") also holds
+    `communication.view_any`, so there is no real end-to-end account that
+    reaches `ReportExportView` and gets refused only at this inner check.
+    This calls the domain branch directly instead — a trainer holds neither
+    outer capability nor this one, so it still proves the branch's own gate
+    independently of whichever roles happen to combine the two today.
+    """
+    from apps.communication.models import Delivery, DeliveryState, MessageChannel
+    from apps.reporting.views import _queryset_for_user
+
+    Delivery.objects.create(
+        channel=MessageChannel.IN_APP,
+        recipient=student_profile.user,
+        state=DeliveryState.SENT,
+        attempts=1,
+    )
+
+    queryset = _queryset_for_user(trainer_profile.user, "deliveries", None, None)
+    assert not queryset.exists()
+
+
+@pytest.mark.django_db
+def test_automation_runs_report_requires_automation_manage(
+    api_client_no_csrf, admin_user, counsellor_user
+):
+    from apps.automation.models import (
+        AutomationRule,
+        AutomationRuleStatus,
+        AutomationRun,
+        AutomationRunStatus,
+        AutomationTrigger,
+    )
+
+    rule = AutomationRule.objects.create(
+        name="Test rule",
+        trigger=AutomationTrigger.ACTIVITY_COMPLETED,
+        status=AutomationRuleStatus.ACTIVE,
+    )
+    AutomationRun.objects.create(
+        rule=rule,
+        trigger=AutomationTrigger.ACTIVITY_COMPLETED,
+        occurrence_key="test-occurrence-1",
+        status=AutomationRunStatus.RAN,
+    )
+
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.get(_export_url("automation_runs"))
+    assert response.status_code == 200
+    body = b"".join(response.streaming_content).decode("utf-8")
+    assert "Test rule" in body
+    assert "test-occurrence-1" in body
+
+    # A counsellor holds `report.view_any`/`data.export` (D-130) but not
+    # `automation.manage` — the report must come back empty for them, the
+    # same rule `_queryset_for_user`'s "automation_runs" branch enforces.
+    api_client_no_csrf.force_login(counsellor_user)
+    response = api_client_no_csrf.get(_export_url("automation_runs"))
+    if response.status_code == 200:
+        body = b"".join(response.streaming_content).decode("utf-8")
+        assert "Test rule" not in body
+    else:
+        assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_automation_runs_report_scrubs_the_error_field(api_client_no_csrf, admin_user):
+    from apps.automation.models import (
+        AutomationRule,
+        AutomationRuleStatus,
+        AutomationRun,
+        AutomationRunStatus,
+        AutomationTrigger,
+    )
+
+    rule = AutomationRule.objects.create(
+        name="Failing rule",
+        trigger=AutomationTrigger.ACTIVITY_COMPLETED,
+        status=AutomationRuleStatus.ACTIVE,
+    )
+    AutomationRun.objects.create(
+        rule=rule,
+        trigger=AutomationTrigger.ACTIVITY_COMPLETED,
+        occurrence_key="test-occurrence-2",
+        status=AutomationRunStatus.FAILED,
+        error="token=eyJsecretvalue123 while calling the action",
+    )
+
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.get(_export_url("automation_runs"))
+    body = b"".join(response.streaming_content).decode("utf-8")
+    assert "eyJsecretvalue123" not in body
+    assert "token=" in body
+
+
 @pytest.mark.django_db
 def test_the_list_endpoint_has_a_bounded_query_count(
     api_client_no_csrf, admin_user, enrollment, django_assert_max_num_queries

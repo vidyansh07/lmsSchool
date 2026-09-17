@@ -347,6 +347,14 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60,
         "options": {"expires": 50},
     },
+    # Exports (ERP Phase 20): once a night, well outside business hours, so a
+    # file's `SystemSetting.export_retention_days` lifetime is enforced daily
+    # rather than left to accumulate in storage indefinitely.
+    "reporting-expire-exports": {
+        "task": "reporting.expire_exports",
+        "schedule": crontab(hour=2, minute=30),
+        "options": {"expires": 3600},
+    },
 }
 
 # Malware scanning for uploads. `disabled` until a scanner is provisioned;

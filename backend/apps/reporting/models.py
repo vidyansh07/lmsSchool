@@ -100,13 +100,18 @@ class ExportStatus(models.TextChoices):
     COMPLETED = "completed", _("Completed")
     FAILED = "failed", _("Failed")
     CANCELLED = "cancelled", _("Cancelled")
+    #: Set by `tasks.expire_exports` once the file has passed
+    #: `SystemSetting.export_retention_days` and been deleted — a distinct
+    #: state from `FAILED`/`CANCELLED` so "the file existed and was cleaned
+    #: up on schedule" stays distinguishable from "this never worked".
+    EXPIRED = "expired", _("Expired")
 
 
 #: Terminal states. Once here, a job does not move again — `run_export` refuses
 #: to touch a job that is not `QUEUED`, and cancellation refuses one that is not
 #: `QUEUED` or `PROCESSING`.
 TERMINAL_EXPORT_STATUSES = frozenset(
-    {ExportStatus.COMPLETED, ExportStatus.FAILED, ExportStatus.CANCELLED}
+    {ExportStatus.COMPLETED, ExportStatus.FAILED, ExportStatus.CANCELLED, ExportStatus.EXPIRED}
 )
 
 #: How long a finished file is kept downloadable. An export is a copy of

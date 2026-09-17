@@ -34,6 +34,12 @@ class ReportPageSerializer(StrictSerializer):
     truncated = serializers.BooleanField()
 
 
+class ReportCountSerializer(StrictSerializer):
+    """The export-preflight response: `GET /reports/{key}/count/`."""
+
+    rows = serializers.IntegerField()
+
+
 class MetricSerializer(StrictSerializer):
     """A number, and the definition §8.6 requires it to carry."""
 

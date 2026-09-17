@@ -283,6 +283,7 @@ class AuditAction(models.TextChoices):
     EXPORT_FAILED = "export.failed", _("Export failed")
     EXPORT_DOWNLOADED = "export.downloaded", _("Export downloaded")
     EXPORT_CANCELLED = "export.cancelled", _("Export cancelled")
+    EXPORT_EXPIRED = "export.expired", _("Export expired")
 
     # --- Reversible deletion
     #

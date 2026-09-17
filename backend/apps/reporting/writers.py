@@ -31,6 +31,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Iterator
 from datetime import date, datetime
+from html import escape
 from io import BytesIO
 from typing import Any
 
@@ -234,6 +235,73 @@ def write_pdf(
     return buffer.getvalue(), row_count
 
 
+def write_print(
+    columns: Iterable[dict[str, str]],
+    rows: Iterable[dict[str, Any]],
+    *,
+    title: str,
+    filters: dict[str, Any],
+) -> tuple[bytes, int]:
+    """The same document shape as `write_pdf` — a title, the scope it ran
+    with, a header row — rendered as HTML with a print stylesheet instead of
+    a PDF library, for a caller who wants "print this" rather than "download
+    this". Never a file: `ReportExportView` serves it `Content-Disposition:
+    inline`, so a browser renders it in the tab that asked.
+
+    No row cap of its own: `ReportExportView` already bounds every non-CSV
+    format to `SYNC_ROW_LIMIT` rows before any writer is called, and this
+    format has no separate background-job path that could hand it something
+    larger later (see `PRINT_FORMAT`'s comment in `views.py`).
+    """
+    columns = list(columns)
+    keys = [column["key"] for column in columns]
+
+    header_html = "".join(f"<th>{escape(column['label'])}</th>" for column in columns)
+    body_html = []
+    row_count = 0
+    for row in rows:
+        cells = "".join(f"<td>{escape(_display(row.get(key)))}</td>" for key in keys)
+        body_html.append(f"<tr>{cells}</tr>")
+        row_count += 1
+
+    generated = timezone.localtime().strftime("%Y-%m-%d %H:%M")
+    html = f"""<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{escape(title)}</title>
+<style>
+  body {{ font-family: -apple-system, "Segoe UI", Arial, sans-serif; margin: 24px; }}
+  body {{ color: #111827; }}
+  h1 {{ font-size: 18px; margin: 0 0 4px; }}
+  .meta {{ color: #6b7280; font-size: 12px; margin-bottom: 16px; }}
+  table {{ border-collapse: collapse; width: 100%; font-size: 12px; }}
+  th, td {{ border: 1px solid #d1d5db; padding: 4px 8px; text-align: left; }}
+  thead {{ background: #1f2937; color: #ffffff; }}
+  .print-button {{ margin-bottom: 16px; }}
+  @media print {{
+    .print-button {{ display: none; }}
+    body {{ margin: 0; }}
+    table {{ font-size: 10px; }}
+    thead {{ display: table-header-group; }}
+    tr {{ page-break-inside: avoid; }}
+  }}
+</style>
+</head>
+<body>
+<button class="print-button" onclick="window.print()">Print</button>
+<h1>{escape(title)}</h1>
+<div class="meta">{escape(_filters_line(filters))} &middot; Generated {escape(generated)} &middot; \
+{row_count} rows</div>
+<table>
+<thead><tr>{header_html}</tr></thead>
+<tbody>{"".join(body_html)}</tbody>
+</table>
+</body>
+</html>"""
+    return html.encode("utf-8"), row_count
+
+
 def write(
     fmt: str,
     columns: Iterable[dict[str, str]],
@@ -242,11 +310,14 @@ def write(
     title: str,
     filters: dict[str, Any],
 ) -> tuple[bytes, int]:
-    """Dispatch to the writer for `fmt`. `fmt` is an `ExportFormat` value."""
+    """Dispatch to the writer for `fmt`. `fmt` is an `ExportFormat` value, or
+    the extra `"print"` value `ReportExportView` alone ever passes."""
     if fmt == "csv":
         return write_csv(columns, rows)
     if fmt == "xlsx":
         return write_xlsx(columns, rows)
     if fmt == "pdf":
         return write_pdf(columns, rows, title=title, filters=filters)
+    if fmt == "print":
+        return write_print(columns, rows, title=title, filters=filters)
     raise ValueError(f"Unknown export format: {fmt!r}")

@@ -911,3 +911,129 @@ REPORTS.update(
         ACTIVITY.key: (ACTIVITY, activity, "activity"),
     }
 )
+
+
+# ---------------------------------------------------------------------------
+# Phase 20: three more list screens as reports, over Phases 9/19/14's own
+# domains. Each source name below is deliberately distinct from every
+# existing one — in particular ``work_activities`` is NOT the pre-existing
+# ``activity`` source above (Phase 9's `apps.work.Activity` versus the
+# unrelated audit/activity-feed `apps.audit.AuditLog` that ``activity``
+# already names) — and each is scoped through that domain's own existing
+# visible/scoped queryset, never a new authorization rule invented here.
+# ---------------------------------------------------------------------------
+
+WORK_ACTIVITIES = Report(
+    key="work_activities",
+    label="Activities",
+    description="Every scheduled or worked activity from the activity engine, and how it went.",
+    columns=(
+        Column("student_code", "Student"),
+        Column("student_name", "Name"),
+        Column("activity_type", "Type"),
+        Column("status", "Status"),
+        Column("assigned_to", "Assigned to"),
+        Column("due_at", "Due"),
+        Column("completed_at", "Completed"),
+        Column("result", "Result"),
+        Column("score", "Score"),
+        Column("max_score", "Out of"),
+    ),
+)
+
+
+def work_activities(activities) -> Iterator[dict[str, Any]]:
+    base = activities.select_related(
+        "student", "student__user", "activity_type", "assigned_to"
+    ).order_by("-created_at")
+    for row in base.iterator(chunk_size=CHUNK):
+        yield {
+            "student_code": row.student.student_id,
+            "student_name": row.student.user.get_full_name(),
+            "activity_type": row.activity_type.name,
+            "status": row.get_status_display(),
+            "assigned_to": row.assigned_to.get_full_name() if row.assigned_to_id else "",
+            "due_at": row.due_at,
+            "completed_at": row.completed_at,
+            "result": row.get_result_display(),
+            "score": str(row.score) if row.score is not None else "",
+            "max_score": str(row.max_score) if row.max_score is not None else "",
+        }
+
+
+DELIVERIES = Report(
+    key="deliveries",
+    label="Deliveries",
+    description=(
+        "The send log: every message dispatched, its channel, template and outcome. "
+        "OTP sends never appear here — they never create a Delivery row (D-051)."
+    ),
+    columns=(
+        Column("channel", "Channel"),
+        Column("recipient", "Recipient"),
+        Column("template", "Template"),
+        Column("state", "State"),
+        Column("attempts", "Attempts"),
+        Column("created_at", "Sent"),
+    ),
+)
+
+
+def deliveries(rows) -> Iterator[dict[str, Any]]:
+    base = rows.select_related(
+        "recipient", "template_version", "template_version__template"
+    ).order_by("-created_at")
+    for row in base.iterator(chunk_size=CHUNK):
+        yield {
+            "channel": row.get_channel_display(),
+            "recipient": row.recipient.get_full_name() if row.recipient_id else row.address,
+            "template": row.template_version.template.key if row.template_version_id else "",
+            "state": row.get_state_display(),
+            "attempts": row.attempts,
+            "created_at": row.created_at,
+        }
+
+
+AUTOMATION_RUNS = Report(
+    key="automation_runs",
+    label="Automation runs",
+    description="Every automation rule evaluation that produced a run, and how it went.",
+    columns=(
+        Column("rule_name", "Rule"),
+        Column("trigger", "Trigger"),
+        Column("status", "Status"),
+        Column("occurrence_key", "Occurrence"),
+        Column("created_at", "When"),
+        Column("error", "Error"),
+    ),
+)
+
+
+def automation_runs(rows) -> Iterator[dict[str, Any]]:
+    """`error` is scrubbed here, the same way `Delivery.error` and
+    `EmailMessage.last_error` already are — `AutomationRun.error` itself is
+    stored unscrubbed (`apps.automation.services._finish_run`), so this report
+    is where the same convention is applied before the text ever leaves the
+    database.
+    """
+    from apps.common.logging import scrub_text
+
+    base = rows.select_related("rule").order_by("-created_at")
+    for row in base.iterator(chunk_size=CHUNK):
+        yield {
+            "rule_name": row.rule.name if row.rule_id else "",
+            "trigger": row.get_trigger_display(),
+            "status": row.get_status_display(),
+            "occurrence_key": row.occurrence_key,
+            "created_at": row.created_at,
+            "error": scrub_text(row.error) if row.error else "",
+        }
+
+
+REPORTS.update(
+    {
+        WORK_ACTIVITIES.key: (WORK_ACTIVITIES, work_activities, "work_activities"),
+        DELIVERIES.key: (DELIVERIES, deliveries, "deliveries"),
+        AUTOMATION_RUNS.key: (AUTOMATION_RUNS, automation_runs, "automation_runs"),
+    }
+)

@@ -250,3 +250,51 @@ def run_export(job_id: str) -> bool:
         context={"report": job.report_key, "error": job.error},
     )
     return False
+
+
+@shared_task(name="reporting.expire_exports", ignore_result=True)
+def expire_exports() -> int:
+    """Nightly (`CELERY_BEAT_SCHEDULE`): delete the file behind every export
+    job whose own `expires_at` has passed, and mark the job `EXPIRED`.
+
+    `expires_at` is set once, at completion time, from
+    `SystemSetting.export_retention_days` as it stood then (`run_export`
+    above) — this task only acts on that stored deadline; it never
+    recomputes it against today's setting, so shortening the retention
+    window does not retroactively expire a file that was promised a longer
+    life when it was produced.
+
+    Idempotent and safe to redeliver, the same as every other task in this
+    module: the queryset only ever matches `COMPLETED` jobs, so a job this
+    sweep has already moved to `EXPIRED` is not matched again, and a job
+    that never completed (`QUEUED`/`PROCESSING`/`FAILED`/`CANCELLED`) is
+    never touched regardless of how old it is.
+    """
+    from apps.configuration.settings_resolver import forget_resolved_settings
+
+    # Same reasoning as `run_export`'s own call: a worker process has no
+    # per-request settings memo to reset, so the first job it ever touches
+    # would otherwise pin a stale reading for the life of the process.
+    forget_resolved_settings()
+
+    candidates = ExportJob.objects.filter(
+        status=ExportStatus.COMPLETED,
+        expires_at__isnull=False,
+        expires_at__lte=timezone.now(),
+    )
+    expired = 0
+    for job in candidates.iterator(chunk_size=200):
+        if job.file:
+            job.file.delete(save=False)
+        job.status = ExportStatus.EXPIRED
+        job.save(update_fields=["status", "file", "updated_at"])
+        record(
+            action=AuditAction.EXPORT_EXPIRED,
+            actor=job.requested_by,
+            resource_type="export_job",
+            resource_id=job.pk,
+            context={"report": job.report_key, "expired_at": str(job.expires_at)},
+            durable=False,
+        )
+        expired += 1
+    return expired

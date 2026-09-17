@@ -2082,14 +2082,18 @@ export interface StaffWarning {
 
 // --- Exports -----------------------------------------------------------------
 
-export type ExportFormat = "csv" | "xlsx" | "pdf";
+/** Formats a background job can be queued for. "print" never queues — it
+ *  always renders synchronously as HTML, so it is not a member of this. */
+export type QueuedExportFormat = "csv" | "xlsx" | "pdf";
+/** Every format the export menu offers, including the synchronous "print". */
+export type ExportFormat = QueuedExportFormat | "print";
 export type ExportStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled";
 
 export interface ExportJob {
   id: string;
   report_key: string;
-  format: ExportFormat;
+  format: QueuedExportFormat;
   filters: Record<string, unknown>;
   status: ExportStatus;
   requested_by_email: string | null;

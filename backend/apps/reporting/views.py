@@ -46,6 +46,7 @@ from .serializers import (
     ExportJobSerializer,
     ManagerDashboardSerializer,
     MetricSerializer,
+    ReportCountSerializer,
     ReportDefinitionSerializer,
     ReportPageSerializer,
     SavedFilterSerializer,
@@ -62,9 +63,17 @@ REPORTS_TAG = ["reports and analytics"]
 #: lists download at once, large ones run in the background").
 SYNC_ROW_LIMIT = 2_000
 
+#: `?as=print` is a fourth value alongside `ExportFormat`'s three, valid only
+#: on `ReportExportView` — never on the background queue, whose `format`
+#: field stays `ExportFormat.choices` (csv/xlsx/pdf): a print view is a
+#: browser-rendered document for the tab that asked for it, not a file to
+#: hand back to someone later.
+PRINT_FORMAT = "print"
+
 CONTENT_TYPES = {
     ExportFormat.XLSX: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ExportFormat.PDF: "application/pdf",
+    PRINT_FORMAT: "text/html; charset=utf-8",
 }
 
 #: How many rows a *screen* receives. An export streams the whole thing; a JSON
@@ -221,6 +230,39 @@ def _queryset_for_user(user, source: str, batch, course, extra=None):
             role=extra.get("role") or None,
             kind=extra.get("kind") or None,
         )
+    if source == "work_activities":
+        # Phase 9's `apps.work.Activity` — NOT the `activity` audit-feed
+        # source above. `visible_activities` is itself the union of every
+        # legitimate way in (branch-scoped `activity.view_any`, a trainer's
+        # taught batches, the caller's own created/assigned rows); there is
+        # no separate capability gate to add on top of it here.
+        from apps.work import access as work_access
+
+        return work_access.visible_activities(user)
+    if source == "deliveries":
+        from apps.communication.models import Delivery
+
+        if not has_capability(user, Capability.COMMUNICATION_VIEW_ANY):
+            return Delivery.objects.none()
+        # The identical scoping `DeliveryListView.get_queryset` uses — same
+        # path, same capability — so this report and that screen can never
+        # disagree about which deliveries are visible.
+        return scope_to_branch(
+            Delivery.objects.with_related(),
+            user,
+            path="recipient__branch",
+            capability=Capability.COMMUNICATION_VIEW_ANY,
+        )
+    if source == "automation_runs":
+        from apps.automation.models import AutomationRun
+
+        # `automation.manage` is unscoped in `apps.automation` itself today
+        # (`AutomationRuleListCreateView` applies no branch narrowing beyond
+        # the capability) — this mirrors that exactly rather than inventing a
+        # branch rule the domain does not have.
+        if not has_capability(user, Capability.AUTOMATION_MANAGE):
+            return AutomationRun.objects.none()
+        return AutomationRun.objects.with_related()
     rows = batch_access.visible_enrollments(user)
     if batch is not None:
         rows = rows.filter(batch=batch)
@@ -336,7 +378,8 @@ class ReportExportView(APIView):
                 str,
                 description=(
                     "csv (streamed, any size), xlsx or pdf (rendered inline up to "
-                    f"{SYNC_ROW_LIMIT} rows; larger exports must be queued)"
+                    f"{SYNC_ROW_LIMIT} rows; larger exports must be queued), or print "
+                    "(HTML with a print stylesheet, same row limit, never a downloadable file)"
                 ),
             ),
         ],
@@ -365,8 +408,8 @@ class ReportExportView(APIView):
 
         definition, _producer, source = reports.REPORTS[key]
         fmt = request.query_params.get("as", ExportFormat.CSV)
-        if fmt not in ExportFormat.values:
-            raise ApplicationError({"as": ["Choose csv, xlsx or pdf."]})
+        if fmt not in (*ExportFormat.values, PRINT_FORMAT):
+            raise ApplicationError({"as": ["Choose csv, xlsx, pdf or print."]})
         batch, course = _filters(request)
         extra = _extra_filters(request.query_params)
         queryset = _queryset_for(request, source, batch, course, extra)
@@ -393,9 +436,11 @@ class ReportExportView(APIView):
             )
             response["Content-Disposition"] = f'attachment; filename="{exports.filename_for(key)}"'
         else:
-            # Excel and PDF are rendered whole, so they are bounded: a list a
-            # person is looking at fits; the whole institution goes through a
-            # background job with a notification when it is ready (19a).
+            # Excel, PDF and print are rendered whole, so they are bounded: a
+            # list a person is looking at fits; the whole institution goes
+            # through a background job with a notification when it is ready
+            # (19a). Print has no background-job path (see `PRINT_FORMAT`'s
+            # comment above), so the same bound applies to it directly here.
             rows = []
             for index, row in enumerate(produced):
                 if index >= SYNC_ROW_LIMIT:
@@ -421,11 +466,69 @@ class ReportExportView(APIView):
             )
             response = HttpResponse(content, content_type=CONTENT_TYPES[fmt])
             response["Content-Disposition"] = (
-                f'attachment; filename="{writers.filename_for(key, fmt)}"'
+                "inline"
+                if fmt == PRINT_FORMAT
+                else f'attachment; filename="{writers.filename_for(key, fmt)}"'
             )
         response["X-Content-Type-Options"] = "nosniff"
         response["Cache-Control"] = "private, no-store"
         return response
+
+
+class ReportCountView(APIView):
+    """`GET /reports/{key}/count/` — the preflight a confirmation dialog reads
+    before an export actually runs.
+
+    Same two gates as `ReportExportView` (`report.view_any`/teaching a batch,
+    plus `data.export`) — a preflight is not a laxer read than the export it
+    is previewing. And the count is produced by running the identical
+    `_queryset_for`/`reports.run` pipeline `ReportExportView` uses, then
+    counting what the producer actually yields, rather than a second,
+    differently-shaped count query: the one thing this endpoint must never do
+    is disagree with the export it is a preflight for.
+    """
+
+    throttle_classes = (BurstThrottle,)
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Row count for a report export (preflight)",
+        parameters=[
+            OpenApiParameter("batch", str),
+            OpenApiParameter("course", str),
+            OpenApiParameter("student", str),
+            OpenApiParameter("since", str),
+            OpenApiParameter("until", str),
+            OpenApiParameter("actor", str),
+            OpenApiParameter("kind", str),
+            OpenApiParameter("role", str),
+        ],
+        responses={200: ReportCountSerializer},
+        tags=REPORTS_TAG,
+    )
+    def get(self, request, key):
+        if not access.can_read_reports(request.user):
+            return _forbidden(request, "Reports are staff-facing.")
+        if not has_capability(request.user, Capability.DATA_EXPORT):
+            record(
+                action=AuditAction.PERMISSION_DENIED,
+                actor=request.user,
+                resource_type="report",
+                resource_id=key,
+                result="failure",
+                context={"attempted": "report.export"},
+            )
+            return _forbidden(request, "You cannot export data.")
+        if key not in reports.REPORTS:
+            raise Http404
+
+        _definition, _producer, source = reports.REPORTS[key]
+        batch, course = _filters(request)
+        extra = _extra_filters(request.query_params)
+        queryset = _queryset_for(request, source, batch, course, extra)
+        _report, produced = reports.run(key, queryset)
+        rows = sum(1 for _ in produced)
+        return Response(ReportCountSerializer({"rows": rows}).data)
 
 
 # ---------------------------------------------------------------------------
