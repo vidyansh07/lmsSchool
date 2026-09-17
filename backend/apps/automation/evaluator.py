@@ -201,6 +201,22 @@ get_path = _get_path
 #: (`eq`, `lt`, …) has no useful meaning against either.
 _FORM_CONTEXT_FIELD_TYPES = frozenset({"number", "decimal", "select", "radio"})
 
+#: Of those, the two whose stored value must be compared as a number.
+#: `apps.forms.validation._validate_decimal` persists a `decimal` field's
+#: cleaned value as a `str` (so `FormResponse.values`, a plain `JSONField`,
+#: never carries a `Decimal` Python cannot serialise) — read back verbatim,
+#: `"3"` compared against a condition's JSON-literal `6` raises `TypeError`
+#: inside `_op_lt`/`_op_gt`/etc., which `evaluate_condition` then treats as
+#: "condition false" (its own documented, deliberate behaviour for a genuine
+#: shape mismatch). Left uncoerced here, that turned every numeric condition
+#: against a `decimal` field — including the seeded "Communication practice
+#: after a weak mock" rule's `form.communication < 6` — into one that could
+#: never fire, silently: not a crash, just a rule that looked active and
+#: never once matched. Coercing back to `float` here, the one place this
+#: context is built, is the fix; `number` fields are already a Python
+#: `int`/`float` from `_validate_number` and pass through unchanged.
+_FORM_CONTEXT_NUMERIC_FIELD_TYPES = frozenset({"number", "decimal"})
+
 
 def _student_context(*, student=None, enrollment=None) -> dict[str, Any]:
     """`student.*` per the catalog: id, name, batch, branch, trainer (user
@@ -266,12 +282,24 @@ def _normalised_score(score, max_score) -> float | None:
 def _form_context(form_version, form_response) -> dict[str, Any]:
     """`form.<key>` for every numeric/select field of the pinned form —
     reads `FormVersion.fields`/`FormResponse.values` (Phase 8), never a
-    second copy of what a form field or a response looks like."""
+    second copy of what a form field or a response looks like. A `decimal`
+    field's value is coerced back to a `float` here — see
+    `_FORM_CONTEXT_NUMERIC_FIELD_TYPES`'s own docstring for why a condition
+    against one would otherwise never match."""
     if form_version is None or form_response is None:
         return {}
     fields = form_version.fields.filter(type__in=_FORM_CONTEXT_FIELD_TYPES)
     values = form_response.values or {}
-    return {field.key: values.get(field.key) for field in fields}
+    context: dict[str, Any] = {}
+    for field in fields:
+        raw = values.get(field.key)
+        if field.type in _FORM_CONTEXT_NUMERIC_FIELD_TYPES and raw is not None:
+            try:
+                raw = float(raw)
+            except (TypeError, ValueError):
+                pass
+        context[field.key] = raw
+    return context
 
 
 def context_for_activity_completed(activity) -> dict[str, Any]:

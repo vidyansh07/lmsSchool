@@ -293,6 +293,93 @@ class TestTriggersFireWithCorrectContext:
 
 
 # ---------------------------------------------------------------------------
+# A numeric condition against a `decimal` form field, through a real
+# submitted response — found by the Phase 25 whole-pipeline chain test
+# (`tests/test_erp_journey.py`), which is the only place in this suite that
+# ever ran a `form.<key>` condition against a response built through
+# `apps.forms.services.submit_response` rather than a `FormResponse`
+# constructed directly with a Python `int`/`float` already in hand.
+# `_validate_decimal` persists a decimal field's cleaned value as a `str`
+# (`FormResponse.values` is a plain `JSONField`); left uncoerced,
+# `apps.automation.evaluator._form_context` handed that string straight to
+# `lt`/`gt`/etc., which raised `TypeError` against the condition's numeric
+# JSON literal — caught by `evaluate_condition` as "condition false", per its
+# own documented behaviour for a genuine shape mismatch. The seeded
+# "Communication practice after a weak mock" rule's own
+# `form.communication < 6` condition is exactly this shape, and could never
+# have matched before the fix.
+# ---------------------------------------------------------------------------
+
+
+def test_a_numeric_condition_matches_a_decimal_form_field_from_a_real_response(
+    admin_user, trainer_profile, enrollment
+):
+    from apps.forms import services as forms_services
+    from apps.forms.models import FormVersionStatus
+
+    definition = forms_services.create_definition(
+        actor=admin_user,
+        slug="decimal-condition-test",
+        name="Decimal condition test",
+        entity="activity",
+    )
+    version = definition.versions.get(status=FormVersionStatus.DRAFT)
+    forms_services.set_fields(
+        actor=admin_user,
+        version=version,
+        fields=[
+            {
+                "key": "communication",
+                "label": "Communication",
+                "type": "decimal",
+                "required": True,
+                "validation": {"min": 0, "max": 10},
+            }
+        ],
+    )
+    forms_services.publish_version(actor=admin_user, version=version)
+
+    activity_type = _activity_type(slug="decimal-condition-type", form_id=definition.pk)
+    trainer_user = trainer_profile.user
+    activity = Activity.objects.create(
+        student=enrollment.student,
+        enrollment=enrollment,
+        batch=enrollment.batch,
+        branch=enrollment.batch.branch,
+        activity_type=activity_type,
+        title="Decimal condition test",
+        status=ActivityStatus.IN_PROGRESS,
+        created_by=trainer_user,
+        assigned_to=trainer_user,
+        performed_by=trainer_user,
+        form_version=version,
+    )
+
+    from apps.work import services as work_services
+
+    activity = work_services.complete_activity(
+        actor=trainer_user, activity=activity, form_values={"communication": 3}
+    )
+    assert activity.form_response.values["communication"] == "3"  # stored as a string
+
+    rule = _rule(
+        admin_user,
+        trigger="ACTIVITY_COMPLETED",
+        conditions=[
+            {"path": "activity.type", "op": "eq", "value": activity_type.slug},
+            {"path": "form.communication", "op": "lt", "value": 6},
+        ],
+    )
+
+    from apps.automation.models import AutomationTrigger
+
+    services.dispatch(AutomationTrigger.ACTIVITY_COMPLETED, activity)
+
+    run = AutomationRun.objects.get(rule=rule)
+    assert run.status == AutomationRunStatus.RAN
+
+
+# ---------------------------------------------------------------------------
 # One test per action
 # ---------------------------------------------------------------------------
 

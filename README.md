@@ -383,17 +383,19 @@ The table above is the Phase 0–3 core. Later phases added, among others:
 `/performance/`, `/reviews/`, `/recovery/`, `/branding/`, `/branches/`, `/settings/`, `/fees/`, `/activity/`, `/warnings/`, `/requirements/`, `/roles/` and `/permissions/`. Every
 one is in [`docs/api.md`](docs/api.md) with its capability.
 
-Frontend screens by audience (82 routes; `find frontend/app -name page.tsx`
-is the source of truth):
+Frontend screens by audience (95 routes; `find frontend/app -name page.tsx`
+is the source of truth — the count below grew from 82 across the 25-phase
+ERP programme, `docs/erp/IMPLEMENTATION_PLAN.md`):
 
 | Audience | Routes |
 | --- | --- |
 | Everyone | `/login`, `/forgot-password`, `/reset-password`, `/verify-email`, `/verify/[code]`, `/status`, `/profile`, `/settings/*`, `/notifications`, `/announcements`, `/discussions/*`, `/calendar` |
 | Students | `/dashboard`, `/my-learning`, `/courses/*` (catalogue and player), `/my-batches`, `/my-fees`, `/my-assignments`, `/my-projects`, `/exams/*`, `/attempts/*`, `/my-results`, `/my-attendance`, `/my-progress` |
-| Trainers | `/teaching/today`, `/teaching/sessions/*`, `/teaching/assignments/*`, `/teaching/assessments/*`, `/teaching/projects/*`, `/teaching/questions`, `/teaching/exams/*`, `/dsr`, `/requirements` |
-| Counsellors | `/admissions` (working list), `/admissions/dashboard`, `/admissions/new` (registration wizard with fee and first payment), `/admissions/[studentId]` (record with the fee ledger), `/admissions/batches`, `/admissions/transfer`, `/admissions/import` |
-| Managers | `/manage`, `/manage/batches/*`, `/manage/students/*`, `/manage/trainers/*`, `/requirements` |
-| Administrators | `/admin/activity`, `/admin/overview`, `/admin/users/*`, `/admin/roles/*`, `/admin/students`, `/admin/trainers`, `/admin/courses/*`, `/admin/categories`, `/admin/batches/*`, `/admin/academics`, `/admin/completions`, `/admin/certificates`, `/admin/reports`, `/admin/imports`, `/admin/recovery`, `/admin/branding`, `/admin/branches`, `/admin/settings` |
+| Trainers, counsellors and managers (shared, server-scoped) | `/activities` (ERP Phase 9 — the activity/work queue: interviews, mentoring, reviews, placement calls) |
+| Trainers | `/teaching/today`, `/teaching/work` (ERP Phase 16 — my activities across batches: pending/overdue/under review), `/teaching/sessions/*`, `/teaching/assignments/*`, `/teaching/assessments/*`, `/teaching/projects/*`, `/teaching/questions`, `/teaching/exams/*`, `/dsr`, `/requirements` |
+| Counsellors | `/admissions` (working list), `/admissions/dashboard`, `/admissions/new` (registration wizard with duplicate detection, ERP Phase 17, fee and first payment), `/admissions/[studentId]` (record with the fee ledger and a link to the 360 profile), `/admissions/batches`, `/admissions/transfer`, `/admissions/import` |
+| Managers | `/manage`, `/manage/batches/*`, `/manage/students/*`, `/manage/trainers/*`, `/manage/reviews` (ERP Phase 18), `/students/[id]` and `/students/[id]/timeline` (Student 360 — ERP Phase 11, tabs Overview/Activities/Timeline/Enrolment/Risk), `/requirements` |
+| Administrators | `/admin/activity`, `/admin/overview`, `/admin/users/*`, `/admin/roles/*`, `/admin/students`, `/admin/trainers`, `/admin/courses/*`, `/admin/categories`, `/admin/batches/*`, `/admin/academics`, `/admin/completions`, `/admin/certificates`, `/admin/reports`, `/admin/imports`, `/admin/recovery`, `/admin/branding`, `/admin/branches`, `/admin/settings`, `/admin/policies` (ERP Phase 3), `/admin/forms/*` (ERP Phase 8), `/admin/activity-types` (ERP Phase 9), `/admin/automation/*` (ERP Phase 14), `/admin/communication/*` (ERP Phase 19) |
 
 ## Branches
 

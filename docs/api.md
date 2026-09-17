@@ -764,6 +764,182 @@ a wider request is clipped rather than refused.
 | `GET` | `student/` | any signed-in user; returns `is_student: false` for others |
 | `GET` | `trainer/` | any signed-in user; returns `is_trainer: false` for others |
 
+The role dashboards below (ERP Phases 16–18) are a separate surface,
+`/api/v1/dashboards/` (plural), each one call:
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `/api/v1/dashboards/counsellor/` | `student.create` — new students today, pending registrations, follow-ups due/overdue, unassigned batches/trainers. Cache 1 min |
+| `GET` | `/api/v1/dashboards/manager/` | `performance.view_any` — adds `activities: {pending, overdue, under_review}`, `risk: {critical, warning}`, `reviews_due` on top of the existing at-risk/attendance figures. Cache 1 min |
+| `GET` | `/api/v1/dashboards/trainer/` | assignment-scoped — adds `today.activities[]` and `work: {pending, overdue}` |
+| `GET` | `/api/v1/dashboards/admin/` | `report.view_any` — adds `system: {failed_deliveries, failed_exports, automation_failures, backup: {last_dump_at, last_verified_at}}` |
+
+Full field shapes: `docs/erp/API_CONTRACTS.md` "Search and productivity".
+
+The activities work queue's saved filters (`/activities`) are a small
+per-user surface alongside these: `GET /api/v1/saved-filters/?screen=` ·
+`POST` · `DELETE /api/v1/saved-filters/<id>/` — one row per (user, screen,
+name), never shared between users.
+
+### Forms — `/api/v1/forms/` (ERP Phase 8)
+
+The engine behind every staff-authored form (mock interview, placement
+call, feedback…): a `FormDefinition` owns a sequence of numbered
+`FormVersion`s, each independently draft or published, so a form mid-course
+gets a version 2 without rewriting the answers already recorded against
+version 1.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `` | `form.view` — every definition, its published version's field count |
+| `POST` | `` | `form.manage` — `{slug, name, entity}`; creates the first, empty, draft version too |
+| `GET` | `<slug>/` | `form.view` — the definition with every version's status |
+| `GET`/`POST` | `<slug>/versions/`, `<slug>/versions/<n>/` | `form.manage` — a new draft (optionally `cloned_from` the published one), or one version's detail |
+| `PUT` | `<slug>/versions/<n>/fields/` | `form.manage` — the full field list; refused 409 once the version is published (a published version's fields are immutable) |
+| `POST` | `<slug>/versions/<n>/publish/` \| `.../unpublish/` | `form.manage` — publishing archives whatever was published before it; refused 409 if nothing about the field schema actually changed |
+| `POST` | `<slug>/preview/` | `form.manage` — validates a sample response against a version's fields without storing anything |
+| `GET` | `published/<slug>/` | any signed-in caller — the currently published version, cached |
+
+Answering a form is never a form-app endpoint of its own: `apps.work
+.services.complete_activity` (below) is the one caller that submits a
+response, against whichever version was pinned when the activity was
+planned — never the latest, so a form edited mid-course cannot rewrite
+history under an already-completed activity.
+
+### Activities and work — `/api/v1/activities/`, `/api/v1/activity-types/` (ERP Phase 9)
+
+The activity engine: `ActivityType` is the catalog (18 seeded rows plus
+whatever an administrator adds — mock interviews, mentoring, counselling,
+placement calls, warnings…); `Activity` is one instance moving through a
+twelve-status lifecycle (`docs/erp/ACTIVITY_CATALOG.md` §25).
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET`/`POST` | `activity-types/`, `PATCH activity-types/<slug>/` | `activity_type.manage` to write; view is broader |
+| `GET` | `activities/` | `activity.view_any` (scoped), a trainer teaching the batch, or the assignee/creator — filters `status`, `type`, `assigned_to`, `mine`, `overdue` |
+| `POST` | `activities/` | role allow-listed by the type, scoped to the branch/batch; `client_key` idempotency |
+| `GET`/`PATCH`/`DELETE` | `activities/<id>/` | as the list, narrowed to the one record; `PATCH` only while `draft`/`planned`/`assigned` |
+| `POST` | `activities/<id>/transition/` | the transition table's own actor rule (`docs/erp/ACTIVITY_CATALOG.md`); illegal edge is 409 with `details.allowed` |
+| `POST` | `activities/<id>/complete/` | the assignee, or a scoped `activity.complete` holder — `form_values` validated against the pinned form version, `summary`, `duration_minutes` |
+| `POST` | `activities/<id>/review/` | `activity.review`, never the performer — `{decision: approved\|requires_action, note}` |
+| `GET` | `students/<id>/activities/` | the Student 360 Activities tab — same filters, one student |
+| `GET` | `me/activities/` | sugar for `?mine=1` on the caller — the trainer/counsellor/manager's own queue |
+
+Completing an activity recomputes the student's performance components and
+risk verdict (Phases 12–13) and, for an `ACTIVITY_COMPLETED`-triggered
+automation rule (Phase 14), may create a next action — all through signals
+on `apps.work.signals.activity_changed`, never a direct call from this app
+into any of the three. Full request/response shapes:
+`docs/erp/API_CONTRACTS.md` "Activities".
+
+### Timeline — `GET /api/v1/students/<id>/timeline/` (ERP Phase 10)
+
+One append-only-by-date feed, composed from eight domains that each keep
+their own access control (enrolment events, attendance days, DSRs,
+assessment results, assignment submissions, project state, activities,
+certificates) — never a second, parallel scoping rule for the timeline
+itself. Keyset (cursor) paginated: `?since=`, `?until=`, `?kinds=`,
+`?cursor=`, `?page_size=`.
+
+### Student 360 — `GET /api/v1/students/<id>/360/` (ERP Phase 11, ADR-09/10/11)
+
+One call composing what the Student 360 header and Overview tab need:
+`profile`, `enrollment`, `batch`, `trainer`, `counsellor`, `progress`,
+`attendance_summary`, `performance` (ADR-10's `{components, overall_score}`),
+`risk` (ADR-11's `{level, triggered}`), `counts`, `fee_status`,
+`recent_activities`, `next_actions`. Cached 1 minute per (viewer scope,
+student); the Activities and Timeline tabs are separate calls above, opened
+only when that tab is clicked.
+
+### Performance and risk — ERP Phases 12–13
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `students/<id>/performance/` | `performance.view_any` (scoped), or the student themselves — the weighted `{components, overall_score}`, each component's own `sources` for the "why" popover |
+| `GET` | `students/<id>/risk/` | as above — `{level, triggered}`, `triggered` a list of full outcome objects (`key, label, severity, detail, numbers`), never just rule keys |
+| `GET` | `risk/summary/` | `performance.view_any` — manager dashboard tile source: counts by level within scope, the 20 most severe currently-flagged enrolments. Cache 1 min |
+| `PATCH` | `policies/risk/…` | `policy.manage` — the six `risk.*` thresholds, through the general Policies API above |
+
+Every component is real state or `None` ("nothing to measure"), never a
+fabricated zero. `risk_state_for`'s synchronous first-read fallback computes
+a brand-new enrolment's very first verdict on the request that asks for it,
+rather than waiting on the debounced Celery recompute a completed activity
+or a changed enrolment otherwise triggers.
+
+### Automation — `/api/v1/automations/` (ERP Phase 14, ADR-13)
+
+Rules an administrator or manager builds from seven triggers
+(`docs/erp/AUTOMATION_CATALOG.md`) and up to six action types
+(`create_activity`, `send_notification`, `send_email`, `send_whatsapp`,
+`create_review`, `flag_risk`) — always executed "as the system", so every
+action type is permission-checked against the rule's *author* at save time,
+never at run time.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET`/`POST` | `` | `automation.manage` to write; each action type additionally needs its own capability (the table in `apps/automation/services.py::ACTION_PERMISSIONS`) held by the author |
+| `GET`/`PATCH`/`DELETE` | `<id>/` | as above |
+| `POST` | `<id>/activate/` | shows `{matched_last_7_days}` from `GET <id>/preview/` first |
+| `POST` | `<id>/pause/` | reason optional |
+| `POST` | `<id>/test/` | dry run against a recent real occurrence — `{would_fire, evaluated_conditions[], actions[]}`, never executes an action or writes a run row; throttled |
+| `GET` | `<id>/runs/` | `AutomationRun` rows, paginated |
+
+A run is idempotent per (rule, object, occurrence) — an `AutomationRun`
+unique constraint, not an application-level check — bounded to 3 chained
+levels deep and a per-object-per-day rate limit (`automation
+.max_runs_per_object_per_day`, a policy key).
+
+### Daily status reports — `/api/v1/dsr/` (extended, ERP Phase 15)
+
+The pre-existing per-class report gained one new door onto the activity
+engine: `POST /api/v1/dsr/<id>/create-activity/` — `{student, activity_type,
+title?, due_in_days?}`, open to whoever may write or review that report.
+The student is resolved through the report's own batch roster; the response
+is the same `ActivityDetail` shape `POST /activities/` returns.
+
+### Communication — ERP Phase 19, ADR-12
+
+Templates (subject/body per channel, versioned like a form), the delivery
+log, and a manual send — under `communication.send`/`communication
+.view_any`, an audience mirroring `announcement.manage_any`'s (superadmin,
+admin, manager, counsellor; never trainer).
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET`/`POST` | `templates/` | `template.manage` to write |
+| `POST` | `templates/<key>/versions/` \| `PUT .../versions/<n>/` | a new draft, or edit one (draft only) |
+| `POST` | `.../approve/` | `template.approve`; a WhatsApp template additionally needs a fresh step-up |
+| `POST` | `.../publish/` \| `.../preview/` \| `.../test-send/` | preview takes `{variables}`, returns the rendered subject/html/text plus `warnings[]`; test-send is to the caller only, throttled |
+| `GET` | `deliveries/` | `communication.view_any` — filters channel, state, recipient, template |
+| `POST` | `deliveries/<id>/retry/` | `communication.send`, failed rows only |
+| `POST` | `deliveries/<id>/cancel/` | `communication.send`, queued rows only |
+| `POST` | `communication/send/` | `communication.send` — a batch, a role, or specific students, resolved through a published template |
+| `POST` | `communication/whatsapp/webhook/` | provider callbacks only — token plus signature verified, never session-authenticated |
+
+Two providers ship: an SMTP-backed email sender and a Null WhatsApp
+provider (a configured real one is a deployment step, not a code gap — see
+`docs/RELEASE_READINESS.md`'s remaining production tasks).
+
+### Exports — extended (ERP Phase 20)
+
+On top of the base export surface above: `GET /reports/<key>/count/
+?filters` is the preflight a confirmation dialog reads before queuing a
+background job; `?as=print` renders HTML with a print stylesheet rather
+than a downloadable file; three new report sources cover the ERP surface
+itself (`work_activities`, `deliveries`, `automation_runs`); and a nightly
+beat task (`reporting.expire_exports`) deletes files past
+`export_retention_days` and marks the job expired.
+
+---
+
+Two Phase 21 changes touch every endpoint above rather than adding a shape
+of their own, so they are noted here instead of a section each: the
+authorization cache (`auth:matrix`/`auth:permissions`) now actually
+invalidates on a role or permission write, closing a stale-authorization
+window a dedicated regression test now guards; and `template:published`/
+`dashboard:student`/`dashboard:trainer` moved from TTL-only caching to real
+invalidation on the writes that should clear them.
+
 ---
 
 ## Batch and enrolment lifecycles

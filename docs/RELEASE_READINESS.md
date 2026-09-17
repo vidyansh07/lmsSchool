@@ -5,6 +5,13 @@ in [Remaining production tasks](#remaining-production-tasks). Everything the
 code can settle on its own is settled and verified below.
 
 Assessed 2 September 2026, against the local production-shaped staging stack.
+Re-measured 18 September 2026 at the close of the 25-phase ERP programme
+(Phase 25, `docs/erp/IMPLEMENTATION_PLAN.md` row 25) — the Tests and Security
+sections below carry today's real, freshly-run numbers rather than 2
+September's, and a new [ERP programme](#the-erp-programme-25-phases)
+section summarises what the 24 phases since built. Everything else in this
+document (Performance, Migrations, the Staging recipe) is unchanged from 2
+September and was not re-measured in this pass.
 
 ---
 
@@ -13,13 +20,13 @@ Assessed 2 September 2026, against the local production-shaped staging stack.
 | | State |
 | --- | --- |
 | Build | Both production images build and run |
-| Tests | 1,221 backend · 61 frontend unit · 69 end-to-end |
-| Security | Every gate clean: bandit, pip-audit, npm audit, gitleaks, `check --deploy` |
+| Tests | 3,448 backend (3,444 passed, 4 skipped, 0 failed) · 1,153 frontend unit · 99 end-to-end |
+| Security | Every gate clean: bandit, pip-audit, npm audit, gitleaks, `check --deploy` — re-run 18 September |
 | Performance | Profiled at 400 students; every report flat in query count |
-| Migrations | 58, none destructive, fresh install and reverse both verified |
-| Backups | Dump and restore verified, sequences included |
+| Migrations | 156 across 25 apps, none destructive |
+| Backups | Dump and restore verified, sequences included; object storage now covered too (Phase 23 — see Known limitations) |
 | Staging | Running, production-shaped, seeded with fake data only |
-| Mandatory journey | Passes, three runs in a row |
+| Mandatory journey | Passed repeatedly through Phase 24's own staging verification; not re-run in this pass (no live stack stood up for Phase 25) |
 
 ---
 
@@ -39,10 +46,24 @@ PostgreSQL 17, and object storage over the S3 protocol.
 
 | Suite | Count | Where it is green |
 | --- | --- | --- |
-| Backend | 1,221 | 91% statement coverage |
-| Frontend unit | 61 | |
-| End-to-end suite | 68 | Local development stack: 68/68 |
-| Mandatory journey | 1 | Clean staging, the production build: passes repeatedly |
+| Backend | 3,448 (3,444 passed, 4 skipped) | `pytest` with no path filter (`tests/` plus every `apps/*/tests/` directory, matching `pyproject.toml`'s own `testpaths`) — run 18 September, 0 failed |
+| Frontend unit | 1,153 | `npx vitest run`, 128 files — run 18 September, 0 failed |
+| End-to-end suite | 99 (98 in the default project, 1 gated) | Typechecks (`tsc --noEmit`) and lints clean, and every spec lists correctly under Playwright; not re-run against a live stack in this pass — see the note below |
+| Mandatory journey | 1 | Verified on staging through Phase 24 (`docs/FEATURE_STATUS.md`'s per-phase "Last verified" rows); not re-run in this pass |
+
+The backend and frontend unit counts above are this phase's own fresh,
+complete run — every test, no subset. The end-to-end count is real (it is
+what exists and is registered in the repository today, confirmed by
+`playwright test --list`), but Phase 25 did not stand up a live
+frontend+backend+worker stack to execute it against: doing so from this
+worktree risked colliding with the concurrent session already running the
+project's own `docker compose` stack in `/Users/vidyansh/grras/lms` (see
+`docs/erp/AGENT_PLAYBOOK.md`'s isolation rule). The seven new specs this
+phase adds (`crawl.spec.ts`'s six role-crawls, plus three focused ERP
+journeys — see [The ERP programme](#the-erp-programme-25-phases)) follow
+this suite's own established conventions (`e2e/helpers.ts`'s `signIn`, the
+same demo accounts, `test.skip(!E2E_DEMO_PASSWORD, ...)`) and are ready for
+the same staging run every other phase's specs already go through.
 
 ```bash
 npx playwright test                                    # the suite
@@ -65,10 +86,15 @@ They are specs written against the development stack that remain sensitive to
 it, and finishing that is unfinished work, recorded below rather than rounded
 off.
 
+*(That 61/68 figure is this section's own 2 September measurement, against
+the staging stack of that date — it predates every ERP phase and was not
+re-run for Phase 25; see the Tests section above for what this phase did
+re-measure.)*
+
 ### The mandatory journey (§15.2)
 
 `frontend/e2e/release-journey.spec.ts` walks the whole chain in one test, and
-has passed three consecutive times:
+had passed three consecutive times as of 2 September:
 
 > admin signs in → creates a course, module and lesson → publishes all three →
 > creates a batch → sets a timetable and generates classes → assigns a trainer,
@@ -94,25 +120,44 @@ Two deliberate notes on how it runs:
   a course — and sharing fixtures with the rest of the suite left those specs
   looking at a register already taken and a student already complete.
 
+**Since 2 September:** the file itself is unchanged — no ERP phase edited
+it — and each phase's own staging deploy included a live smoke check of the
+endpoints that phase touched (`docs/FEATURE_STATUS.md`'s per-phase "Manual
+verification" column), though not a re-run of this specific spec. Phase 25
+did not re-run it either (no live stack stood up in this pass — see the
+Tests section above); it remains the mandatory gate for whoever next deploys
+this branch, unchanged in content from the three passes above.
+
 ---
 
 ## Security
 
-Every gate, run on 2 September 2026:
+Every gate, re-run 18 September 2026 (originally 2 September; every result
+below is this phase's own fresh run, not carried forward):
 
 | Gate | Result |
 | --- | --- |
-| `ruff check` / `ruff format --check` | Clean |
-| `bandit` | Clean |
-| `pip-audit` | No known vulnerabilities |
-| `npm audit --audit-level=high` | 0 vulnerabilities |
-| `gitleaks` | No leaks |
-| `manage.py check --deploy --fail-level WARNING` | Clean, production and staging |
+| `ruff check` / `ruff format --check` | Clean, `apps`/`tests`/`config` |
+| `bandit -r apps config manage.py` | Clean — 0 issues (undefined/low/medium/high all 0), 65,420 lines scanned |
+| `pip-audit -r requirements/dev.txt --strict` | No known vulnerabilities found |
+| `npm audit` | 0 vulnerabilities |
+| `gitleaks detect` | No leaks — 125 commits scanned |
+| `manage.py check --deploy --fail-level WARNING` | Clean, production settings |
+
+`gitleaks` is now installed via Homebrew (`which gitleaks` →
+`/opt/homebrew/bin/gitleaks`, v8.30.1) rather than only available inside CI's
+own image — confirmed as part of this phase, per the phase brief's own
+instruction to check.
 
 Phase 9 covered OWASP ASVS-shaped verification: authentication, an
 authorization matrix derived from the URL resolver (160 tests), private object
 storage with signed URLs, data minimisation, audit completeness, dependency and
-database security. `docs/security.md` is the detail.
+database security. `docs/security.md` is the detail. Phase 24 (17 September)
+added a second pass specifically over the ERP surface:
+`docs/erp/SECURITY_DECISIONS.md`'s eleven-row threat table walked with real tests,
+`backend/tests/test_erp_security_sweep.py` and `test_concurrency.py`, and a
+mechanically-generalized mass-assignment sweep — see
+[The ERP programme](#the-erp-programme-25-phases) below.
 
 ### Verified secret handling
 
@@ -179,8 +224,14 @@ The sequences are checked because they are the failure that looks like success:
 a restore with every table and no sequences hands the next student an identifier
 somebody already has, and nothing complains until two people hold `GRS-S-00041`.
 
-Not covered: object storage. Student files live in S3, so a database dump does
-not contain them. Bucket versioning is the mechanism and no bucket exists yet.
+This section (`./scripts/backup.sh staging --verify`, the database) is
+unchanged from 2 September and was not re-run in this pass. Object storage
+— not covered by a database dump, since student files live in S3 — was the
+gap noted here on 2 September; Phase 23 (17 September) closed it for real
+(`scripts/backup-media.sh`, bucket versioning confirmed live on staging).
+See [Known limitations](#known-limitations) and
+[The ERP programme](#the-erp-programme-25-phases) for what that covers and
+what is still a human-run drill rather than automated.
 
 ---
 
@@ -250,15 +301,81 @@ URLs that modern AWS regions reject.
 
 | | Detail |
 | --- | --- |
-| No multi-factor authentication | Rate limiting and session controls only |
+| MFA is opt-in, not enforced | Phase 5 (`apps/accounts/mfa.py`, `MfaVerifyView`) built and deployed real MFA — TOTP enrolment, email OTP, and ten single-use recovery codes, reachable at `/settings/security` and enforced on login via the pending-MFA session flow when a user has enrolled; policy-driven forced enrolment (`mfa_required_roles`) is wired but no role has been put in the policy yet, so nobody is required into it today |
 | No account lockout | Throttling only |
 | No malware scanning | The hook exists, fails closed, and no scanner is configured |
-| Object storage not backed up | Needs bucket versioning on a real bucket. Database dumps run nightly on the host with a Sunday restore check (`scripts/install-backup-timer.sh`) and copy to S3 once `BACKUP_S3_BUCKET` is set |
+| Object storage backup drills not yet run for real | No longer "not backed up" — Phase 23 (17 September) built and deployed the real mechanism: `scripts/backup-media.sh` mirrors the bucket with a SHA-256 comparison of actual bytes on both sides, `manage.py export_configuration` covers the seven non-media categories a database dump alone would miss, and staging's own bucket is confirmed versioned (`storage-init`'s logs read `versioning is enabled`). What remains is two specific drill-log rows in `docs/erp/BACKUP_AND_RECOVERY.md`, deliberately left for a human to run rather than performed unattended: the first Sunday cron-verified scratch restore (installed, due 20 September) and a live-database-restore-plus-new-host-disaster-recovery drill (provisioning infrastructure and repointing DNS — genuinely destructive/costly, the one standing pause point in the whole 25-phase programme) |
 | Fees are a ledger, not a gateway | Agreed amounts, payments and receipts are recorded by hand at the desk; nothing moves money |
 | XLSX export not built | Exports are CSV |
 | Certificates render one layout | Templates are configuration, not a designer |
 | Google Forms is a link | No API integration; marks are imported |
 | Seven E2E specs are dev-stack-specific | They pass locally and fail on staging; the shared sign-in helper fixed three classes of this and the rest is unfinished |
+
+---
+
+## The ERP programme (25 phases)
+
+Everything above this section describes the base LMS as it stood on 2
+September 2026. Between then and 18 September,
+`docs/erp/IMPLEMENTATION_PLAN.md`'s 25-phase programme built the ERP layer
+on top of it: capability-based
+authorization and a role builder (1–2), step-up and MFA (4–6), configurable
+policies (3), dynamic forms (8), the activity/work engine (9), a composed
+timeline and Student 360 (10–11), a weighted performance and risk engine
+(12–13), an automation rule engine (14), duplicate-aware admissions and
+per-enrolment fees (15–17), manager/counsellor/trainer dashboards (16–18),
+a communication center with templates and delivery tracking (19), background
+exports (20), a caching and authorization-hardening sweep (21), performance
+hardening with flat-cost tests (22), backup and recovery (23), a security
+and regression sweep (24), and this phase — production readiness (25). One
+row per phase, with its own tests, security checks and staging verification,
+is in `docs/FEATURE_STATUS.md`'s "Phase 14 — ERP platform" table.
+
+**What the adversarial-review process actually caught.** Phase 24 is the
+clearest concrete example: its own review found a real concurrency bug in
+`apps.performance.services.recompute_risk` (two callers reaching a brand-new
+enrolment's first-ever risk computation at once could both lose a race on the
+same `IntegrityError`), got it fixed with a retry that re-enters and finds
+the already-committed row, added 48 new tests to prove it (and the other ten
+rows of `docs/erp/SECURITY_DECISIONS.md`'s threat table), and had the fix
+independently re-verified live on staging afterward. This phase's own audit
+found two smaller examples of the same discipline paying off: writing
+`tests/test_erp_journey.py` (the §103 gate test below) surfaced a real,
+previously-untested bug in `apps.automation.evaluator._form_context` — a
+`decimal` form field's value is stored as a string
+(`apps.forms.validation._validate_decimal`), and an uncoerced numeric
+condition against it raised `TypeError`, which `evaluate_condition` silently
+treats as "condition false" — meaning the seeded "Communication practice
+after a weak mock" automation rule could never have fired in production.
+Auditing the export jobs panel's empty/error test coverage surfaced a second
+one: `ExportJobsPanel` never cleared its `error` state before a retry's
+fetch, so a Retry that actually succeeded still rendered the old error
+forever. Both are fixed, both now have a regression test, in this phase's
+own diff.
+
+**What is still a human-supervised action, not a gap.** Phase 23 built the
+real backup-and-recovery mechanism for object storage (see Known
+limitations above) but deliberately left two `docs/erp/BACKUP_AND_RECOVERY
+.md` drill-log rows unfilled rather than run them unattended: the first
+Sunday cron-verified scratch restore (due 20 September) and a live-database
+plus new-host disaster-recovery drill. This is the one standing pause point
+across the whole 25-phase programme — everything else in Phase 23 was built
+and proven against isolated scratch database/bucket stacks first.
+
+**This phase's own gate.** `tests/test_erp_journey.py` walks
+`docs/erp/USER_JOURNEYS.md` §7's own named chain — a trainer completing a
+weak mock interview through to a manager's approval, performance and risk
+recomputing, the real seeded automation rule firing, and every step
+surviving a form version 2, the trainer leaving and the batch ending — in
+one test, through the real service functions, against the real seeded
+catalog rather than a lookalike fixture. It is `IMPLEMENTATION_PLAN.md` row
+25's own named gate, and it passes.
+
+**DECISIONS reconciliation.** Row 25's deliverables include "DECISIONS
+entries", so every `D-NNN` citation across `docs/*.md` and `docs/erp/*.md`
+was extracted and checked against `docs/DECISIONS.md`'s own headings:
+127 distinct numbers cited, all 127 defined, zero cited and undefined.
+Nothing was missing, so there was nothing to add — checked, not skipped.
 
 ---
 

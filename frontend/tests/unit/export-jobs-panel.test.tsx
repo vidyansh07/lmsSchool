@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ExportJobsPanel } from '@/components/export-jobs-panel';
+import { ApiError } from '@/lib/api';
 import type { ExportJob } from '@/types/api';
 
 const listExportJobs = vi.hoisted(() => vi.fn());
@@ -55,5 +56,25 @@ describe('ExportJobsPanel', () => {
     );
     expect(screen.getByText('Ready')).toBeInTheDocument();
     expect(screen.getByText('More than 2,000 rows for a PDF.')).toBeInTheDocument();
+  });
+
+  it('shows an empty state when nothing has been exported yet', async () => {
+    listExportJobs.mockResolvedValue([]);
+    render(<ExportJobsPanel />);
+    expect(await screen.findByText('No exports yet')).toBeInTheDocument();
+    expect(screen.getByText(/Choose Export on any list/i)).toBeInTheDocument();
+  });
+
+  it('shows an error state with Retry on a failed load, and Retry recovers it', async () => {
+    listExportJobs.mockRejectedValueOnce(
+      new ApiError(500, 'server_error', 'Could not load your exports.', 'req-exports-1'),
+    );
+    render(<ExportJobsPanel />);
+    expect(await screen.findByText('Could not load your exports')).toBeInTheDocument();
+    expect(screen.getByText(/req-exports-1/)).toBeInTheDocument();
+
+    listExportJobs.mockResolvedValueOnce(jobs);
+    screen.getByRole('button', { name: /try again/i }).click();
+    expect(await screen.findByText('fee payments')).toBeInTheDocument();
   });
 });

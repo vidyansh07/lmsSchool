@@ -34,19 +34,39 @@ const STATUS_LABEL: Record<ExportStatus, string> = {
   cancelled: 'Cancelled',
 };
 
+interface State {
+  attempt: number;
+  jobs: ExportJob[] | null;
+  error: ApiError | null;
+}
+
 export function ExportJobsPanel() {
-  const [jobs, setJobs] = useState<ExportJob[] | null>(null);
-  const [error, setError] = useState<ApiError | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // One combined object, reset at the top of render rather than inside the
+  // effect (`components/teaching/today-activities-panel.tsx`'s own
+  // pattern): a retry after a failed load must clear that failure before
+  // the new request lands, not only replace it on success — otherwise a
+  // retry that *does* succeed still renders the previous `ErrorState`
+  // forever, because nothing ever cleared it. Calling `setError(null)`
+  // synchronously inside the effect body did clear it, but trips the
+  // `react-hooks/set-state-in-effect` rule (a same-render `setState` call
+  // is exactly what a render-time reset like this one is for).
+  const [state, setState] = useState<State>({ attempt, jobs: null, error: null });
+  if (state.attempt !== attempt) {
+    setState({ attempt, jobs: null, error: null });
+  }
+  const { jobs, error } = state;
 
   useEffect(() => {
     let cancelled = false;
     listExportJobs()
       .then((rows) => {
-        if (!cancelled) setJobs(rows);
+        if (!cancelled) setState({ attempt, jobs: rows, error: null });
       })
       .catch((cause: unknown) => {
-        if (!cancelled) setError(cause instanceof ApiError ? cause : null);
+        if (!cancelled) {
+          setState({ attempt, jobs: null, error: cause instanceof ApiError ? cause : null });
+        }
       });
     return () => {
       cancelled = true;
