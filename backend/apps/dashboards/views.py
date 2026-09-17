@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+from django.db.models import Count, Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework.response import Response
@@ -23,6 +24,8 @@ from apps.batches.models import BatchStatus
 from apps.common.permissions import IsActiveUser
 from apps.enrollments.models import ACCESS_GRANTING_STATUSES, Enrollment, EnrollmentStatus
 from apps.enrollments.services import course_progress
+from apps.work import access as work_access
+from apps.work.models import OPEN_STATUSES, ActivityStatus
 
 from .calendar import MAX_RANGE_DAYS, events_for
 from .serializers import (
@@ -227,6 +230,7 @@ class TrainerDashboardView(APIView):
                     "upcoming_classes": [],
                     "student_count": 0,
                     "courses": [],
+                    "work": {"pending": 0, "overdue": 0},
                 }
             )
 
@@ -250,6 +254,23 @@ class TrainerDashboardView(APIView):
             .values("student_id")
             .distinct()
             .count()
+        )
+
+        # This trainer's own work queue (rule 2: queryset-first, never a raw
+        # `Activity.objects` count) — the same `Q(assigned_to=user) |
+        # Q(created_by=user)` filter `MeActivitiesView` already uses for "my
+        # activities", layered on `visible_activities` rather than a second
+        # unscoped query. Filtering to `assigned_to` alone would drift from
+        # that endpoint: a trainer who created but did not self-assign an
+        # activity (handed off, or still an unassigned draft) would show up
+        # on `/me/activities` and `/teaching/work` but silently drop out of
+        # this dashboard's counts and list.
+        own_activities = work_access.visible_activities(request.user).filter(
+            Q(assigned_to=request.user) | Q(created_by=request.user)
+        )
+        work_counts = own_activities.aggregate(
+            pending=Count("id", filter=Q(status__in=OPEN_STATUSES)),
+            overdue=Count("id", filter=Q(status=ActivityStatus.OVERDUE)),
         )
 
         seen: dict[str, dict] = {}
@@ -286,5 +307,9 @@ class TrainerDashboardView(APIView):
                 "upcoming_classes": [event.as_dict() for event in week[:RECENT_LIMIT]],
                 "student_count": student_count,
                 "courses": list(seen.values()),
+                "work": {
+                    "pending": work_counts["pending"] or 0,
+                    "overdue": work_counts["overdue"] or 0,
+                },
             }
         )

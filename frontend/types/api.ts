@@ -585,6 +585,10 @@ export interface TrainerDashboard {
     slug: string;
     batch_count: number;
   }[];
+  /** Always real integers, never null — a trainer with no work sees `0`, not
+   *  a swallowed error (see the "no undefined/NaN" rule in
+   *  DESIGN_DECISIONS.md). */
+  work: { pending: number; overdue: number };
 }
 
 // ---------------------------------------------------------------------------

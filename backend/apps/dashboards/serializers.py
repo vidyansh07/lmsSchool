@@ -81,6 +81,16 @@ class TrainerCourseSerializer(serializers.Serializer):
     batch_count = serializers.IntegerField(read_only=True)
 
 
+class TrainerWorkSerializer(serializers.Serializer):
+    """§Phase 9 work-queue counts, scoped to the calling trainer's own
+    activities (`apps.work.access.visible_activities`, never a raw
+    `Activity.objects.count()`) — always a real, measured number, never
+    `null`, even when it is zero."""
+
+    pending = serializers.IntegerField(read_only=True)
+    overdue = serializers.IntegerField(read_only=True)
+
+
 class TrainerDashboardSerializer(serializers.Serializer):
     is_trainer = serializers.BooleanField(read_only=True)
     batches = TrainerBatchSerializer(many=True, read_only=True)
@@ -88,3 +98,5 @@ class TrainerDashboardSerializer(serializers.Serializer):
     upcoming_classes = CalendarEventSerializer(many=True, read_only=True)
     student_count = serializers.IntegerField(read_only=True)
     courses = TrainerCourseSerializer(many=True, read_only=True)
+    #: Phase 15: `{pending, overdue}` — always measured, never `null`.
+    work = TrainerWorkSerializer(read_only=True)

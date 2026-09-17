@@ -280,6 +280,139 @@ def test_the_trainer_dashboard_costs_a_bounded_number_of_queries(
         assert api_client_no_csrf.get(TRAINER_DASHBOARD).status_code == 200
 
 
+def _activity_type(**overrides):
+    from apps.work.models import ActivityType
+
+    defaults = {
+        "slug": f"dash-{ActivityType.objects.count()}",
+        "name": "Dashboard Test Type",
+        "category": "mentoring",
+        "allowed_creator_roles": ["admin", "superadmin", "manager", "trainer", "counsellor"],
+        "allowed_assignee_roles": ["trainer"],
+        "visible_to_student": True,
+    }
+    defaults.update(overrides)
+    return ActivityType.objects.create(**defaults)
+
+
+@pytest.mark.django_db
+def test_the_trainer_dashboard_reports_own_work_counts(
+    api_client_no_csrf,
+    admin_user,
+    trainer_profile,
+    trainer_profile_two,
+    student_profile,
+    enrollment,
+    upcoming_batch,
+):
+    from apps.enrollments.services import enrol_student
+    from apps.work import services
+    from apps.work.models import ActivityStatus
+
+    other_enrollment = enrol_student(
+        actor=admin_user, student=student_profile, batch=upcoming_batch
+    )
+
+    activity_type = _activity_type()
+    services.create_activity(
+        actor=admin_user,
+        student=student_profile,
+        activity_type=activity_type,
+        enrollment=enrollment,
+        assigned_to=trainer_profile.user,
+        due_at=timezone.now(),
+    )
+    overdue_activity = services.create_activity(
+        actor=admin_user,
+        student=student_profile,
+        activity_type=activity_type,
+        enrollment=enrollment,
+        assigned_to=trainer_profile.user,
+        due_at=timezone.now() - timedelta(days=3),
+    )
+    overdue_activity.status = ActivityStatus.OVERDUE
+    overdue_activity.save(update_fields=["status"])
+    # Not due today and not overdue — must not be counted as "pending" noise
+    # for a query-count assertion, but does count toward `work.pending`.
+    services.create_activity(
+        actor=admin_user,
+        student=student_profile,
+        activity_type=activity_type,
+        enrollment=enrollment,
+        assigned_to=trainer_profile.user,
+        due_at=timezone.now() + timedelta(days=10),
+    )
+    # A second trainer's own activity must never leak into the first
+    # trainer's counts.
+    services.create_activity(
+        actor=admin_user,
+        student=student_profile,
+        activity_type=activity_type,
+        enrollment=other_enrollment,
+        assigned_to=trainer_profile_two.user,
+        due_at=timezone.now(),
+    )
+
+    api_client_no_csrf.force_login(trainer_profile.user)
+    body = api_client_no_csrf.get(TRAINER_DASHBOARD).json()
+
+    # draft/planned/assigned/in_progress/overdue/requires_action are "open":
+    # the un-due-today activity plus the overdue one, three in total.
+    assert body["work"]["pending"] == 3
+    assert body["work"]["overdue"] == 1
+
+
+@pytest.mark.django_db
+def test_the_trainer_dashboard_work_counts_include_activities_created_but_not_self_assigned(
+    api_client_no_csrf,
+    admin_user,
+    trainer_profile,
+    student_profile,
+    enrollment,
+):
+    """A trainer who hands an activity off to someone else (created it, but
+    it is assigned elsewhere) still sees it counted here — the same
+    `Q(assigned_to=user) | Q(created_by=user))` filter `MeActivitiesView`
+    uses for "my activities", so `/teaching/work` and this dashboard's
+    "Pending work" tile never disagree on the total."""
+    from apps.work import services
+
+    activity_type = _activity_type()
+    services.create_activity(
+        actor=trainer_profile.user,
+        student=student_profile,
+        activity_type=activity_type,
+        enrollment=enrollment,
+        assigned_to=admin_user,
+        due_at=timezone.now(),
+    )
+
+    api_client_no_csrf.force_login(trainer_profile.user)
+    body = api_client_no_csrf.get(TRAINER_DASHBOARD).json()
+
+    assert body["work"]["pending"] == 1
+    assert body["work"]["overdue"] == 0
+
+
+@pytest.mark.django_db
+def test_the_trainer_dashboard_work_is_zero_but_not_null_with_no_activities(
+    api_client_no_csrf, trainer_profile, batch, schedule, enrollment
+):
+    api_client_no_csrf.force_login(trainer_profile.user)
+    body = api_client_no_csrf.get(TRAINER_DASHBOARD).json()
+
+    assert body["work"] == {"pending": 0, "overdue": 0}
+
+
+@pytest.mark.django_db
+def test_the_trainer_dashboard_work_is_empty_for_a_non_trainer(api_client_no_csrf, enrollment):
+    api_client_no_csrf.force_login(enrollment.student.user)
+    body = api_client_no_csrf.get(TRAINER_DASHBOARD).json()
+
+    assert body["is_trainer"] is False
+    assert body["work"] == {"pending": 0, "overdue": 0}
+
+
 # ---------------------------------------------------------------------------
 # Progress
 # ---------------------------------------------------------------------------

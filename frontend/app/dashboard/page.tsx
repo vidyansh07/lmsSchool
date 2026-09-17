@@ -482,6 +482,25 @@ function TrainerView({ data }: { data: TrainerDashboard }) {
         </Card>
       </div>
 
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Link href="/teaching/work" className="block">
+          <Card className="transition-shadow hover:shadow-[var(--shadow-card-hover)]">
+            <CardHeader className="gap-1">
+              <CardDescription>Pending work</CardDescription>
+              <CardTitle className="text-2xl">{data.work.pending}</CardTitle>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/teaching/work?overdue=1" className="block">
+          <Card className="transition-shadow hover:shadow-[var(--shadow-card-hover)]">
+            <CardHeader className="gap-1">
+              <CardDescription>Overdue work</CardDescription>
+              <CardTitle className="text-2xl">{data.work.overdue}</CardTitle>
+            </CardHeader>
+          </Card>
+        </Link>
+      </div>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>

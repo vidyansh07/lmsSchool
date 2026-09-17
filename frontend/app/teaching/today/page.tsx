@@ -56,6 +56,8 @@ import { ClassPicker } from '@/components/teaching/class-picker';
 import { ClassWorkPanel } from '@/components/teaching/class-work-panel';
 import { DsrPanel } from '@/components/teaching/dsr-panel';
 import { RegisterEditor } from '@/components/teaching/register-editor';
+import { TodayActivitiesPanel } from '@/components/teaching/today-activities-panel';
+import { ActivityDrawer } from '@/components/work/activity-drawer';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -177,6 +179,10 @@ export function ClassWorkspace({
   const [isFinishing, setIsFinishing] = useState(false);
   const [finished, setFinished] = useState(false);
   const [finishedCounts, setFinishedCounts] = useState({ present: 0, absent: 0 });
+
+  // --- This trainer's own activities due today (ERP Phase 16) ---------------
+  const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const [activitiesReloadToken, setActivitiesReloadToken] = useState(0);
 
   // --- Load the class -------------------------------------------------------
 
@@ -543,6 +549,16 @@ export function ClassWorkspace({
         assessmentConducted={Boolean(draft.assessment_conducted)}
         onToggleAssignmentGiven={(value) => updateDraft({ assignment_given: value })}
         onToggleAssessmentConducted={(value) => updateDraft({ assessment_conducted: value })}
+      />
+
+      <TodayActivitiesPanel onSelect={setSelectedActivityId} reloadToken={activitiesReloadToken} />
+
+      <ActivityDrawer
+        activityId={selectedActivityId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedActivityId(null);
+        }}
+        onChanged={() => setActivitiesReloadToken((value) => value + 1)}
       />
 
       {dsr.is_editable ? (

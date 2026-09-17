@@ -339,10 +339,58 @@ describe('Dashboard — role routing', () => {
       upcoming_classes: [],
       student_count: 0,
       courses: [],
+      work: { pending: 0, overdue: 0 },
     };
     getTrainerDashboard.mockResolvedValue(trainerData);
 
     render(<Dashboard />);
     expect(await within(document.body).findByText(/your batches, classes and students/i)).toBeInTheDocument();
+  });
+
+  it("shows the trainer's pending/overdue work tiles, each linking to their own work list", async () => {
+    useAuthMock.value = { user: { first_name: 'Tina', role: 'trainer' } };
+    const trainerData: TrainerDashboard = {
+      is_trainer: true,
+      batches: [],
+      today_classes: [],
+      upcoming_classes: [],
+      student_count: 0,
+      courses: [],
+      work: { pending: 4, overdue: 2 },
+    };
+    getTrainerDashboard.mockResolvedValue(trainerData);
+
+    render(<Dashboard />);
+    await screen.findByText('Pending work');
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText('Overdue work')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+
+    expect(screen.getByText('Pending work').closest('a')).toHaveAttribute('href', '/teaching/work');
+    expect(screen.getByText('Overdue work').closest('a')).toHaveAttribute(
+      'href',
+      '/teaching/work?overdue=1',
+    );
+  });
+
+  it('renders a real "0" for a trainer with no outstanding work, not a blank tile', async () => {
+    useAuthMock.value = { user: { first_name: 'Tina', role: 'trainer' } };
+    const trainerData: TrainerDashboard = {
+      is_trainer: true,
+      batches: [],
+      today_classes: [],
+      upcoming_classes: [],
+      student_count: 0,
+      courses: [],
+      work: { pending: 0, overdue: 0 },
+    };
+    getTrainerDashboard.mockResolvedValue(trainerData);
+
+    render(<Dashboard />);
+    await screen.findByText('Pending work');
+    const pendingCard = screen.getByText('Pending work').closest('a');
+    const overdueCard = screen.getByText('Overdue work').closest('a');
+    expect(pendingCard).toHaveTextContent('0');
+    expect(overdueCard).toHaveTextContent('0');
   });
 });

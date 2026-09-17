@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '@/lib/api';
 import type { DSR } from '@/lib/dsr';
-import type { BatchDetail, ClassSession, Register, RegisterEntry } from '@/types/api';
+import type { Activity, BatchDetail, ClassSession, Register, RegisterEntry } from '@/types/api';
 import type { SessionWithTopic } from '@/lib/dsr';
 
 // --- Mocks -------------------------------------------------------------
@@ -36,6 +36,17 @@ vi.mock('@/lib/batches', () => ({ getBatch }));
 
 const listModules = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/courses', () => ({ listModules }));
+
+const listMyActivities = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/work', () => ({ listMyActivities }));
+
+// The drawer has its own dedicated tests (`activity-drawer.test.tsx`); here
+// a stand-in that surfaces the id it was opened with is enough to prove the
+// panel below opens it on click.
+vi.mock('@/components/work/activity-drawer', () => ({
+  ActivityDrawer: ({ activityId }: { activityId: string | null }) =>
+    activityId ? <div data-testid="activity-drawer">{activityId}</div> : null,
+}));
 
 const mockRouter = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
 const mockSearchParams = vi.hoisted(() => ({ value: new URLSearchParams() }));
@@ -175,6 +186,26 @@ function fixtures(overrides: {
   return { session, register, dsr, batch };
 }
 
+function activityRow(overrides: Partial<Activity> = {}): Activity {
+  return {
+    id: 'act-1',
+    title: 'Mock interview with Asha',
+    status: 'assigned',
+    priority: 'normal',
+    planned_at: null,
+    due_at: '2026-09-01T17:00:00Z',
+    completed_at: null,
+    created_at: '2026-08-30T09:00:00Z',
+    student: { id: 's1', name: 'Asha Rao', student_id: 'STU-001' },
+    type: { id: 't1', slug: 'mock-interview', name: 'Mock Interview', category: 'interview' },
+    batch: null,
+    assigned_to: { id: 'trainer-1', name: 'Tina Trainer' },
+    created_by: { id: 'manager-1', name: 'Manager One' },
+    counts: { history: 0 },
+    ...overrides,
+  };
+}
+
 function wireHappyPath(state: ReturnType<typeof fixtures>) {
   getSessionWithTopic.mockResolvedValue(state.session);
   getRegister.mockResolvedValue(state.register);
@@ -209,6 +240,15 @@ beforeEach(() => {
   recordTopic.mockReset();
   getBatch.mockReset();
   listModules.mockReset();
+  listMyActivities.mockReset().mockResolvedValue({
+    count: 0,
+    page: 1,
+    page_size: 50,
+    total_pages: 0,
+    next: null,
+    previous: null,
+    results: [],
+  });
   mockRouter.replace.mockReset();
   mockSearchParams.value = new URLSearchParams();
 });
@@ -400,6 +440,59 @@ describe('ClassWorkspace', () => {
     await user.keyboard('{Control>}{Enter}{/Control}');
 
     await waitFor(() => expect(markAttendance).toHaveBeenCalledOnce());
+  });
+
+  it("lists the trainer's own activities due today and opens the drawer on click", async () => {
+    const user = userEvent.setup();
+    const state = fixtures();
+    wireHappyPath(state);
+    listMyActivities.mockResolvedValue({
+      count: 1,
+      page: 1,
+      page_size: 50,
+      total_pages: 1,
+      next: null,
+      previous: null,
+      results: [activityRow()],
+    });
+
+    render(<ClassWorkspace sessionId="session-1" />);
+
+    await waitFor(() => expect(screen.getByText('Mock interview with Asha')).toBeInTheDocument());
+    expect(listMyActivities).toHaveBeenCalledWith(
+      expect.objectContaining({ ordering: 'due_at', page_size: 50 }),
+    );
+
+    await user.click(screen.getByText('Mock interview with Asha'));
+    expect(screen.getByTestId('activity-drawer')).toHaveTextContent('act-1');
+  });
+
+  it("shows an empty state when nothing of the trainer's is due today", async () => {
+    const state = fixtures();
+    wireHappyPath(state);
+    listMyActivities.mockResolvedValue({
+      count: 0,
+      page: 1,
+      page_size: 50,
+      total_pages: 0,
+      next: null,
+      previous: null,
+      results: [],
+    });
+
+    render(<ClassWorkspace sessionId="session-1" />);
+
+    await waitFor(() => expect(screen.getByText('Nothing due today')).toBeInTheDocument());
+  });
+
+  it("shows an error with retry when the trainer's activities fail to load", async () => {
+    const state = fixtures();
+    wireHappyPath(state);
+    listMyActivities.mockRejectedValue(new ApiError(500, 'error', 'Server exploded.', 'req-4'));
+
+    render(<ClassWorkspace sessionId="session-1" />);
+
+    await waitFor(() => expect(screen.getByText('Could not load your activities')).toBeInTheDocument());
   });
 });
 

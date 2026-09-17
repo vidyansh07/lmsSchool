@@ -1,0 +1,266 @@
+'use client';
+
+/**
+ * A trainer's own "my work" queue (ERP Phase 16): every one of their own
+ * activities, filterable by status and overdue, reusing Phase 9's activity
+ * engine end to end — `lib/work.ts`'s `listMyActivities` (already scoped
+ * server-side to the caller by `GET /me/activities/`) for the list and
+ * `components/work/activity-drawer.tsx` for detail.
+ *
+ * Deliberately a separate, lighter page rather than the shared `/activities`
+ * screen (`app/activities/page.tsx`) with `mine=1` pinned: that screen's
+ * saved filters, "assigned to" field and type filter all exist for a
+ * cross-role reviewer working someone else's queue, and every one of them
+ * would have exactly one useful value once every row is already the
+ * caller's own — reusing it would mean carrying that dead UI along, or
+ * threading new "hide this control" props through an already-dense
+ * component for a single caller. The two screens share everything that
+ * *is* reusable instead: the query and mutation functions in `lib/work.ts`,
+ * `ActivityDrawer`, and the same table/badge/pagination primitives.
+ */
+
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+
+import { Pagination } from '@/components/pagination';
+import { RequireAuth } from '@/components/require-auth';
+import { EmptyState, ErrorState, LoadingState } from '@/components/states';
+import { Badge, categoryVariant } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select } from '@/components/ui/input';
+import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
+import { ActivityDrawer } from '@/components/work/activity-drawer';
+import { ApiError } from '@/lib/api';
+import { formatDateTime } from '@/lib/format';
+import {
+  ACTIVITY_PRIORITY_LABEL,
+  ACTIVITY_STATUS_LABEL,
+  ACTIVITY_STATUS_VARIANT,
+} from '@/lib/labels';
+import { listMyActivities } from '@/lib/work';
+import type { Activity, ActivityStatus, Paginated } from '@/types/api';
+
+const STATUSES: ActivityStatus[] = [
+  'draft',
+  'planned',
+  'assigned',
+  'in_progress',
+  'completed',
+  'missed',
+  'overdue',
+  'cancelled',
+  'reopened',
+  'under_review',
+  'approved',
+  'requires_action',
+];
+
+interface Filters {
+  status: '' | ActivityStatus;
+  overdue: boolean;
+  page: number;
+}
+
+interface ListState {
+  key: string;
+  data: Paginated<Activity> | null;
+  error: ApiError | null;
+  isLoading: boolean;
+}
+
+function MyWorkWorkspace() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // Read once, at mount — this only seeds the initial filter from a link
+  // like the dashboard's "Overdue" tile (`/teaching/work?overdue=1`); after
+  // that the checkbox below is the source of truth, same as the toggles on
+  // `/activities`.
+  const [filters, setFilters] = useState<Filters>(() => ({
+    status: '',
+    overdue: searchParams.get('overdue') === '1',
+    page: 1,
+  }));
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  const key = `${JSON.stringify(filters)}#${reloadToken}`;
+  const [state, setState] = useState<ListState>({ key, data: null, error: null, isLoading: true });
+  if (state.key !== key) {
+    setState({ key, data: null, error: null, isLoading: true });
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    listMyActivities({
+      status: filters.status || undefined,
+      overdue: filters.overdue ? 1 : undefined,
+      ordering: 'due_at',
+      page: filters.page,
+    })
+      .then((data) => {
+        if (!cancelled) setState({ key, data, error: null, isLoading: false });
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) return;
+        const error =
+          cause instanceof ApiError ? cause : new ApiError(0, 'unknown_error', 'The request failed.', '');
+        setState({ key, data: null, error, isLoading: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  function reload() {
+    setReloadToken((value) => value + 1);
+  }
+
+  function updateFilters(patch: Partial<Filters>) {
+    const next = { ...filters, ...patch, page: patch.page ?? 1 };
+    setFilters(next);
+    // Keeps the URL in sync with the "overdue" toggle so this screen stays
+    // bookmarkable/shareable the same way the dashboard tile links to it —
+    // without making the filter bar itself re-read the URL on every render.
+    const query = next.overdue ? '?overdue=1' : '';
+    router.replace(`/teaching/work${query}`);
+  }
+
+  const rows = state.data?.results ?? [];
+  const hasFilters = Boolean(filters.status) || filters.overdue;
+
+  return (
+    <div className="animate-rise-in space-y-6">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight">My work</h1>
+        <p className="text-sm text-muted-foreground">
+          Every activity assigned to you — interviews, mentoring, reviews and the rest.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <Select
+          aria-label="Status"
+          value={filters.status}
+          onChange={(event) => updateFilters({ status: event.target.value as '' | ActivityStatus })}
+          className="w-44"
+        >
+          <option value="">Every status</option>
+          {STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {ACTIVITY_STATUS_LABEL[status]}
+            </option>
+          ))}
+        </Select>
+        <div className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm">
+          <Checkbox
+            aria-label="Overdue"
+            checked={filters.overdue}
+            onCheckedChange={(checked) => updateFilters({ overdue: Boolean(checked) })}
+          />
+          <span>Overdue only</span>
+        </div>
+        {hasFilters ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => updateFilters({ status: '', overdue: false })}
+          >
+            Clear filters
+          </Button>
+        ) : null}
+      </div>
+
+      {state.isLoading ? (
+        <LoadingState label="Loading your work…" rows={6} />
+      ) : state.error ? (
+        <ErrorState
+          title="Could not load your work"
+          message={state.error.message}
+          requestId={state.error.requestId || undefined}
+          onRetry={reload}
+        />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title="Nothing here"
+          description="No activities match these filters."
+        />
+      ) : (
+        <>
+          <TableWrapper>
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Title</Th>
+                  <Th>Student</Th>
+                  <Th>Type</Th>
+                  <Th>Status</Th>
+                  <Th>Priority</Th>
+                  <Th>Due</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <Tr key={row.id} className="cursor-pointer" onClick={() => setSelectedId(row.id)}>
+                    <Td>
+                      <button
+                        type="button"
+                        className="text-left font-medium underline-offset-2 hover:underline"
+                        onClick={() => setSelectedId(row.id)}
+                      >
+                        {row.title}
+                      </button>
+                    </Td>
+                    <Td>
+                      {row.student.name}
+                      <span className="block text-xs text-muted-foreground">{row.student.student_id}</span>
+                    </Td>
+                    <Td>
+                      <Badge variant={categoryVariant(row.type.category)}>{row.type.name}</Badge>
+                    </Td>
+                    <Td>
+                      <Badge variant={ACTIVITY_STATUS_VARIANT[row.status]}>
+                        {ACTIVITY_STATUS_LABEL[row.status]}
+                      </Badge>
+                    </Td>
+                    <Td>{ACTIVITY_PRIORITY_LABEL[row.priority]}</Td>
+                    <Td className="whitespace-nowrap">{formatDateTime(row.due_at)}</Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
+          </TableWrapper>
+          {state.data ? (
+            <Pagination
+              page={state.data.page}
+              totalPages={state.data.total_pages}
+              count={state.data.count}
+              pageSize={state.data.page_size}
+              onPageChange={(page) => updateFilters({ page })}
+            />
+          ) : null}
+        </>
+      )}
+
+      <ActivityDrawer
+        activityId={selectedId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedId(null);
+        }}
+        onChanged={reload}
+      />
+    </div>
+  );
+}
+
+export default function TeachingWorkPage() {
+  return (
+    <RequireAuth>
+      <Suspense fallback={<LoadingState label="Loading your work…" rows={6} />}>
+        <MyWorkWorkspace />
+      </Suspense>
+    </RequireAuth>
+  );
+}
