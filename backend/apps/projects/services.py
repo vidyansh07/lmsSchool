@@ -634,6 +634,15 @@ def review_project(
         },
         durable=False,
     )
+
+    # Performance sweep: a project review is one of Student 360's own
+    # invalidation triggers (its performance/results figures) — every
+    # outcome, not only `approved`, since the status/feedback shown there
+    # changes on a `rework`/`under_review` decision too.
+    from apps.students.student_360 import forget_360
+
+    forget_360(work.enrollment.student_id)
+
     return work
 
 

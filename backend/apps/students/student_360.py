@@ -60,6 +60,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Q, When
 
 from apps.accounts.roles import Capability, has_capability
@@ -67,6 +68,7 @@ from apps.assessments import access as assessment_access
 from apps.assignments import access as assignment_access
 from apps.attendance.models import attendance_summary as _attendance_summary
 from apps.authorization.scopes import ALL, BRANCH, effective_scope
+from apps.common.caching import forget
 from apps.enrollments.models import LIVE_STATUS_LIST, Enrollment
 from apps.enrollments.serializers import EnrollmentSerializer
 from apps.enrollments.services import course_progress
@@ -77,6 +79,36 @@ from apps.work.models import OPEN_STATUSES, ActivityStatus
 
 from .models import StudentProfile
 from .serializers import AdminStudentProfileSerializer, StudentProfileSerializer
+
+#: The cache prefix `views.Student360View` reads under (`{PREFIX}:{student_id}`,
+#: per PERFORMANCE_PLAN.md's caching table). Carrying the student id in the
+#: *prefix* itself — not just in `remember()`'s `parts` — means `forget_360`
+#: below can bump exactly one student's version, the same trick
+#: `apps.forms.services._forget_published` uses for `form:published:{slug}`,
+#: rather than evicting every other student's cached 360 too.
+PREFIX = "student:360"
+
+
+def forget_360(student_id) -> None:
+    """Invalidate this one student's cached 360 — never the whole prefix,
+    which would also evict every other student's cache for no reason. Called
+    from every write path whose result this read model surfaces: activity
+    completion/review (`apps.work.services`), attendance marking/correction
+    (`apps.attendance.services`), and assessment/assignment/project result
+    recording (`apps.assessments`/`apps.assignments`/`apps.projects`
+    `.services`).
+
+    Every one of those callers invokes this from inside their own
+    `@transaction.atomic` block, before their write is durable, so — exactly
+    like `apps.authorization.services._forget` — this bumps the version now
+    *and* registers the same bump again via `transaction.on_commit`. Now
+    alone would leave a window between this call and that transaction's
+    COMMIT in which a concurrent Student 360 read could recompute from
+    not-yet-committed state and cache that stale answer for the full TTL,
+    with nothing left to invalidate it again once the transaction finishes."""
+    key = f"{PREFIX}:{student_id}"
+    forget(key)
+    transaction.on_commit(lambda: forget(key))
 
 
 def viewer_scope_key(user) -> str:

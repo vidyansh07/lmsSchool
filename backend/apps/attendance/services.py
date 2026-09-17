@@ -190,6 +190,15 @@ def mark_attendance(
 
         transaction.on_commit(_schedule)
 
+        # Performance sweep: an attendance mark is one of Student 360's own
+        # invalidation triggers (its attendance summary). Only the students
+        # actually touched, from `roster` (already select_related on
+        # `student`) — never the whole `student:360` prefix.
+        from apps.students.student_360 import forget_360
+
+        for enrollment_id in touched_enrollment_ids:
+            forget_360(roster[str(enrollment_id)].student_id)
+
     return {"created": len(created), "updated": len(updated), "corrections": corrections}
 
 
@@ -251,5 +260,9 @@ def correct_record(
     from apps.performance.tasks import schedule_recompute
 
     transaction.on_commit(lambda: schedule_recompute(record_row.enrollment_id))
+
+    from apps.students.student_360 import forget_360
+
+    forget_360(record_row.enrollment.student_id)
 
     return record_row

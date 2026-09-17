@@ -42,6 +42,7 @@ from django.utils import timezone
 
 from apps.accounts.roles import Capability, has_capability
 from apps.audit.services import AuditAction, record
+from apps.common.caching import MINUTE, forget, remember
 from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
 from apps.common.logging import scrub
 from apps.notifications.models import NotificationKind
@@ -66,6 +67,35 @@ logger = logging.getLogger("grras.communication")
 #: `apps.notifications.channels.MAX_ATTEMPTS`.
 MAX_ATTEMPTS = 4
 ERROR_MAX = 500
+
+#: `resolve_published_template`'s cache (PERFORMANCE_PLAN.md: 1 h, scope key
+#: `(key, channel)`). The `key`/`channel` pair lives in the *prefix* itself —
+#: the same per-key-prefix trick `apps.forms.services._forget_published`
+#: uses for `form:published:{slug}` — so `_forget_published` below bumps
+#: exactly this one template, never every template's cache.
+_PUBLISHED_CACHE_TTL = 60 * MINUTE  # 1 hour
+
+
+def _published_cache_key(key: str, channel: str) -> str:
+    return f"template:published:{key}:{channel}"
+
+
+def _forget_published(key: str, channel: str) -> None:
+    """Invalidate now *and* again on commit — the same double bump
+    `apps.authorization.services._forget` uses, for the same reason.
+    `publish_version`/`create_draft_version` call this from inside their own
+    `@transaction.atomic` block, before the write is durable. Bumping only
+    now would leave a window open between this call and the transaction's
+    COMMIT in which a concurrent `resolve_published_template()` could
+    recompute from the pre-write row and cache that stale answer under the
+    *new* version for the full TTL — with no second write left to correct
+    it, since the transaction that would fire another `forget()` already
+    ran its only one. Registering the same call again via `on_commit`
+    closes that window: whatever got cached during it is bumped again the
+    moment the write actually lands."""
+    published_key = _published_cache_key(key, channel)
+    forget(published_key)
+    transaction.on_commit(lambda: forget(published_key))
 
 
 def _require(actor: Any, capability: str) -> None:
@@ -155,8 +185,12 @@ def create_draft_version(*, actor, template: MessageTemplate) -> TemplateVersion
         provider_template_id=current.provider_template_id if current else "",
     )
     if template.status != TemplateStatus.DRAFT:
+        # This is the "unpublish" transition for caching purposes: a new
+        # draft on top of a published template means `resolve_published_template`
+        # must stop answering with the old version from its next call on.
         template.status = TemplateStatus.DRAFT
         template.save(update_fields=["status", "updated_at"])
+        _forget_published(template.key, template.channel)
     record(
         action=AuditAction.TEMPLATE_VERSION_CREATED,
         actor=actor,
@@ -287,6 +321,7 @@ def publish_version(*, actor, version: TemplateVersion) -> TemplateVersion:
     template.current_version = version
     template.status = TemplateStatus.PUBLISHED
     template.save(update_fields=["current_version", "status", "updated_at"])
+    _forget_published(template.key, template.channel)
 
     record(
         action=AuditAction.TEMPLATE_PUBLISHED,
@@ -347,19 +382,30 @@ def resolve_published_template(*, key: str, channel: str) -> TemplateVersion | N
     """The published version for `key`/`channel`, or `None`. The one place
     both the manual-send endpoint and automation's `send_email`/
     `send_whatsapp` actions resolve "which template" from — see
-    `apps.automation.actions`."""
+    `apps.automation.actions`.
+
+    Cached an hour (`template:published:{key}:{channel}`), the same shape
+    `apps.forms.views`' `form:published` uses — called on every send, and a
+    template is published rarely. `_forget_published` (called from
+    `publish_version` and `create_draft_version`, the two places a
+    template's published state actually changes) invalidates precisely this
+    key/channel pair, never any other template's."""
     if not key:
         return None
-    template = (
-        MessageTemplate.objects.filter(
-            key=key, channel=channel, status=TemplateStatus.PUBLISHED, deleted_at__isnull=True
+
+    def _compute():
+        template = (
+            MessageTemplate.objects.filter(
+                key=key, channel=channel, status=TemplateStatus.PUBLISHED, deleted_at__isnull=True
+            )
+            .select_related("current_version")
+            .first()
         )
-        .select_related("current_version")
-        .first()
-    )
-    if template is None or template.current_version_id is None:
-        return None
-    return template.current_version
+        if template is None or template.current_version_id is None:
+            return None
+        return template.current_version
+
+    return remember(_published_cache_key(key, channel), (), _PUBLISHED_CACHE_TTL, _compute)
 
 
 # ---------------------------------------------------------------------------

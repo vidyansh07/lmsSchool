@@ -112,11 +112,102 @@ class CalendarView(APIView):
         )
 
 
+def _student_dashboard(user) -> dict:
+    student = batch_access.student_profile(user)
+    if student is None:
+        return {
+            "is_student": False,
+            "courses": [],
+            "batches": [],
+            "upcoming_classes": [],
+            "continue_learning": None,
+            "recent_activity": [],
+            "notifications": [],
+        }
+
+    # One query for every enrolment with its course, batch and trainer.
+    enrollments = list(
+        Enrollment.objects.with_related().filter(student=student).order_by("-enrolled_at")
+    )
+    active = [row for row in enrollments if row.status in ACCESS_GRANTING_STATUSES]
+
+    courses = []
+    continue_learning = None
+    for enrollment in active:
+        progress = course_progress(enrollment)
+        entry = {
+            "enrollment_id": str(enrollment.pk),
+            "course_id": str(enrollment.course_id),
+            "course_title": enrollment.course.title,
+            "course_slug": enrollment.course.slug,
+            "batch_code": enrollment.batch.code,
+            "batch_name": enrollment.batch.name,
+            "status": enrollment.status,
+            "grants_access": enrollment.grants_access(),
+            "progress_percent": progress["percent"],
+            "completed_lessons": progress["completed_lessons"],
+            "total_lessons": progress["total_lessons"],
+            "last_lesson_id": progress["last_lesson_id"],
+            "last_lesson_title": progress["last_lesson_title"],
+        }
+        courses.append(entry)
+
+        # "Continue learning" is the most recently opened lesson across all
+        # live enrolments.
+        if progress["last_accessed_at"] and (
+            continue_learning is None or progress["last_accessed_at"] > continue_learning["_at"]
+        ):
+            continue_learning = {**entry, "_at": progress["last_accessed_at"]}
+
+    if continue_learning is not None:
+        continue_learning.pop("_at", None)
+
+    today = timezone.localdate()
+    upcoming = events_for(user, today, today + timedelta(days=UPCOMING_DAYS))
+
+    return {
+        "is_student": True,
+        "courses": courses,
+        "batches": [
+            {
+                "id": str(row.batch_id),
+                "code": row.batch.code,
+                "name": row.batch.name,
+                "course_title": row.course.title,
+                "status": row.batch.status,
+                "enrollment_status": row.status,
+                "start_date": row.batch.start_date.isoformat(),
+                "end_date": row.batch.end_date.isoformat(),
+            }
+            for row in enrollments
+        ],
+        "upcoming_classes": [event.as_dict() for event in upcoming[:RECENT_LIMIT]],
+        "continue_learning": continue_learning,
+        "recent_activity": [
+            {
+                "kind": "enrollment",
+                "title": f"Enrolled on {row.course.title}",
+                "at": row.enrolled_at.isoformat(),
+                "status": row.status,
+            }
+            for row in enrollments[:RECENT_LIMIT]
+        ],
+        # Placeholder, as §8 asks. The shape is fixed now so the
+        # notifications feature fills it rather than redesigning it.
+        "notifications": [],
+    }
+
+
 class StudentDashboardView(APIView):
     """What a student needs on opening the app.
 
     Deliberately short: current courses, the next few classes, where to pick up,
     and their batches. §8 asks for useful information, not a wall of it.
+
+    Cached a minute per caller, the same shape `CounsellorDashboardView`
+    below uses: `remember()` keyed on the user's own id, TTL-only (no write
+    path here makes a minute-stale figure worth an explicit `forget()`, per
+    `PERFORMANCE_PLAN.md`'s caching table).
     """
 
     permission_classes = (IsActiveUser,)
@@ -125,97 +216,116 @@ class StudentDashboardView(APIView):
         summary="Student dashboard", responses={200: StudentDashboardSerializer}, tags=DASHBOARD_TAG
     )
     def get(self, request):
-        student = batch_access.student_profile(request.user)
-        if student is None:
-            return Response(
-                {
-                    "is_student": False,
-                    "courses": [],
-                    "batches": [],
-                    "upcoming_classes": [],
-                    "continue_learning": None,
-                    "recent_activity": [],
-                    "notifications": [],
-                }
-            )
-
-        # One query for every enrolment with its course, batch and trainer.
-        enrollments = list(
-            Enrollment.objects.with_related().filter(student=student).order_by("-enrolled_at")
+        data = remember(
+            "dashboard:student",
+            (request.user.pk,),
+            MINUTE,
+            lambda: _student_dashboard(request.user),
         )
-        active = [row for row in enrollments if row.status in ACCESS_GRANTING_STATUSES]
+        return Response(data)
 
-        courses = []
-        continue_learning = None
-        for enrollment in active:
-            progress = course_progress(enrollment)
-            entry = {
-                "enrollment_id": str(enrollment.pk),
-                "course_id": str(enrollment.course_id),
-                "course_title": enrollment.course.title,
-                "course_slug": enrollment.course.slug,
-                "batch_code": enrollment.batch.code,
-                "batch_name": enrollment.batch.name,
-                "status": enrollment.status,
-                "grants_access": enrollment.grants_access(),
-                "progress_percent": progress["percent"],
-                "completed_lessons": progress["completed_lessons"],
-                "total_lessons": progress["total_lessons"],
-                "last_lesson_id": progress["last_lesson_id"],
-                "last_lesson_title": progress["last_lesson_title"],
-            }
-            courses.append(entry)
 
-            # "Continue learning" is the most recently opened lesson across all
-            # live enrolments.
-            if progress["last_accessed_at"] and (
-                continue_learning is None or progress["last_accessed_at"] > continue_learning["_at"]
-            ):
-                continue_learning = {**entry, "_at": progress["last_accessed_at"]}
+def _trainer_dashboard(user) -> dict:
+    trainer = batch_access.trainer_profile(user)
+    if trainer is None:
+        return {
+            "is_trainer": False,
+            "batches": [],
+            "today_classes": [],
+            "upcoming_classes": [],
+            "student_count": 0,
+            "courses": [],
+            "work": {"pending": 0, "overdue": 0},
+        }
 
-        if continue_learning is not None:
-            continue_learning.pop("_at", None)
+    # One query, with the seat count annotated rather than counted per row.
+    batches = list(
+        batch_access.visible_batches(user)
+        .with_counts()
+        .exclude(status=BatchStatus.ARCHIVED)
+        .order_by("-start_date")
+    )
 
-        today = timezone.localdate()
-        upcoming = events_for(request.user, today, today + timedelta(days=UPCOMING_DAYS))
+    today = timezone.localdate()
+    week = events_for(user, today, today + timedelta(days=UPCOMING_DAYS))
+    today_classes = [event for event in week if event.start.date() == today]
 
-        return Response(
+    student_count = (
+        Enrollment.objects.filter(
+            batch__trainer=trainer,
+            status__in=(EnrollmentStatus.ACTIVE, EnrollmentStatus.PENDING),
+        )
+        .values("student_id")
+        .distinct()
+        .count()
+    )
+
+    # This trainer's own work queue (rule 2: queryset-first, never a raw
+    # `Activity.objects` count) — the same `Q(assigned_to=user) |
+    # Q(created_by=user)` filter `MeActivitiesView` already uses for "my
+    # activities", layered on `visible_activities` rather than a second
+    # unscoped query. Filtering to `assigned_to` alone would drift from
+    # that endpoint: a trainer who created but did not self-assign an
+    # activity (handed off, or still an unassigned draft) would show up
+    # on `/me/activities` and `/teaching/work` but silently drop out of
+    # this dashboard's counts and list.
+    own_activities = work_access.visible_activities(user).filter(
+        Q(assigned_to=user) | Q(created_by=user)
+    )
+    work_counts = own_activities.aggregate(
+        pending=Count("id", filter=Q(status__in=OPEN_STATUSES)),
+        overdue=Count("id", filter=Q(status=ActivityStatus.OVERDUE)),
+    )
+
+    seen: dict[str, dict] = {}
+    for batch in batches:
+        seen.setdefault(
+            str(batch.course_id),
             {
-                "is_student": True,
-                "courses": courses,
-                "batches": [
-                    {
-                        "id": str(row.batch_id),
-                        "code": row.batch.code,
-                        "name": row.batch.name,
-                        "course_title": row.course.title,
-                        "status": row.batch.status,
-                        "enrollment_status": row.status,
-                        "start_date": row.batch.start_date.isoformat(),
-                        "end_date": row.batch.end_date.isoformat(),
-                    }
-                    for row in enrollments
-                ],
-                "upcoming_classes": [event.as_dict() for event in upcoming[:RECENT_LIMIT]],
-                "continue_learning": continue_learning,
-                "recent_activity": [
-                    {
-                        "kind": "enrollment",
-                        "title": f"Enrolled on {row.course.title}",
-                        "at": row.enrolled_at.isoformat(),
-                        "status": row.status,
-                    }
-                    for row in enrollments[:RECENT_LIMIT]
-                ],
-                # Placeholder, as §8 asks. The shape is fixed now so the
-                # notifications feature fills it rather than redesigning it.
-                "notifications": [],
-            }
+                "course_id": str(batch.course_id),
+                "title": batch.course.title,
+                "slug": batch.course.slug,
+                "batch_count": 0,
+            },
         )
+        seen[str(batch.course_id)]["batch_count"] += 1
+
+    return {
+        "is_trainer": True,
+        "batches": [
+            {
+                "id": str(batch.pk),
+                "code": batch.code,
+                "name": batch.name,
+                "course_title": batch.course.title,
+                "status": batch.status,
+                "start_date": batch.start_date.isoformat(),
+                "end_date": batch.end_date.isoformat(),
+                "capacity": batch.capacity,
+                "enrolled_count": getattr(batch, "enrolled_count", 0),
+            }
+            for batch in batches
+        ],
+        "today_classes": [event.as_dict() for event in today_classes],
+        "upcoming_classes": [event.as_dict() for event in week[:RECENT_LIMIT]],
+        "student_count": student_count,
+        "courses": list(seen.values()),
+        "work": {
+            "pending": work_counts["pending"] or 0,
+            "overdue": work_counts["overdue"] or 0,
+        },
+    }
 
 
 class TrainerDashboardView(APIView):
-    """What a trainer needs: today, this week, and who they teach."""
+    """What a trainer needs: today, this week, and who they teach.
+
+    Cached a minute per caller (`dashboard:trainer`), same shape as
+    `StudentDashboardView` above — except this one *does* get an explicit
+    `forget()`: `apps.dashboards.receivers.on_activity_changed` bumps it the
+    moment one of this trainer's activities completes, per
+    `PERFORMANCE_PLAN.md`'s "activity complete forgets manager/trainer".
+    """
 
     permission_classes = (IsActiveUser,)
 
@@ -223,99 +333,13 @@ class TrainerDashboardView(APIView):
         summary="Trainer dashboard", responses={200: TrainerDashboardSerializer}, tags=DASHBOARD_TAG
     )
     def get(self, request):
-        trainer = batch_access.trainer_profile(request.user)
-        if trainer is None:
-            return Response(
-                {
-                    "is_trainer": False,
-                    "batches": [],
-                    "today_classes": [],
-                    "upcoming_classes": [],
-                    "student_count": 0,
-                    "courses": [],
-                    "work": {"pending": 0, "overdue": 0},
-                }
-            )
-
-        # One query, with the seat count annotated rather than counted per row.
-        batches = list(
-            batch_access.visible_batches(request.user)
-            .with_counts()
-            .exclude(status=BatchStatus.ARCHIVED)
-            .order_by("-start_date")
+        data = remember(
+            "dashboard:trainer",
+            (request.user.pk,),
+            MINUTE,
+            lambda: _trainer_dashboard(request.user),
         )
-
-        today = timezone.localdate()
-        week = events_for(request.user, today, today + timedelta(days=UPCOMING_DAYS))
-        today_classes = [event for event in week if event.start.date() == today]
-
-        student_count = (
-            Enrollment.objects.filter(
-                batch__trainer=trainer,
-                status__in=(EnrollmentStatus.ACTIVE, EnrollmentStatus.PENDING),
-            )
-            .values("student_id")
-            .distinct()
-            .count()
-        )
-
-        # This trainer's own work queue (rule 2: queryset-first, never a raw
-        # `Activity.objects` count) — the same `Q(assigned_to=user) |
-        # Q(created_by=user)` filter `MeActivitiesView` already uses for "my
-        # activities", layered on `visible_activities` rather than a second
-        # unscoped query. Filtering to `assigned_to` alone would drift from
-        # that endpoint: a trainer who created but did not self-assign an
-        # activity (handed off, or still an unassigned draft) would show up
-        # on `/me/activities` and `/teaching/work` but silently drop out of
-        # this dashboard's counts and list.
-        own_activities = work_access.visible_activities(request.user).filter(
-            Q(assigned_to=request.user) | Q(created_by=request.user)
-        )
-        work_counts = own_activities.aggregate(
-            pending=Count("id", filter=Q(status__in=OPEN_STATUSES)),
-            overdue=Count("id", filter=Q(status=ActivityStatus.OVERDUE)),
-        )
-
-        seen: dict[str, dict] = {}
-        for batch in batches:
-            seen.setdefault(
-                str(batch.course_id),
-                {
-                    "course_id": str(batch.course_id),
-                    "title": batch.course.title,
-                    "slug": batch.course.slug,
-                    "batch_count": 0,
-                },
-            )
-            seen[str(batch.course_id)]["batch_count"] += 1
-
-        return Response(
-            {
-                "is_trainer": True,
-                "batches": [
-                    {
-                        "id": str(batch.pk),
-                        "code": batch.code,
-                        "name": batch.name,
-                        "course_title": batch.course.title,
-                        "status": batch.status,
-                        "start_date": batch.start_date.isoformat(),
-                        "end_date": batch.end_date.isoformat(),
-                        "capacity": batch.capacity,
-                        "enrolled_count": getattr(batch, "enrolled_count", 0),
-                    }
-                    for batch in batches
-                ],
-                "today_classes": [event.as_dict() for event in today_classes],
-                "upcoming_classes": [event.as_dict() for event in week[:RECENT_LIMIT]],
-                "student_count": student_count,
-                "courses": list(seen.values()),
-                "work": {
-                    "pending": work_counts["pending"] or 0,
-                    "overdue": work_counts["overdue"] or 0,
-                },
-            }
-        )
+        return Response(data)
 
 
 def _counsellor_dashboard(user) -> dict:

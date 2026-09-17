@@ -383,6 +383,12 @@ def record_result(
 
         transaction.on_commit(_dispatch)
 
+    # Performance sweep: a result is one of Student 360's own invalidation
+    # triggers (its performance/results figures).
+    from apps.students.student_360 import forget_360
+
+    forget_360(enrollment.student_id)
+
     return result, created
 
 

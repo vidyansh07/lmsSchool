@@ -558,6 +558,15 @@ def complete_activity(
         )
 
     activity_changed.send(sender=Activity, activity=activity, event="completed", actor=actor)
+
+    # Performance sweep: this activity's completion is exactly the kind of
+    # write Student 360 surfaces (its timeline, its risk/performance
+    # figures), so the caching table names it explicitly. Inline import —
+    # `apps.students` already imports this app (`student_360.py`'s own
+    # `work_access` use), so importing it back at module load would cycle.
+    from apps.students.student_360 import forget_360
+
+    forget_360(activity.student_id)
     return activity
 
 
@@ -626,6 +635,10 @@ def review_activity(*, actor, activity: Activity, decision: str, note: str) -> A
             resource_type="activity",
             resource_id=activity.pk,
         )
+
+    from apps.students.student_360 import forget_360
+
+    forget_360(activity.student_id)
     return activity
 
 

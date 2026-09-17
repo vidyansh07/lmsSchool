@@ -11,11 +11,13 @@ from rest_framework.views import APIView
 
 from apps.accounts.roles import Capability, has_capability
 from apps.accounts.stepup import StepUpRequired, is_fresh
+from apps.common.caching import remember
 from apps.common.exceptions import AuthorityError
 from apps.common.permissions import HasCapability
 
 from . import services
 from .models import Permission, Role, ScopeGrant
+from .resolver import MATRIX_PREFIX, MATRIX_TTL, PERMISSIONS_PREFIX, PERMISSIONS_TTL
 from .serializers import (
     PermissionSerializer,
     RoleDeleteSerializer,
@@ -225,6 +227,12 @@ class ScopeGrantDetailView(APIView):
 
 
 class PermissionListView(ListAPIView):
+    """The permission catalog — small, changes only on a `sync_permissions`
+    run or a `Permission.is_active` flip, and read on every roles-admin page
+    load. Cached 1 hour (`auth:permissions`, no scope key: the catalog is the
+    same for every caller `ROLE_VIEW` admits), forgotten from the same
+    `forget_roles()` call sites as `auth:roles`/`auth:matrix`."""
+
     permission_classes = (HasCapability,)
     required_capability = Capability.ROLE_VIEW
     serializer_class = PermissionSerializer
@@ -233,10 +241,18 @@ class PermissionListView(ListAPIView):
 
     @extend_schema(summary="The permission catalog", tags=TAG)
     def get(self, request, *args, **kwargs):
-        return super().get(request, *args, **kwargs)
+        def _compute():
+            return PermissionSerializer(Permission.objects.filter(is_active=True), many=True).data
+
+        return Response(remember(PERMISSIONS_PREFIX, (), PERMISSIONS_TTL, _compute))
 
 
 class RoleMatrixView(APIView):
+    """Every role by every permission. Cached 10 minutes (`auth:matrix`, no
+    scope key: the matrix does not vary by caller, only `ROLE_VIEW` gates
+    it), forgotten from the same `forget_roles()` call sites as
+    `auth:roles`/`auth:permissions` — never a second invalidation path."""
+
     permission_classes = (HasCapability,)
     required_capability = Capability.ROLE_VIEW
 
@@ -246,13 +262,14 @@ class RoleMatrixView(APIView):
         tags=TAG,
     )
     def get(self, request):
-        data = services.matrix()
-        return Response(
-            {
+        def _compute():
+            data = services.matrix()
+            return {
                 "roles": RoleSummarySerializer(
                     _annotated().order_by("-is_system", "kind", "name"), many=True
                 ).data,
                 "permissions": PermissionSerializer(data["permissions"], many=True).data,
                 "cells": data["cells"],
             }
-        )
+
+        return Response(remember(MATRIX_PREFIX, (), MATRIX_TTL, _compute))

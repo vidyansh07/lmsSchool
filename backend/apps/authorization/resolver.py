@@ -15,6 +15,16 @@ from apps.common.caching import MINUTE, forget, remember
 PREFIX = "auth:roles"
 TTL = 10 * MINUTE
 
+#: `views.RoleMatrixView`/`views.PermissionListView`'s own cache prefixes
+#: (PERFORMANCE_PLAN.md's caching table: 10 min / 1 h, no scope key — neither
+#: response varies by caller). Forgotten from the exact same call sites as
+#: `PREFIX` above, by `forget_roles()` below, so there is one invalidation
+#: path for every auth-shaped cache, never a second one that could drift.
+MATRIX_PREFIX = "auth:matrix"
+MATRIX_TTL = 10 * MINUTE
+PERMISSIONS_PREFIX = "auth:permissions"
+PERMISSIONS_TTL = 60 * MINUTE
+
 
 def _codes_for(role) -> frozenset[str]:
     from .models import RolePermission
@@ -52,3 +62,5 @@ def resolved_capabilities(kind: str, custom_role_id=None) -> frozenset[str] | No
 
 def forget_roles() -> None:
     forget(PREFIX)
+    forget(MATRIX_PREFIX)
+    forget(PERMISSIONS_PREFIX)

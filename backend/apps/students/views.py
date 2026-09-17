@@ -440,9 +440,12 @@ class Student360View(APIView):
             raise AuthorityError("You do not have authority to see this student.")
 
         scope_key = student_360.viewer_scope_key(request.user)
+        # Prefix carries the student id (`student_360.forget_360` bumps
+        # exactly this prefix on a write), so `parts` only needs the
+        # viewer's scope key — see `student_360.PREFIX`'s own docstring.
         data = remember(
-            "student:360",
-            (student.pk, scope_key),
+            f"{student_360.PREFIX}:{student.pk}",
+            (scope_key,),
             MINUTE,
             lambda: student_360.build(request.user, student),
         )

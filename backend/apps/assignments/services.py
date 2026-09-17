@@ -570,6 +570,16 @@ def grade_submission(
 
     transaction.on_commit(lambda: schedule_recompute(submission.enrollment_id))
 
+    # Performance sweep: a grade is one of Student 360's own invalidation
+    # triggers. `sync_result_from_submission` above may already have bumped
+    # the same key via `record_result`, when this assignment backs an
+    # assessment; harmless to bump twice, and required on its own for a
+    # plain (non-assessment-backed) assignment, which never reaches
+    # `record_result` at all.
+    from apps.students.student_360 import forget_360
+
+    forget_360(submission.enrollment.student_id)
+
     return submission
 
 
