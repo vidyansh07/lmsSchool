@@ -57,7 +57,7 @@ adds nothing in it.
 | 18 Manager dashboard and reviews | VERIFIED | VERIFIED | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED | n/a | VERIFIED | n/a | VERIFIED | VERIFIED | n/a | n/a | VERIFIED | VERIFIED |
 | 19 Communication center | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED |
 | 20 Export system | VERIFIED | VERIFIED | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED | VERIFIED | n/a | n/a | VERIFIED | VERIFIED |
-| 21 Caching | n/a | PLANNED | PLANNED | PLANNED | n/a | n/a | PLANNED | PLANNED | PLANNED | n/a | n/a | PLANNED | n/a | n/a | PLANNED | PLANNED |
+| 21 Caching | n/a | VERIFIED | VERIFIED | VERIFIED | n/a | n/a | VERIFIED | VERIFIED | VERIFIED | n/a | n/a | VERIFIED | n/a | n/a | VERIFIED | VERIFIED |
 | 22 Performance hardening | n/a | PLANNED | PLANNED | PLANNED | PLANNED | n/a | n/a | n/a | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | n/a | PLANNED | PLANNED |
 | 23 Backup and recovery | n/a | n/a | n/a | PLANNED | n/a | n/a | n/a | PLANNED | n/a | PLANNED | n/a | PLANNED | n/a | PLANNED | PLANNED | PLANNED |
 | 24 Security and regression | n/a | n/a | PLANNED | PLANNED | n/a | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | n/a | PLANNED | PLANNED |
