@@ -28,12 +28,22 @@ class Audience(models.TextChoices):
     # trainers something, without naming each one (owner's call, 14 September
     # 2026). Resolved at publication like the others, see `audience_for`.
     TRAINERS = "trainers", _("Trainers at my centre")
+    # ERP Phase 19: two more rule-shaped audiences, the same "resolved at
+    # publication, never a stored list" design as every other one here.
+    # `ROLE` generalises `TRAINERS` to any role, not just the trainer kind;
+    # `BRANCH` generalises `EVERYONE` to one named centre instead of the
+    # whole institution.
+    ROLE = "role", _("Everyone holding a role")
+    BRANCH = "branch", _("Everyone at a centre")
 
 
 class AnnouncementStatus(models.TextChoices):
     DRAFT = "draft", _("Draft")
     PUBLISHED = "published", _("Published")
     ARCHIVED = "archived", _("Archived")
+    # ERP Phase 19 (announcements scheduling).
+    SCHEDULED = "scheduled", _("Scheduled")
+    CANCELLED = "cancelled", _("Cancelled")
 
 
 class AnnouncementQuerySet(SoftDeleteQuerySet):
@@ -91,6 +101,22 @@ class Announcement(SoftDeleteBaseModel):
         related_name="announcements_addressed",
         help_text=_("Only for the 'selected people' audience."),
     )
+    role = models.ForeignKey(
+        "authorization.Role",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="announcements",
+        help_text=_("Only for the 'role' audience. Matched by the role's kind, not its id."),
+    )
+    branch = models.ForeignKey(
+        "organisation.Branch",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="announcements",
+        help_text=_("Only for the 'branch' audience: everyone at this one centre."),
+    )
 
     is_pinned = models.BooleanField(
         _("pinned"), default=False, help_text=_("Kept at the top of the noticeboard.")
@@ -102,6 +128,15 @@ class Announcement(SoftDeleteBaseModel):
         default=AnnouncementStatus.DRAFT,
     )
     published_at = models.DateTimeField(_("published at"), null=True, blank=True)
+    #: ERP Phase 19: when a `SCHEDULED` announcement should publish itself.
+    #: `apps.announcements.tasks.publish_due` (beat, every minute) is what
+    #: actually acts on it.
+    publish_at = models.DateTimeField(
+        _("publish at"),
+        null=True,
+        blank=True,
+        help_text=_("When a scheduled announcement is published automatically."),
+    )
     expires_at = models.DateTimeField(
         _("expires at"),
         null=True,
@@ -132,11 +167,53 @@ class Announcement(SoftDeleteBaseModel):
             # one is an implementation detail.
             models.CheckConstraint(
                 condition=(
-                    models.Q(audience="everyone", course__isnull=True, batch__isnull=True)
-                    | models.Q(audience="course", course__isnull=False, batch__isnull=True)
-                    | models.Q(audience="batch", batch__isnull=False)
-                    | models.Q(audience="selected", course__isnull=True, batch__isnull=True)
-                    | models.Q(audience="trainers", course__isnull=True, batch__isnull=True)
+                    models.Q(
+                        audience="everyone",
+                        course__isnull=True,
+                        batch__isnull=True,
+                        role__isnull=True,
+                        branch__isnull=True,
+                    )
+                    | models.Q(
+                        audience="course",
+                        course__isnull=False,
+                        role__isnull=True,
+                        branch__isnull=True,
+                    )
+                    | models.Q(
+                        audience="batch",
+                        batch__isnull=False,
+                        role__isnull=True,
+                        branch__isnull=True,
+                    )
+                    | models.Q(
+                        audience="selected",
+                        course__isnull=True,
+                        batch__isnull=True,
+                        role__isnull=True,
+                        branch__isnull=True,
+                    )
+                    | models.Q(
+                        audience="trainers",
+                        course__isnull=True,
+                        batch__isnull=True,
+                        role__isnull=True,
+                        branch__isnull=True,
+                    )
+                    | models.Q(
+                        audience="role",
+                        role__isnull=False,
+                        course__isnull=True,
+                        batch__isnull=True,
+                        branch__isnull=True,
+                    )
+                    | models.Q(
+                        audience="branch",
+                        branch__isnull=False,
+                        course__isnull=True,
+                        batch__isnull=True,
+                        role__isnull=True,
+                    )
                 ),
                 name="announcement_audience_matches_target",
             ),

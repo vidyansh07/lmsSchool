@@ -19,6 +19,16 @@ urlpatterns = [
         name="announcement-publish",
     ),
     path(
+        "<uuid:announcement_id>/schedule/",
+        views.ScheduleAnnouncementView.as_view(),
+        name="announcement-schedule",
+    ),
+    path(
+        "<uuid:announcement_id>/cancel/",
+        views.CancelScheduledAnnouncementView.as_view(),
+        name="announcement-cancel",
+    ),
+    path(
         "<uuid:announcement_id>/archive/",
         views.ArchiveAnnouncementView.as_view(),
         name="announcement-archive",

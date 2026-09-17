@@ -339,6 +339,20 @@ class Capability(models.TextChoices):
     # save-time-checked exactly like `send_notification`.
     COMMUNICATION_SEND = "communication.send", _("Send a notification, email or WhatsApp message")
 
+    # --- Communication centre (ERP Phase 19, ADR-12)
+    #
+    # `template.manage` covers the builder: creating a template, opening a new
+    # draft version, editing a draft, publishing it. `template.approve` is
+    # separate (PERMISSION_CATALOG.md, phase 19) so an administrator can
+    # require a second pair of eyes before a version is publishable — approval
+    # and authorship are gated independently, same shape as
+    # `completion.approve` sitting apart from `completion.view_any`.
+    # `communication.view_any` covers the `Delivery` log/send history;
+    # `communication.send` (above) already covers actually sending.
+    TEMPLATE_MANAGE = "template.manage", _("Create and edit message templates")
+    TEMPLATE_APPROVE = "template.approve", _("Approve a message template version")
+    COMMUNICATION_VIEW_ANY = "communication.view_any", _("View the delivery log")
+
 
 #: Capabilities every authenticated, active user has regardless of role.
 BASE_CAPABILITIES: frozenset[str] = frozenset(
@@ -433,6 +447,10 @@ _MANAGER_CAPABILITIES = frozenset(
         # audience (`PERMISSION_CATALOG.md`, phase 14): superadmin, admin,
         # manager and counsellor, never trainer.
         Capability.COMMUNICATION_SEND,
+        # `communication.view_any` (Phase 19): the same audience as
+        # `communication.send` per the catalog's row — whoever can send may
+        # also see the delivery log their sends produced.
+        Capability.COMMUNICATION_VIEW_ANY,
     }
 )
 
@@ -462,6 +480,12 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.FORM_MANAGE,
         Capability.ACTIVITY_TYPE_MANAGE,
         Capability.AUTOMATION_MANAGE,
+        # Template authoring and approval (Phase 19): superadmin/admin only,
+        # per the catalog — a manager or counsellor may *send* through a
+        # published template (`communication.send`) but not author or
+        # approve one.
+        Capability.TEMPLATE_MANAGE,
+        Capability.TEMPLATE_APPROVE,
     }
 )
 

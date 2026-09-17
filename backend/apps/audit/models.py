@@ -364,6 +364,29 @@ class AuditAction(models.TextChoices):
     AUTOMATION_SKIPPED = "automation.skipped", _("Automation run skipped")
     AUTOMATION_FAILED = "automation.failed", _("Automation run failed")
 
+    # --- Communication centre (ERP Phase 19, ADR-12)
+    #
+    # Template lifecycle mirrors Phase 8's own form-version events
+    # (`form.version_created`/`form.published`) so "who changed this
+    # template, and when was it published" reads the same way for both.
+    # `communication.sent` carries counts only, never recipient PII (the
+    # same reasoning `search.performed` already documents). Delivery state
+    # changes made from the outside (the WhatsApp webhook) are audited too,
+    # with no human actor, because a state change is a state change (rule 5)
+    # regardless of who — or what — triggered it.
+    TEMPLATE_CREATED = "template.created", _("Message template created")
+    TEMPLATE_VERSION_CREATED = "template.version_created", _("Template version created")
+    TEMPLATE_VERSION_UPDATED = "template.version_updated", _("Template version updated")
+    TEMPLATE_APPROVED = "template.approved", _("Template version approved")
+    TEMPLATE_PUBLISHED = "template.published", _("Template version published")
+    TEMPLATE_TEST_SENT = "template.test_sent", _("Template test message sent")
+    COMMUNICATION_SENT = "communication.sent", _("Manual communication sent")
+    DELIVERY_RETRIED = "delivery.retried", _("Delivery retried")
+    DELIVERY_CANCELLED = "delivery.cancelled", _("Delivery cancelled")
+    DELIVERY_WEBHOOK_UPDATED = "delivery.webhook_updated", _("Delivery updated by provider webhook")
+    ANNOUNCEMENT_SCHEDULED = "announcement.scheduled", _("Announcement scheduled")
+    ANNOUNCEMENT_CANCELLED = "announcement.cancelled", _("Scheduled announcement cancelled")
+
 
 class AuditResult(models.TextChoices):
     SUCCESS = "success", _("Success")

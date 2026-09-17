@@ -163,6 +163,15 @@ def test_every_foreign_key_is_declared_to_the_database():
         # again: the other half of a `GenericForeignKey`, naming whichever
         # activity/enrolment/assessment result/risk state a run was about.
         ("automation_automationrun", "object_id"),
+        # `Delivery.related_id` (ERP Phase 19, ADR-12) is the same
+        # `GenericForeignKey` shape once more, paired with `related_type`.
+        ("communication_delivery", "related_id"),
+        # `Delivery.provider_message_id` and `TemplateVersion.provider_template_id`
+        # are the provider's *own* external identifiers (a WhatsApp Business
+        # API message id / approved-template id) — opaque strings from
+        # outside this database, never a local row to reference.
+        ("communication_delivery", "provider_message_id"),
+        ("communication_templateversion", "provider_template_id"),
     }
     unexpected = {(table, column) for table, column in rows} - allowed
     assert not unexpected, f"columns that look like keys but are not: {sorted(unexpected)}"

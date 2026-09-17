@@ -352,7 +352,13 @@ class TestActions:
         notification = Notification.objects.get(recipient=enrollment.student.user)
         assert enrollment.student.user.first_name in notification.title
 
-    def test_send_email_always_skips_with_a_clear_reason(self, admin_user, enrollment):
+    def test_send_email_skips_with_a_clear_reason_when_no_template_is_published(
+        self, admin_user, enrollment
+    ):
+        """ERP Phase 19 wired this action to the real communication centre
+        (ADR-12): a template key that resolves to nothing published is a
+        real, honestly-labelled skip — never a silent success, and no
+        longer the phase-14-era placeholder that skipped unconditionally."""
         from apps.automation.models import AutomationTrigger
 
         activity = _completed_activity(enrollment)
@@ -368,9 +374,56 @@ class TestActions:
         assert run.status == AutomationRunStatus.RAN
         outcome = run.result["actions"][0]
         assert outcome["skipped"] is True
-        assert "communication center" in outcome["reason"]
+        assert "no published" in outcome["reason"].lower()
 
-    def test_send_whatsapp_always_skips_with_a_clear_reason(self, admin_user, enrollment):
+    def test_send_email_creates_a_real_delivery_once_a_template_is_published(
+        self, admin_user, enrollment
+    ):
+        """The other half of the same wiring: a real published template
+        produces a real `Delivery` row, not just a "would have sent" log
+        line."""
+        from apps.automation.models import AutomationTrigger
+        from apps.communication import services as communication_services
+        from apps.communication.models import Delivery, MessageChannel
+
+        template = communication_services.create_template(
+            actor=admin_user,
+            key="test.automation.send_email",
+            name="Automation email test",
+            channel=MessageChannel.EMAIL,
+            kind="activity.completed",
+        )
+        version = template.versions.get(number=1)
+        version = communication_services.update_draft_version(
+            actor=admin_user, version=version, subject="Done", variables=[]
+        )
+        version = communication_services.approve_version(actor=admin_user, version=version)
+        communication_services.publish_version(actor=admin_user, version=version)
+
+        activity = _completed_activity(enrollment)
+        rule = _rule(
+            admin_user,
+            trigger="ACTIVITY_COMPLETED",
+            actions=[
+                {
+                    "type": "send_email",
+                    "params": {"to": "student", "template": "test.automation.send_email"},
+                }
+            ],
+        )
+
+        services.dispatch(AutomationTrigger.ACTIVITY_COMPLETED, activity)
+
+        run = AutomationRun.objects.get(rule=rule)
+        outcome = run.result["actions"][0]
+        assert "skipped" not in outcome
+        delivery = Delivery.objects.get(pk=outcome["delivery_id"])
+        assert delivery.recipient_id == enrollment.student.user_id
+        assert delivery.template_version_id == version.pk
+
+    def test_send_whatsapp_skips_with_a_clear_reason_when_no_template_is_published(
+        self, admin_user, enrollment
+    ):
         from apps.automation.models import AutomationTrigger
 
         activity = _completed_activity(enrollment)
@@ -388,7 +441,48 @@ class TestActions:
         assert run.status == AutomationRunStatus.RAN
         outcome = run.result["actions"][0]
         assert outcome["skipped"] is True
-        assert "provider configured" in outcome["reason"]
+        assert "no published" in outcome["reason"].lower()
+
+    def test_send_whatsapp_skips_when_recipient_has_not_opted_in_even_with_a_published_template(
+        self, admin_user, enrollment
+    ):
+        from apps.automation.models import AutomationTrigger
+        from apps.communication import services as communication_services
+        from apps.communication.models import MessageChannel
+
+        template = communication_services.create_template(
+            actor=admin_user,
+            key="test.automation.send_whatsapp",
+            name="Automation WhatsApp test",
+            channel=MessageChannel.WHATSAPP,
+            kind="wa.activity_completed",
+        )
+        version = template.versions.get(number=1)
+        version = communication_services.update_draft_version(
+            actor=admin_user, version=version, body_text="Done", variables=[]
+        )
+        version = communication_services.approve_version(actor=admin_user, version=version)
+        communication_services.publish_version(actor=admin_user, version=version)
+        assert enrollment.student.user.whatsapp_opt_in is False
+
+        activity = _completed_activity(enrollment)
+        rule = _rule(
+            admin_user,
+            trigger="ACTIVITY_COMPLETED",
+            actions=[
+                {
+                    "type": "send_whatsapp",
+                    "params": {"to": "student", "template": "test.automation.send_whatsapp"},
+                }
+            ],
+        )
+
+        services.dispatch(AutomationTrigger.ACTIVITY_COMPLETED, activity)
+
+        run = AutomationRun.objects.get(rule=rule)
+        outcome = run.result["actions"][0]
+        assert outcome["skipped"] is True
+        assert "opt" in outcome["reason"].lower()
 
     def test_create_review_opens_a_draft(self, admin_user, manager_user, enrollment):
         from apps.automation.models import AutomationTrigger

@@ -107,10 +107,21 @@ export const Capability = {
   automationManage: "automation.manage",
   // The permission `send_notification`/`send_email`/`send_whatsapp` check
   // against a rule's author at save time (`AUTOMATION_CATALOG.md`'s
-  // "Actions" table). Not gated on in this app yet — the server is the one
-  // that refuses a save when the author lacks it — but named here so the
-  // capability mirror stays exact (`tests/unit/capability-mirror.test.ts`).
+  // "Actions" table). Also the manual-send screen's gate (ERP Phase 19,
+  // `PERMISSION_CATALOG.md`: superadmin/admin/manager/counsellor).
   communicationSend: "communication.send",
+  // Communication Center (ERP Phase 19, ADR-12, `COMMUNICATION_CATALOG.md`).
+  // One capability guards the whole template builder — creating/editing a
+  // draft version and publishing it — the same "one capability, no separate
+  // view cut" shape as `automation.manage`. `template.approve` is a distinct
+  // grant so approving (which for a WhatsApp-channel template also needs a
+  // step-up, per `API_CONTRACTS.md`) can sit apart from authoring.
+  templateManage: "template.manage",
+  templateApprove: "template.approve",
+  // The delivery log's gate — broader than `template.manage` (also manager
+  // and counsellor, per `PERMISSION_CATALOG.md`), since reading what has
+  // been sent is an operational concern, not template authorship.
+  communicationViewAny: "communication.view_any",
 } as const;
 
 export type CapabilityName = (typeof Capability)[keyof typeof Capability];

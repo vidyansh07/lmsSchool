@@ -156,28 +156,89 @@ def send_notification(
 def send_email(
     *, rule, run, rctx: RunContext, context: dict[str, Any], params: dict[str, Any], depth: int = 0
 ) -> dict[str, Any]:
-    """Always skipped — scope decision for this phase.
+    """Send through a published `MessageTemplate` (ERP Phase 19, ADR-12).
 
-    The catalog's own params ask for a "published template key", which is a
-    Phase 19 (communication centre) concept: `MessageTemplate`/
-    `TemplateVersion`/`Delivery` do not exist yet. Sending an ad-hoc body
-    instead of a published, approved template would be exactly the
-    "fake or placeholder functionality" the release-blockers list forbids,
-    so this both stays a real, honestly-labelled no-op until Phase 19 ships
-    it and never runs.
+    `params["template"]` names a published *key*, exactly the catalog's own
+    "published template key" — resolved by
+    `apps.communication.services.resolve_published_template`, the same
+    function `POST /communication/send/` resolves its own template through,
+    so "which template does 'email' mean" has one answer everywhere. `to`
+    is either a resolvable strategy/user id (`resolve_user`, as
+    `send_notification` already uses) or, per the catalog, a literal
+    address. A rule whose template was never published — or has since been
+    unpublished — is a real, honestly-labelled `skipped` outcome, never a
+    silent success and never a fabricated send.
     """
-    return {
-        "skipped": True,
-        "reason": "template system not available until communication center (Phase 19)",
-    }
+    from apps.communication.models import MessageChannel
+    from apps.communication.services import create_deliveries, resolve_published_template
+
+    key = params.get("template")
+    version = resolve_published_template(key=key, channel=MessageChannel.EMAIL)
+    if version is None:
+        return {"skipped": True, "reason": f"No published email template for key {key!r}."}
+
+    to = params.get("to")
+    recipient = resolve_user(to, rctx=rctx)
+    literal_address = to if recipient is None and isinstance(to, str) and "@" in to else None
+    if recipient is None and literal_address is None:
+        return {"skipped": True, "reason": f"Could not resolve a recipient for 'to': {to!r}."}
+
+    deliveries = create_deliveries(
+        channel=MessageChannel.EMAIL,
+        template_version=version,
+        recipients=[recipient] if recipient else [],
+        literal_addresses=[literal_address] if literal_address else [],
+        base_variables=context,
+        related_object=rctx.activity or rctx.enrollment,
+        requested_by=_system_actor(rule),
+    )
+    if not deliveries:
+        return {"skipped": True, "reason": "The resolved recipient has no usable email address."}
+    return {"delivery_id": str(deliveries[0].pk), "template": key}
 
 
 def send_whatsapp(
     *, rule, run, rctx: RunContext, context: dict[str, Any], params: dict[str, Any], depth: int = 0
 ) -> dict[str, Any]:
-    """Always skipped — no WhatsApp provider is configured, and none will be
-    until Phase 19 builds `Delivery`/the provider integration."""
-    return {"skipped": True, "reason": "no WhatsApp provider configured"}
+    """Send through a published, WhatsApp-channel `MessageTemplate` (ERP
+    Phase 19, ADR-12). Skipped — with a real reason, on `AutomationRun`,
+    never a fabricated success — when there is no published template for
+    this key, the recipient cannot be resolved, or the recipient has not
+    opted in (`User.whatsapp_opt_in`); an unconfigured provider (the Null
+    provider) is a *failed* `Delivery`, not a skipped action, since the
+    catalog's own row for this action names "requires ... a configured
+    provider; otherwise the run is skipped" only for the template/opt-in
+    gates checked here — once a real `Delivery` exists, what the provider
+    does with it is that row's own state, not this action's.
+    """
+    from apps.communication.models import MessageChannel
+    from apps.communication.services import create_deliveries, resolve_published_template
+
+    key = params.get("template")
+    version = resolve_published_template(key=key, channel=MessageChannel.WHATSAPP)
+    if version is None:
+        return {"skipped": True, "reason": f"No published WhatsApp template for key {key!r}."}
+
+    recipient = resolve_user(params.get("to"), rctx=rctx)
+    if recipient is None:
+        return {
+            "skipped": True,
+            "reason": f"Could not resolve a recipient for 'to': {params.get('to')!r}.",
+        }
+    if not recipient.whatsapp_opt_in:
+        return {"skipped": True, "reason": "Recipient has not opted in to WhatsApp."}
+
+    deliveries = create_deliveries(
+        channel=MessageChannel.WHATSAPP,
+        template_version=version,
+        recipients=[recipient],
+        base_variables=context,
+        related_object=rctx.activity or rctx.enrollment,
+        requested_by=_system_actor(rule),
+    )
+    if not deliveries:
+        return {"skipped": True, "reason": "The recipient has no WhatsApp number on file."}
+    return {"delivery_id": str(deliveries[0].pk), "template": key}
 
 
 def create_review(

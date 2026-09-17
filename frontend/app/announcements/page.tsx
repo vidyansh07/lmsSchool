@@ -15,13 +15,17 @@ import { ApiError, errorMessage, fieldErrors } from '@/lib/api';
 import { formatDateTime } from '@/lib/academic-labels';
 import {
   archiveAnnouncement,
+  cancelAnnouncement,
   createAnnouncement,
   listAnnouncements,
   publishAnnouncement,
+  scheduleAnnouncement,
 } from '@/lib/communication';
 import { listBatches } from '@/lib/batches';
+import { listBranches } from '@/lib/organisation';
 import { Capability, can } from '@/lib/capabilities';
-import type { Announcement, Audience, BatchListRow } from '@/types/api';
+import { ANNOUNCEMENT_STATUS_LABEL, ANNOUNCEMENT_STATUS_VARIANT, ROLE_OPTIONS } from '@/lib/labels';
+import type { Announcement, Audience, BatchListRow, Branch, UserRole } from '@/types/api';
 
 /** The noticeboard, and — for those who may write — the compose form. */
 function Announcements() {
@@ -31,6 +35,7 @@ function Announcements() {
 
   const [rows, setRows] = useState<Announcement[]>([]);
   const [batches, setBatches] = useState<BatchListRow[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -43,7 +48,13 @@ function Announcements() {
     body: '',
     audience: 'batch' as Audience,
     batch: '',
+    role: (ROLE_OPTIONS[0]?.value ?? 'trainer') as UserRole,
+    branch: '',
     is_pinned: false,
+    // "Schedule for later" (ERP Phase 19): unset publishes immediately (the
+    // existing "Save as a draft" → explicit "Publish" path is unchanged), set
+    // moves the new draft straight to `scheduled` for that moment instead.
+    publish_at: '',
   });
 
   const load = useCallback(async () => {
@@ -52,11 +63,16 @@ function Announcements() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listAnnouncements(), listBatches({ page_size: 100 }).catch(() => null)])
-      .then(([page, batchPage]) => {
+    Promise.all([
+      listAnnouncements(),
+      listBatches({ page_size: 100 }).catch(() => null),
+      listBranches({ page_size: 100 }).catch(() => null),
+    ])
+      .then(([page, batchPage, branchPage]) => {
         if (cancelled) return;
         setRows(page.results);
         setBatches(batchPage?.results ?? []);
+        setBranches(branchPage?.results ?? []);
       })
       .catch((cause: unknown) => {
         if (!cancelled) setError(cause instanceof ApiError ? cause : null);
@@ -89,17 +105,29 @@ function Announcements() {
     setBusy('create');
     setErrors({});
     try {
-      await createAnnouncement({
+      const publishAt = form.publish_at ? new Date(form.publish_at).toISOString() : undefined;
+      const created = await createAnnouncement({
         title: form.title,
         body: form.body,
         audience: form.audience,
         batch: form.audience === 'batch' ? form.batch : undefined,
+        role: form.audience === 'role' ? form.role : undefined,
+        branch: form.audience === 'branch' ? form.branch : undefined,
         is_pinned: form.is_pinned,
+        publish_at: publishAt,
       });
+      // A chosen date means "schedule it", not just "remember a date on the
+      // draft" — the explicit `.../schedule/` call is what actually moves it
+      // out of `draft` (`API_CONTRACTS.md`: "moves draft → scheduled").
+      if (publishAt) await scheduleAnnouncement(created.id, publishAt);
       setIsOpen(false);
-      setForm({ ...form, title: '', body: '' });
+      setForm({ ...form, title: '', body: '', publish_at: '' });
       await load();
-      setNotice('Saved as a draft. Publish it when you are ready.');
+      setNotice(
+        publishAt
+          ? `Scheduled for ${formatDateTime(publishAt)}.`
+          : 'Saved as a draft. Publish it when you are ready.',
+      );
     } catch (cause) {
       setErrors(fieldErrors(cause));
     } finally {
@@ -185,6 +213,8 @@ function Announcements() {
                 >
                   <option value="batch">A batch</option>
                   {mayAnnounceToAll ? <option value="trainers">Trainers at my centre</option> : null}
+                  {mayAnnounceToAll ? <option value="role">Everyone in a role</option> : null}
+                  {mayAnnounceToAll ? <option value="branch">A centre</option> : null}
                   {mayAnnounceToAll ? <option value="everyone">Everyone</option> : null}
                 </Select>
               </Field>
@@ -207,6 +237,41 @@ function Announcements() {
                 </Field>
               ) : null}
 
+              {form.audience === 'role' ? (
+                <Field label="Role" htmlFor="announcement-role" error={errors.role}>
+                  <Select
+                    id="announcement-role"
+                    required
+                    value={form.role}
+                    onChange={(event) => setForm({ ...form, role: event.target.value as UserRole })}
+                  >
+                    {ROLE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              ) : null}
+
+              {form.audience === 'branch' ? (
+                <Field label="Centre" htmlFor="announcement-branch" error={errors.branch}>
+                  <Select
+                    id="announcement-branch"
+                    required
+                    value={form.branch}
+                    onChange={(event) => setForm({ ...form, branch: event.target.value })}
+                  >
+                    <option value="">Choose a centre…</option>
+                    {branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.code} · {branch.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              ) : null}
+
               <Field label="Pin it" htmlFor="is_pinned">
                 <label className="flex items-center gap-2 text-sm" htmlFor="is_pinned">
                   <input
@@ -219,11 +284,34 @@ function Announcements() {
                 </label>
               </Field>
 
+              <Field
+                label="Schedule for later"
+                htmlFor="announcement-publish-at"
+                hint="Leave blank to save as a draft and publish it yourself when ready."
+                error={errors.publish_at}
+              >
+                <Input
+                  id="announcement-publish-at"
+                  type="datetime-local"
+                  value={form.publish_at}
+                  onChange={(event) => setForm({ ...form, publish_at: event.target.value })}
+                />
+              </Field>
+
               <Button
                 type="submit"
-                disabled={busy === 'create' || (form.audience === 'batch' && !form.batch)}
+                disabled={
+                  busy === 'create' ||
+                  (form.audience === 'batch' && !form.batch) ||
+                  (form.audience === 'role' && !form.role) ||
+                  (form.audience === 'branch' && !form.branch)
+                }
               >
-                {busy === 'create' ? 'Saving…' : 'Save as a draft'}
+                {busy === 'create'
+                  ? 'Saving…'
+                  : form.publish_at
+                    ? 'Schedule'
+                    : 'Save as a draft'}
               </Button>
             </form>
           </CardContent>
@@ -239,15 +327,25 @@ function Announcements() {
               <div className="flex flex-wrap items-center gap-2">
                 {row.is_pinned ? <Badge variant="warning">Pinned</Badge> : null}
                 {row.status && row.status !== 'published' ? (
-                  <Badge variant="neutral">{row.status}</Badge>
+                  <Badge variant={ANNOUNCEMENT_STATUS_VARIANT[row.status]}>
+                    {ANNOUNCEMENT_STATUS_LABEL[row.status]}
+                  </Badge>
                 ) : null}
                 {row.batch_code ? (
                   <span className="font-mono text-xs text-muted-foreground">
                     {row.batch_code}
                   </span>
                 ) : null}
+                {row.role_name ? (
+                  <span className="text-xs text-muted-foreground">{row.role_name}</span>
+                ) : null}
+                {row.branch_name ? (
+                  <span className="text-xs text-muted-foreground">{row.branch_name}</span>
+                ) : null}
                 <span className="text-xs text-muted-foreground">
-                  {formatDateTime(row.published_at)}
+                  {row.status === 'scheduled'
+                    ? `Scheduled for ${formatDateTime(row.publish_at)}`
+                    : formatDateTime(row.published_at)}
                 </span>
               </div>
               <CardTitle>{row.title}</CardTitle>
@@ -291,6 +389,19 @@ function Announcements() {
                       }
                     >
                       Take it down
+                    </Button>
+                  ) : null}
+                  {row.status === 'scheduled' ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy === row.id}
+                      onClick={() =>
+                        run(row.id, () => cancelAnnouncement(row.id), 'Schedule cancelled.')
+                      }
+                    >
+                      Cancel schedule
                     </Button>
                   ) : null}
                 </div>

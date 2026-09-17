@@ -71,3 +71,22 @@ class BurstThrottle(SimpleRateThrottle):
         else:
             ident = self.get_ident(request)
         return self.cache_format % {"scope": self.scope, "ident": ident}
+
+
+class CommunicationThrottle(SimpleRateThrottle):
+    """The communication centre's own endpoints (scope: ``communication``):
+    manual send and a template's test-send (`API_CONTRACTS.md`, Phase 19).
+
+    Keyed on the caller, same as `BurstThrottle` — both endpoints require
+    authentication and the cost (queuing a bulk send, or firing a live test
+    message) is attributable to an account, not a source address.
+    """
+
+    scope = "communication"
+
+    def get_cache_key(self, request, view):
+        if request.user and request.user.is_authenticated:
+            ident = str(request.user.pk)
+        else:
+            ident = self.get_ident(request)
+        return self.cache_format % {"scope": self.scope, "ident": ident}

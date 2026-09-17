@@ -117,6 +117,7 @@ LOCAL_APPS = [
     "apps.fees",
     "apps.work",
     "apps.automation",
+    "apps.communication",
     "apps.activity",
     "apps.warnings",
     "apps.requirements",
@@ -338,6 +339,14 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": env.int("WORK_REMINDER_INTERVAL_SECONDS", default=600),
         "options": {"expires": 540},
     },
+    # Announcements scheduling (ERP Phase 19): every minute, so a scheduled
+    # notice reaches the board within roughly a minute of its `publish_at`
+    # rather than on the next hourly-or-slower sweep.
+    "announcements-publish-due": {
+        "task": "announcements.publish_due",
+        "schedule": 60,
+        "options": {"expires": 50},
+    },
 }
 
 # Malware scanning for uploads. `disabled` until a scanner is provisioned;
@@ -417,6 +426,10 @@ REST_FRAMEWORK = {
         # keystrokes from turning into unbounded query volume across ten
         # scoped sources.
         "search": env.str("THROTTLE_RATE_SEARCH", default="30/min"),
+        # Communication centre (ERP Phase 19): manual send and a template's
+        # test-send. Both are per-account, low-frequency, deliberate acts
+        # (never a keystroke-driven UI), so the rate stays modest.
+        "communication": env.str("THROTTLE_RATE_COMMUNICATION", default="20/min"),
     },
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
@@ -611,3 +624,20 @@ AUTH_TOKEN_VERIFICATION_TTL_DAYS = env.int("AUTH_TOKEN_VERIFICATION_TTL_DAYS", d
 # "no defaults for secrets" rule in docs/environments.md. local/test each set
 # a fixed, clearly-labelled placeholder key of their own.
 MFA_ENCRYPTION_KEY = env.str("MFA_ENCRYPTION_KEY", default="")
+
+# --- WhatsApp (ERP Phase 19, ADR-12) ----------------------------------------
+# Optional integration, gated on presence exactly like `SENTRY_DSN` above:
+# `apps.communication.providers.get_provider` returns the Null provider
+# (always "not configured, skipped") until an access token and phone number
+# id are both set, and never fails at import time either way.
+WHATSAPP_ACCESS_TOKEN = env.str("WHATSAPP_ACCESS_TOKEN", default="")
+WHATSAPP_PHONE_NUMBER_ID = env.str("WHATSAPP_PHONE_NUMBER_ID", default="")
+WHATSAPP_API_BASE_URL = env.str("WHATSAPP_API_BASE_URL", default="https://graph.facebook.com/v19.0")
+# The webhook's own authentication (it is deliberately not session-based —
+# see `apps.communication.webhooks`): `WHATSAPP_APP_SECRET` signs the POST
+# body (`X-Hub-Signature-256`, the Meta Cloud API's own convention);
+# `WHATSAPP_WEBHOOK_VERIFY_TOKEN` answers the provider's one-time GET
+# handshake. An empty value fails every verification closed — there is no
+# "accept anything" fallback for either.
+WHATSAPP_APP_SECRET = env.str("WHATSAPP_APP_SECRET", default="")
+WHATSAPP_WEBHOOK_VERIFY_TOKEN = env.str("WHATSAPP_WEBHOOK_VERIFY_TOKEN", default="")

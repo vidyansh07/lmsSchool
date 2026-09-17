@@ -18,10 +18,14 @@ import type {
   ActivityRiskEffect,
   ActivityStatus,
   ActivityTypeStatus,
+  AnnouncementStatus,
+  Audience,
   AutomationActionType,
   AutomationConditionOperator,
   AutomationRuleStatus,
   AutomationTrigger,
+  CommunicationChannel,
+  DeliveryState,
   MatrixCell,
   MfaMethodName,
   PermissionCategory,
@@ -40,6 +44,7 @@ import type {
   ReviewType,
   RiskLevel,
   RiskSeverity,
+  TemplateStatus,
   UserRole,
 } from "@/types/api";
 
@@ -620,3 +625,86 @@ export const REVIEW_STATUS_VARIANT: Record<ReviewStatus, "neutral" | "success" |
 export const REVIEW_STATUS_OPTIONS: { value: ReviewStatus; label: string }[] = (
   Object.keys(REVIEW_STATUS_LABEL) as ReviewStatus[]
 ).map((value) => ({ value, label: REVIEW_STATUS_LABEL[value] }));
+
+// --- Communication Center (ERP Phase 19, ADR-12) ----------------------------
+
+export const COMMUNICATION_CHANNEL_LABEL: Record<CommunicationChannel, string> = {
+  email: "Email",
+  whatsapp: "WhatsApp",
+  in_app: "In-app",
+};
+
+export const COMMUNICATION_CHANNEL_OPTIONS: { value: CommunicationChannel; label: string }[] = (
+  Object.keys(COMMUNICATION_CHANNEL_LABEL) as CommunicationChannel[]
+).map((value) => ({ value, label: COMMUNICATION_CHANNEL_LABEL[value] }));
+
+export const TEMPLATE_STATUS_LABEL: Record<TemplateStatus, string> = {
+  draft: "Draft",
+  approved: "Approved",
+  published: "Published",
+};
+
+export const TEMPLATE_STATUS_VARIANT: Record<
+  TemplateStatus,
+  "neutral" | "success" | "warning"
+> = {
+  draft: "neutral",
+  approved: "warning",
+  published: "success",
+};
+
+export const DELIVERY_STATE_LABEL: Record<DeliveryState, string> = {
+  queued: "Queued",
+  processing: "Processing",
+  sent: "Sent",
+  delivered: "Delivered",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
+export const DELIVERY_STATE_VARIANT: Record<
+  DeliveryState,
+  "neutral" | "success" | "warning" | "error"
+> = {
+  queued: "neutral",
+  processing: "warning",
+  sent: "success",
+  delivered: "success",
+  failed: "error",
+  cancelled: "neutral",
+};
+
+export const DELIVERY_STATE_OPTIONS: { value: DeliveryState; label: string }[] = (
+  Object.keys(DELIVERY_STATE_LABEL) as DeliveryState[]
+).map((value) => ({ value, label: DELIVERY_STATE_LABEL[value] }));
+
+// --- Announcements (extended, ERP Phase 19) ---------------------------------
+
+export const ANNOUNCEMENT_STATUS_LABEL: Record<AnnouncementStatus, string> = {
+  draft: "Draft",
+  scheduled: "Scheduled",
+  published: "Published",
+  archived: "Archived",
+  cancelled: "Cancelled",
+};
+
+export const ANNOUNCEMENT_STATUS_VARIANT: Record<
+  AnnouncementStatus,
+  "neutral" | "success" | "warning" | "error"
+> = {
+  draft: "neutral",
+  scheduled: "warning",
+  published: "success",
+  archived: "neutral",
+  cancelled: "error",
+};
+
+export const AUDIENCE_LABEL: Record<Audience, string> = {
+  everyone: "Everyone",
+  course: "A course",
+  batch: "A batch",
+  selected: "Selected people",
+  trainers: "Trainers at my centre",
+  role: "Everyone in a role",
+  branch: "A centre",
+};

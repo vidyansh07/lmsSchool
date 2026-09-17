@@ -17,6 +17,7 @@ from apps.attendance import urls as attendance_urls
 from apps.authorization import urls as authorization_urls
 from apps.batches import urls as batch_urls
 from apps.certificates import urls as certificate_urls
+from apps.communication import urls as communication_urls
 from apps.configuration import urls as configuration_urls
 from apps.courses import urls as course_urls
 from apps.dashboards import urls as dashboard_urls
@@ -177,4 +178,7 @@ urlpatterns = [
     path("activities/", include((work_urls.activity_patterns, "activities"))),
     path("me/", include((work_urls.me_patterns, "work-me"))),
     path("automation-rules/", include("apps.automation.urls")),
+    path("templates/", include((communication_urls.template_patterns, "templates"))),
+    path("deliveries/", include((communication_urls.delivery_patterns, "deliveries"))),
+    path("communication/", include((communication_urls.communication_patterns, "communication"))),
 ]

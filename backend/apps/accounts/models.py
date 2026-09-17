@@ -69,6 +69,15 @@ class User(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
     phone = models.CharField(
         _("phone"), max_length=20, blank=True, validators=[validate_phone_number]
     )
+    whatsapp_opt_in = models.BooleanField(
+        _("WhatsApp opt-in"),
+        default=False,
+        help_text=_(
+            "Explicit consent to receive WhatsApp messages at `phone` (ERP Phase 19). "
+            "The WhatsApp channel refuses to send to anyone without this set, "
+            "regardless of what a template or a manual send names as the recipient."
+        ),
+    )
     profile_image = models.ImageField(
         _("profile image"),
         upload_to=profile_image_upload_to,

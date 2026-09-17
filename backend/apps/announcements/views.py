@@ -22,6 +22,7 @@ from . import access, services
 from .models import Announcement, Audience
 from .serializers import (
     AnnouncementDeleteSerializer,
+    AnnouncementScheduleSerializer,
     AnnouncementSerializer,
     AnnouncementWriteSerializer,
     StudentAnnouncementSerializer,
@@ -48,6 +49,8 @@ def _resolve(request, data: dict) -> tuple[dict, list]:
     fields = dict(data)
     course_id = fields.pop("course", None)
     batch_id = fields.pop("batch", None)
+    role_id = fields.pop("role", None)
+    branch_id = fields.pop("branch", None)
     recipient_ids = fields.pop("recipients", None)
 
     if course_id:
@@ -56,6 +59,14 @@ def _resolve(request, data: dict) -> tuple[dict, list]:
         )
     if batch_id:
         fields["batch"] = get_object_or_404(batch_access.visible_batches(request.user), pk=batch_id)
+    if role_id:
+        from apps.authorization.models import Role
+
+        fields["role"] = get_object_or_404(Role.objects, pk=role_id)
+    if branch_id:
+        from apps.organisation.models import Branch
+
+        fields["branch"] = get_object_or_404(Branch.objects, pk=branch_id)
 
     recipients = []
     if recipient_ids:
@@ -201,6 +212,46 @@ class PublishAnnouncementView(APIView):
     def post(self, request, announcement_id):
         announcement = _announcement_for(request, announcement_id, manage=True)
         announcement = services.publish(announcement=announcement, actor=request.user)
+        return Response(AnnouncementSerializer(announcement).data)
+
+
+class ScheduleAnnouncementView(APIView):
+    """`POST /announcements/{id}/schedule/` — draft → scheduled."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Schedule an announcement",
+        request=AnnouncementScheduleSerializer,
+        responses={200: AnnouncementSerializer},
+        tags=ANNOUNCEMENTS_TAG,
+    )
+    def post(self, request, announcement_id):
+        announcement = _announcement_for(request, announcement_id, manage=True)
+        serializer = AnnouncementScheduleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        announcement = services.schedule(
+            announcement=announcement,
+            actor=request.user,
+            publish_at=serializer.validated_data["publish_at"],
+        )
+        return Response(AnnouncementSerializer(announcement).data)
+
+
+class CancelScheduledAnnouncementView(APIView):
+    """`POST /announcements/{id}/cancel/` — scheduled → cancelled."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Cancel a scheduled announcement",
+        request=None,
+        responses={200: AnnouncementSerializer},
+        tags=ANNOUNCEMENTS_TAG,
+    )
+    def post(self, request, announcement_id):
+        announcement = _announcement_for(request, announcement_id, manage=True)
+        announcement = services.cancel_scheduled(announcement=announcement, actor=request.user)
         return Response(AnnouncementSerializer(announcement).data)
 
 

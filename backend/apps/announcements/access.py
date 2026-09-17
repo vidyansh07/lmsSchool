@@ -48,7 +48,14 @@ from .models import Announcement, Audience
 
 def _one_centres_notices(branch_id) -> Q:
     """The notices that belong to one particular centre."""
-    return Q(batch__branch_id=branch_id) | Q(batch__isnull=True, created_by__branch_id=branch_id)
+    return (
+        Q(batch__branch_id=branch_id)
+        # A `branch`-audience notice belongs to the centre it *names*, not
+        # to its author's — the one audience where the target column, not
+        # `created_by`, is the owning centre (see `announcement_branch_id`).
+        | Q(audience=Audience.BRANCH, branch_id=branch_id)
+        | Q(batch__isnull=True, branch__isnull=True, created_by__branch_id=branch_id)
+    )
 
 
 def scope_board_to_branch(queryset: QuerySet[Announcement], user) -> QuerySet[Announcement]:
@@ -114,6 +121,31 @@ def _notices_to_teaching_staff(user) -> Q:
     )
 
 
+def _notices_to_role(user) -> Q:
+    """Notices addressed to this person's *kind* of role (ERP Phase 19).
+
+    `TRAINERS` generalised: a role-audience notice is matched by the base
+    `UserRole` kind, not by the exact `Role` row, so somebody holding a
+    custom role built on top of a kind still sees a notice addressed to that
+    kind — the same reading `apps.announcements.services.teaching_staff_of`
+    already gives trainers.
+    """
+    branch_id = actor_branch_id(user)
+    if branch_id is None:
+        return Q(pk__isnull=True)
+    return Q(audience=Audience.ROLE, role__kind=user.role) & (
+        Q(created_by__branch_id=branch_id) | Q(created_by__branch__isnull=True)
+    )
+
+
+def _notices_to_branch(user) -> Q:
+    """Notices addressed to everyone at this person's own centre."""
+    branch_id = actor_branch_id(user)
+    if branch_id is None:
+        return Q(pk__isnull=True)
+    return Q(audience=Audience.BRANCH, branch_id=branch_id)
+
+
 def announcement_branch_id(announcement: Announcement):
     """The centre a notice belongs to, or ``None`` for an institution-wide one.
 
@@ -123,6 +155,10 @@ def announcement_branch_id(announcement: Announcement):
     """
     if announcement.audience == Audience.EVERYONE:
         return None
+    if announcement.audience == Audience.BRANCH:
+        # The one audience whose owning centre is the *named* target, not
+        # the author's — see `_one_centres_notices`.
+        return announcement.branch_id
     if announcement.batch_id:
         return announcement.batch.branch_id
     return announcement.created_by.branch_id if announcement.created_by_id else None
@@ -138,7 +174,12 @@ def visible_announcements(user) -> QuerySet[Announcement]:
     if has_capability(user, Capability.ANNOUNCEMENT_MANAGE_ANY):
         return scope_board_to_branch(base, user)
 
-    scope = Q(audience=Audience.EVERYONE) | Q(audience=Audience.SELECTED, recipients=user)
+    scope = (
+        Q(audience=Audience.EVERYONE)
+        | Q(audience=Audience.SELECTED, recipients=user)
+        | _notices_to_role(user)
+        | _notices_to_branch(user)
+    )
 
     trainer = batch_access.trainer_profile(user)
     if trainer is not None:

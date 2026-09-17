@@ -1478,9 +1478,16 @@ export interface NotificationPreference {
   updated_at: string;
 }
 
+// `role` and `branch` are new (ERP Phase 19, `API_CONTRACTS.md` "Announcements
+// (existing, extended)"): announce to everyone holding a given role, or to a
+// centre, the same way `batch`/`course` already scope one.
 export type Audience =
-  "everyone" | "course" | "batch" | "selected" | "trainers";
-export type AnnouncementStatus = "draft" | "published" | "archived";
+  "everyone" | "course" | "batch" | "selected" | "trainers" | "role" | "branch";
+// `scheduled`/`cancelled` are new (Phase 19): a draft may be scheduled for a
+// future `publish_at` instead of published immediately, and a scheduled one
+// may be cancelled before it goes out.
+export type AnnouncementStatus =
+  "draft" | "scheduled" | "published" | "archived" | "cancelled";
 
 export interface Announcement {
   id: string;
@@ -1491,8 +1498,14 @@ export interface Announcement {
   course_title: string | null;
   batch?: string | null;
   batch_code: string | null;
+  role?: string | null;
+  role_name?: string | null;
+  branch?: string | null;
+  branch_name?: string | null;
   is_pinned: boolean;
   status?: AnnouncementStatus;
+  /** Set only when scheduled — the moment the beat task will publish it. */
+  publish_at?: string | null;
   published_at: string | null;
   expires_at: string | null;
   is_live?: boolean;
@@ -2951,4 +2964,111 @@ export interface AutomationRunRow {
   error: string;
   rule_version: number;
   created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Communication Center (ERP Phase 19, ADR-12, `docs/erp/COMMUNICATION_CATALOG.md`).
+//
+// `MessageTemplate` + `TemplateVersion` + `Delivery` — one row per message per
+// channel. Rendering only ever substitutes `variables` from the version's own
+// allowlist (D-051); there is no expression language anywhere in this shape.
+// ---------------------------------------------------------------------------
+
+export type CommunicationChannel = "email" | "whatsapp" | "in_app";
+export type TemplateStatus = "draft" | "approved" | "published";
+
+/** A version is immutable once published (`DATA_MODEL.md` §7) — editing after
+ *  that point means creating the next `number`, never a `PUT` on this one. */
+export interface TemplateVersion {
+  id: string;
+  template: string;
+  number: number;
+  subject: string;
+  body_html: string;
+  body_text: string;
+  /** The allowlist "Preview"/"Send" render against — anything else in the
+   *  body is left as literal text, never evaluated (D-051, ADR-12). */
+  variables: string[];
+  provider_template_id: string;
+  approved_by: string | null;
+  approved_by_name?: string | null;
+  approved_at: string | null;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * `MessageTemplateSerializer` (`apps/communication/serializers.py`) — the
+ * exact same shape for both `GET /templates/` rows and `GET /templates/
+ * {key}/` (there is no separate, richer "detail" shape; `MessageTemplateDetail`
+ * below is only a naming alias, matching `AutomationRuleDetail`'s own).
+ *
+ * `current_version` is the *published* version (null until the first
+ * publish) — immutable, live. `draft_version` is whichever version is not
+ * yet published (`published_at` null): the one a draft/approved template is
+ * actually being edited, approved and published through. A template always
+ * has exactly one or the other in progress; both can be null only if
+ * something has gone wrong, never in normal use, since `create_template`
+ * always opens version 1 as a draft.
+ */
+export interface MessageTemplate {
+  id: string;
+  key: string;
+  name: string;
+  channel: CommunicationChannel;
+  kind: string;
+  language: string;
+  status: TemplateStatus;
+  current_version: TemplateVersion | null;
+  draft_version: TemplateVersion | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MessageTemplateDetail = MessageTemplate;
+
+/** `POST .../preview/` `{variables}` response. `warnings` names every
+ *  variable the body referenced that is not on the version's own allowlist
+ *  (rendered empty, never evaluated) — the UI surfaces these, it never hides
+ *  them (D-051). */
+export interface TemplatePreviewResult {
+  subject: string;
+  html: string;
+  text: string;
+  warnings: string[];
+}
+
+export type DeliveryState =
+  "queued" | "processing" | "sent" | "delivered" | "failed" | "cancelled";
+
+/** `DeliverySerializer` (`apps/communication/serializers.py`). Never carries
+ *  an OTP body — every OTP send bypasses this app entirely, so there is no
+ *  such row to ever appear here. */
+export interface Delivery {
+  id: string;
+  channel: CommunicationChannel;
+  recipient: string | null;
+  recipient_name: string | null;
+  address: string;
+  template_version: string | null;
+  template_key: string | null;
+  variables: Record<string, unknown>;
+  state: DeliveryState;
+  attempts: number;
+  next_attempt_at: string | null;
+  provider_message_id: string;
+  error: string;
+  requested_by: string | null;
+  requested_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** `POST /communication/send/`'s `recipients` — exactly one of the three
+ *  (`ManualSendRecipientsSerializer`). */
+export interface CommunicationRecipientSpec {
+  students?: string[];
+  batch?: string;
+  role?: string;
 }

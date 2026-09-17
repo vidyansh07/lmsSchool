@@ -26,6 +26,7 @@ import {
   PenLine,
   Repeat,
   ScrollText,
+  Send,
   Settings2,
   SlidersHorizontal,
   Sparkles,
@@ -430,6 +431,12 @@ export const STAFF_NAV: NavGroup[] = [
         capability: Capability.automationManage,
       },
       {
+        href: "/admin/communication",
+        label: "Communication",
+        icon: Send,
+        capability: Capability.templateManage,
+      },
+      {
         href: "/admin/settings",
         label: "Settings",
         icon: SlidersHorizontal,
@@ -746,6 +753,12 @@ export const ADMIN_NAV: NavGroup[] = [
         label: "Automation",
         icon: Zap,
         capability: Capability.automationManage,
+      },
+      {
+        href: "/admin/communication",
+        label: "Communication",
+        icon: Send,
+        capability: Capability.templateManage,
       },
       {
         href: "/admin/branches",

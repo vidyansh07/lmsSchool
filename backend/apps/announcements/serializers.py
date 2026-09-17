@@ -17,6 +17,9 @@ class AnnouncementSerializer(StrictModelSerializer):
     )
     is_live = serializers.BooleanField(read_only=True)
 
+    role_name = serializers.CharField(source="role.name", read_only=True, default=None)
+    branch_name = serializers.CharField(source="branch.name", read_only=True, default=None)
+
     class Meta:
         model = Announcement
         fields = (
@@ -28,9 +31,14 @@ class AnnouncementSerializer(StrictModelSerializer):
             "course_title",
             "batch",
             "batch_code",
+            "role",
+            "role_name",
+            "branch",
+            "branch_name",
             "is_pinned",
             "status",
             "published_at",
+            "publish_at",
             "expires_at",
             "is_live",
             "created_by_name",
@@ -66,9 +74,15 @@ class AnnouncementWriteSerializer(StrictSerializer):
     audience = serializers.ChoiceField(choices=Audience.choices, required=False)
     course = serializers.UUIDField(required=False, allow_null=True)
     batch = serializers.UUIDField(required=False, allow_null=True)
+    role = serializers.UUIDField(required=False, allow_null=True)
+    branch = serializers.UUIDField(required=False, allow_null=True)
     recipients = serializers.ListField(child=serializers.UUIDField(), required=False)
     is_pinned = serializers.BooleanField(required=False)
     expires_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class AnnouncementScheduleSerializer(StrictSerializer):
+    publish_at = serializers.DateTimeField()
 
 
 class AnnouncementDeleteSerializer(StrictSerializer):

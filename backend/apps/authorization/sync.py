@@ -97,6 +97,9 @@ LOCKABLE = frozenset(
         "session.revoke_any",
         "form.manage",
         "activity_type.manage",
+        "template.manage",
+        "template.approve",
+        "communication.send",
     }
 )
 

@@ -56,7 +56,7 @@ def update_announcement(
     """Edit. The audience is fixed once published — see :func:`publish`."""
     fields.pop("status", None)
     if announcement.status == AnnouncementStatus.PUBLISHED:
-        locked = {"audience", "course", "batch"}
+        locked = {"audience", "course", "batch", "role", "branch"}
         blocked = sorted(locked & set(fields))
         if blocked:
             raise ConflictError(
@@ -127,7 +127,31 @@ def audience_for(announcement: Announcement) -> list:
         from .access import announcement_branch_id
 
         return list(teaching_staff_of(announcement_branch_id(announcement)))
+    if announcement.audience == Audience.ROLE and announcement.role_id:
+        from .access import announcement_branch_id
+
+        return list(role_holders_of(announcement.role, announcement_branch_id(announcement)))
+    if announcement.audience == Audience.BRANCH and announcement.branch_id:
+        from apps.accounts.models import User as UserModel
+
+        return list(UserModel.objects.filter(is_active=True, branch_id=announcement.branch_id))
     return []
+
+
+def role_holders_of(role, branch_id):
+    """Everyone whose base role *kind* matches `role` (ERP Phase 19) — the
+    generalisation of :func:`teaching_staff_of` to any role, not only
+    trainer. Matched on `User.role` (the kind every account's authoritative
+    role field always carries, custom role or not — see
+    `apps.accounts.roles`'s own note that a custom role "adjusts the set,
+    never the kind"), not on the exact `Role` row, so a custom role built on
+    top of a kind is still reached. ``None`` means every centre."""
+    from apps.accounts.models import User as UserModel
+
+    people = UserModel.objects.filter(is_active=True, role=role.kind)
+    if branch_id is not None:
+        people = people.filter(branch_id=branch_id)
+    return people
 
 
 def teaching_staff_of(branch_id):
@@ -147,12 +171,25 @@ def teaching_staff_of(branch_id):
 
 
 @transaction.atomic
-def publish(*, announcement: Announcement, actor: User) -> Announcement:
-    """Put it on the noticeboard, and tell the people it is for."""
+def publish(*, announcement: Announcement, actor: User | None) -> Announcement:
+    """Put it on the noticeboard, and tell the people it is for.
+
+    `actor` is `None` for the one system-driven caller —
+    `apps.announcements.tasks.publish_due` — the same "system, not nobody"
+    shape `apps.work`'s own overdue/missed transitions already use for a
+    beat-triggered state change; `apps.audit.services.record` accepts it.
+    A draft published by a human and a scheduled one published by the beat
+    task go through this exact same function, so the fan-out and the audit
+    trail never drift between the two paths.
+    """
     if announcement.status == AnnouncementStatus.PUBLISHED:
         raise ConflictError({"announcement": ["This announcement is already published."]})
     if announcement.status == AnnouncementStatus.ARCHIVED:
         raise ConflictError({"announcement": ["An archived announcement cannot be published."]})
+    if announcement.status == AnnouncementStatus.CANCELLED:
+        raise ConflictError(
+            {"announcement": ["A cancelled announcement cannot be published; schedule it again."]}
+        )
 
     announcement.status = AnnouncementStatus.PUBLISHED
     announcement.published_at = timezone.now()
@@ -213,16 +250,40 @@ def delete_announcement(*, announcement: Announcement, actor: User, reason: str)
     soft_delete(instance=announcement, actor=actor, reason=reason)
 
 
+#: Which target field each audience requires. Mirrors
+#: `announcement_audience_matches_target`'s own per-audience shape exactly,
+#: so the service and the database constraint can never quietly drift apart
+#: — including that constraint's own asymmetry: a `course`-audience notice
+#: has never forbidden also naming a `batch` there for reference, and a
+#: `batch`-audience one has never forbidden naming its `course`. That
+#: looseness predates this phase (see the constraint's own `course`/`batch`
+#: clauses, neither of which mentions the other field) and is preserved
+#: here rather than tightened as a side effect of adding `role`/`branch`.
+_AUDIENCE_TARGET_FIELD: dict[str, str] = {
+    Audience.COURSE: "course",
+    Audience.BATCH: "batch",
+    Audience.ROLE: "role",
+    Audience.BRANCH: "branch",
+}
+_ALSO_PERMITTED: dict[str, frozenset[str]] = {
+    Audience.COURSE: frozenset({"batch"}),
+    Audience.BATCH: frozenset({"course"}),
+}
+
+
 def _validate(announcement: Announcement) -> None:
     errors: dict[str, list[str]] = {}
-    if announcement.audience == Audience.COURSE and not announcement.course_id:
-        errors["course"] = ["Choose the course this is for."]
-    if announcement.audience == Audience.BATCH and not announcement.batch_id:
-        errors["batch"] = ["Choose the batch this is for."]
-    if announcement.audience in (Audience.EVERYONE, Audience.SELECTED, Audience.TRAINERS) and (
-        announcement.course_id or announcement.batch_id
-    ):
-        errors["audience"] = ["This audience does not take a course or a batch."]
+    required = _AUDIENCE_TARGET_FIELD.get(announcement.audience)
+    also_permitted = _ALSO_PERMITTED.get(announcement.audience, frozenset())
+    for field in ("course", "batch", "role", "branch"):
+        value = getattr(announcement, f"{field}_id")
+        if field == required:
+            if not value:
+                errors[field] = [f"Choose the {field} this is for."]
+        elif field in also_permitted:
+            continue
+        elif value:
+            errors[field] = [f"This audience does not take a {field}."]
     if errors:
         raise ApplicationError(errors)
 
@@ -230,3 +291,51 @@ def _validate(announcement: Announcement) -> None:
         announcement.full_clean(exclude=["created_by"])
     except DjangoValidationError as exc:
         raise ApplicationError(exc.message_dict) from exc
+
+
+@transaction.atomic
+def schedule(*, announcement: Announcement, actor: User, publish_at) -> Announcement:
+    """Draft → scheduled. `apps.announcements.tasks.publish_due` is what
+    actually publishes it once `publish_at` has passed."""
+    if announcement.status != AnnouncementStatus.DRAFT:
+        raise ConflictError({"announcement": ["Only a draft announcement can be scheduled."]})
+    if publish_at is None:
+        raise ApplicationError(
+            {"publish_at": ["publish_at is required to schedule an announcement."]}
+        )
+    if publish_at <= timezone.now():
+        raise ApplicationError({"publish_at": ["publish_at must be in the future."]})
+
+    announcement.status = AnnouncementStatus.SCHEDULED
+    announcement.publish_at = publish_at
+    announcement.save(update_fields=["status", "publish_at", "updated_at"])
+    record(
+        action=AuditAction.ANNOUNCEMENT_SCHEDULED,
+        actor=actor,
+        resource_type="announcement",
+        resource_id=announcement.pk,
+        context={"title": announcement.title, "publish_at": publish_at.isoformat()},
+        durable=False,
+    )
+    return announcement
+
+
+@transaction.atomic
+def cancel_scheduled(*, announcement: Announcement, actor: User) -> Announcement:
+    """Scheduled → cancelled. A cancelled announcement is not a draft again —
+    scheduling a fresh attempt starts from an explicit new `schedule` call,
+    same as `archive` never quietly reopens a notice as a draft."""
+    if announcement.status != AnnouncementStatus.SCHEDULED:
+        raise ConflictError({"announcement": ["Only a scheduled announcement can be cancelled."]})
+
+    announcement.status = AnnouncementStatus.CANCELLED
+    announcement.save(update_fields=["status", "updated_at"])
+    record(
+        action=AuditAction.ANNOUNCEMENT_CANCELLED,
+        actor=actor,
+        resource_type="announcement",
+        resource_id=announcement.pk,
+        context={"title": announcement.title},
+        durable=False,
+    )
+    return announcement

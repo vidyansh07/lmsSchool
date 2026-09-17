@@ -628,6 +628,17 @@ def test_a_trainers_report_contains_only_their_own_batches(
 #: and it is the one honest exception to "nothing refuses a superadmin".
 SELF_SERVICE_ROUTES = frozenset({"/api/v1/students/me/", "/api/v1/trainers/me/"})
 
+#: The one deliberate exception to "capability, not identity, is what a route
+#: checks" (ERP Phase 19): the WhatsApp webhook is never session-authenticated
+#: at all (`apps.communication.webhooks`'s own module docstring), so its 403
+#: is a signature/token failure that applies identically to every caller,
+#: signed in or not — a superadmin session must never make an unverifiable
+#: payload acceptable, which is exactly what this route's own test suite
+#: (`tests/test_whatsapp_provider.py`) proves directly. Skipping it here is
+#: not "this route may refuse a superadmin's *capability*"; there is no
+#: capability check on this route to exempt in the first place.
+NEVER_SESSION_AUTHENTICATED_ROUTES = frozenset({"/api/v1/communication/whatsapp/webhook/"})
+
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(("path", "view"), ROUTES, ids=[path for path, _ in ROUTES])
@@ -644,6 +655,8 @@ def test_no_route_refuses_a_superadmin(api_client_no_csrf, db, path, view):
     """
     if path in SELF_SERVICE_ROUTES:
         pytest.skip("answers about the caller, and a superadmin is neither a student nor a trainer")
+    if path in NEVER_SESSION_AUTHENTICATED_ROUTES:
+        pytest.skip("never session-authenticated at all; identity is not what its 403 means")
 
     from apps.accounts.models import User
 
