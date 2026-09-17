@@ -102,6 +102,15 @@ export const Capability = {
   // Search and productivity (ERP Phase 11) — `API_CONTRACTS.md`'s
   // `GET /search/` row: "Any authenticated user (`search.global`)".
   searchGlobal: "search.global",
+  // Automation Builder (ERP Phase 14, ADR-13) — `AUTOMATION_CATALOG.md`'s
+  // "Builder screen contract".
+  automationManage: "automation.manage",
+  // The permission `send_notification`/`send_email`/`send_whatsapp` check
+  // against a rule's author at save time (`AUTOMATION_CATALOG.md`'s
+  // "Actions" table). Not gated on in this app yet — the server is the one
+  // that refuses a save when the author lacks it — but named here so the
+  // capability mirror stays exact (`tests/unit/capability-mirror.test.ts`).
+  communicationSend: "communication.send",
 } as const;
 
 export type CapabilityName = (typeof Capability)[keyof typeof Capability];

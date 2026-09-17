@@ -39,6 +39,7 @@ import {
   UsersRound,
   Workflow,
   ShieldCheck,
+  Zap,
 } from "lucide-react";
 
 import { Capability } from "@/lib/capabilities";
@@ -417,6 +418,12 @@ export const STAFF_NAV: NavGroup[] = [
         capability: Capability.activityTypeManage,
       },
       {
+        href: "/admin/automation",
+        label: "Automation",
+        icon: Zap,
+        capability: Capability.automationManage,
+      },
+      {
         href: "/admin/settings",
         label: "Settings",
         icon: SlidersHorizontal,
@@ -721,6 +728,12 @@ export const ADMIN_NAV: NavGroup[] = [
         label: "Activity types",
         icon: ClipboardCheck,
         capability: Capability.activityTypeManage,
+      },
+      {
+        href: "/admin/automation",
+        label: "Automation",
+        icon: Zap,
+        capability: Capability.automationManage,
       },
       {
         href: "/admin/branches",

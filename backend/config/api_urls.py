@@ -168,4 +168,5 @@ urlpatterns = [
     path("activity-types/", include((work_urls.activity_type_patterns, "activity-types"))),
     path("activities/", include((work_urls.activity_patterns, "activities"))),
     path("me/", include((work_urls.me_patterns, "work-me"))),
+    path("automation-rules/", include("apps.automation.urls")),
 ]

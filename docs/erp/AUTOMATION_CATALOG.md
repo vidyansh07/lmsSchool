@@ -39,7 +39,7 @@ condition is false (never an error).
 | send_email | to (as above or address), template (published key) | communication.send | through `Delivery`, channel email |
 | send_whatsapp | to, template (published key with provider id) | communication.send | requires an approved template and a configured provider; otherwise the run is `skipped` with reason |
 | create_review | review_type, reviewer (`manager` / user id), due_in_days | review.manage_any | creates a draft `PerformanceReview` |
-| flag_risk | level (`warning` / `critical`), reason | performance.view_any | writes a manual `RiskState` override with expiry (policy `risk.manual_flag_days`) |
+| flag_risk | level (`warning` / `critical`), reason | review.manage_any | writes a manual `RiskState` override with expiry (policy `risk.manual_flag_days`) |
 
 An action that needs a permission the author lacks cannot be saved; a rule
 whose author later loses the permission is paused by `sync` and shown as

@@ -159,6 +159,10 @@ def test_every_foreign_key_is_declared_to_the_database():
         # at, so no single foreign key could express it — the same shape as
         # `django_admin_log.object_id` above.
         ("forms_formresponse", "object_id"),
+        # `AutomationRun.object_id` (ERP Phase 14, ADR-13) is the same shape
+        # again: the other half of a `GenericForeignKey`, naming whichever
+        # activity/enrolment/assessment result/risk state a run was about.
+        ("automation_automationrun", "object_id"),
     }
     unexpected = {(table, column) for table, column in rows} - allowed
     assert not unexpected, f"columns that look like keys but are not: {sorted(unexpected)}"

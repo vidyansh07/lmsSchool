@@ -694,7 +694,76 @@ def mark_overdue_and_missed() -> dict[str, int]:
             continue
         missed += 1
 
+    _dispatch_overdue_automation()
+
     return {"overdue": overdue, "missed": missed}
+
+
+def _dispatch_overdue_automation() -> None:
+    """Enqueues `ACTIVITY_OVERDUE`, `PROJECT_OVERDUE` and
+    `ASSIGNMENT_OVERDUE` automation dispatches for whatever this sweep finds
+    overdue right now (ERP Phase 14, ADR-13).
+
+    Called from `mark_overdue_and_missed` itself rather than wired through a
+    signal: unlike `ACTIVITY_COMPLETED`/`RISK_CHANGED` (Phase 9/13's own
+    extension points), there is no existing "this went overdue" event to
+    attach a receiver to — the beat sweep *is* the detection. A local
+    import, same discipline as everywhere else in this module: `apps.work`
+    never depends on `apps.automation` existing at import time.
+
+    Projects and assignments reuse exactly the "what's overdue" reading
+    Phase 13's risk engine already established
+    (`apps.projects.models.StudentProject.mark_late`,
+    `apps.performance.engine._missed_assignments`'s own predicate) rather
+    than a third definition of "overdue" for either.
+    """
+    from apps.automation.tasks import (
+        dispatch_activity_overdue,
+        dispatch_assignment_overdue,
+        dispatch_project_overdue,
+    )
+
+    now = timezone.now()
+
+    for stale in Activity.objects.filter(
+        status=ActivityStatus.OVERDUE, due_at__isnull=False, due_at__lt=now
+    ).only("id", "due_at"):
+        dispatch_activity_overdue.delay(str(stale.pk), max((now - stale.due_at).days, 0))
+
+    from apps.projects.models import FINISHED_STATUSES, StudentProject
+
+    today = timezone.localdate()
+    for student_project in (
+        StudentProject.objects.exclude(status__in=list(FINISHED_STATUSES))
+        .filter(project__end_date__isnull=False, project__end_date__lt=today)
+        .select_related("project")
+    ):
+        if student_project.mark_late():
+            days = (today - student_project.project.end_date).days
+            dispatch_project_overdue.delay(str(student_project.pk), max(days, 0))
+
+    from apps.assignments.models import Assignment, AssignmentSubmission
+    from apps.enrollments.models import Enrollment, EnrollmentStatus
+
+    for assignment in Assignment.objects.filter(due_at__isnull=False, due_at__lt=now):
+        submitted_ids = set(
+            AssignmentSubmission.objects.filter(assignment=assignment).values_list(
+                "enrollment_id", flat=True
+            )
+        )
+        candidates = (
+            Enrollment.objects.filter(
+                course_id=assignment.course_id, status=EnrollmentStatus.ACTIVE
+            )
+            .exclude(pk__in=submitted_ids)
+            .select_related("batch")
+        )
+        for enrollment in candidates:
+            if enrollment.batch_id and not assignment.applies_to_batch(enrollment.batch_id):
+                continue
+            dispatch_assignment_overdue.delay(
+                str(assignment.pk), str(enrollment.pk), max((now - assignment.due_at).days, 0)
+            )
 
 
 def send_activity_reminders() -> int:

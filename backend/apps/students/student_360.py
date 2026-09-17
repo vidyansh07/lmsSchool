@@ -257,13 +257,22 @@ def _risk_for(enrollment: Enrollment | None, performance: dict[str, Any] | None)
     persisted row is written from a second, separately-gathered
     `student_performance` call inside `recompute_risk` — a bounded, one-time
     cost, not a per-request one.
+
+    `level` itself, though, is *not* always this instant's live
+    `risk_result["level"]`: while the persisted row carries a still-active
+    manual override (`apps.automation.actions.flag_risk`,
+    `RiskState.manual_override_active`), that override — not the engine's
+    own live computation — is this enrolment's actual current verdict, the
+    same one `/risk/summary/` already shows. Reading the live value instead
+    here would make this the one screen where a manager-visible manual flag
+    is invisible.
     """
     if enrollment is None or performance is None:
         return dict(_INERT_RISK)
 
     from apps.performance.services import risk_state_for
 
-    risk_state_for(enrollment)
+    state = risk_state_for(enrollment)
 
     risk_result = performance["risk"]
     triggered = [
@@ -277,7 +286,8 @@ def _risk_for(enrollment: Enrollment | None, performance: dict[str, Any] | None)
         for outcome in risk_result["outcomes"]
         if outcome["triggered"]
     ]
-    return {"level": risk_result["level"], "triggered": triggered}
+    level = state.level if state.manual_override_active else risk_result["level"]
+    return {"level": level, "triggered": triggered}
 
 
 def _recent_activities(user, student: StudentProfile) -> list[dict[str, Any]]:

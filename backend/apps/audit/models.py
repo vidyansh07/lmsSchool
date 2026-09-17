@@ -340,6 +340,21 @@ class AuditAction(models.TextChoices):
     SAVED_FILTER_CREATED = "saved_filter.created", _("Saved filter created")
     SAVED_FILTER_DELETED = "saved_filter.deleted", _("Saved filter deleted")
 
+    # --- Automation (ERP Phase 14, ADR-13)
+    #
+    # `automation.ran`/`automation.skipped`/`automation.failed` are the
+    # catalog's own three per-run outcomes (`AUTOMATION_CATALOG.md`
+    # "Guards"); `automation.rule_*` cover the builder's own CRUD so every
+    # state change on the rule itself is audited too (rule 5).
+    AUTOMATION_RULE_CREATED = "automation.rule_created", _("Automation rule created")
+    AUTOMATION_RULE_UPDATED = "automation.rule_updated", _("Automation rule updated")
+    AUTOMATION_RULE_ACTIVATED = "automation.rule_activated", _("Automation rule activated")
+    AUTOMATION_RULE_PAUSED = "automation.rule_paused", _("Automation rule paused")
+    AUTOMATION_RULE_DELETED = "automation.rule_deleted", _("Automation rule deleted")
+    AUTOMATION_RAN = "automation.ran", _("Automation rule ran")
+    AUTOMATION_SKIPPED = "automation.skipped", _("Automation run skipped")
+    AUTOMATION_FAILED = "automation.failed", _("Automation run failed")
+
 
 class AuditResult(models.TextChoices):
     SUCCESS = "success", _("Success")

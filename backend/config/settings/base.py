@@ -116,6 +116,7 @@ LOCAL_APPS = [
     "apps.enrollments",
     "apps.fees",
     "apps.work",
+    "apps.automation",
     "apps.activity",
     "apps.warnings",
     "apps.requirements",

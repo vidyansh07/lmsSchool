@@ -318,6 +318,27 @@ class Capability(models.TextChoices):
     # existing for the caller at all.
     SEARCH_GLOBAL = "search.global", _("Use global search")
 
+    # --- Automation (ERP Phase 14, ADR-13)
+    #
+    # One capability guards the whole builder — reading the rule list,
+    # editing a rule, activating/pausing it, and the dry-run endpoint. There
+    # is no separate "view" cut (unlike `role.view`/`role.manage`) because a
+    # rule's conditions and actions already say everything a read-only view
+    # would show; there is nothing to expose short of letting somebody
+    # change it. Configuration rung, admin/superadmin only
+    # (`PERMISSION_CATALOG.md` row, phase 14).
+    AUTOMATION_MANAGE = "automation.manage", _("Build and manage automation rules")
+
+    # --- Communication (ERP Phase 19 builds the templates/Delivery model
+    # this eventually sends through; Phase 14 needs the capability itself
+    # now, because `send_notification` is an automation action and the
+    # catalog's save-time rule — "an action that needs a permission the
+    # author lacks cannot be saved" — needs something real to check from day
+    # one. `send_email`/`send_whatsapp` always skip until Phase 19 exists,
+    # but still name this same capability, so a rule using either is
+    # save-time-checked exactly like `send_notification`.
+    COMMUNICATION_SEND = "communication.send", _("Send a notification, email or WhatsApp message")
+
 
 #: Capabilities every authenticated, active user has regardless of role.
 BASE_CAPABILITIES: frozenset[str] = frozenset(
@@ -408,6 +429,10 @@ _MANAGER_CAPABILITIES = frozenset(
         Capability.ACTIVITY_COMPLETE,
         Capability.ACTIVITY_REVIEW,
         Capability.ACTIVITY_DELETE,
+        # `communication.send` mirrors `announcement.manage_any`'s rough
+        # audience (`PERMISSION_CATALOG.md`, phase 14): superadmin, admin,
+        # manager and counsellor, never trainer.
+        Capability.COMMUNICATION_SEND,
     }
 )
 
@@ -436,6 +461,7 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.SESSION_REVOKE_ANY,
         Capability.FORM_MANAGE,
         Capability.ACTIVITY_TYPE_MANAGE,
+        Capability.AUTOMATION_MANAGE,
     }
 )
 

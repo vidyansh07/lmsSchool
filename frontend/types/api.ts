@@ -2658,3 +2658,168 @@ export interface SavedFilter {
   filters: Record<string, unknown>;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// Automation (ERP Phase 14, ADR-13) — `docs/erp/AUTOMATION_CATALOG.md`,
+// checked against `backend/apps/automation/{models,serializers,views,
+// services}.py` directly (the backend for this phase landed in this same
+// worktree while this client was being built — see `lib/automation.ts`'s
+// module docstring for the two points where the real API turned out to
+// differ from `API_CONTRACTS.md`'s description of it).
+//
+// A rule is a trigger, a list of ANDed conditions over that trigger's
+// allowlisted context, and a list of typed actions. The seven triggers, nine
+// condition operators and six action types are the fixed, named vocabulary
+// the catalog defines; only the *paths* a condition may reference are
+// per-trigger (`apps/automation/evaluator.py::ALLOWED_PATHS`, mirrored in
+// `lib/automation.ts::AUTOMATION_TRIGGER_PATHS` — there turned out to be no
+// endpoint exposing it; see that file).
+// ---------------------------------------------------------------------------
+
+export type AutomationTrigger =
+  | "ACTIVITY_COMPLETED"
+  | "ACTIVITY_OVERDUE"
+  | "ASSESSMENT_FAILED"
+  | "ATTENDANCE_THRESHOLD"
+  | "PROJECT_OVERDUE"
+  | "ASSIGNMENT_OVERDUE"
+  | "RISK_CHANGED";
+
+export type AutomationConditionOperator =
+  | "eq"
+  | "ne"
+  | "lt"
+  | "lte"
+  | "gt"
+  | "gte"
+  | "in"
+  | "not_in"
+  | "contains";
+
+/** A condition's `value` is always a literal per the catalog: a scalar for
+ *  every operator except `in`/`not_in`, which take a list. */
+export type AutomationConditionValue = string | number | boolean | (string | number)[];
+
+export interface AutomationCondition {
+  path: string;
+  op: AutomationConditionOperator;
+  value: AutomationConditionValue;
+}
+
+export type AutomationActionType =
+  | "create_activity"
+  | "send_notification"
+  | "send_email"
+  | "send_whatsapp"
+  | "create_review"
+  | "flag_risk";
+
+export interface CreateActivityActionParams {
+  type: string;
+  assign_to: string;
+  due_in_days?: number | null;
+  priority?: ActivityPriority | "";
+  title?: string;
+}
+
+export interface SendNotificationActionParams {
+  to: string;
+  kind: string;
+  title?: string;
+  body?: string;
+}
+
+export interface SendEmailActionParams {
+  to: string;
+  template: string;
+}
+
+export interface SendWhatsappActionParams {
+  to: string;
+  template: string;
+}
+
+export interface CreateReviewActionParams {
+  review_type?: string;
+  reviewer: string;
+  due_in_days?: number | null;
+}
+
+export interface FlagRiskActionParams {
+  level: "warning" | "critical";
+  reason?: string;
+}
+
+/** Discriminated on `type` so the builder's per-type parameter form (and any
+ *  code reading `.params`) gets the right shape without a cast. */
+export type AutomationAction =
+  | { type: "create_activity"; params: CreateActivityActionParams }
+  | { type: "send_notification"; params: SendNotificationActionParams }
+  | { type: "send_email"; params: SendEmailActionParams }
+  | { type: "send_whatsapp"; params: SendWhatsappActionParams }
+  | { type: "create_review"; params: CreateReviewActionParams }
+  | { type: "flag_risk"; params: FlagRiskActionParams };
+
+export type AutomationRuleStatus = "draft" | "active" | "paused";
+
+/**
+ * `AutomationRuleSerializer` (`apps/automation/serializers.py`) — the exact
+ * same serializer backs both the list and the detail endpoint, so a list
+ * row already carries every field a detail screen needs; `branch`/
+ * `created_by`/`updated_by` read back as bare ids (`serializers.UUIDField
+ * (source=..._id)`), never an expanded `{id, name}` brief.
+ */
+export interface AutomationRule {
+  id: string;
+  name: string;
+  description: string;
+  trigger: AutomationTrigger;
+  conditions: AutomationCondition[];
+  actions: AutomationAction[];
+  status: AutomationRuleStatus;
+  version: number;
+  branch: string | null;
+  is_system: boolean;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Aliases so a call site can still say which shape it means; both name the
+ *  identical wire type (see `AutomationRule`'s own docstring). */
+export type AutomationRuleDetail = AutomationRule;
+export type AutomationRuleSummary = AutomationRule;
+
+/**
+ * `POST /automation-rules/{id}/dry-run/` (`DryRunResultSerializer`) — a bare
+ * array, one entry per real recent occurrence of the rule's trigger
+ * (`services.dry_run`, up to the last 20). `context` is the exact allowlisted
+ * dict `evaluate_conditions` was run against for that occurrence — the same
+ * shape `apps/automation/evaluator.py::context_for` builds — so the builder
+ * can show *why* without the server computing a second, display-only
+ * explanation of its own verdict.
+ */
+export interface AutomationDryRunEvent {
+  object_id: string;
+  would_fire: boolean;
+  context: Record<string, unknown>;
+}
+
+export type AutomationDryRunResult = AutomationDryRunEvent[];
+
+/** A row of `GET /automation-rules/{id}/runs/` — `AutomationRun`
+ *  (`DATA_MODEL.md` "Automation", `AutomationRunSerializer`). */
+export interface AutomationRunRow {
+  id: string;
+  rule: string;
+  trigger: AutomationTrigger;
+  object_id: string | null;
+  occurrence_key: string;
+  depth: number;
+  status: "queued" | "ran" | "skipped" | "failed";
+  result: Record<string, unknown>;
+  error: string;
+  rule_version: number;
+  created_at: string;
+}

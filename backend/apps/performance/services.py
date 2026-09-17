@@ -8,6 +8,7 @@ one place the rule is written.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -328,6 +329,18 @@ def recompute_risk(*, enrollment) -> RiskState:
     is correctly "no change, no noise"; one that lands on `warning` or
     `critical` on its very first computation is still real news nobody has
     been told before, and treating that as silence would be the actual bug.
+
+    A manual override (`apps.automation.actions.flag_risk`) that is still
+    active (`RiskState.manual_override_active`) is left standing: the
+    engine's own numbers still refresh every time, but `level`/`triggered`
+    are not overwritten out from under it, and no `RISK_CHANGED` fires for a
+    verdict nobody can actually see change. Once the override is no longer
+    active — expired, per `manual_override_expires_at` (`policy
+    risk.manual_flag_days`) — the *next* recompute is exactly where it is
+    superseded: the engine's own verdict takes over again and the
+    `manual_override*` fields are cleared, so neither this row nor a reader
+    of it (`student_360._risk_for`, `risk_summary`) ever mistakes a lapsed
+    flag for a live one.
     """
     from .engine import student_performance
 
@@ -339,6 +352,17 @@ def recompute_risk(*, enrollment) -> RiskState:
     now = timezone.now()
 
     existing = RiskState.objects.select_for_update().filter(enrollment=enrollment).first()
+    previous_numbers = existing.numbers if existing else None
+
+    if existing is not None and existing.manual_override_active:
+        existing.numbers = numbers
+        existing.computed_at = now
+        existing.save(update_fields=["numbers", "computed_at", "updated_at"])
+        _maybe_dispatch_attendance_threshold(
+            enrollment=enrollment, numbers=numbers, previous_numbers=previous_numbers
+        )
+        return existing
+
     previous_level = existing.level if existing else None
     previous_triggered = existing.triggered if existing else None
     baseline_level = previous_level or RiskLevel.NONE
@@ -368,6 +392,15 @@ def recompute_risk(*, enrollment) -> RiskState:
         existing.triggered = new_triggered
         existing.numbers = numbers
         existing.computed_at = now
+        # Any override on this row (expired, or this is simply the first
+        # recompute since one was cleared some other way) is being
+        # superseded by a fresh engine verdict right now — clear it rather
+        # than leave it stale, per this function's own docstring.
+        existing.manual_override = False
+        existing.manual_override_level = ""
+        existing.manual_override_reason = ""
+        existing.manual_override_expires_at = None
+        existing.manual_override_set_by = None
         existing.save(
             update_fields=[
                 "previous_level",
@@ -376,6 +409,11 @@ def recompute_risk(*, enrollment) -> RiskState:
                 "triggered",
                 "numbers",
                 "computed_at",
+                "manual_override",
+                "manual_override_level",
+                "manual_override_reason",
+                "manual_override_expires_at",
+                "manual_override_set_by",
                 "updated_at",
             ]
         )
@@ -410,7 +448,75 @@ def recompute_risk(*, enrollment) -> RiskState:
         )
         _notify_risk_changed(enrollment=enrollment, level=new_level, previous_level=previous_level)
 
+    _maybe_dispatch_attendance_threshold(
+        enrollment=enrollment, numbers=numbers, previous_numbers=previous_numbers
+    )
+
     return state
+
+
+def _maybe_dispatch_attendance_threshold(*, enrollment, numbers, previous_numbers) -> None:
+    """`ATTENDANCE_THRESHOLD` (ERP Phase 14, ADR-13): "attendance percent
+    crosses `risk.attendance_percent` downward" — a *different* condition
+    than the attendance risk rule's own level change (`_attendance_risk` can
+    stay `triggered` for months without this ever firing again). Reads the
+    exact `percent`/`threshold` pair `_attendance_risk`
+    (`apps.performance.risk`) already computed into `numbers["attendance"]`,
+    rather than a second read of a threshold from a different source, and
+    fires once per crossing by comparing against the *previous* recompute's
+    own stored numbers — not on every recompute while a student stays below.
+
+    A student whose very first-ever recompute already lands below the
+    threshold (no previous numbers to compare against) is treated as a
+    crossing too, the same "no previous verdict yet" reasoning
+    `recompute_risk`'s own docstring gives for `RISK_CHANGED`: that is
+    real news nobody has been told before, not silence.
+    """
+    attendance = numbers.get("attendance") or {}
+    percent, threshold = attendance.get("percent"), attendance.get("threshold")
+    if percent is None or threshold is None:
+        return
+
+    threshold_value = Decimal(str(threshold))
+    now_below = Decimal(str(percent)) < threshold_value
+    if not now_below:
+        return
+
+    previous_attendance = (previous_numbers or {}).get("attendance") or {}
+    previous_percent = previous_attendance.get("percent")
+    was_already_below = (
+        previous_percent is not None and Decimal(str(previous_percent)) < threshold_value
+    )
+    if was_already_below:
+        return
+
+    enrollment_id = str(enrollment.pk)
+    absent_streak = _absent_streak(enrollment)
+
+    def _dispatch() -> None:
+        from apps.automation.tasks import dispatch_attendance_threshold
+
+        dispatch_attendance_threshold.delay(enrollment_id, float(percent), absent_streak)
+
+    transaction.on_commit(_dispatch)
+
+
+def _absent_streak(enrollment) -> int:
+    """Consecutive most-recent sessions marked absent, capped at 60 records
+    back — bounded, and far more than any realistic streak. Kept here
+    (rather than imported from `apps.automation`) for the same "business
+    logic stays in each app's own services.py" reason
+    `apps.assessments.services._failed_attempt_number` gives."""
+    from apps.attendance.models import COUNTS_AS_PRESENT, AttendanceRecord
+
+    streak = 0
+    for record_row in AttendanceRecord.objects.filter(enrollment=enrollment).order_by(
+        "-session__session_date"
+    )[:60]:
+        if record_row.status in COUNTS_AS_PRESENT:
+            break
+        streak += 1
+    return streak
 
 
 def risk_state_for(enrollment) -> RiskState:

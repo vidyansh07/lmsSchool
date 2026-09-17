@@ -236,6 +236,21 @@ POLICY_SCHEMAS: dict[str, dict[str, dict[str, Any]]] = {
                 "and risk_assessment_average_percent, for the same 0-100 scale."
             ),
         },
+        # --- ERP Phase 14 (ADR-13): the automation `flag_risk` action writes
+        # a manual override onto `RiskState`, and this is how long it stands
+        # before lapsing back to whatever the engine itself computes — a
+        # human (or a rule acting for one) flagged this today, but a stale
+        # flag from months ago should not outlive its relevance forever.
+        "manual_flag_days": {
+            "type": "integer",
+            "default": 14,
+            "min": 1,
+            "max": 180,
+            "critical": False,
+            "description": (
+                "Days a manual risk flag (automation's flag_risk action) stands before expiring."
+            ),
+        },
     },
     "performance": {
         "weights": {
@@ -319,6 +334,21 @@ POLICY_SCHEMAS: dict[str, dict[str, dict[str, Any]]] = {
             "critical": False,
             "description": (
                 "How often notification digests are sent, instead of one message per event."
+            ),
+        },
+    },
+    # --- ERP Phase 14 (ADR-13): the automation engine's own guards.
+    "automation": {
+        "max_runs_per_object_per_day": {
+            "type": "integer",
+            "default": 10,
+            "min": 1,
+            "max": 200,
+            "critical": False,
+            "description": (
+                "At most this many AutomationRun rows per (rule, object) pair per day — the "
+                "catalog's rate guard against a rule (or a chain of rules) firing without bound "
+                "on one record."
             ),
         },
     },

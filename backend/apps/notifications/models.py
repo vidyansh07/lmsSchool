@@ -80,6 +80,14 @@ class NotificationKind(models.TextChoices):
     # --- Risk engine (ERP Phase 13, ADR-11)
     RISK_LEVEL_CHANGED = "risk.level_changed", _("Student risk level changed")
 
+    # --- Automation (ERP Phase 14, ADR-13)
+    #
+    # `AUTOMATION_CATALOG.md`'s seeded "Overdue activity nudge" and "Project
+    # overdue" rules name these two kinds explicitly; nothing pre-Phase-14
+    # sends either.
+    ACTIVITY_OVERDUE = "activity.overdue", _("Activity overdue")
+    PROJECT_OVERDUE = "project.overdue", _("Project overdue")
+
 
 class NotificationCategory(models.TextChoices):
     ACADEMIC = "academic", _("Coursework and results")
@@ -121,6 +129,9 @@ KIND_CATEGORY: dict[str, str] = {
     NotificationKind.ACTIVITY_ASSIGNED: NotificationCategory.SCHEDULE,
     NotificationKind.ACTIVITY_COMPLETED: NotificationCategory.ACADEMIC,
     NotificationKind.ACTIVITY_REMINDER: NotificationCategory.SCHEDULE,
+    NotificationKind.RISK_LEVEL_CHANGED: NotificationCategory.ACADEMIC,
+    NotificationKind.ACTIVITY_OVERDUE: NotificationCategory.SCHEDULE,
+    NotificationKind.PROJECT_OVERDUE: NotificationCategory.SCHEDULE,
 }
 
 

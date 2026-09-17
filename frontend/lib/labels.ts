@@ -18,6 +18,10 @@ import type {
   ActivityRiskEffect,
   ActivityStatus,
   ActivityTypeStatus,
+  AutomationActionType,
+  AutomationConditionOperator,
+  AutomationRuleStatus,
+  AutomationTrigger,
   MatrixCell,
   MfaMethodName,
   PermissionCategory,
@@ -494,3 +498,95 @@ function titleCaseKind(kind: string): string {
 export function timelineKindMeta(kind: string): TimelineKindMeta {
   return TIMELINE_KIND_META[kind] ?? { icon: CircleDot, label: titleCaseKind(kind) || "Event" };
 }
+
+// --- Automation (ERP Phase 14, ADR-13) --------------------------------------
+
+/**
+ * The seven trigger names and the fixed condition/action vocabulary are
+ * literal, named constants of `AUTOMATION_CATALOG.md` — safe to label here
+ * exactly like any other enum in this file. The condition **paths** each
+ * trigger allows are a different matter — mirrored from the backend's own
+ * `apps/automation/evaluator.py::ALLOWED_PATHS` in
+ * `lib/automation.ts::AUTOMATION_TRIGGER_PATHS` instead of living here,
+ * since there is no endpoint that serves them (see that file's module
+ * docstring) and `ACTIVITY_COMPLETED` additionally allows any `form.<key>`
+ * path with no fixed list at all.
+ */
+export const AUTOMATION_TRIGGER_LABEL: Record<AutomationTrigger, string> = {
+  ACTIVITY_COMPLETED: "Activity completed",
+  ACTIVITY_OVERDUE: "Activity overdue",
+  ASSESSMENT_FAILED: "Assessment failed",
+  ATTENDANCE_THRESHOLD: "Attendance crossed a threshold",
+  PROJECT_OVERDUE: "Project overdue",
+  ASSIGNMENT_OVERDUE: "Assignment overdue",
+  RISK_CHANGED: "Risk level changed",
+};
+
+export const AUTOMATION_TRIGGER_OPTIONS: { value: AutomationTrigger; label: string }[] = (
+  Object.keys(AUTOMATION_TRIGGER_LABEL) as AutomationTrigger[]
+).map((value) => ({ value, label: AUTOMATION_TRIGGER_LABEL[value] }));
+
+export const AUTOMATION_RULE_STATUS_LABEL: Record<AutomationRuleStatus, string> = {
+  draft: "Draft",
+  active: "Active",
+  paused: "Paused",
+};
+
+export const AUTOMATION_RULE_STATUS_VARIANT: Record<
+  AutomationRuleStatus,
+  "neutral" | "success" | "warning"
+> = {
+  draft: "neutral",
+  active: "success",
+  paused: "warning",
+};
+
+export const AUTOMATION_OPERATOR_LABEL: Record<AutomationConditionOperator, string> = {
+  eq: "is",
+  ne: "is not",
+  lt: "is less than",
+  lte: "is at most",
+  gt: "is greater than",
+  gte: "is at least",
+  in: "is one of",
+  not_in: "is none of",
+  contains: "contains",
+};
+
+export const AUTOMATION_OPERATOR_OPTIONS: {
+  value: AutomationConditionOperator;
+  label: string;
+}[] = (Object.keys(AUTOMATION_OPERATOR_LABEL) as AutomationConditionOperator[]).map((value) => ({
+  value,
+  label: AUTOMATION_OPERATOR_LABEL[value],
+}));
+
+export const AUTOMATION_ACTION_TYPE_LABEL: Record<AutomationActionType, string> = {
+  create_activity: "Create an activity",
+  send_notification: "Send a notification",
+  send_email: "Send an email",
+  send_whatsapp: "Send a WhatsApp message",
+  create_review: "Open a performance review",
+  flag_risk: "Flag risk",
+};
+
+export const AUTOMATION_ACTION_TYPE_OPTIONS: { value: AutomationActionType; label: string }[] = (
+  Object.keys(AUTOMATION_ACTION_TYPE_LABEL) as AutomationActionType[]
+).map((value) => ({ value, label: AUTOMATION_ACTION_TYPE_LABEL[value] }));
+
+export const AUTOMATION_RUN_STATUS_LABEL: Record<string, string> = {
+  queued: "Queued",
+  ran: "Ran",
+  skipped: "Skipped",
+  failed: "Failed",
+};
+
+export const AUTOMATION_RUN_STATUS_VARIANT: Record<
+  string,
+  "neutral" | "success" | "warning" | "error"
+> = {
+  queued: "neutral",
+  ran: "success",
+  skipped: "warning",
+  failed: "error",
+};

@@ -332,6 +332,17 @@ class Activity(SoftDeleteBaseModel):
     parent = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="children"
     )
+    #: Set by `apps.automation.actions.create_activity` (ERP Phase 14,
+    #: ADR-13) on the activity a rule created — provenance, never read by
+    #: this app itself. Additive: `AutomationRun` did not exist when `parent`
+    #: above was added, per this model's own module docstring.
+    automation_run = models.ForeignKey(
+        "automation.AutomationRun",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_activities",
+    )
     #: Idempotency key for POST /activities/: a retry with the same
     #: (created_by, client_key) within 24h returns the original row instead
     #: of creating a duplicate. See `services.create_activity`. Blank, not

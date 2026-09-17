@@ -365,7 +365,51 @@ def record_result(
 
     transaction.on_commit(lambda: schedule_recompute(enrollment.pk))
 
+    # ERP Phase 14 (ADR-13): ASSESSMENT_FAILED — "percent < policy passing".
+    # An absence is not a failed attempt (nothing was attempted to grade),
+    # so it never dispatches this trigger. Deferred to `transaction.on_commit`
+    # for the same reason as the risk recompute just above: a rolled-back
+    # write must never fire an automation rule for a mark that was never
+    # actually saved.
+    if not is_absent and value is not None and result.is_passing is False:
+        percent = round(float(value) * 100 / float(assessment.max_marks), 1)
+        attempt_number = _failed_attempt_number(enrollment, assessment)
+        result_id = str(result.pk)
+
+        def _dispatch() -> None:
+            from apps.automation.tasks import dispatch_assessment_failed
+
+            dispatch_assessment_failed.delay(result_id, percent, attempt_number)
+
+        transaction.on_commit(_dispatch)
+
     return result, created
+
+
+def _failed_attempt_number(enrollment: Enrollment, assessment: Assessment) -> int:
+    """How many-th failed assessment this is for this student in this
+    course, counting from 1 — the reading `AUTOMATION_CATALOG.md`'s "Failed
+    a test twice" seeded rule (`assessment.attempt_number gte 2`) implies,
+    since a single `AssessmentResult` row (one per assessment/enrolment pair,
+    never a retake sequence) carries no attempt counter of its own.
+
+    Business logic stays in this app's own `services.py` (rule 1) rather
+    than being imported from `apps.automation`, which keeps its own copy for
+    the same computation over the same already-saved rows, used by its
+    dry-run preview rather than a live dispatch."""
+    from apps.academics.policies import passing_mark_for_assessment
+
+    count = 0
+    rows = AssessmentResult.objects.filter(
+        enrollment=enrollment,
+        assessment__course_id=assessment.course_id,
+        is_absent=False,
+        marks_obtained__isnull=False,
+    ).select_related("assessment")
+    for row in rows:
+        if row.marks_obtained < passing_mark_for_assessment(row.assessment):
+            count += 1
+    return count
 
 
 def sync_result_from_submission(submission) -> AssessmentResult | None:

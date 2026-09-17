@@ -25,6 +25,7 @@ to render it.
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
@@ -368,6 +369,45 @@ class RiskState(BaseModel):
     )
     previous_triggered = models.JSONField(_("previously triggered rules"), null=True, blank=True)
 
+    # --- Manual override (ERP Phase 14, ADR-13: automation's `flag_risk`
+    # action)
+    #
+    # Additive — Phase 13 had no concept of a human (or a rule acting for
+    # one) overriding the computed verdict, only `engine.student_performance`
+    # ever writing here. `manual_override` is the flag a screen or the next
+    # `recompute_risk` checks to know a stored `level`/`triggered` came from
+    # a flag rather than the engine; `manual_override_expires_at` is when it
+    # lapses (policy `risk.manual_flag_days`, applied by the action at write
+    # time, not read dynamically here). Nothing here changes how
+    # `recompute_risk` computes its own verdict — that stays purely a
+    # function of the numbers, exactly as ADR-11 established; a manual flag
+    # simply stands beside it as its own, separately-audited fact until it
+    # expires or a person clears it.
+    manual_override = models.BooleanField(
+        _("manually flagged"),
+        default=False,
+        help_text=_("Set by automation's flag_risk action; not written by the risk engine."),
+    )
+    manual_override_level = models.CharField(
+        _("manually flagged level"),
+        max_length=10,
+        choices=RiskLevel.choices,
+        default="",
+        blank=True,
+    )
+    manual_override_reason = models.TextField(_("manual flag reason"), blank=True)
+    manual_override_expires_at = models.DateTimeField(
+        _("manual flag expires at"), null=True, blank=True
+    )
+    manual_override_set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text=_("The automation rule's author of record for this flag (audit provenance)."),
+    )
+
     class Meta:
         verbose_name = _("risk state")
         verbose_name_plural = _("risk states")
@@ -378,3 +418,21 @@ class RiskState(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.enrollment_id}: {self.level}"
+
+    @property
+    def manual_override_active(self) -> bool:
+        """Whether the last `flag_risk` override still stands, right now.
+
+        `manual_override` alone answers "was this row ever manually
+        flagged", not "is that flag still in force" — `services.recompute_risk`
+        clears it once superseded, but nothing clears it purely by the clock
+        ticking past `manual_override_expires_at` in between two recomputes,
+        so any reader that needs to know whether the override is still the
+        governing verdict (`recompute_risk` itself, `student_360._risk_for`)
+        checks both here rather than `manual_override` alone.
+        """
+        if not self.manual_override:
+            return False
+        if self.manual_override_expires_at is None:
+            return True
+        return self.manual_override_expires_at > timezone.now()
