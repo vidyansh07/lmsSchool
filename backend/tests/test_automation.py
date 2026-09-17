@@ -683,3 +683,23 @@ class TestSaveTimePermissionCheck:
         rule.refresh_from_db()
         assert paused == 0
         assert rule.status == "active"
+
+
+class TestListCreateViewOverHTTP:
+    """A real `client.get(url)` through the DRF view layer, not just a
+    `services.*` call: this is the exact gap that let
+    `AutomationRuleListCreateView`'s missing `serializer_class` ship to
+    staging with a green test suite and a clean `check --deploy` — every
+    other test in this file calls the service functions directly, so
+    `ListAPIView.get()`'s own `self.get_serializer(page, many=True)` call
+    (which needs `get_serializer_class()` to resolve, regardless of what
+    `@extend_schema(responses=...)` declares for documentation purposes)
+    never actually ran until a real request hit it. See
+    docs/erp/AGENT_PLAYBOOK.md's note on this class of bug."""
+
+    def test_listing_rules_over_http_does_not_500(self, api_client_no_csrf, admin_user):
+        _rule(admin_user, trigger="ACTIVITY_COMPLETED")
+        api_client_no_csrf.force_login(admin_user)
+        response = api_client_no_csrf.get("/api/v1/automation-rules/")
+        assert response.status_code == 200, response.data
+        assert response.data["count"] >= 1

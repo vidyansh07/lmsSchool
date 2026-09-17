@@ -54,6 +54,7 @@ def _branch_or_400(branch_id) -> Branch | None:
 class AutomationRuleListCreateView(ListCreateAPIView):
     permission_classes = (HasCapability,)
     required_capability = Capability.AUTOMATION_MANAGE
+    serializer_class = AutomationRuleSerializer
     pagination_class = DefaultPagination
     queryset = AutomationRule.objects.none()
 

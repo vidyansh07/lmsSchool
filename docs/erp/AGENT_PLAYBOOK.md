@@ -108,6 +108,23 @@ if unused by that method) or drf-spectacular's `check --deploy` warns —
 this bit Phase 2's `LockPermissionView`. Every `extend_schema` needs
 `responses=`.
 
+A `ListAPIView`/`ListCreateAPIView` still needs its own `serializer_class`
+set even when its `get`/`post` is decorated with
+`@extend_schema(responses=...)` — the decorator's `responses=` satisfies
+drf-spectacular's *schema-generation* check (so `check --deploy`/
+`spectacular --fail-on-warn` stay silent) but does nothing for the
+*runtime* call: `ListAPIView.get()` still calls
+`self.get_serializer(page, many=True)` internally, which calls
+`get_serializer_class()` and raises `AssertionError` at request time if
+it's unset. This bit Phase 14's `AutomationRuleListCreateView` — verify
+clean, `check --deploy` clean, 3178 tests green, and the endpoint still
+500'd on first real staging traffic, because no test in the phase's own
+suite ever called `GET` on it through the view layer (every test called
+`services.*` directly). Lesson: for any `List*View`/`*ListCreateAPIView`,
+confirm `serializer_class` is set by reading the class, not by trusting
+`check --deploy`'s silence — and give it at least one real
+`client.get(url)`-shaped test, not only a services-layer test.
+
 **Anonymous-POST endpoints** (login, MFA verify, OTP request) MUST inherit
 `EnforceCSRFMixin` — DRF only checks CSRF once `SessionAuthentication`
 finds a logged-in user, so an `AllowAnyPublic` POST is unprotected by
