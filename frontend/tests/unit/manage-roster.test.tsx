@@ -114,7 +114,11 @@ describe('BatchRoster', () => {
     const user = userEvent.setup();
     await user.type(screen.getByLabelText('Search'), 'jane');
     await waitFor(() =>
-      expect(listBatchStudents).toHaveBeenLastCalledWith('batch-1', expect.objectContaining({ search: 'jane' })),
+      expect(listBatchStudents).toHaveBeenLastCalledWith(
+        'batch-1',
+        expect.objectContaining({ search: 'jane' }),
+        expect.anything(),
+      ),
     );
 
     await user.click(screen.getByRole('button', { name: /attendance/i }));
@@ -122,6 +126,7 @@ describe('BatchRoster', () => {
       expect(listBatchStudents).toHaveBeenLastCalledWith(
         'batch-1',
         expect.objectContaining({ ordering: 'attendance_percent' }),
+        expect.anything(),
       ),
     );
   });

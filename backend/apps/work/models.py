@@ -363,6 +363,21 @@ class Activity(SoftDeleteBaseModel):
             ),
             models.Index(fields=["branch", "status"], name="activity_branch_status_idx"),
             models.Index(fields=["created_by", "client_key"], name="activity_client_key_idx"),
+            # DATA_MODEL.md §9 / PERFORMANCE_PLAN.md's Indexing section: the
+            # overdue sweep (`work.mark_overdue`) scans only the open
+            # statuses, so the index need only cover those rows rather than
+            # every completed/cancelled activity ever created.
+            models.Index(
+                fields=["due_at"],
+                name="activity_open_due_idx",
+                condition=models.Q(
+                    status__in=[
+                        ActivityStatus.PLANNED,
+                        ActivityStatus.ASSIGNED,
+                        ActivityStatus.IN_PROGRESS,
+                    ]
+                ),
+            ),
         ]
 
     def __str__(self) -> str:

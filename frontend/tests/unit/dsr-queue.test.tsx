@@ -211,7 +211,10 @@ describe('DsrQueue filters', () => {
     listDsr.mockResolvedValue(page([]));
     render(<DsrQueue />);
     await waitFor(() =>
-      expect(listDsr).toHaveBeenCalledWith(expect.objectContaining({ status: 'submitted', ordering: '-report_date' })),
+      expect(listDsr).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'submitted', ordering: '-report_date' }),
+        expect.anything(),
+      ),
     );
   });
 
@@ -222,7 +225,10 @@ describe('DsrQueue filters', () => {
     await waitFor(() => expect(listDsr).toHaveBeenCalledTimes(1));
 
     await user.selectOptions(screen.getByLabelText('Status'), 'rejected');
-    await waitFor(() => expect(listDsr).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'rejected' })));
+    await waitFor(() => expect(listDsr).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'rejected' }),
+      expect.anything(),
+    ));
   });
 
   it('sends a batch filter to the server', async () => {
@@ -233,7 +239,10 @@ describe('DsrQueue filters', () => {
     await waitFor(() => expect(screen.getByRole('option', { name: /GRS-B-001/ })).toBeInTheDocument());
 
     await user.selectOptions(screen.getByLabelText('Batch'), 'batch-1');
-    await waitFor(() => expect(listDsr).toHaveBeenLastCalledWith(expect.objectContaining({ batch: 'batch-1' })));
+    await waitFor(() => expect(listDsr).toHaveBeenLastCalledWith(
+      expect.objectContaining({ batch: 'batch-1' }),
+      expect.anything(),
+    ));
   });
 
   it('sends a trainer filter to the server', async () => {
@@ -244,7 +253,10 @@ describe('DsrQueue filters', () => {
     await waitFor(() => expect(screen.getByRole('option', { name: /Tina Trainer/ })).toBeInTheDocument());
 
     await user.selectOptions(screen.getByLabelText('Trainer'), 'trainer-1');
-    await waitFor(() => expect(listDsr).toHaveBeenLastCalledWith(expect.objectContaining({ trainer: 'trainer-1' })));
+    await waitFor(() => expect(listDsr).toHaveBeenLastCalledWith(
+      expect.objectContaining({ trainer: 'trainer-1' }),
+      expect.anything(),
+    ));
   });
 
   it('sends a report-date range to the server', async () => {
@@ -255,7 +267,10 @@ describe('DsrQueue filters', () => {
 
     await user.click(screen.getByRole('button', { name: 'Today' }));
     await waitFor(() =>
-      expect(listDsr).toHaveBeenLastCalledWith(expect.objectContaining({ date_after: today(), date_before: today() })),
+      expect(listDsr).toHaveBeenLastCalledWith(
+        expect.objectContaining({ date_after: today(), date_before: today() }),
+        expect.anything(),
+      ),
     );
   });
 

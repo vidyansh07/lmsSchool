@@ -129,11 +129,12 @@ class Command(BaseCommand):
             self._flush()
 
         with transaction.atomic():
+            branch = self._branch()
             category = self._category()
             courses = self._courses(category, counts["courses"], counts["lessons"])
-            trainers = self._trainers(max(3, counts["batches"] // 2), password)
-            batches = self._batches(courses, trainers, counts["batches"])
-            students = self._students(counts["students"], password)
+            trainers = self._trainers(max(3, counts["batches"] // 2), password, branch)
+            batches = self._batches(courses, trainers, counts["batches"], branch)
+            students = self._students(counts["students"], password, branch)
             enrollments = self._enrollments(students, batches)
             sessions = self._sessions(batches, counts["sessions"])
             attendance = self._attendance(sessions, enrollments)
@@ -185,6 +186,24 @@ class Command(BaseCommand):
         User.objects.filter(email__endswith=f"@{SCALE_DOMAIN}").delete()
         self.stdout.write("Previous scale dataset removed.")
 
+    def _branch(self):
+        """The centre every generated trainer/student/batch is stamped with.
+
+        `organisation.0002_default_branch` made `branch` required on exactly
+        these three models; this command predates that migration and never
+        picked up the change, so it fails closed with an `IntegrityError`
+        rather than silently creating unscoped rows. Reusing that same
+        migration's "MAIN"/"Main centre" row (rather than inventing a
+        scale-only branch) keeps a generated trainer or student visible to
+        the same branch-scoped queries as any other centre-one row.
+        """
+        from apps.organisation.models import Branch
+
+        branch, _created = Branch.objects.get_or_create(
+            code="MAIN", defaults={"name": "Main centre", "is_active": True}
+        )
+        return branch
+
     def _category(self) -> Category:
         category, _ = Category.objects.get_or_create(
             slug="scale-performance",
@@ -233,7 +252,7 @@ class Command(BaseCommand):
         )
         return courses
 
-    def _trainers(self, count: int, password: str) -> list[TrainerProfile]:
+    def _trainers(self, count: int, password: str, branch) -> list[TrainerProfile]:
         from apps.common.identifiers import next_trainer_id
 
         profiles = []
@@ -244,17 +263,19 @@ class Command(BaseCommand):
                 first_name=_rng.choice(FIRST),
                 last_name=_rng.choice(LAST),
                 role=UserRole.TRAINER,
+                branch=branch,
             )
             profiles.append(
                 TrainerProfile(
                     user=user,
                     trainer_id=next_trainer_id(),
                     professional_title="Generated Trainer",
+                    branch=branch,
                 )
             )
         return TrainerProfile.objects.bulk_create(profiles)
 
-    def _batches(self, courses, trainers, count: int) -> list[Batch]:
+    def _batches(self, courses, trainers, count: int, branch) -> list[Batch]:
         start = date.today() - timedelta(days=60)
         return Batch.objects.bulk_create(
             Batch(
@@ -262,6 +283,7 @@ class Command(BaseCommand):
                 name=f"Scale Batch {index + 1:02d}",
                 course=courses[index % len(courses)],
                 trainer=trainers[index % len(trainers)],
+                branch=branch,
                 start_date=start,
                 end_date=start + timedelta(days=120),
                 capacity=200,
@@ -270,7 +292,7 @@ class Command(BaseCommand):
             for index in range(count)
         )
 
-    def _students(self, count: int, password: str) -> list[StudentProfile]:
+    def _students(self, count: int, password: str, branch) -> list[StudentProfile]:
         from apps.common.identifiers import next_student_id
 
         # `create_user` hashes a password per call, which dominates the runtime
@@ -288,6 +310,7 @@ class Command(BaseCommand):
                 last_name=_rng.choice(LAST),
                 role=UserRole.STUDENT,
                 is_active=True,
+                branch=branch,
             )
             for index in range(count)
         )
@@ -296,6 +319,7 @@ class Command(BaseCommand):
                 user=user,
                 student_id=next_student_id(),
                 fee_status=_rng.choice([FeeStatus.PAID, FeeStatus.PARTIAL, FeeStatus.PENDING]),
+                branch=branch,
             )
             for user in users
         )

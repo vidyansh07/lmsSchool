@@ -47,8 +47,9 @@ export function useApi<T>(path: string): AsyncState<T> {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
-    apiFetch<T>(path)
+    apiFetch<T>(path, { signal: controller.signal })
       .then((result) => {
         if (!cancelled) {
           setState({ data: result, error: null, isLoading: false, requestKey });
@@ -56,6 +57,11 @@ export function useApi<T>(path: string): AsyncState<T> {
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
+        // A deliberate cancellation (this effect's own cleanup, below) is not
+        // a failure — it never reaches here anyway, since `cancelled` is set
+        // synchronously before `abort()`, but a belt-and-suspenders check
+        // keeps this correct even if that ordering ever changes.
+        if (cause instanceof ApiError && cause.code === 'cancelled') return;
         const error =
           cause instanceof ApiError
             ? cause
@@ -63,9 +69,12 @@ export function useApi<T>(path: string): AsyncState<T> {
         setState({ data: null, error, isLoading: false, requestKey });
       });
 
-    // Prevents a state update from a stale request overwriting a newer one.
+    // Prevents a state update from a stale request overwriting a newer one,
+    // and now also cancels the in-flight network request itself rather than
+    // letting it run to completion for a result nobody will use.
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [path, requestKey]);
 

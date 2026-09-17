@@ -87,7 +87,10 @@ describe('TrainersHub', () => {
     const user = userEvent.setup();
     await user.type(screen.getByLabelText('Search'), 'tina');
     await waitFor(() =>
-      expect(listManageTrainers).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'tina' })),
+      expect(listManageTrainers).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: 'tina' }),
+        expect.anything(),
+      ),
     );
   });
 
@@ -110,13 +113,19 @@ describe('TrainersHub — arriving from the attention strip', () => {
     render(<TrainersHub />);
 
     await waitFor(() => expect(listManageTrainers).toHaveBeenCalled());
-    expect(listManageTrainers).toHaveBeenCalledWith(expect.objectContaining({ attention: 'review_missing' }));
+    expect(listManageTrainers).toHaveBeenCalledWith(
+      expect.objectContaining({ attention: 'review_missing' }),
+      expect.anything(),
+    );
     expect(screen.getByRole('status')).toHaveTextContent(/no performance review/i);
 
     await user.click(screen.getByRole('button', { name: /show all/i }));
 
     await waitFor(() =>
-      expect(listManageTrainers).toHaveBeenLastCalledWith(expect.not.objectContaining({ attention: expect.anything() })),
+      expect(listManageTrainers).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({ attention: expect.anything() }),
+        expect.anything(),
+      ),
     );
     expect(replace).toHaveBeenCalledWith('/manage/hub');
     searchParams.value = '';

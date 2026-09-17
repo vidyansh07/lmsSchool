@@ -59,8 +59,14 @@ export function listRecoveryKinds(): Promise<BinSummary[]> {
 }
 
 /** One kind's deleted records, most recently removed first. */
-export function listDeletedRecords(label: string, query: ListQuery = {}): Promise<Paginated<DeletedRecord>> {
-  return apiFetch<Paginated<DeletedRecord>>(`/api/v1/recovery/${label}/${queryString(query)}`);
+export function listDeletedRecords(
+  label: string,
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<DeletedRecord>> {
+  return apiFetch<Paginated<DeletedRecord>>(`/api/v1/recovery/${label}/${queryString(query)}`, {
+    signal,
+  });
 }
 
 /** Bring one record back. Ordinary and reversible — no reason required. */

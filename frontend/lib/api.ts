@@ -63,8 +63,13 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   // 20 s (22a). A slow report or export is cut off with a message and a Retry
-  // rather than a spinner that never resolves.
-  const { body, formData, timeoutMs = 20_000, headers, ...rest } = options;
+  // rather than a spinner that never resolves. `signal` is the *caller's* own
+  // cancellation (a superseded request key, an unmounted component) — pulled
+  // out of `rest` so it is not spread straight into `fetch`'s options, where
+  // it would just be overwritten by the timeout controller's signal below.
+  // Both need to be able to abort the one request, so the external signal is
+  // wired onto the internal controller instead of replacing it.
+  const { body, formData, timeoutMs = 20_000, headers, signal: externalSignal, ...rest } = options;
   const method = (rest.method ?? 'GET').toUpperCase();
 
   const requestHeaders = new Headers(headers);
@@ -79,7 +84,18 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  // Fold the caller's own cancellation into the same controller that owns the
+  // timeout, so either one can abort this one underlying request.
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
 
   let response: Response;
   try {
@@ -95,6 +111,15 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     });
   } catch (cause) {
     const aborted = cause instanceof DOMException && cause.name === 'AbortError';
+    if (aborted && !timedOut) {
+      // The caller cancelled deliberately (a stale request key, an unmounted
+      // component) rather than the request failing — nothing went wrong, so
+      // this is not an error a screen should ever show. `code: 'cancelled'`
+      // lets a caller that inspects the rejection tell the two apart; `useApi`
+      // and `useList` already drop a superseded response via their own
+      // `cancelled` flag before this would even be inspected.
+      throw new ApiError(0, 'cancelled', '', '');
+    }
     throw new ApiError(
       0,
       aborted ? 'timeout' : 'network_error',

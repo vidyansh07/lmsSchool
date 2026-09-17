@@ -36,8 +36,11 @@ export async function ensureTeachingProfile(userId: string): Promise<TrainerProf
   });
 }
 
-export async function listUsers(query: ListQuery = {}): Promise<Paginated<AdminUser>> {
-  return apiFetch<Paginated<AdminUser>>(`/api/v1/users/${queryString(query)}`);
+export async function listUsers(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<AdminUser>> {
+  return apiFetch<Paginated<AdminUser>>(`/api/v1/users/${queryString(query)}`, { signal });
 }
 
 export async function getUser(id: string): Promise<AdminUser> {
@@ -99,8 +102,11 @@ export async function setUserActive(
 
 // --- Students --------------------------------------------------------------
 
-export async function listStudents(query: ListQuery = {}): Promise<Paginated<StudentListRow>> {
-  return apiFetch<Paginated<StudentListRow>>(`/api/v1/students/${queryString(query)}`);
+export async function listStudents(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<StudentListRow>> {
+  return apiFetch<Paginated<StudentListRow>>(`/api/v1/students/${queryString(query)}`, { signal });
 }
 
 export async function getStudent(id: string): Promise<StudentProfile> {
@@ -205,8 +211,11 @@ export async function setFeeStatus(
 
 // --- Trainers --------------------------------------------------------------
 
-export async function listTrainers(query: ListQuery = {}): Promise<Paginated<TrainerListRow>> {
-  return apiFetch<Paginated<TrainerListRow>>(`/api/v1/trainers/${queryString(query)}`);
+export async function listTrainers(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<TrainerListRow>> {
+  return apiFetch<Paginated<TrainerListRow>>(`/api/v1/trainers/${queryString(query)}`, { signal });
 }
 
 export async function getTrainer(id: string): Promise<TrainerProfile> {

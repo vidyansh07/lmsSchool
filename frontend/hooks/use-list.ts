@@ -26,7 +26,7 @@ export interface ListState<T> {
  * landing on an empty page 7 of a 2-page result.
  */
 export function useList<T>(
-  fetcher: (query: ListQuery) => Promise<Paginated<T>>,
+  fetcher: (query: ListQuery, signal?: AbortSignal) => Promise<Paginated<T>>,
   initialQuery: ListQuery = {},
 ): ListState<T> {
   const [query, setQueryState] = useState<ListQuery>({ page: 1, page_size: 20, ...initialQuery });
@@ -50,26 +50,31 @@ export function useList<T>(
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     const requestQuery = JSON.parse(key.split('#')[0] ?? '{}') as ListQuery;
 
-    fetcher(requestQuery)
+    fetcher(requestQuery, controller.signal)
       .then((result) => {
         if (!cancelled) setState({ data: result, error: null, isLoading: false, key });
       })
       .catch((cause: unknown) => {
-        if (!cancelled) {
-          setState({
-            data: null,
-            error: cause instanceof ApiError ? cause : null,
-            isLoading: false,
-            key,
-          });
-        }
+        if (cancelled) return;
+        // A deliberate cancellation (query changed, unmount) is not a
+        // failure to show — see the matching check in `useApi`.
+        if (cause instanceof ApiError && cause.code === 'cancelled') return;
+        setState({
+          data: null,
+          error: cause instanceof ApiError ? cause : null,
+          isLoading: false,
+          key,
+        });
       });
 
-    // Stops a slow earlier request from overwriting a newer result.
+    // Stops a slow earlier request from overwriting a newer result, and now
+    // also cancels that request's underlying network call.
     return () => {
       cancelled = true;
+      controller.abort();
     };
     // `fetcher` is a stable module-level function at every call site.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -70,6 +70,52 @@ describe('apiFetch', () => {
     expect(headers.get('X-CSRFToken')).toBeNull();
   });
 
+  it('classifies a caller-cancelled request separately from a timeout or network failure', async () => {
+    const controller = new AbortController();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('Aborted', 'AbortError'));
+          });
+        });
+      }),
+    );
+
+    const pending = apiFetch('/api/v1/things/', { signal: controller.signal }).catch(
+      (cause: unknown) => cause,
+    );
+    controller.abort();
+
+    const error = (await pending) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.code).toBe('cancelled');
+    expect(error.status).toBe(0);
+  });
+
+  it('still classifies its own 20s timeout as a timeout, not a cancellation', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('Aborted', 'AbortError'));
+          });
+        });
+      }),
+    );
+
+    const pending = apiFetch('/api/v1/things/').catch((cause: unknown) => cause);
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    const error = (await pending) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.code).toBe('timeout');
+    vi.useRealTimers();
+  });
+
   it('flags authentication failures so callers can redirect to sign-in', async () => {
     mockFetch({
       ok: false,

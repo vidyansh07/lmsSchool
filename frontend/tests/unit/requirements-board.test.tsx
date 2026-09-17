@@ -131,6 +131,7 @@ describe("RequirementsBoard", () => {
     // Arriving from a notification shows everything, not only the open ones.
     expect(listRequirements).toHaveBeenLastCalledWith(
       expect.objectContaining({ status: "" }),
+      expect.anything(),
     );
   });
 

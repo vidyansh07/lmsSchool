@@ -38,7 +38,10 @@ import type { ListQuery } from '@/lib/people';
 
 export function BatchRoster({ batchId }: { batchId: string }) {
   const router = useRouter();
-  const fetcher = useCallback((query: ListQuery) => listBatchStudents(batchId, query), [batchId]);
+  const fetcher = useCallback(
+    (query: ListQuery, signal?: AbortSignal) => listBatchStudents(batchId, query, signal),
+    [batchId],
+  );
   const list = useList<BatchStudentRow>(fetcher, { page_size: 25 });
 
   const columns: DataTableColumn<BatchStudentRow>[] = [

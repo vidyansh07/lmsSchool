@@ -53,7 +53,10 @@ describe('listStudentEnrollments', () => {
       results: [enrollment()],
     });
     const rows = await listStudentEnrollments('GRS-S-00042');
-    expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining('search=GRS-S-00042'));
+    expect(apiFetch).toHaveBeenCalledWith(
+      expect.stringContaining('search=GRS-S-00042'),
+      expect.anything(),
+    );
     expect(rows).toHaveLength(1);
   });
 

@@ -228,8 +228,11 @@ export type DSRListItem = DSR & { id: string };
  * (`Meta.ordering` on `DSR`), which is exactly what the queue wants by
  * default and is not something a client request can change.
  */
-export function listDsr(query: ListQuery = {}): Promise<Paginated<DSRListItem>> {
-  return apiFetch<Paginated<DSRListItem>>(`/api/v1/dsr/${queryString(query)}`);
+export function listDsr(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<DSRListItem>> {
+  return apiFetch<Paginated<DSRListItem>>(`/api/v1/dsr/${queryString(query)}`, { signal });
 }
 
 // --- Activities and history spun off a report (ERP Phase 15) ---------------

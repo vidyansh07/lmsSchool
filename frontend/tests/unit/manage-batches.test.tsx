@@ -115,7 +115,10 @@ describe('BatchesHub', () => {
     const user = userEvent.setup();
     await user.type(screen.getByLabelText('Search'), 'linux');
     await waitFor(() =>
-      expect(listManageBatches).toHaveBeenLastCalledWith(expect.objectContaining({ search: 'linux' })),
+      expect(listManageBatches).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: 'linux' }),
+        expect.anything(),
+      ),
     );
   });
 
@@ -126,7 +129,10 @@ describe('BatchesHub', () => {
     const user = userEvent.setup();
     await user.selectOptions(screen.getByLabelText('Status'), 'active');
     await waitFor(() =>
-      expect(listManageBatches).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'active' })),
+      expect(listManageBatches).toHaveBeenLastCalledWith(
+        expect.objectContaining({ status: 'active' }),
+        expect.anything(),
+      ),
     );
   });
 
@@ -149,13 +155,19 @@ describe('BatchesHub — arriving from the attention strip', () => {
     render(<BatchesHub />);
 
     await waitFor(() => expect(listManageBatches).toHaveBeenCalled());
-    expect(listManageBatches).toHaveBeenCalledWith(expect.objectContaining({ attention: 'behind_schedule' }));
+    expect(listManageBatches).toHaveBeenCalledWith(
+      expect.objectContaining({ attention: 'behind_schedule' }),
+      expect.anything(),
+    );
     expect(screen.getByRole('status')).toHaveTextContent(/behind schedule/i);
 
     await user.click(screen.getByRole('button', { name: /show all/i }));
 
     await waitFor(() =>
-      expect(listManageBatches).toHaveBeenLastCalledWith(expect.not.objectContaining({ attention: expect.anything() })),
+      expect(listManageBatches).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({ attention: expect.anything() }),
+        expect.anything(),
+      ),
     );
     expect(replace).toHaveBeenCalledWith('/manage/hub');
     searchParams.value = '';

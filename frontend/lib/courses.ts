@@ -18,8 +18,11 @@ import type {
 
 // --- Categories ------------------------------------------------------------
 
-export async function listCategories(query: ListQuery = {}): Promise<Paginated<Category>> {
-  return apiFetch<Paginated<Category>>(`/api/v1/categories/${queryString(query)}`);
+export async function listCategories(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<Category>> {
+  return apiFetch<Paginated<Category>>(`/api/v1/categories/${queryString(query)}`, { signal });
 }
 
 export async function createCategory(payload: {
@@ -39,12 +42,20 @@ export async function updateCategory(
 
 // --- Courses ---------------------------------------------------------------
 
-export async function listCourses(query: ListQuery = {}): Promise<Paginated<CourseListRow>> {
-  return apiFetch<Paginated<CourseListRow>>(`/api/v1/courses/${queryString(query)}`);
+export async function listCourses(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<CourseListRow>> {
+  return apiFetch<Paginated<CourseListRow>>(`/api/v1/courses/${queryString(query)}`, { signal });
 }
 
-export async function listMyCourses(query: ListQuery = {}): Promise<Paginated<CourseListRow>> {
-  return apiFetch<Paginated<CourseListRow>>(`/api/v1/courses/mine/${queryString(query)}`);
+export async function listMyCourses(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<CourseListRow>> {
+  return apiFetch<Paginated<CourseListRow>>(`/api/v1/courses/mine/${queryString(query)}`, {
+    signal,
+  });
 }
 
 /** Accepts a slug or a UUID — the API resolves either. */

@@ -239,6 +239,15 @@ class Delivery(BaseModel):
             models.Index(fields=["state", "next_attempt_at"], name="delivery_pending_idx"),
             models.Index(fields=["recipient", "-created_at"], name="delivery_recipient_idx"),
             models.Index(fields=["related_type", "related_id"], name="delivery_related_idx"),
+            # DATA_MODEL.md §9 / PERFORMANCE_PLAN.md's Indexing section: the
+            # retry sweep only ever scans queued/failed rows, so a partial
+            # index on just those beats the full composite above once the
+            # sent/delivered/cancelled history dwarfs the live queue.
+            models.Index(
+                fields=["next_attempt_at"],
+                name="delivery_retry_due_idx",
+                condition=models.Q(state__in=[DeliveryState.QUEUED, DeliveryState.FAILED]),
+            ),
         ]
 
     def __str__(self) -> str:

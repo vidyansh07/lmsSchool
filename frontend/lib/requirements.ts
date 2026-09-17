@@ -13,9 +13,11 @@ import type {
 
 export async function listRequirements(
   query: ListQuery = {},
+  signal?: AbortSignal,
 ): Promise<Paginated<TrainerRequirement>> {
   return apiFetch<Paginated<TrainerRequirement>>(
     `/api/v1/requirements/${queryString(query)}`,
+    { signal },
   );
 }
 

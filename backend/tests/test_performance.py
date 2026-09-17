@@ -17,7 +17,7 @@ for an unbounded result set.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 
 import pytest
 from django.core.cache import cache
@@ -589,3 +589,384 @@ def test_a_nullable_sort_column_still_paginates_completely(
 
     assert len(seen) == len(set(seen))
     assert len(seen) == body["count"]
+
+
+# ---------------------------------------------------------------------------
+# Phases 8-21: flat-cost tests for the lists/dashboards this ERP programme
+# added. Student 360 (`test_student_360.py::test_student_360_flat`), the
+# student timeline (`test_timeline.py`, a fixed-per-source ceiling since it
+# composes bounded sources rather than one queryset), the manager dashboard,
+# batch overview and roster (`test_manager_hubs.py`), and the student/
+# trainer/counsellor dashboards (`test_dashboards_calendar.py`, each already
+# a `django_assert_max_num_queries` ceiling) are covered elsewhere and are
+# not duplicated here.
+# ---------------------------------------------------------------------------
+
+
+def _make_activity_type(**overrides):
+    from apps.work.models import ActivityType
+
+    defaults = {
+        "slug": f"perf-type-{ActivityType.objects.count()}",
+        "name": "Perf Activity Type",
+        "category": "mentoring",
+        "allowed_creator_roles": ["admin", "superadmin", "manager", "trainer"],
+        "allowed_assignee_roles": ["trainer"],
+        "visible_to_student": True,
+        "requires_review": False,
+    }
+    defaults.update(overrides)
+    return ActivityType.objects.create(**defaults)
+
+
+def _add_activities(*, student, branch, activity_type, created_by, count: int) -> None:
+    from apps.work.models import Activity, ActivityStatus
+
+    Activity.objects.bulk_create(
+        Activity(
+            student=student,
+            branch=branch,
+            activity_type=activity_type,
+            title=f"Perf activity {index}",
+            status=ActivityStatus.COMPLETED,
+            created_by=created_by,
+        )
+        for index in range(count)
+    )
+
+
+@pytest.mark.django_db
+def test_the_activity_list_does_not_query_per_activity(
+    api_client_no_csrf, admin_user, student_profile
+):
+    activity_type = _make_activity_type()
+    api_client_no_csrf.force_login(admin_user)
+
+    def measure() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            response = api_client_no_csrf.get("/api/v1/activities/")
+        assert response.status_code == 200
+        return len(captured.captured_queries)
+
+    _add_activities(
+        student=student_profile,
+        branch=student_profile.branch,
+        activity_type=activity_type,
+        created_by=admin_user,
+        count=SMALL,
+    )
+    small = measure()
+    _add_activities(
+        student=student_profile,
+        branch=student_profile.branch,
+        activity_type=activity_type,
+        created_by=admin_user,
+        count=LARGE,
+    )
+    assert measure() == small
+
+
+@pytest.mark.django_db
+def test_the_student_activity_list_does_not_query_per_activity(
+    api_client_no_csrf, admin_user, student_profile
+):
+    activity_type = _make_activity_type()
+    api_client_no_csrf.force_login(admin_user)
+    url = f"/api/v1/students/{student_profile.pk}/activities/"
+
+    def measure() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            response = api_client_no_csrf.get(url)
+        assert response.status_code == 200
+        return len(captured.captured_queries)
+
+    _add_activities(
+        student=student_profile,
+        branch=student_profile.branch,
+        activity_type=activity_type,
+        created_by=admin_user,
+        count=SMALL,
+    )
+    small = measure()
+    _add_activities(
+        student=student_profile,
+        branch=student_profile.branch,
+        activity_type=activity_type,
+        created_by=admin_user,
+        count=LARGE,
+    )
+    assert measure() == small
+
+
+@pytest.mark.django_db
+def test_search_flat(api_client_no_csrf, admin_user, batch):
+    """§ Search: `icontains` per source, each capped at `LIMIT 5` — the
+    query count must not grow with how many rows match, only with how many
+    source types are asked for."""
+
+    def measure() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            response = api_client_no_csrf.get("/api/v1/search/?q=PerfMatch")
+        assert response.status_code == 200
+        return len(captured.captured_queries)
+
+    api_client_no_csrf.force_login(admin_user)
+    _add_students(batch, SMALL)
+    for enrollment_row in Enrollment.objects.filter(batch=batch)[:SMALL]:
+        enrollment_row.student.user.first_name = "PerfMatch"
+        enrollment_row.student.user.save(update_fields=["first_name"])
+    measure()  # warm the caller's scope cache
+    small = measure()
+
+    _add_students(batch, LARGE, start=300)
+    for enrollment_row in Enrollment.objects.filter(batch=batch)[: SMALL + LARGE]:
+        enrollment_row.student.user.first_name = "PerfMatch"
+        enrollment_row.student.user.save(update_fields=["first_name"])
+    assert measure() == small
+
+
+@pytest.mark.django_db
+def test_the_automation_rule_list_does_not_query_per_rule(api_client_no_csrf, admin_user):
+    from apps.automation import services as automation_services
+
+    def _rule(index: int):
+        return automation_services.create_rule(
+            actor=admin_user,
+            name=f"Perf rule {index}",
+            trigger="ACTIVITY_COMPLETED",
+            conditions=[],
+            actions=[],
+            status="active",
+            branch=None,
+        )
+
+    api_client_no_csrf.force_login(admin_user)
+
+    def measure() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            response = api_client_no_csrf.get("/api/v1/automation-rules/")
+        assert response.status_code == 200
+        return len(captured.captured_queries)
+
+    for index in range(SMALL):
+        _rule(index)
+    measure()  # warm the caller's scope cache (ADR-02), the same reasoning
+    # `test_the_batch_report_does_not_query_per_batch` gives for its own
+    # warm-up call.
+    small = measure()
+    for index in range(SMALL, SMALL + LARGE):
+        _rule(index)
+    assert measure() == small
+
+
+@pytest.mark.django_db
+def test_the_automation_run_list_does_not_query_per_run(api_client_no_csrf, admin_user):
+    from apps.automation import services as automation_services
+    from apps.automation.models import AutomationRun, AutomationRunStatus
+
+    rule = automation_services.create_rule(
+        actor=admin_user,
+        name="Perf rule with runs",
+        trigger="ACTIVITY_COMPLETED",
+        conditions=[],
+        actions=[],
+        status="active",
+        branch=None,
+    )
+    api_client_no_csrf.force_login(admin_user)
+    url = f"/api/v1/automation-rules/{rule.pk}/runs/"
+
+    def _add_runs(count: int, *, start: int) -> None:
+        AutomationRun.objects.bulk_create(
+            AutomationRun(
+                rule=rule,
+                trigger=rule.trigger,
+                occurrence_key=f"perf-run-{start + index}",
+                status=AutomationRunStatus.RAN,
+            )
+            for index in range(count)
+        )
+
+    def measure() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            response = api_client_no_csrf.get(url)
+        assert response.status_code == 200
+        return len(captured.captured_queries)
+
+    _add_runs(SMALL, start=0)
+    measure()  # warm the caller's scope cache
+    small = measure()
+    _add_runs(LARGE, start=100)
+    assert measure() == small
+
+
+@pytest.mark.django_db
+def test_the_dsr_list_does_not_query_per_report(
+    api_client_no_csrf, admin_user, manager_user, batch
+):
+    from apps.dsr.services import start_dsr
+    from apps.sessions.services import create_session
+
+    def _add_dsrs(count: int, *, start: int) -> None:
+        # `batch` only spans from 7 days ago, so distinct sessions are spread
+        # across a same-day rotation of time slots (never overlapping)
+        # rather than distinct days once the count outgrows the batch's date
+        # range.
+        for offset in range(count):
+            index = start + offset
+            session_date = date.today() - timedelta(days=index % 6)
+            hour = 6 + (index // 6)
+            session = create_session(
+                batch=batch,
+                actor=admin_user,
+                session_date=session_date,
+                start_time=time(hour, 0),
+                end_time=time(hour + 1, 0),
+            )
+            start_dsr(session=session, actor=admin_user)
+
+    api_client_no_csrf.force_login(manager_user)
+
+    def measure() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            response = api_client_no_csrf.get("/api/v1/dsr/")
+        assert response.status_code == 200
+        return len(captured.captured_queries)
+
+    _add_dsrs(SMALL, start=0)
+    # The first request after a cache clear also resolves the caller's
+    # configured scope for `dsr.view_any` (ADR-02) and caches it for ten
+    # minutes; warm it once so both measurements start from the same cache
+    # state, the same reasoning `test_the_batch_report_does_not_query_per_batch`
+    # gives for its own warm-up call.
+    measure()
+    small = measure()
+    _add_dsrs(LARGE, start=SMALL)
+    assert measure() == small
+
+
+def _delivery(**overrides):
+    from apps.communication.models import Delivery, DeliveryState, MessageChannel
+
+    defaults = {
+        "channel": MessageChannel.EMAIL,
+        "address": "perf@example.test",
+        "state": DeliveryState.QUEUED,
+    }
+    defaults.update(overrides)
+    return Delivery.objects.create(**defaults)
+
+
+@pytest.mark.django_db
+def test_the_delivery_list_does_not_query_per_delivery(api_client_no_csrf, admin_user):
+    api_client_no_csrf.force_login(admin_user)
+
+    def measure() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            response = api_client_no_csrf.get("/api/v1/deliveries/")
+        assert response.status_code == 200
+        return len(captured.captured_queries)
+
+    for _ in range(SMALL):
+        _delivery()
+    measure()  # warm the caller's scope cache
+    small = measure()
+    for _ in range(LARGE):
+        _delivery()
+    assert measure() == small
+
+
+# ---------------------------------------------------------------------------
+# Phase 20: the three new report sources over Phases 9/19/14's own domains,
+# the same pattern `test_the_student_progress_report_does_not_query_per_student`
+# already uses.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_the_work_activities_report_does_not_query_per_activity(
+    api_client_no_csrf, admin_user, student_profile
+):
+    activity_type = _make_activity_type(slug="perf-report-type")
+
+    def measure() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            response = api_client_no_csrf.get("/api/v1/reports/work_activities/")
+        assert response.status_code == 200
+        return len(captured.captured_queries)
+
+    api_client_no_csrf.force_login(admin_user)
+    _add_activities(
+        student=student_profile,
+        branch=student_profile.branch,
+        activity_type=activity_type,
+        created_by=admin_user,
+        count=SMALL,
+    )
+    small = measure()
+    _add_activities(
+        student=student_profile,
+        branch=student_profile.branch,
+        activity_type=activity_type,
+        created_by=admin_user,
+        count=LARGE,
+    )
+    assert measure() == small
+
+
+@pytest.mark.django_db
+def test_the_deliveries_report_does_not_query_per_delivery(api_client_no_csrf, admin_user):
+    def measure() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            response = api_client_no_csrf.get("/api/v1/reports/deliveries/")
+        assert response.status_code == 200
+        return len(captured.captured_queries)
+
+    api_client_no_csrf.force_login(admin_user)
+    for _ in range(SMALL):
+        _delivery()
+    measure()  # warm the caller's scope cache
+    small = measure()
+    for _ in range(LARGE):
+        _delivery()
+    assert measure() == small
+
+
+@pytest.mark.django_db
+def test_the_automation_runs_report_does_not_query_per_run(api_client_no_csrf, admin_user):
+    from apps.automation import services as automation_services
+    from apps.automation.models import AutomationRun, AutomationRunStatus
+
+    rule = automation_services.create_rule(
+        actor=admin_user,
+        name="Perf report rule",
+        trigger="ACTIVITY_COMPLETED",
+        conditions=[],
+        actions=[],
+        status="active",
+        branch=None,
+    )
+
+    def _add_runs(count: int, *, start: int) -> None:
+        AutomationRun.objects.bulk_create(
+            AutomationRun(
+                rule=rule,
+                trigger=rule.trigger,
+                occurrence_key=f"perf-report-run-{start + index}",
+                status=AutomationRunStatus.RAN,
+            )
+            for index in range(count)
+        )
+
+    def measure() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            response = api_client_no_csrf.get("/api/v1/reports/automation_runs/")
+        assert response.status_code == 200
+        return len(captured.captured_queries)
+
+    api_client_no_csrf.force_login(admin_user)
+    _add_runs(SMALL, start=0)
+    measure()  # warm the caller's scope cache
+    small = measure()
+    _add_runs(LARGE, start=100)
+    assert measure() == small

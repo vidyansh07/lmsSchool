@@ -42,7 +42,10 @@ import { listDeletedRecords, restoreRecord, type DeletedRecord } from '@/lib/rec
 
 export function DeletedRecordsTable({ label, onChanged }: { label: string; onChanged: () => void }) {
   const { can } = useAuth();
-  const fetcher = useCallback((query: ListQuery) => listDeletedRecords(label, query), [label]);
+  const fetcher = useCallback(
+    (query: ListQuery, signal?: AbortSignal) => listDeletedRecords(label, query, signal),
+    [label],
+  );
   const list = useList<DeletedRecord>(fetcher, { page_size: 20 });
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});

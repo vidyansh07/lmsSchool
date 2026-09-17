@@ -109,8 +109,11 @@ export interface ManageBatchRow extends BatchListRow {
   dsr_state?: string | null;
 }
 
-export function listManageBatches(query: ListQuery = {}): Promise<Paginated<ManageBatchRow>> {
-  return listBatches(query);
+export function listManageBatches(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<ManageBatchRow>> {
+  return listBatches(query, signal);
 }
 
 // --- Batch overview --------------------------------------------------------
@@ -176,8 +179,12 @@ export interface BatchStudentRow {
 export function listBatchStudents(
   batchId: string,
   query: ListQuery = {},
+  signal?: AbortSignal,
 ): Promise<Paginated<BatchStudentRow>> {
-  return apiFetch<Paginated<BatchStudentRow>>(`/api/v1/batches/${batchId}/students/${queryString(query)}`);
+  return apiFetch<Paginated<BatchStudentRow>>(
+    `/api/v1/batches/${batchId}/students/${queryString(query)}`,
+    { signal },
+  );
 }
 
 // --- Trainers hub ----------------------------------------------------------
@@ -189,8 +196,11 @@ export interface ManageTrainerRow extends TrainerListRow {
   overdue_dsr?: number | null;
 }
 
-export function listManageTrainers(query: ListQuery = {}): Promise<Paginated<ManageTrainerRow>> {
-  return listTrainers(query);
+export function listManageTrainers(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<ManageTrainerRow>> {
+  return listTrainers(query, signal);
 }
 
 // --- Trainer overview --------------------------------------------------
@@ -267,8 +277,14 @@ export interface ManageDsrRow {
   submitted_at: string | null;
 }
 
-export function listBatchDsr(batchId: string, query: ListQuery = {}): Promise<Paginated<ManageDsrRow>> {
-  return apiFetch<Paginated<ManageDsrRow>>(`/api/v1/batches/${batchId}/dsr/${queryString(query)}`);
+export function listBatchDsr(
+  batchId: string,
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<ManageDsrRow>> {
+  return apiFetch<Paginated<ManageDsrRow>>(`/api/v1/batches/${batchId}/dsr/${queryString(query)}`, {
+    signal,
+  });
 }
 
 /**

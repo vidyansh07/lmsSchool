@@ -21,8 +21,11 @@ import type {
 
 // --- Batches ---------------------------------------------------------------
 
-export async function listBatches(query: ListQuery = {}): Promise<Paginated<BatchListRow>> {
-  return apiFetch<Paginated<BatchListRow>>(`/api/v1/batches/${queryString(query)}`);
+export async function listBatches(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<BatchListRow>> {
+  return apiFetch<Paginated<BatchListRow>>(`/api/v1/batches/${queryString(query)}`, { signal });
 }
 
 export async function getBatch(id: string): Promise<BatchDetail> {
@@ -111,8 +114,11 @@ export async function deleteSchedule(scheduleId: string): Promise<void> {
 
 // --- Enrolment -------------------------------------------------------------
 
-export async function listEnrollments(query: ListQuery = {}): Promise<Paginated<Enrollment>> {
-  return apiFetch<Paginated<Enrollment>>(`/api/v1/enrollments/${queryString(query)}`);
+export async function listEnrollments(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<Enrollment>> {
+  return apiFetch<Paginated<Enrollment>>(`/api/v1/enrollments/${queryString(query)}`, { signal });
 }
 
 export async function listMyEnrollments(): Promise<Enrollment[]> {
