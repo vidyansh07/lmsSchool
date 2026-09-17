@@ -20,7 +20,7 @@ September and was not re-measured in this pass.
 | | State |
 | --- | --- |
 | Build | Both production images build and run |
-| Tests | 3,448 backend (3,444 passed, 4 skipped, 0 failed) · 1,153 frontend unit · 99 end-to-end |
+| Tests | 3,455 backend (3,451 passed, 4 skipped, 0 failed) · 1,153 frontend unit · 99 end-to-end |
 | Security | Every gate clean: bandit, pip-audit, npm audit, gitleaks, `check --deploy` — re-run 18 September |
 | Performance | Profiled at 400 students; every report flat in query count |
 | Migrations | 156 across 25 apps, none destructive |
@@ -46,7 +46,7 @@ PostgreSQL 17, and object storage over the S3 protocol.
 
 | Suite | Count | Where it is green |
 | --- | --- | --- |
-| Backend | 3,448 (3,444 passed, 4 skipped) | `pytest` with no path filter (`tests/` plus every `apps/*/tests/` directory, matching `pyproject.toml`'s own `testpaths`) — run 18 September, 0 failed |
+| Backend | 3,455 (3,451 passed, 4 skipped) | `pytest` with no path filter (`tests/` plus every `apps/*/tests/` directory, matching `pyproject.toml`'s own `testpaths`) — run 18 September, 0 failed. (An earlier pass of this same phase reported 3,448/3,444: that number came from a narrower, four-app subset used by the fast mid-phase verify checklist, mislabelled as the full suite; `pytest --collect-only` confirms 3,455 is the genuine full collection.) |
 | Frontend unit | 1,153 | `npx vitest run`, 128 files — run 18 September, 0 failed |
 | End-to-end suite | 99 (98 in the default project, 1 gated) | Typechecks (`tsc --noEmit`) and lints clean, and every spec lists correctly under Playwright; not re-run against a live stack in this pass — see the note below |
 | Mandatory journey | 1 | Verified on staging through Phase 24 (`docs/FEATURE_STATUS.md`'s per-phase "Last verified" rows); not re-run in this pass |

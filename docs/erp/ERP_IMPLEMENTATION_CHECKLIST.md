@@ -61,7 +61,7 @@ adds nothing in it.
 | 22 Performance hardening | n/a | VERIFIED | VERIFIED | VERIFIED | VERIFIED | n/a | n/a | n/a | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED |
 | 23 Backup and recovery | n/a | n/a | n/a | TESTED | n/a | n/a | n/a | TESTED | n/a | TESTED | n/a | TESTED | n/a | TESTED | TESTED | TESTED |
 | 24 Security and regression | n/a | n/a | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED |
-| 25 Production readiness | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED |
+| 25 Production readiness | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED |
 
 ## Deliberately not started
 
