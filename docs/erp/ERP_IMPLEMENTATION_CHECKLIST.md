@@ -60,7 +60,7 @@ adds nothing in it.
 | 21 Caching | n/a | VERIFIED | VERIFIED | VERIFIED | n/a | n/a | VERIFIED | VERIFIED | VERIFIED | n/a | n/a | VERIFIED | n/a | n/a | VERIFIED | VERIFIED |
 | 22 Performance hardening | n/a | VERIFIED | VERIFIED | VERIFIED | VERIFIED | n/a | n/a | n/a | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED |
 | 23 Backup and recovery | n/a | n/a | n/a | TESTED | n/a | n/a | n/a | TESTED | n/a | TESTED | n/a | TESTED | n/a | TESTED | TESTED | TESTED |
-| 24 Security and regression | n/a | n/a | PLANNED | PLANNED | n/a | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | n/a | PLANNED | PLANNED |
+| 24 Security and regression | n/a | n/a | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | VERIFIED | n/a | VERIFIED | VERIFIED |
 | 25 Production readiness | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED | PLANNED |
 
 ## Deliberately not started
