@@ -114,6 +114,52 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R7 — Forms (2026-09-19, commit `bf4481b`)
+
+Three named targets from R1's own audit, each re-verified against current
+code before touching anything (a couple of R1's premises were found stale
+by later phases, so this was not assumed):
+
+- **`create-student-dialog.tsx`** — validation was on-submit only. Added
+  on-blur validation scoped to exactly the two fields the form already
+  marks `required` (Email, First name) — no new rule invented, message
+  shown only after that field's own blur, cleared on fix. `student-background-fields.tsx`
+  left untouched: none of its fields carry `required` today, so there was
+  no existing rule to attach a blur check to without inventing one.
+- **`rule-builder.tsx`** — had zero field-level error state, unlike every
+  sibling form. Added an `errors` record populated via the same
+  `fieldErrors(cause)` helper every other dialog already uses; wired to
+  Name/Trigger (both `required`, matching `NewRuleDialog`'s identical
+  fields) and Description. Read the diff myself: `failure` (the old
+  generic banner) still legitimately fires for the test/activate/pause
+  actions, which are untouched — only `save()`'s error path moved to
+  field-level, so nothing went dead.
+- **`admin/activity-types/page.tsx`** — the one form with genuinely zero
+  progressive disclosure (~15 fields on one screen). The `grid-cols-2`→
+  `sm:grid-cols-2` fix R1 flagged had already been done by an earlier,
+  uncommitted partial run found sitting in the tree at phase start (on-topic,
+  correctly scoped, not treated as contamination). This phase completed the
+  actual headline finding: three native `<details>/<summary>` sections
+  (Roles/visibility, Scheduling, Scoring), open by default when editing or
+  when a field inside has a server error, closed for a new record.
+
+Broader sweep found nothing else meeting the "concretely show a real gap"
+bar — per-row grading tools using a single action-result banner for an
+inline `run()` action were correctly left alone as an already-appropriate,
+different pattern, not a gap.
+
+Independently re-verified: read the `rule-builder.tsx` diff in full myself
+and traced every `setFailure` call site to confirm the old banner is still
+reachable from the untouched actions — not dead code. Confirmed no
+route/API/validation-*rule* changes anywhere in the diff, only timing/
+display/grouping. `git status --short` clean of anything beyond this
+phase's own files. Ran the full checklist myself: `tsc --noEmit` clean,
+`vitest --maxWorkers=2` — 138 files / 1247 tests, matching the commit's own
+claim exactly.
+
+Live on staging: deployed clean, `/`, `/admin/activity-types`, and
+`/admin/automation` all return `200`. claude-in-chrome still not connected.
+
 ### R6 — Tables (2026-09-18, commit `ab712d2`)
 
 Migrated every remaining hand-rolled `<TableWrapper>`/`<Table>` large list
