@@ -25,6 +25,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import {
+  AlertTriangle,
   BookOpen,
   CalendarClock,
   ClipboardList,
@@ -46,14 +47,15 @@ import {
   tallyAssignments,
   tallyProjects,
 } from '@/components/student/pending-work-panel';
-import { StandingPanel, collectRiskItems } from '@/components/student/standing-panel';
+import { averageMetric, StandingPanel, collectRiskItems } from '@/components/student/standing-panel';
 import { UpcomingTimeline } from '@/components/student/upcoming-timeline';
 import { WarningsStrip } from '@/components/warnings-strip';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { DonutChart, type DonutDatum } from '@/components/ui/charts';
+import { DonutChart, RadialProgress, type DonutDatum } from '@/components/ui/charts';
+import { StatCard } from '@/components/ui/motion';
 import { ApiError } from '@/lib/api';
 import { listMyAssignments } from '@/lib/assignments';
 import { getStudentDashboard, getTrainerDashboard } from '@/lib/batches';
@@ -67,6 +69,7 @@ import {
   formatEventTime,
 } from '@/lib/batch-labels';
 import { listNotifications } from '@/lib/communication';
+import { greeting } from '@/lib/greeting';
 import {
   getMyPerformance,
   listMyFeedback,
@@ -206,6 +209,23 @@ function useDashboardSection<T>(loader: () => Promise<T>, empty: T): SectionStat
   return { data: state.data, error: state.error, isLoading: state.isLoading, reload };
 }
 
+/**
+ * The backend's own configured attendance-risk threshold for one enrolment
+ * (`apps/performance/risk.py::_attendance_risk`), which always stamps
+ * `numbers.threshold` on the `attendance` risk outcome regardless of whether
+ * it triggered — a real, backend-owned policy value, not an app-invented
+ * target. `null` when the entry carries no attendance outcome at all (should
+ * not happen given the backend always evaluates it, but the type is
+ * `unknown`, so this stays defensive rather than trusting it blindly).
+ */
+function attendanceThreshold(entry: StudentPerformanceEntry): number | null {
+  const outcome = entry.risk.outcomes.find((item) => item.key === 'attendance');
+  if (!outcome) return null;
+  const raw = outcome.numbers?.threshold;
+  const parsed = typeof raw === 'string' || typeof raw === 'number' ? Number(raw) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function pluralize(count: number, singular: string, plural: string): string {
   return count === 1 ? singular : plural;
 }
@@ -261,6 +281,18 @@ export function StudentView({ data }: { data: StudentDashboard }) {
   const riskCount = collectRiskItems(performance.data).length;
   const showStatusLine =
     pendingLoaded && !pendingFailed && !performance.isLoading && !performance.error;
+
+  // Average attendance vs. the backend's own configured risk threshold,
+  // across every enrolment with something measured — the same `averageMetric`
+  // helper `StandingPanel` already uses, re-run here rather than duplicated,
+  // since this page composes its own `RadialProgress` directly rather than
+  // reaching into that panel's internals.
+  const avgAttendance = averageMetric(performance.data, (entry) => entry.attendance.percent);
+  const avgAttendanceThreshold = averageMetric(performance.data, attendanceThreshold);
+  const attendanceGaugeReady =
+    !performance.isLoading && !performance.error && avgAttendance !== null && avgAttendanceThreshold !== null;
+
+  const batchStatusMix = summarizeBatchStatuses(data.batches);
 
   return (
     <div className="stagger space-y-6">
@@ -350,6 +382,45 @@ export function StudentView({ data }: { data: StudentDashboard }) {
           error={performance.error}
           onRetry={performance.reload}
         />
+      </section>
+
+      <section className="animate-rise-in grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Attendance vs. the risk threshold</CardTitle>
+            <CardDescription>
+              Your average attendance against the policy line that decides a risk flag.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-center py-2">
+            {attendanceGaugeReady ? (
+              <RadialProgress
+                value={avgAttendance as number}
+                target={avgAttendanceThreshold as number}
+                max={100}
+                valueFormatter={(v) => `${Math.round(v)}%`}
+                label={`of ${Math.round(avgAttendanceThreshold as number)}% required`}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">Nothing measured yet.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>My batches by status</CardTitle>
+            <CardDescription>Every batch you have ever enrolled on, past and present.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DonutChart
+              data={batchStatusMix}
+              centerLabel="Batches"
+              emptyMessage="No batch history to chart yet."
+              ariaLabel="Your batches by status"
+            />
+          </CardContent>
+        </Card>
       </section>
 
       <section className="animate-rise-in space-y-3">
@@ -487,43 +558,36 @@ function TrainerView({ data }: { data: TrainerDashboard }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="gap-1">
-            <CardDescription>Assigned batches</CardDescription>
-            <CardTitle className="text-2xl">{data.batches.length}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="gap-1">
-            <CardDescription>Students</CardDescription>
-            <CardTitle className="text-2xl">{data.student_count}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="gap-1">
-            <CardDescription>Courses taught</CardDescription>
-            <CardTitle className="text-2xl">{data.courses.length}</CardTitle>
-          </CardHeader>
-        </Card>
+        <StatCard
+          label="Assigned batches"
+          value={data.batches.length}
+          icon={CalendarClock}
+          accent="blue"
+        />
+        <StatCard label="Students" value={data.student_count} icon={Users} accent="violet" />
+        <StatCard
+          label="Courses taught"
+          value={data.courses.length}
+          icon={BookOpen}
+          accent="green"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Link href="/teaching/work" className="block">
-          <Card className="transition-shadow hover:shadow-[var(--shadow-card-hover)]">
-            <CardHeader className="gap-1">
-              <CardDescription>Pending work</CardDescription>
-              <CardTitle className="text-2xl">{data.work.pending}</CardTitle>
-            </CardHeader>
-          </Card>
-        </Link>
-        <Link href="/teaching/work?overdue=1" className="block">
-          <Card className="transition-shadow hover:shadow-[var(--shadow-card-hover)]">
-            <CardHeader className="gap-1">
-              <CardDescription>Overdue work</CardDescription>
-              <CardTitle className="text-2xl">{data.work.overdue}</CardTitle>
-            </CardHeader>
-          </Card>
-        </Link>
+        <StatCard
+          label="Pending work"
+          value={data.work.pending}
+          icon={ClipboardList}
+          accent="amber"
+          href="/teaching/work"
+        />
+        <StatCard
+          label="Overdue work"
+          value={data.work.overdue}
+          icon={AlertTriangle}
+          accent="rose"
+          href="/teaching/work?overdue=1"
+        />
       </div>
 
       <Card>
@@ -681,6 +745,9 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       <div className="animate-fade-in space-y-1">
+        <p className="text-sm font-medium text-muted-foreground">
+          {greeting(user?.full_name || user?.email)}
+        </p>
         <h1 className="text-2xl font-semibold tracking-tight">
           Welcome back, {user?.first_name || user?.email}
         </h1>

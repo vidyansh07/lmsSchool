@@ -349,6 +349,21 @@ describe('Dashboard — role routing', () => {
   });
 
   it("shows the trainer's pending/overdue work tiles, each linking to their own work list", async () => {
+    // Reduced motion so `NumberTicker` renders the final value immediately —
+    // this test asserts the visible text, not the animated intermediate one.
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: true,
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as unknown as MediaQueryList,
+    );
     useAuthMock.value = { user: { first_name: 'Tina', role: 'trainer' } };
     const trainerData: TrainerDashboard = {
       is_trainer: true,
@@ -426,6 +441,174 @@ describe('summarizeBatchStatuses', () => {
 
   it('returns an empty list for no batches, never a slice of zero', () => {
     expect(summarizeBatchStatuses([])).toEqual([]);
+  });
+});
+
+describe('Dashboard — greeting header', () => {
+  it('shows a time-of-day greeting above the welcome-back heading for both roles', async () => {
+    useAuthMock.value = {
+      user: { first_name: 'Asha', full_name: 'Asha Verma', email: 'asha@example.com', role: 'student' },
+    };
+    emptyBuckets();
+    getStudentDashboard.mockResolvedValue(emptyStudentDashboard());
+
+    render(<Dashboard />);
+    expect(await screen.findByText(/good (morning|afternoon|evening), asha verma/i)).toBeInTheDocument();
+    // The original "Welcome back" heading is untouched, not replaced.
+    expect(screen.getByText(/welcome back, asha/i)).toBeInTheDocument();
+  });
+});
+
+describe('StudentView — attendance gauge and batch-status chart', () => {
+  it('renders a RadialProgress for average attendance against the real backend risk threshold', async () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: true,
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as unknown as MediaQueryList,
+    );
+
+    listMyAssignments.mockResolvedValue(paginated<StudentAssignment>([]));
+    listMyProjects.mockResolvedValue(paginated<StudentProject>([]));
+    getMyPerformance.mockResolvedValue([
+      {
+        enrollment_id: 'enrol-1',
+        course_title: 'Linux Essentials',
+        batch_code: 'GRS-B-001',
+        attendance: { percent: 62, total_sessions: 4, attended: 2, has_records: true },
+        assessment: { average_percent: null, sitting_percent: null, recorded: 0, total: 0 },
+        assignments: { percent: null, total: 0, submitted: 0, graded: 0, passed: 0, missed: 0 },
+        projects: { percent: null, required: 0, finished: 0 },
+        progress: { percent: null, expected_percent: null, variance: null },
+        overall_score: null,
+        risk: {
+          at_risk: true,
+          triggered: ['attendance'],
+          triggered_count: 1,
+          outcomes: [
+            {
+              key: 'attendance',
+              label: 'Attendance',
+              triggered: true,
+              severity: 'warning',
+              detail: '62% attended, below the 75% risk threshold.',
+              numbers: { percent: 62, threshold: '75' },
+            },
+          ],
+        },
+        counts: { components_measured: 1, risk_flags: 1 },
+      } satisfies StudentPerformanceEntry,
+    ]);
+    listMyFeedback.mockResolvedValue([]);
+    listMyCertificates.mockResolvedValue([]);
+    listNotifications.mockResolvedValue(paginated<AppNotification>([]));
+
+    render(<StudentView data={emptyStudentDashboard()} />);
+    await waitForBucketsToSettle();
+
+    const heading = await screen.findByText('Attendance vs. the risk threshold');
+    const card = heading.closest('div')?.parentElement as HTMLElement;
+    const scope = within(card);
+    expect(scope.getByText('62%')).toBeInTheDocument();
+    expect(scope.getByText('of 75% required')).toBeInTheDocument();
+  });
+
+  it('shows the gauge empty state when nothing has been measured yet', async () => {
+    emptyBuckets();
+    render(<StudentView data={emptyStudentDashboard()} />);
+    await waitForBucketsToSettle();
+
+    const heading = await screen.findByText('Attendance vs. the risk threshold');
+    const card = heading.closest('div')?.parentElement as HTMLElement;
+    expect(within(card).getByText('Nothing measured yet.')).toBeInTheDocument();
+  });
+
+  it('renders a real batch-status donut for the student\'s own batches, including non-access-granting history', async () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: true,
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as unknown as MediaQueryList,
+    );
+    emptyBuckets();
+
+    const data: StudentDashboard = {
+      ...emptyStudentDashboard(),
+      batches: [
+        {
+          id: 'batch-1',
+          code: 'GRS-B-001',
+          name: 'Morning batch',
+          course_title: 'Linux Essentials',
+          status: 'active',
+          enrollment_status: 'active',
+          start_date: '2026-01-01',
+          end_date: '2026-06-01',
+        },
+        {
+          id: 'batch-2',
+          code: 'GRS-B-002',
+          name: 'Evening batch',
+          course_title: 'Networking Basics',
+          status: 'completed',
+          enrollment_status: 'completed',
+          start_date: '2025-01-01',
+          end_date: '2025-06-01',
+        },
+      ],
+    };
+
+    const { container } = render(<StudentView data={data} />);
+    await waitForBucketsToSettle();
+    await screen.findByText('My batches by status');
+    await waitFor(() => expect(container.querySelector('.recharts-pie-sector')).toBeInTheDocument());
+
+    const table = within(screen.getByRole('table', { hidden: true }));
+    expect(table.getByText('Active')).toBeInTheDocument();
+    expect(table.getByText('Completed')).toBeInTheDocument();
+  });
+});
+
+describe('Dashboard — trainer KPI tiles get distinct accents', () => {
+  it('renders all 5 trainer tiles as accented StatCards, not bare unaccented cards', async () => {
+    useAuthMock.value = { user: { first_name: 'Tina', role: 'trainer' } };
+    const trainerData: TrainerDashboard = {
+      is_trainer: true,
+      batches: [],
+      today_classes: [],
+      upcoming_classes: [],
+      student_count: 12,
+      courses: [],
+      work: { pending: 3, overdue: 1 },
+    };
+    getTrainerDashboard.mockResolvedValue(trainerData);
+
+    const { container } = render(<Dashboard />);
+    await screen.findByText('Assigned batches');
+
+    // Each of the 6 accent trios paints its tile with a `bg-*-tint` class —
+    // a bare `Card` (the old shape) carries none. At least 5 distinct tints
+    // should now be present across the trainer tiles.
+    const tintClasses = new Set(
+      Array.from(container.querySelectorAll('[class*="-tint"]')).map(
+        (el) => (el.getAttribute('class') ?? '').match(/\bbg-\S+-tint\b/)?.[0],
+      ),
+    );
+    expect(tintClasses.size).toBeGreaterThanOrEqual(5);
   });
 });
 

@@ -353,6 +353,84 @@ describe('AdmissionsDashboardContent', () => {
   });
 });
 
+describe('AdmissionsDashboardContent — greeting header', () => {
+  it('shows a time-of-day greeting above the static "Admissions dashboard" heading', async () => {
+    useAuthMock.value = {
+      user: { full_name: 'Riya Sharma', email: 'riya@example.com', role: 'counsellor' },
+    };
+    mockEmptyPipeline();
+
+    render(<AdmissionsDashboardContent />);
+
+    expect(await screen.findByText(/good (morning|afternoon|evening), riya sharma/i)).toBeInTheDocument();
+    expect(screen.getByText('Admissions dashboard')).toBeInTheDocument();
+  });
+});
+
+describe('AdmissionsDashboardContent — recent enrolments by status', () => {
+  beforeEach(() => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: true,
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as unknown as MediaQueryList,
+    );
+  });
+
+  it('renders a real, mutually-exclusive donut of the last 100 enrolments by status', async () => {
+    listStudents.mockResolvedValue(paginated<StudentListRow>([]));
+    listBatches.mockResolvedValue(paginated<BatchListRow>([]));
+    listEnrollments.mockImplementation((query: Record<string, unknown> = {}) => {
+      if (query.status === 'pending') return Promise.resolve(paginated<Enrollment>([], 0));
+      return Promise.resolve(
+        paginated<Enrollment>([
+          enrollment({ id: 'e1', status: 'active' }),
+          enrollment({ id: 'e2', status: 'active' }),
+          enrollment({ id: 'e3', status: 'completed' }),
+        ]),
+      );
+    });
+    getCounsellorDashboard.mockResolvedValue(counsellorDashboard());
+
+    render(<AdmissionsDashboardContent />);
+    await screen.findByText('Recent enrolments by status');
+    const card = cardFor('Recent enrolments by status');
+    await waitFor(() => expect(card.querySelector('.recharts-pie-sector')).toBeInTheDocument());
+
+    const table = within(within(card).getByRole('table', { hidden: true }));
+    expect(table.getByText('Active')).toBeInTheDocument();
+    expect(table.getByText('2')).toBeInTheDocument();
+    expect(table.getByText('Completed')).toBeInTheDocument();
+    expect(table.getByText('1')).toBeInTheDocument();
+  });
+
+  it('shows the empty state rather than a broken shape when there are no recent enrolments', async () => {
+    mockEmptyPipeline();
+    render(<AdmissionsDashboardContent />);
+    await screen.findByText('Recent enrolments by status');
+    expect(await screen.findByText('No recent enrolments yet.')).toBeInTheDocument();
+  });
+
+  it('says the breakdown is unavailable, not a misleading empty chart, when the fetch fails', async () => {
+    listStudents.mockResolvedValue(paginated<StudentListRow>([]));
+    listBatches.mockResolvedValue(paginated<BatchListRow>([]));
+    listEnrollments.mockRejectedValue(new ApiError(500, 'server_error', 'Enrolments are down.', 'req-2'));
+    getCounsellorDashboard.mockResolvedValue(counsellorDashboard());
+
+    render(<AdmissionsDashboardContent />);
+    await screen.findByText('Recent enrolments by status');
+    const scope = within(cardFor('Recent enrolments by status'));
+    expect(await scope.findByText('Not available right now.')).toBeInTheDocument();
+  });
+});
+
 describe('AdmissionsDashboardContent — pipeline bottleneck chart', () => {
   beforeEach(() => {
     vi.spyOn(window, 'matchMedia').mockImplementation(

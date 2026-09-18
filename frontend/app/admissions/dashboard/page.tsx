@@ -59,12 +59,13 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+import { useAuth } from '@/components/auth-provider';
 import { BatchWatchlist } from '@/components/counsellor/batches-panel';
 import { FeesPanel } from '@/components/counsellor/fees-panel';
 import { NotYetEnrolledPanel } from '@/components/counsellor/not-yet-enrolled-panel';
 import { PendingConfirmationsPanel } from '@/components/counsellor/pending-confirmations-panel';
 import { RecentActivityPanel } from '@/components/counsellor/recent-activity-panel';
-import { BarChart, type CategoryDatum } from '@/components/ui/charts';
+import { BarChart, DonutChart, type CategoryDatum, type DonutDatum } from '@/components/ui/charts';
 import { BentoGrid, BentoTile, StatCard, type StatAccent } from '@/components/ui/motion';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { RequireAuth } from '@/components/require-auth';
@@ -73,14 +74,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api';
 import { listBatches, listEnrollments } from '@/lib/batches';
+import { ENROLLMENT_STATUS_LABEL } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
 import { getCounsellorDashboard } from '@/lib/dashboards';
 import { getFeesOverview } from '@/lib/fees';
+import { greeting } from '@/lib/greeting';
 import { listStudents } from '@/lib/people';
 import type {
   BatchListRow,
   CounsellorDashboard,
   Enrollment,
+  EnrollmentStatus,
   FeesOverview,
   StudentListRow,
 } from '@/types/api';
@@ -251,7 +255,37 @@ function pipelineBottlenecks(dashboard: CounsellorDashboard | null): CategoryDat
   ];
 }
 
+/**
+ * The 5 mutually-exclusive `EnrollmentStatus` values, in a fixed display
+ * order (never count-sorted, so the same status always lands in the same
+ * palette slice run to run) — a real composition, unlike `pipelineBottlenecks`
+ * above, whose own comment explains why those five figures overlap. Statuses
+ * with nothing in the current window are left out rather than shown as an
+ * empty slice, matching `summarizeBatchStatuses` in `app/dashboard/page.tsx`
+ * (not imported from there: this page's own two-file scope keeps it a small
+ * local copy of the same pattern, not a shared import).
+ */
+const ENROLLMENT_STATUS_ORDER: EnrollmentStatus[] = [
+  'active',
+  'pending',
+  'suspended',
+  'completed',
+  'cancelled',
+];
+
+export function summarizeEnrollmentStatuses(enrollments: Enrollment[]): DonutDatum[] {
+  const counts = new Map<EnrollmentStatus, number>();
+  for (const enrollment of enrollments) {
+    counts.set(enrollment.status, (counts.get(enrollment.status) ?? 0) + 1);
+  }
+  return ENROLLMENT_STATUS_ORDER.filter((status) => (counts.get(status) ?? 0) > 0).map((status) => ({
+    label: ENROLLMENT_STATUS_LABEL[status],
+    value: counts.get(status) as number,
+  }));
+}
+
 export function AdmissionsDashboardContent() {
+  const { user } = useAuth();
   // The single-call summary (ERP Phase 17): wherever its figures cover what
   // the older N-call pattern below computed by hand, this wins — see the KPI
   // row. It does not carry the actual rows any panel needs to list (a
@@ -344,6 +378,9 @@ export function AdmissionsDashboardContent() {
   return (
     <div className="space-y-4">
       <div className="space-y-1">
+        <p className="text-sm font-medium text-muted-foreground">
+          {greeting(user?.full_name || user?.email)}
+        </p>
         <h1 className="text-2xl font-semibold tracking-tight">Admissions dashboard</h1>
         <p className="text-sm text-muted-foreground">
           Today&apos;s pipeline, and what needs chasing before you start the next one.
@@ -469,6 +506,28 @@ export function AdmissionsDashboardContent() {
               height={220}
               emptyMessage="Nothing waiting on you."
               ariaLabel="Pipeline bottlenecks, by kind"
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="animate-rise-in">
+        <CardHeader>
+          <CardTitle as="h2">Recent enrolments by status</CardTitle>
+          <CardDescription>
+            The last 100 enrolments in the pipeline, by where they stand right now.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {recentEnrollments.error ? (
+            <p className="text-sm text-muted-foreground">Not available right now.</p>
+          ) : (
+            <DonutChart
+              data={summarizeEnrollmentStatuses(recentEnrollments.data)}
+              loading={recentEnrollments.isLoading}
+              centerLabel="Enrolments"
+              emptyMessage="No recent enrolments yet."
+              ariaLabel="Recent enrolments by status"
             />
           )}
         </CardContent>
