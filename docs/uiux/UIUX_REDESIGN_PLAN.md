@@ -114,7 +114,7 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
-### R9 — Responsive pass (2026-09-19, no commit — zero changes needed)
+### R9 — Responsive pass (2026-09-19, commit `c88c56d`, correcting the record below)
 
 claude-in-chrome was still unavailable, so this ran the same close-reading
 fallback R1 used, scoped to exactly the screens R1's own audit did *not*
@@ -122,39 +122,55 @@ read: the R2 chart components, the R3 collapsed sidebar
 (`app-shell.tsx`), the R4 dashboard rebuilds, the R6 `DataTable` primitive
 plus several adopters, and R7's form changes (including confirming R7's own
 `sm:grid-cols-2` fix at `activity-types/page.tsx` lines 310/386 is in
-place). Result: a genuine, honest zero — every grid in scope already starts
-at `grid-cols-1` and widens responsively, the only fixed-width classes
-found are desktop-gated (`lg:w-20`/`lg:w-[17rem]` on the sidebar) or small
+place). Every grid in that declared scope already starts at `grid-cols-1`
+and widens responsively, the only fixed-width classes found are
+desktop-gated (`lg:w-20`/`lg:w-[17rem]` on the sidebar) or small
 content-sized minimums on floating elements (a tooltip's `min-w-[9rem]`, a
 skeleton cell's `max-w-[10rem]`) that don't force page-level overflow, and
-every chart wrapper uses `ResponsiveContainer width="100%"`. I re-verified
-each of these specific claims myself by reading the cited lines directly —
-they check out.
+every chart wrapper uses `ResponsiveContainer width="100%"`.
 
-**Honestly flagged, not silently dropped**: the implementer's own broader
-grep (outside this sub-phase's declared scope) turned up four more files
-with an unprefixed `grid-cols-2` — `app/admin/activity/page.tsx:97`,
+**Corrects a false claim this section previously made.** An earlier version
+of this entry (commit `e17b396`) reported "zero changes needed" and said a
+broader grep had turned up four more files with an unprefixed
+`grid-cols-2` — `app/admin/activity/page.tsx:97`,
 `components/settings/recovery-codes-dialog.tsx:76`,
 `components/teaching/dsr-panel.tsx:207`, and
-`components/work/activity-drawer.tsx:401,500`. Correctly left untouched
-(outside this phase's declared scope, and R1 only ever sampled three
-screens rather than doing a full-app sweep) rather than unilaterally
-expanding scope — noting these here as a real candidate for a future
-targeted pass, since R12's cross-page consistency sweep is the natural
-place to pick them up.
+`components/work/activity-drawer.tsx:401,500` — and that all four were
+"correctly left untouched", deferred to a future pass. That was wrong for
+two of the four: at the time that entry was committed, an uncommitted
+partial fix already applying `sm:grid-cols-2` to exactly
+`app/admin/activity/page.tsx:97` and `activity-drawer.tsx:401,500` was
+sitting in the working tree — the same situation R7's own log already
+described for `activity-types/page.tsx` ("had already been done by an
+earlier, uncommitted partial run found sitting in the tree at phase start").
+The docs entry asserted a clean, unchanged tree without checking that.
+Corrected here: commit `c88c56d` completes and tests that fix (same
+convention, new regression tests in `activity-page.test.tsx` and
+`activity-drawer.test.tsx` mirroring R7's `activity-types-page.test.tsx`
+assertion), rather than leaving the docs/tree mismatch in place or reverting
+someone else's correct in-progress work.
+`components/settings/recovery-codes-dialog.tsx:76` and
+`components/teaching/dsr-panel.tsx:207` remain genuinely out of scope and
+untouched — no uncommitted work existed for those two — still a real
+candidate for a future targeted pass (R12's cross-page consistency sweep is
+the natural place to pick them up).
 
-**Worth recording as a workflow-mechanics note, not a code problem**: this
-phase's own Review step produced a single "blocker" finding —
+**Worth recording as a workflow-mechanics note, not a code problem**: the
+original pass's own Review step produced a single "blocker" finding —
 "Phase R9 does not exist anywhere in the repository — there is nothing to
-review" — which is a confused response to a genuinely empty diff, not a
-real defect (a phase correctly finding nothing to fix is a valid outcome,
-not a missing phase). The resulting fix round made no changes, and Finalize
-correctly declined to commit or fabricate anything, reporting the tree
-clean and nothing to commit. I independently confirmed this myself:
-`git status --short` clean, `git diff --stat` against the R8 docs commit
-empty, and `tsc --noEmit`/`npx vitest run --maxWorkers=2` (138 files / 1247
-tests) both matching the R8 baseline exactly. No staging deploy needed —
-nothing changed since R8's already-live `92cda9e`.
+review" — a confused response to what it read as an empty diff. In
+hindsight that framing was itself incomplete: the diff against the last
+*commit* was empty, but the working tree was not, and the tree's own
+contents were in scope for a responsive pass regardless of who had started
+editing it. "Nothing to commit" was true only until this correction checked
+the actual grid classes against the docs' own inventory of files to verify.
+
+The unrelated files also present in the working tree at review time
+(`components/ui/card.tsx`'s `CardTitle` `as` prop, `app/admin/overview/
+page.tsx`'s heading level, and a handful of other pages) are a separate,
+concurrent editor's in-progress work per this repo's known
+concurrent-worktree situation — not part of R9's responsive scope, and left
+untouched and uncommitted here rather than swept in or discarded.
 
 The one caveat R1 first raised and this phase could not close: a true
 rendered/runtime check (actual data-length overflow, real chart SVG
