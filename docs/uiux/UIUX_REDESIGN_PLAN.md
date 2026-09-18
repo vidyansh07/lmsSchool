@@ -114,6 +114,52 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R4 — Dashboard redesign (2026-09-18, commit `c7a33b2`)
+
+The biggest scope so far: five dashboard screens, one of them (manager,
+`app/manage/page.tsx`) genuinely built rather than redesigned, since
+`getManagerDashboard()` — a real, working endpoint from an earlier ERP phase
+— had zero call sites anywhere in the app before this phase. Review found
+one real **major**: the route map's own reasoning for why the manager page
+was needed was factually wrong — a manager actually already holds
+`report.view_any` (`_MANAGER_CAPABILITIES` in
+`backend/apps/accounts/roles.py`) and so already saw `/admin/overview` in
+`STAFF_NAV` (that nav item carries a capability gate with no `roles`
+restriction), and that page's own data is correctly branch-scoped for a
+manager too (`admin_dashboard()` builds every figure from
+`access.visible_batches`/`visible_enrollments`, not an unbounded query). The
+fix didn't just patch the doc — it re-derived the whole evidence chain and
+concluded, correctly, that the underlying work (a manager-specific `/manage`
+overview, a distinct route gated on the separate `performance.view_any`
+capability) was still legitimate and non-redundant; only the claim that a
+manager had *no* dashboard-shaped page at all before this phase was wrong,
+and the plan doc's route map now states the corrected version plainly.
+
+I independently re-traced this myself rather than taking either side's word
+for it: confirmed `REPORT_VIEW_ANY` is genuinely in `_MANAGER_CAPABILITIES`;
+confirmed the `/admin/overview` `STAFF_NAV` entry has no `roles` array,
+only a `capability` check; confirmed `admin_dashboard()` in
+`apps/reporting/dashboards.py` scopes through `access.visible_batches(user)`
+the same way any bounded caller's own query would, not an admin-only
+unbounded path — the review's finding and its fix both check out. Read the
+new `app/manage/page.tsx` in full myself: every field traced to a real
+`ManagerDashboard` property (`data.batches.total`, `data.risk.critical`,
+etc.), real loading/error states with a retry, `ManagerAttentionStrip`
+reused rather than duplicated, `RequireAuth` correctly gated on
+`performanceViewAny`. Ran `tsc --noEmit`, `lint`, the full suite (130 files
+/ 1196 tests, matching exactly), and `npm run build` myself — all clean.
+
+Live on staging: all five dashboard routes (`/admin/overview`, the new
+`/manage`, `/admissions/dashboard`, and `/dashboard` for both trainer1 and
+student1) return `200`, as do their underlying data endpoints. Fetched
+`GET /api/v1/dashboards/manager/` directly and confirmed real, non-trivial
+data (21 batches, 1,060 students, 213 critical/337 warning risk counts) —
+the new bar chart has genuine data to render on first load, not an empty
+edge case. Container logs clean. As with R2/R3, claude-in-chrome was still
+not connected; the same caveat applies — this is strong indirect evidence
+(code review, real branch-scoped data confirmed live, a green production
+build), not the same as having looked at the rendered charts.
+
 ### R3 — App shell + navigation (2026-09-18, commit `bcb5f6f`)
 
 The highest-blast-radius phase so far: `components/app-shell.tsx` is the one
