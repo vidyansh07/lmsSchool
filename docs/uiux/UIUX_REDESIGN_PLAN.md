@@ -114,6 +114,64 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R12 — Final QA (2026-09-19, commits `853a621`, `e2808e3`) — the last phase
+
+Closed the one item R9 explicitly deferred: `recovery-codes-dialog.tsx:76`
+and `dsr-panel.tsx:207`'s bare `grid-cols-2` fixed to `sm:grid-cols-2`,
+matching the convention every other multi-column grid in the app now uses.
+Cross-page consistency sweep found one real, larger gap: five trainer
+content-management screens (`teaching/{assignments,assessments,projects,
+questions,exams}`) still fetch unpaginated and render through raw
+`<TableWrapper><Table>`, unlike every R6-migrated large list. Correctly
+**not** force-fixed here — retrofitting real server pagination means
+verifying each endpoint's paginated-response contract, a bigger and
+riskier change than a mechanical UI swap, and out of proportion for a
+final-QA phase. Documented as an open, named item in the new
+`docs/uiux/UI_UX_PERFORMANCE_NOTES.md` for a future dedicated phase instead
+of being invented into this one.
+
+**A real reviewer error happened this phase, corrected after the fact by
+me directly (not by another workflow run) — worth recording as plainly as
+R5's contamination incident and R9's mislabeled commit.** The Audit stage
+ran `chrome-devtools-axi lighthouse` against the public staging home page
+and reported real scores (Accessibility 100, Best Practices 96, SEO 63,
+Agentic Browsing 92, CLS 0.123, 48/3 pass/fail). Review rejected these as
+fabricated, reasoning that "Agentic Browsing" isn't a real Lighthouse
+category and that Lighthouse defaults to a Performance audit — both true
+of the *standard* Lighthouse CLI, but review never actually ran the tool
+itself to check whether that reasoning applied here. `chrome-devtools-axi`
+is not standard Lighthouse: its own `--help` text says it runs "an audit
+for accessibility, SEO, and best practices" and its output really does add
+a fourth "Agentic Browsing" category and really does omit Performance. The
+review-fix round, trusting the review's reasoning over the original data,
+stripped the real numbers from the notes doc and replaced them with "not
+run." I independently ran `chrome-devtools-axi lighthouse` myself from
+scratch after Finalize committed and got the **exact same scores and CLS
+value** back — proving the original Audit report was accurate all along
+and the correction that followed it was the actual error. Fixed directly
+(commit `e2808e3`, not a re-run workflow): restored the real numbers with
+the mistake documented in place, and re-verified the screenshot claim the
+same fix-round had also (correctly cautiously, given the same audit stage
+had just been wrongly accused) stopped trusting — took a fresh 1440px
+screenshot myself and confirmed the home page renders cleanly with the
+sidebar's full "Grras LMS · staging" branding, matching R3's description.
+The lesson: a review's stated reasoning about a tool's behavior is not a
+substitute for actually running the tool, even when the reasoning sounds
+authoritative — this cuts the same way as this whole session's standing
+"never trust a report, read the real thing" rule, just applied to a
+reviewer's claim instead of an implementer's.
+
+Independently re-verified everything else: read the two grid-cols-2 fixes,
+correct and minimal. Ran the full checklist myself twice (once after the
+finalize commit, once after my own docs fix) — `tsc --noEmit` clean,
+`vitest --maxWorkers=2` — 141 files / 1257 tests both times. Deployed
+clean; `/`, `/settings/security` both return `200` on staging.
+
+**This closes the 12-phase UI/UX redesign programme (R1–R12).** Every
+phase is independently re-verified, merged to both `feat/erp-platform` and
+`feat/erp-foundation`, and deployed to staging. `docs/uiux/UI_UX_PERFORMANCE_NOTES.md`
+holds the practical summary; this file holds the full evidence trail.
+
 ### R11 — Network + render performance (2026-09-19, commit `f093ee9`)
 
 Audit covered all four line items real (not guessed) evidence:
