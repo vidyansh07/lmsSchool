@@ -603,7 +603,20 @@ function Shell({
           </div>
         </header>
 
-        <main id="main-content" className="w-full max-w-[90rem] flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        {/* tabIndex={-1} so the skip link's fragment navigation actually
+            moves DOM focus here (a non-natively-focusable element like
+            <main> only gets a "sequential focus navigation starting point"
+            otherwise, which some browsers never turn into a real focus/
+            arrival announcement for assistive tech). No outline-none: the
+            skip link is activated from the keyboard, so this focus arrival
+            gets the same global :focus-visible ring (globals.css) as every
+            other focusable element -- the visible landing cue keyboard
+            users need, not something to suppress. */}
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="w-full max-w-[90rem] flex-1 px-4 py-6 sm:px-6 lg:px-8"
+        >
           {children}
         </main>
       </div>

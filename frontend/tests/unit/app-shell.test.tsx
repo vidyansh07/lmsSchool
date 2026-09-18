@@ -49,6 +49,24 @@ describe('AppShell', () => {
     expect(screen.getByText('Content')).toBeInTheDocument();
   });
 
+  it('makes the skip link target focusable so DOM focus actually lands there', async () => {
+    mockAuth.value = { user: null, isLoading: false, signOut: vi.fn(), can: () => false };
+    const user = userEvent.setup();
+    renderShell();
+
+    const skipLink = screen.getByRole('link', { name: /skip to content/i });
+    const main = screen.getByRole('main');
+
+    // A non-natively-focusable element like <main> only actually receives
+    // DOM focus (rather than just a scroll / sequential-focus-navigation
+    // starting point) when it carries tabIndex={-1}.
+    expect(main).toHaveAttribute('tabindex', '-1');
+
+    await user.click(skipLink);
+    main.focus();
+    expect(main).toHaveFocus();
+  });
+
   it('shows the environment badge outside production', () => {
     mockAuth.value = { user: null, isLoading: false, signOut: vi.fn(), can: () => false };
     renderShell();
