@@ -6,10 +6,12 @@ import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
 import { ErrorState, LoadingState } from '@/components/states';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AreaChart } from '@/components/ui/charts';
 import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
+import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { WarningsStrip } from '@/components/warnings-strip';
 import { ApiError } from '@/lib/api';
 import { formatNumber, formatPercent, NO_DATA } from '@/lib/format';
@@ -29,6 +31,10 @@ function Overview() {
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // The chart shows the shape of the trend; counted/attended are the exact
+  // figures someone reconciling a register actually needs, so they stay
+  // available rather than disappearing when the table became a chart.
+  const [showTrendTable, setShowTrendTable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -194,23 +200,68 @@ function Overview() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Attendance by week</CardTitle>
-          <CardDescription>
-            Excused absences leave the denominator, so a term of excused absence does not read as
-            poor attendance.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div>
+            <CardTitle>Attendance by week</CardTitle>
+            <CardDescription>
+              Excused absences leave the denominator, so a term of excused absence does not read as
+              poor attendance.
+            </CardDescription>
+          </div>
+          {trend.length > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowTrendTable((value) => !value)}
+              aria-expanded={showTrendTable}
+            >
+              {showTrendTable ? 'Show chart' : 'Show exact figures'}
+            </Button>
+          ) : null}
         </CardHeader>
         <CardContent>
-          <AreaChart
-            data={trend.map((point) => ({ date: point.week, value: point.percent }))}
-            series={[{ key: 'value', label: 'Attendance rate' }]}
-            xLabel="Week"
-            height={280}
-            valueFormatter={(value) => formatPercent(value)}
-            emptyMessage="No registers taken yet."
-            ariaLabel="Attendance rate by week"
-          />
+          {showTrendTable && trend.length > 0 ? (
+            <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
+              <Table>
+                <thead>
+                  <tr>
+                    <Th className="sticky top-0 z-10 bg-muted">Week</Th>
+                    <Th className="sticky top-0 z-10 bg-muted text-right">Counted</Th>
+                    <Th className="sticky top-0 z-10 bg-muted text-right">Attended</Th>
+                    <Th className="sticky top-0 z-10 bg-muted text-right">Rate</Th>
+                  </tr>
+                </thead>
+                <tbody className="stagger">
+                  {trend.map((point) => (
+                    <tr key={point.week} className="animate-fade-in hover:bg-muted/40">
+                      <Td>{point.week}</Td>
+                      <Td className="text-right tabular-nums">{formatNumber(point.counted)}</Td>
+                      <Td className="text-right tabular-nums">{formatNumber(point.attended)}</Td>
+                      <Td className="text-right">
+                        {point.percent === null ? (
+                          <span className="text-muted-foreground">{NO_DATA}</span>
+                        ) : (
+                          <Badge variant={point.percent >= 75 ? 'success' : 'warning'}>
+                            {formatPercent(point.percent)}
+                          </Badge>
+                        )}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </TableWrapper>
+          ) : (
+            <AreaChart
+              data={trend.map((point) => ({ date: point.week, value: point.percent }))}
+              series={[{ key: 'value', label: 'Attendance rate' }]}
+              xLabel="Week"
+              height={280}
+              valueFormatter={(value) => formatPercent(value)}
+              emptyMessage="No registers taken yet."
+              ariaLabel="Attendance rate by week"
+            />
+          )}
         </CardContent>
       </Card>
     </div>

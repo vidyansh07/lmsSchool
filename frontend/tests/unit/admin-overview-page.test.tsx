@@ -6,7 +6,7 @@
  * `attendanceTrend()` call it always was, now renders through `AreaChart`
  * with that real data rather than the plain table the page used to render.
  */
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import OverviewPage from '@/app/admin/overview/page';
@@ -115,6 +115,28 @@ describe('OverviewPage — attendance trend', () => {
     await screen.findByText('Attendance by week');
     expect(screen.getByText('No registers taken yet.')).toBeInTheDocument();
     expect(container.querySelector('.recharts-area')).not.toBeInTheDocument();
+  });
+
+  it('lets an admin switch to the exact counted/attended figures the chart does not plot', async () => {
+    adminDashboard.mockResolvedValue(dashboard());
+    attendanceTrend.mockResolvedValue(realTrend);
+
+    const { container } = render(<OverviewPage />);
+
+    await screen.findByText('Attendance by week');
+    await waitFor(() => expect(container.querySelector('.recharts-area')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show exact figures' }));
+
+    // The chart is gone, replaced by the real table with the counted/attended
+    // columns the chart itself never plots.
+    expect(container.querySelector('.recharts-area')).not.toBeInTheDocument();
+    const table = within(screen.getByRole('table'));
+    expect(table.getByText('40')).toBeInTheDocument(); // counted, week 1
+    expect(table.getByText('32')).toBeInTheDocument(); // attended, week 1
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show chart' }));
+    await waitFor(() => expect(container.querySelector('.recharts-area')).toBeInTheDocument());
   });
 
   it('still shows the page-level error state when the fetch itself fails — untouched by this phase', async () => {
