@@ -85,6 +85,28 @@ dependencies that "ship two hundred things to upgrade forever."
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R1 — Foundation audit + token cleanup (2026-09-18, commit `95e577b`)
+
+Review found zero findings. Independently re-verified given this phase
+touched two shared primitives (`components/ui/badge.tsx`,
+`components/ui/motion/stat-card.tsx`): confirmed via `git show` on the prior
+commit that the removed `--color-blue/green/pink` (+tint/soft) oklch values
+were byte-for-byte identical to the `sky/emerald/fuchsia` values they
+aliased — a genuine zero-visual-change rename, not just a claimed one;
+confirmed the `StatAccent`/`variant` object *keys* (`blue`, `green`, `pink`)
+were correctly left untouched since they are the components' public prop
+values, only the internal Tailwind class strings changed; grepped the whole
+`app/`/`components/` tree myself and found zero remaining
+`bg-/text-/border-/fill-/ring-blue|green|pink` usage; ran `tsc --noEmit`,
+`lint`, and the full frontend suite myself (128 files / 1153 tests, matching
+pre-phase counts exactly). Deployed to staging and fetched the real compiled
+CSS bundle (`/_next/static/chunks/3-z4-wxpb9kvl.css`) to confirm live: zero
+old classes/tokens in the deployed bundle, the new classes present and
+resolving through the correct custom properties
+(`.text-emerald{color:var(--color-emerald)}`). The audit findings section
+(forms/tables/responsive/AuthProvider/`'use client'` sweep) was spot-checked
+against the cited files and is genuinely evidence-based, not filler.
+
 ## R1 follow-up audit findings
 
 Read-only investigation (Part 1 of R1). No code was changed for any finding
