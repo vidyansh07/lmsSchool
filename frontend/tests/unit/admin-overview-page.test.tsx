@@ -148,4 +148,37 @@ describe('OverviewPage — attendance trend', () => {
     expect(await screen.findByText('Overview is down.')).toBeInTheDocument();
     expect(screen.queryByText('Attendance by week')).not.toBeInTheDocument();
   });
+
+  it('keeps the KPI tiles and metrics on screen when only the attendance trend fails — a local error, not a page-level one', async () => {
+    adminDashboard.mockResolvedValue(dashboard({ active_students: 120 }));
+    attendanceTrend.mockRejectedValue(
+      new ApiError(503, 'server_error', 'The trend is temporarily unavailable.', 'req-2'),
+    );
+
+    render(<OverviewPage />);
+
+    // The dashboard's own figures loaded fine and stay on screen.
+    await screen.findByText('Overview');
+    expect(await screen.findAllByTestId('headline-figure')).toHaveLength(6);
+    expect(screen.getByText('120')).toBeInTheDocument();
+
+    // Only the attendance card reports the failure — the rest of the page
+    // is not replaced by a full-page error.
+    expect(await screen.findByText('The trend is temporarily unavailable.')).toBeInTheDocument();
+    expect(screen.getByText('Attendance by week')).toBeInTheDocument();
+    expect(screen.queryByText('Overview is down.')).not.toBeInTheDocument();
+
+    // Retrying only re-fetches the trend, not the whole dashboard. Earlier
+    // tests in this file share the same hoisted mocks with no reset between
+    // them, so this asserts the *increase* in call counts rather than an
+    // absolute number.
+    const trendCallsBeforeRetry = attendanceTrend.mock.calls.length;
+    const dashboardCallsBeforeRetry = adminDashboard.mock.calls.length;
+    attendanceTrend.mockResolvedValueOnce(realTrend);
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() =>
+      expect(attendanceTrend.mock.calls.length).toBe(trendCallsBeforeRetry + 1),
+    );
+    expect(adminDashboard.mock.calls.length).toBe(dashboardCallsBeforeRetry);
+  });
 });

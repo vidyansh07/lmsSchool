@@ -28,9 +28,38 @@ import type { AdminDashboard, TrendPoint } from '@/types/api';
  */
 function Overview() {
   const [data, setData] = useState<AdminDashboard | null>(null);
-  const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // The attendance trend is fetched independently of the dashboard's own
+  // figures, and errors independently too: `adminDashboard()` failing is a
+  // page-level problem (every KPI tile and the metrics list depend on it,
+  // so there is genuinely nothing else worth showing), but
+  // `attendanceTrend()` failing is not — the six KPI tiles and the metrics
+  // list above have already loaded and are real, useful data on their own.
+  // A single `Promise.all` used to make one endpoint's failure take the
+  // whole page down with it; this keeps that failure scoped to the one
+  // card that actually needs it.
+  // Same "compare during render, never `setState` unconditionally inside the
+  // effect body" pattern every other multi-section dashboard in this app
+  // already uses (`useDashboardSection` in `app/dashboard/page.tsx` and
+  // `app/admissions/dashboard/page.tsx`, `ManagerOverview` in
+  // `app/manage/page.tsx`) — an unconditional `setState` at the top of an
+  // effect reads as a synchronous write inside that effect, which this
+  // repo's lint config refuses.
+  const [trendAttempt, setTrendAttempt] = useState(0);
+  const [trendState, setTrendState] = useState<{
+    trend: TrendPoint[];
+    error: ApiError | null;
+    isLoading: boolean;
+    attempt: number;
+  }>({ trend: [], error: null, isLoading: true, attempt: trendAttempt });
+
+  if (trendState.attempt !== trendAttempt) {
+    setTrendState({ trend: [], error: null, isLoading: true, attempt: trendAttempt });
+  }
+  const { trend, error: trendError, isLoading: isTrendLoading } = trendState;
+
   // The chart shows the shape of the trend; counted/attended are the exact
   // figures someone reconciling a register actually needs, so they stay
   // available rather than disappearing when the table became a chart.
@@ -38,11 +67,9 @@ function Overview() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([adminDashboard(), attendanceTrend({ weeks: 12 })])
-      .then(([dashboard, points]) => {
-        if (cancelled) return;
-        setData(dashboard);
-        setTrend(points);
+    adminDashboard()
+      .then((dashboard) => {
+        if (!cancelled) setData(dashboard);
       })
       .catch((cause: unknown) => {
         if (!cancelled) setError(cause instanceof ApiError ? cause : null);
@@ -54,6 +81,29 @@ function Overview() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    attendanceTrend({ weeks: 12 })
+      .then((points) => {
+        if (!cancelled) {
+          setTrendState({ trend: points, error: null, isLoading: false, attempt: trendAttempt });
+        }
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setTrendState({
+            trend: [],
+            error: cause instanceof ApiError ? cause : null,
+            isLoading: false,
+            attempt: trendAttempt,
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [trendAttempt]);
 
   if (isLoading) return <LoadingState label="Loading the overview…" rows={5} />;
   if (error) {
@@ -208,7 +258,7 @@ function Overview() {
               poor attendance.
             </CardDescription>
           </div>
-          {trend.length > 0 ? (
+          {!isTrendLoading && !trendError && trend.length > 0 ? (
             <Button
               variant="ghost"
               size="sm"
@@ -220,7 +270,16 @@ function Overview() {
           ) : null}
         </CardHeader>
         <CardContent>
-          {showTrendTable && trend.length > 0 ? (
+          {isTrendLoading ? (
+            <LoadingState label="Loading the attendance trend…" rows={4} />
+          ) : trendError ? (
+            <ErrorState
+              title="Could not load the attendance trend"
+              message={trendError.message}
+              requestId={trendError.requestId || undefined}
+              onRetry={() => setTrendAttempt((value) => value + 1)}
+            />
+          ) : showTrendTable && trend.length > 0 ? (
             <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
               <Table>
                 <thead>
