@@ -114,6 +114,44 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R8 — Micro-interactions + motion coverage (2026-09-19, commit `92cda9e`)
+
+Audit-first, as this app had no prior audit findings on interaction states.
+A brace/quote-aware AST-lite scanner (a raw grep produced false positives on
+arrow functions) walked every JSX element with an `onClick`, flagged any
+missing hover/focus-visible/transition/active/animate- classes, then each
+candidate was hand-verified against the nearest same-shape sibling
+elsewhere in the app before being called a real gap — 16 raw candidates,
+11 confirmed as already covered (`Button`/`DialogClose` primitives, dead
+code, an arrow-function scanning bug), 5 genuine: three bare-underline text
+links with no hover, a step-pill selector (`role-builder.tsx`) missing the
+transition/focus-visible treatment its sibling `step-indicator.tsx` already
+has, a card-expand toggle (`requirements-board.tsx`) missing the hover
+state its sibling expand-toggles already carry, and two raw remove-chip `×`
+buttons with zero styling. Also caught in the same pass: `components/ui/checkbox.tsx`
+and `radio-group.tsx` got a peer-hover border tint so the custom controls
+react like native ones — not in the original 5 but the same class of fix.
+All fixes reused existing `globals.css`/Tailwind utilities already applied
+elsewhere; no new keyframe or animation vocabulary was added.
+
+Review's one finding was a nit, not a real gap: `role-builder.tsx`'s new
+`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`
+duplicates values the app-wide `:focus-visible` rule already provides —
+harmless (same values, just redundant), left as-is rather than churning the
+diff further for a cosmetic duplicate.
+
+Independently re-verified: read the full `92cda9e` diff myself — 15 files,
+32 insertions / 21 deletions, entirely class-only, no `on*` handler logic
+touched anywhere. Ran the checklist myself: `tsc --noEmit` clean,
+`vitest --maxWorkers=2` — 138 files / 1247 tests, matching the commit's own
+claim. Deploy hit a transient Docker container-rename race on the frontend
+service (a "Conflict... container name already in use" error mid-recreate)
+that looked like a failure but was not: `docker compose ps` immediately
+after showed all 8 services healthy including a genuinely-recreated
+frontend on the new image, and staging (`/`, `/admin/roles`, `/admissions`)
+all returned `200` — the deploy script's own transient exit noise did not
+mean the deploy actually failed.
+
 ### R7 — Forms (2026-09-19, commit `bf4481b`)
 
 Three named targets from R1's own audit, each re-verified against current
