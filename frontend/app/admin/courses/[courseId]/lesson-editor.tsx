@@ -103,6 +103,7 @@ export function LessonEditor({
   const [loaded, setLoaded] = useState<LessonContent | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [isChangingStatus, setIsChangingStatus] = useState(false);
 
   // Load the full body when editing: the outline summary deliberately does not
   // include it, so the editor has to ask for it separately.
@@ -157,21 +158,27 @@ export function LessonEditor({
 
   async function onToggleStatus() {
     if (!lesson) return;
+    setIsChangingStatus(true);
     try {
       await setLessonStatus(lesson.id, lesson.status === 'published' ? 'draft' : 'published');
       onSaved();
     } catch (cause) {
       setErrors(fieldErrors(cause));
+    } finally {
+      setIsChangingStatus(false);
     }
   }
 
   async function onDelete() {
     if (!lesson) return;
+    setIsChangingStatus(true);
     try {
       await deleteLesson(lesson.id);
       onSaved();
     } catch (cause) {
       setErrors(fieldErrors(cause));
+    } finally {
+      setIsChangingStatus(false);
     }
   }
 
@@ -304,13 +311,20 @@ export function LessonEditor({
         </Button>
         {lesson ? (
           <>
-            <Button type="button" size="sm" variant="outline" onClick={() => void onToggleStatus()}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isChangingStatus}
+              onClick={() => void onToggleStatus()}
+            >
               {lesson.status === 'published' ? 'Unpublish' : 'Publish'}
             </Button>
             <Button
               type="button"
               size="sm"
               variant="destructive"
+              disabled={isChangingStatus}
               onClick={() => void onDelete()}
               className="ml-auto"
             >
@@ -373,12 +387,15 @@ function ResourceManager({ lesson, onChanged }: { lesson: LessonContent; onChang
   }
 
   async function onDelete(resourceId: string) {
+    setIsBusy(true);
     try {
       await deleteResource(resourceId);
       setResources((current) => current.filter((item) => item.id !== resourceId));
       onChanged();
     } catch (cause) {
       setMessage(cause instanceof ApiError ? cause.message : 'The resource could not be removed.');
+    } finally {
+      setIsBusy(false);
     }
   }
 
@@ -405,6 +422,7 @@ function ResourceManager({ lesson, onChanged }: { lesson: LessonContent; onChang
                 type="button"
                 size="sm"
                 variant="ghost"
+                disabled={isBusy}
                 onClick={() => void onDelete(resource.id)}
                 aria-label={`Remove ${resource.title}`}
               >

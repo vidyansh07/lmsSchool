@@ -55,6 +55,7 @@ export function SessionsCard() {
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const [isRevokingAll, setIsRevokingAll] = useState(false);
   const [revokeAllMessage, setRevokeAllMessage] = useState<string | null>(
     null,
   );
@@ -107,6 +108,7 @@ export function SessionsCard() {
   }
 
   async function onRevokeAll() {
+    setIsRevokingAll(true);
     try {
       const response = await logoutEverywhere();
       setRevokeAllMessage(response.detail);
@@ -119,6 +121,8 @@ export function SessionsCard() {
           ? cause.message
           : "Could not sign out of other sessions.",
       );
+    } finally {
+      setIsRevokingAll(false);
     }
   }
 
@@ -176,8 +180,12 @@ export function SessionsCard() {
               {revokeAllMessage}
             </Alert>
           ) : null}
-          <Button variant="destructive" onClick={() => void onRevokeAll()}>
-            Sign out everywhere
+          <Button
+            variant="destructive"
+            disabled={isRevokingAll}
+            onClick={() => void onRevokeAll()}
+          >
+            {isRevokingAll ? "Signing out…" : "Sign out everywhere"}
           </Button>
           <p className="mt-2 text-sm text-muted-foreground">
             Ends every session, including this one. Use this if you think

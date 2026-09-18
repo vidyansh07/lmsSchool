@@ -206,4 +206,28 @@ describe("SessionsCard — listing and revoking", () => {
     await waitFor(() => expect(logoutEverywhere).toHaveBeenCalledOnce());
     await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
   });
+
+  it("disables 'Sign out everywhere' while the request is in flight, so a fast double-click only fires it once", async () => {
+    listSessions.mockResolvedValue([row({ id: "current", is_current: true })]);
+    let resolve!: (value: DetailResponse) => void;
+    logoutEverywhere.mockReturnValue(
+      new Promise<DetailResponse>((r) => {
+        resolve = r;
+      }),
+    );
+    render(<SessionsCard />);
+
+    await screen.findByText("This device");
+    const button = screen.getByRole("button", { name: "Sign out everywhere" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Signing out…" })).toBeDisabled(),
+    );
+    expect(logoutEverywhere).toHaveBeenCalledOnce();
+
+    resolve({ detail: "Signed out of 1 session(s)." });
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
+  });
 });
