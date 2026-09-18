@@ -76,7 +76,7 @@ dependencies that "ship two hundred things to upgrade forever."
 | R7 | Forms | R1 | Grouping, validation timing, progressive disclosure standardized across the most complex forms |
 | R8 | Micro-interactions + motion coverage | R2–R7 | Existing hover/press/transition vocabulary applied consistently to every interactive surface that doesn't yet use it |
 | R9 | Responsive pass | R4–R7 | Per-page fixes at 375/768/1024/1440, especially dense table/dashboard/chart screens |
-| R10 | Accessibility pass | R2–R9 | Skip link, heading hierarchy, remaining aria gaps, keyboard nav through drawers/modals/comboboxes |
+| R10 | Accessibility pass | R2–R9 | Skip link, remaining aria gaps, keyboard nav through drawers/modals/comboboxes — heading hierarchy already landed in R9 (`63d3484`), verify rather than redo |
 | R11 | Network + render performance | R1 | The broader duplicate-fetch sweep the first audit pass couldn't finish, `AuthProvider` render-width fix if needed, the `'use client'` sweep, double-submission protection audit, bundle check |
 | R12 | Visual + performance QA, docs | all | Cross-page consistency sweep, `docs/uiux/UI_UX_PERFORMANCE_NOTES.md` (practical notes, not a system), final verification |
 
@@ -113,6 +113,40 @@ a dashboard of widgets" design intent quoted above.
 
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
+
+### R9 — final correction (2026-09-19, commit `63d3484`)
+
+One more correction on top of the ones already recorded below, found during
+my own independent re-verification after this phase's Finalize stage ran.
+The section below says the `CardTitle`/heading-level/`aria-pressed`/
+`aria-autocomplete` changes sitting in the tree were "a separate, concurrent
+editor's in-progress work... left untouched and uncommitted here." That
+theory was wrong: this phase's own later Finalize stage went on to commit
+exactly those files — 56 of them — in `63d3484`, under the commit subject
+"responsive pass -- 375/768/1024/1440 fixes", even though the actual
+responsive grid fixes (the real R9 work) were already committed earlier in
+`c88c56d`. So `63d3484`'s *label* is wrong (it is entirely heading-hierarchy/
+aria accessibility work, R10's territory, not a responsive fix), but its
+*content* is real, independently-verified, working code — read the diff
+myself: `CardTitle`'s new `as` prop is a clean, backward-compatible additive
+change (defaults to `h3`, unchanged for every existing call site that
+doesn't pass `as`), and the ~40 page-level changes correctly identify each
+page's first heading-bearing card after its own `h1` and either pass
+`as="h2"` or add an `sr-only` `h2` above a card grid that had no heading at
+all — spot-checked several (`dashboard/page.tsx`, `my-attendance/page.tsx`)
+against the actual page structure and the fix is right in both. There was
+never a second concurrent session touching this worktree; the "concurrent
+editor" read was this phase's own later stage, not yet visible to the
+agent that wrote that paragraph.
+
+**Net effect, and what this means for R10**: R9 shipped both its own actual
+scope (the two responsive grid fixes) and a first pass at R10's heading-
+hierarchy line item, ahead of schedule. R10 (Accessibility pass) should
+verify this heading-hierarchy work rather than redo it, and treat it as a
+head start, not a gap. Independently re-verified before pushing: `tsc
+--noEmit` clean, `npx vitest run --maxWorkers=2` — 138 files / 1249 tests,
+matching Finalize's own claim exactly. Deployed clean; `/`, `/dashboard`,
+`/my-attendance` all return `200` on staging.
 
 ### R9 — Responsive pass (2026-09-19, commit `c88c56d`, correcting the record below)
 
