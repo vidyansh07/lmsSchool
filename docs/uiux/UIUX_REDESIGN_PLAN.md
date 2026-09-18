@@ -85,6 +85,47 @@ dependencies that "ship two hundred things to upgrade forever."
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R3 — App shell + navigation (2026-09-18, commit `bcb5f6f`)
+
+The highest-blast-radius phase so far: `components/app-shell.tsx` is the one
+shell every page in the app renders through. Collapsed sidebar at 80px
+(middle of the 72-84px range), icon-only with right-side tooltips, toggle
+persisted to `localStorage` (`grras.sidebar-collapsed`), defaults to
+collapsed at `lg:` and expanded at `xl:` via a new `useMediaQuery` hook,
+user's own choice always wins. Review found a real **major** (the collapsed
+Brand/home link had no accessible name outside a non-production environment
+— production builds would announce it as a blank link) and a real **minor**
+(the AccountCard's collapsed name/role tooltip sat on a non-focusable
+`<span>`, reachable by mouse only), both fixed. Independently re-verified
+both fixes myself by reading the final code, not the report: confirmed the
+`sr-only` "Grras LMS — Home" label on the collapsed Brand link is now
+unconditional (not gated on `showEnvDot`/non-production), and confirmed
+`tabIndex={0}` was added to the AccountCard avatar with a clear comment
+explaining why it's the one non-interactive-element tooltip trigger in the
+file. Confirmed the single most important thing for a phase like this:
+`git diff` on `components/ui/sheet.tsx` between the R2 and R3 commits is
+empty — untouched — and inside `app-shell.tsx`'s own `<Sheet>` block, the
+nav is hardcoded to `collapsed={false}` and `Brand`/`AccountCard` are called
+with no props (their existing defaults), so the mobile drawer is
+byte-for-byte the same experience it always was regardless of the sidebar's
+new state. Ran `tsc --noEmit`, `lint`, the full suite (130 files / 1180
+tests, matching exactly), and `npm run build` myself — all clean.
+
+Live on staging: clean container startup with no errors, login and a fetch
+of `/admin/overview` and `/manage` (both render through the shell) both
+return `200` with a real page shell, no server-side crash. As with R2, a
+true visual check via claude-in-chrome was attempted again and the
+extension was still not connected; the evidence above (diff-level
+confirmation the drawer is untouched, both accessibility fixes read
+directly in the final code, a green production build, and clean live
+container logs) stands in for it, not equivalent to actually having looked
+at the collapsed sidebar. Two unrelated untracked files
+(`docs/ER_DIAGRAM.mmd`, `docs/SCHEMA.md`, apparently a schema-dump from
+some other process, dated 17:23 today) were found sitting in the worktree
+during this phase's own finalize step — correctly left uncommitted and
+unrelated to this phase, still sitting there untracked; harmless, but worth
+the user's own attention if they didn't mean to generate them.
+
 ### R2 — Charting system (2026-09-18, commits `c57c898`, `2cb02c2`)
 
 Recharts 3.10.1 installed; themed chart wrappers (`LineChart`, `AreaChart`,
