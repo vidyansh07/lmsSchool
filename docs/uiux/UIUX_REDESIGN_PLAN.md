@@ -114,6 +114,45 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R10 — Accessibility pass (2026-09-19, commit `9b7b36f`)
+
+Adjusted scope going in, since R9 already landed heading hierarchy: audited
+all four original line items anyway rather than trusting the adjustment
+blindly. Skip link (`app-shell.tsx`) was already real and working — correct
+`href="#main-content"`, correctly `sr-only`/`focus:not-sr-only` — but its
+target `<main>` had no `tabIndex={-1}`, so fragment navigation only set the
+sequential-focus-navigation starting point in some browsers rather than
+reliably moving DOM/AT focus there. Fixed with `tabIndex={-1}` and,
+correctly per review, no `outline-none` — the global `:focus-visible` ring
+applies to the newly-focusable `<main>` same as everywhere else.
+
+Heading hierarchy: independently re-swept all 43 `page.tsx` files R9's
+commit did NOT touch (not a sample) for any h1→h3 skip it might have
+missed — zero found. R9's claim holds.
+
+Aria gaps: broad sweep (icon-only buttons, unlabeled form controls, live
+regions, alt text, custom-interactive-without-role) found nothing beyond
+one item — `admin/activity-types/page.tsx`'s `RoleCheckboxes` groups
+missing `aria-describedby` to their error text, first flagged in R1's own
+audit. Independently confirmed this was **already fixed in R7** (`bf4481b`,
+`git log` on the file shows no R10-era commit touches it) — the audit's own
+claim that R7 "did not end up fixing" it was a false positive, caught on
+Implement's own re-check rather than duplicated. Correctly excluded from
+this phase's diff.
+
+Keyboard nav: read `hooks/use-focus-trap.ts` (the single shared hook both
+`dialog.tsx` and `sheet.tsx` delegate to, not two hand-rolled copies) line
+by line rather than trusting it "looks trapped" — genuine, working
+focus-capture/Tab-cycle/Escape-close/restore-on-close logic, confirmed
+correct.
+
+Independently re-verified: read the `9b7b36f` diff myself (2 files,
+`app-shell.tsx` + its test) — the change is exactly what the commit
+message says, no scope creep, no stray commit (only one commit this phase,
+unlike R9). Ran the checklist myself: `tsc --noEmit` clean,
+`vitest --maxWorkers=2` — 138 files / 1250 tests, matching Finalize's own
+claim. Deployed clean; `/` returns `200` on staging.
+
 ### R9 — final correction (2026-09-19, commit `63d3484`)
 
 One more correction on top of the ones already recorded below, found during
