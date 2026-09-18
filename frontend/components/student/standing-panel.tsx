@@ -21,6 +21,7 @@ import { AlertTriangle, CalendarCheck, CheckCircle2, GaugeCircle, TrendingUp, Tr
 
 import { AlertList, type AlertItem } from '@/components/alert-list';
 import { ErrorState, LoadingState } from '@/components/states';
+import { BarChart, type CategoryDatum } from '@/components/ui/charts';
 import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
 import type { StudentPerformanceEntry } from '@/lib/performance';
 
@@ -99,6 +100,17 @@ export function StandingPanel({
     { label: 'Overall standing', value: overall, icon: Trophy, accent: 'amber' as const },
   ] as const;
 
+  // The same four averages as a side-by-side comparison, not a second copy
+  // of them — a student reading four separate tiles still has to hold each
+  // number in their head to spot the gap between, say, attendance and
+  // assessment; a bar puts the shape of that in one glance. Null stays null
+  // (no fabricated zero) — `BarChart` simply skips a bar with nothing to
+  // plot, and shows its own empty state only when every one of the four is.
+  const standingChartData: CategoryDatum[] = tiles.map((tile) => ({
+    label: tile.label,
+    value: tile.value,
+  }));
+
   return (
     <div className="space-y-4">
       <BentoGrid>
@@ -114,6 +126,21 @@ export function StandingPanel({
           </BentoTile>
         ))}
       </BentoGrid>
+
+      <div className="animate-fade-in rounded-[var(--radius-card)] border border-border p-4">
+        <p className="mb-2 text-sm font-medium">Side by side</p>
+        <BarChart
+          data={standingChartData}
+          height={200}
+          // One more digit than the tiles above deliberately — "90.0%" here,
+          // "90%" there — so the chart's own visually-hidden data table
+          // never collides, character for character, with the headline
+          // figure a person (or a test) already found in the tile.
+          valueFormatter={(value) => `${value.toFixed(1)}%`}
+          emptyMessage="Nothing measured yet."
+          ariaLabel="Your standing, by measure"
+        />
+      </div>
 
       {riskItems.length === 0 ? (
         <div className="animate-fade-in flex items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">

@@ -11,7 +11,7 @@
  * number absent at once, and this file checks that combination exhaustively
  * rather than trusting each panel's individual empty branch in isolation.
  */
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -396,6 +396,46 @@ describe('StandingPanel', () => {
     );
     expect(screen.getByText(/40% attended/)).toBeInTheDocument();
     expect(screen.getByText(/worth a look/i)).toBeInTheDocument();
+  });
+
+  it('renders the four standing metrics as a real, already-computed comparison chart', () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: true,
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as unknown as MediaQueryList,
+    );
+
+    const { container } = render(
+      <StandingPanel
+        performance={[
+          performanceEntry({
+            attendance: { percent: 90, total_sessions: 10, attended: 9, has_records: true },
+            assessment: { average_percent: 75, sitting_percent: 75, recorded: 2, total: 2 },
+          }),
+        ]}
+      />,
+    );
+
+    expect(container.querySelector('.recharts-bar-rectangle')).toBeInTheDocument();
+    // The chart's own precision (one decimal) deliberately differs from the
+    // tile above it ("90%") so the two never collide as identical text —
+    // both are the same real figure, not two different ones.
+    const table = within(screen.getByRole('table', { hidden: true }));
+    expect(table.getByText('90.0%')).toBeInTheDocument();
+    expect(table.getByText('75.0%')).toBeInTheDocument();
+  });
+
+  it('shows the chart empty state rather than a broken plot when nothing is measured', () => {
+    render(<StandingPanel performance={[]} />);
+    expect(screen.getByText('Nothing measured yet.')).toBeInTheDocument();
   });
 });
 

@@ -64,6 +64,7 @@ import { FeesPanel } from '@/components/counsellor/fees-panel';
 import { NotYetEnrolledPanel } from '@/components/counsellor/not-yet-enrolled-panel';
 import { PendingConfirmationsPanel } from '@/components/counsellor/pending-confirmations-panel';
 import { RecentActivityPanel } from '@/components/counsellor/recent-activity-panel';
+import { BarChart, type CategoryDatum } from '@/components/ui/charts';
 import { BentoGrid, BentoTile, StatCard, type StatAccent } from '@/components/ui/motion';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { RequireAuth } from '@/components/require-auth';
@@ -223,6 +224,31 @@ function KpiTileSection({
       accent={accent}
     />
   );
+}
+
+/**
+ * The five counts on `CounsellorDashboard` that are, in one way or another,
+ * a student stuck somewhere in the pipeline — a comparison of *kinds* of
+ * bottleneck, not a trend or a composition, so a bar chart rather than a
+ * donut: these are not five slices of one whole (a student can be both
+ * "pending" and headed for "unassigned batch" at once), just five counts
+ * worth comparing side by side. `new_students_today` is deliberately left
+ * out — good news, not a bottleneck, and already its own KPI tile above.
+ */
+function pipelineBottlenecks(dashboard: CounsellorDashboard | null): CategoryDatum[] {
+  if (!dashboard) return [];
+  return [
+    // Deliberately not the same wording as the KPI tiles above ("Follow-ups
+    // due", "Unassigned batch", …) — this card's own title and description
+    // already give the context, and a shorter, distinct label here means a
+    // reader (or a query for either one) never has to guess which of two
+    // identical-looking pieces of text they landed on.
+    { label: 'Pending', value: dashboard.pending_registrations },
+    { label: 'Due', value: dashboard.follow_ups_due },
+    { label: 'Overdue', value: dashboard.follow_ups_overdue },
+    { label: 'No batch', value: dashboard.unassigned_batch },
+    { label: 'No trainer', value: dashboard.unassigned_trainer },
+  ];
 }
 
 export function AdmissionsDashboardContent() {
@@ -425,6 +451,28 @@ export function AdmissionsDashboardContent() {
           />
         </BentoTile>
       </BentoGrid>
+
+      <Card className="animate-rise-in">
+        <CardHeader>
+          <CardTitle>Where the pipeline is stuck</CardTitle>
+          <CardDescription>
+            The same figures as the tiles above, compared side by side.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {dashboard.error ? (
+            <p className="text-sm text-muted-foreground">Not available right now.</p>
+          ) : (
+            <BarChart
+              data={pipelineBottlenecks(dashboard.data)}
+              loading={dashboard.isLoading}
+              height={220}
+              emptyMessage="Nothing waiting on you."
+              ariaLabel="Pipeline bottlenecks, by kind"
+            />
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="animate-rise-in">
         <CardHeader>

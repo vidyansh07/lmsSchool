@@ -135,4 +135,12 @@ describe('StatCard', () => {
     rerender(<StatCard label="Batches" value={4} href="/admin/batches" />);
     expect(screen.getByRole('link')).toHaveAttribute('href', '/admin/batches');
   });
+
+  it('shows the period beside the label when given one, and nothing extra when not', () => {
+    const { rerender } = render(<StatCard label="Total batches" value={42} period="All-time" />);
+    expect(screen.getByText(/All-time/)).toBeInTheDocument();
+
+    rerender(<StatCard label="Total batches" value={42} />);
+    expect(screen.queryByText(/All-time/)).not.toBeInTheDocument();
+  });
 });

@@ -353,6 +353,70 @@ describe('AdmissionsDashboardContent', () => {
   });
 });
 
+describe('AdmissionsDashboardContent — pipeline bottleneck chart', () => {
+  beforeEach(() => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: true,
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as unknown as MediaQueryList,
+    );
+  });
+
+  it('renders the real per-kind breakdown through BarChart, fed by the same counsellor-dashboard fetch as the KPI tiles', async () => {
+    mockEmptyPipeline();
+    getCounsellorDashboard.mockResolvedValue(
+      counsellorDashboard({
+        pending_registrations: 7,
+        follow_ups_due: 3,
+        follow_ups_overdue: 2,
+        unassigned_batch: 5,
+        unassigned_trainer: 1,
+      }),
+    );
+
+    const { container } = render(<AdmissionsDashboardContent />);
+    await screen.findByText('Where the pipeline is stuck');
+
+    await waitFor(() => expect(container.querySelector('.recharts-bar-rectangle')).toBeInTheDocument());
+
+    const table = within(screen.getByRole('table', { hidden: true }));
+    const rowValue = (label: string) =>
+      table.getByText(label).closest('tr')?.querySelector('td:nth-child(2)')?.textContent;
+
+    expect(rowValue('Pending')).toBe('7');
+    expect(rowValue('Due')).toBe('3');
+    expect(rowValue('Overdue')).toBe('2');
+    expect(rowValue('No batch')).toBe('5');
+    expect(rowValue('No trainer')).toBe('1');
+  });
+
+  it('shows the chart empty state rather than a zero-everything plot while the endpoint is still loading', () => {
+    mockEmptyPipeline();
+    getCounsellorDashboard.mockReturnValue(new Promise(() => {}));
+
+    render(<AdmissionsDashboardContent />);
+    expect(screen.getByText('Where the pipeline is stuck')).toBeInTheDocument();
+    expect(screen.queryByRole('table', { hidden: true })).not.toBeInTheDocument();
+  });
+
+  it('says the breakdown is unavailable, rather than a misleading zero, when the endpoint fails', async () => {
+    mockEmptyPipeline();
+    getCounsellorDashboard.mockRejectedValue(new ApiError(500, 'server_error', 'Dashboard is down.', 'req-9'));
+
+    render(<AdmissionsDashboardContent />);
+    await screen.findByText('Where the pipeline is stuck');
+    expect(screen.getByText('Not available right now.')).toBeInTheDocument();
+  });
+});
+
 describe('AdmissionsDashboardPage — capability gate', () => {
   it('renders the dashboard for a counsellor holding enrolment.create', async () => {
     useAuthMock.value = {

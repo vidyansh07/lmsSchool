@@ -80,6 +80,35 @@ dependencies that "ship two hundred things to upgrade forever."
 | R11 | Network + render performance | R1 | The broader duplicate-fetch sweep the first audit pass couldn't finish, `AuthProvider` render-width fix if needed, the `'use client'` sweep, double-submission protection audit, bundle check |
 | R12 | Visual + performance QA, docs | all | Cross-page consistency sweep, `docs/uiux/UI_UX_PERFORMANCE_NOTES.md` (practical notes, not a system), final verification |
 
+## R4 dashboard route map
+
+Read-only mapping, done before any code changed for this phase, per its own
+"map the five real dashboards first" instruction. Resolved by evidence, not
+assumption: for each role, `components/navigation.ts` was read for which
+route its own "Dashboard"/"Home"-labelled nav link actually points at
+(`isVisible()`'s capability/role gate applied by hand for each role), cross-
+checked against `docs/erp/USER_JOURNEYS.md`'s own "Dashboards — loading
+contract" table (§6/§67) and the page/`lib/*.ts` code itself.
+
+| Role | Real landing route | Evidence |
+| --- | --- | --- |
+| Admin | `app/admin/overview/page.tsx` | `ADMIN_NAV`'s first group: `{ href: '/admin/overview', label: 'Overview', capability: reportViewAny }` — the only dashboard-shaped link an admin/superadmin sees first. Already has a real chart (Phase R2's attendance trend) — not touched further here beyond what R2 already built. |
+| Student | `app/dashboard/page.tsx` (`StudentView` branch) | `STUDENT_NAV`: `{ href: '/dashboard', label: 'Dashboard', roles: ['student'] }` — the only "Dashboard" link a student's nav has. Calls `getStudentDashboard()` → `GET /api/v1/dashboard/student/`. Already rebuilt by an earlier hand ("only `StudentView` was rebuilt" per the file's own top docstring); this phase adds the one chart it lacked. |
+| Trainer | `app/dashboard/page.tsx` (`TrainerView` branch) — **not** `/teaching/today` | `STAFF_NAV`'s first group: `{ href: '/dashboard', label: 'Dashboard', roles: ['trainer'] }` is the *only* item in the whole nav config labelled "Dashboard" for the trainer role. `/teaching/today` is a real, heavily-built screen (722 lines) but its own nav entry is labelled **"Today"**, sits under the separate "Teaching" group, and its page is a session/attendance/DSR work tool (`listTodaySessions`, `getRegister`, `markAttendance`, `startDsr`/`updateDsr`) — a daily-class workspace, not a KPI dashboard, and it fetches none of `getTrainerDashboard()`'s data. `docs/erp/USER_JOURNEYS.md`'s own §67 table documents the trainer's loading contract as `/teaching/today` → `GET /dashboards/trainer/`, which matches **neither** today's nav wiring **nor** the actual endpoint the code calls: `app/dashboard/page.tsx` calls `getTrainerDashboard()` (`lib/batches.ts`), which hits `GET /api/v1/dashboard/trainer/` (singular "dashboard", not the doc's plural "dashboards"). That table is stale documentation from the earlier ERP build, not a second real route — resolved here by what the shipped nav and code actually do, per this phase's own instruction. `/teaching/today` is correctly untouched by this phase; `TrainerView` in `app/dashboard/page.tsx` is where its chart was added. |
+| Counsellor | `app/admissions/dashboard/page.tsx` | `STAFF_NAV`: `{ href: '/admissions/dashboard', label: 'Dashboard', roles: ['counsellor'], capability: enrolmentCreate }`; also linked from `ADMIN_NAV` as "Admissions pipeline" for admin/superadmin visibility. Confirms the pre-check's assumption. |
+| Manager | **`app/manage/page.tsx` — newly built this phase**, alongside the pre-existing shared `/admin/overview` | Corrected after review: `STAFF_NAV`'s first group *does* already have an item visible to a manager — `{ href: '/admin/overview', label: 'Overview', capability: reportViewAny }` carries no `roles` restriction, and `isVisible()` (`components/navigation.ts`) checks `user?.capabilities.includes(item.capability)` before ever consulting `roles`, so any role holding `report.view_any` sees it regardless of role. A manager does: `_MANAGER_CAPABILITIES` (`backend/apps/accounts/roles.py`) explicitly includes `Capability.REPORT_VIEW_ANY`, and `backend/apps/reporting/access.py:162-163` says outright that "a branch-scoped manager *holds* `report.view_any`." So a manager already saw "Overview" pointing at `/admin/overview` before this phase — the earlier claim that no first-group item is visible to a manager was wrong, confirmed by hand-applying `isVisible()` to that item with a manager's actual capability set. That page's own data isn't leaked to a manager either: `AdminDashboardView.get()` gates on `access.can_read_everything(user)` (`= has_capability(user, REPORT_VIEW_ANY)`, true for a manager), and `dashboards.admin_dashboard()` builds every figure from `access.scope_for(user)` / `access.visible_batches(user)` / `access.visible_enrollments(user)` / `trainers_access.visible_trainers(user)` — all branch-bounded via `is_unbounded`, per `scope_for`'s own comment. So a manager opening `/admin/overview` before this phase already got a real, correctly branch-scoped dashboard carrying Phase R2's attendance chart, not a blank or forbidden screen; "Batch review" and "Trainer review" were not their only two real entry points. This doesn't make `app/manage/page.tsx` redundant — it's a distinct route (`/manage`, not `/admin/overview`) gated on the separate `performance.view_any` capability, and turning it into a real dashboard is still genuine new work: `/manage` itself was `redirect('/manage/batches')` with no content of its own, and `getManagerDashboard()` (`lib/manage.ts`, `GET /api/v1/dashboards/manager/`) had zero call sites anywhere in the app — `components/manage/attention-strip.tsx` calls the same endpoint through `useApi` directly, not through the named function, so the function itself was genuinely dead code until this phase's new `app/manage/page.tsx` became its first caller. What was wrong is only the premise that a manager had *no* real, chart-bearing landing page before this phase; they did, shared with admin at `/admin/overview` — this phase adds a manager-specific one at `/manage` beside it, not in place of a blank. |
+
+Five files this phase actually touched (for R9/R10 to know precisely):
+`app/dashboard/page.tsx` (both branches share this file — `TrainerView` got
+a new chart; `StudentView`'s own chart lives in the panel it already
+composed, `components/student/standing-panel.tsx`), `app/admissions/
+dashboard/page.tsx`, and `app/manage/page.tsx` (new, replacing the bare
+redirect). `app/admin/overview/page.tsx` needed no change — R2 already gave
+it a chart. `app/manage/batches/page.tsx` and `app/manage/trainers/page.tsx`
+were **not** touched — they keep `ManagerAttentionStrip` exactly as an
+earlier ERP phase left it, on purpose, per the "drill all the way down, not
+a dashboard of widgets" design intent quoted above.
+
 ## Phase log
 
 (Filled in as each phase completes — same evidence bar as the ERP

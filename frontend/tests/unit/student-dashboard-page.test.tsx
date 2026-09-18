@@ -13,11 +13,12 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { Dashboard, StudentView } from '@/app/dashboard/page';
+import { Dashboard, StudentView, summarizeBatchStatuses } from '@/app/dashboard/page';
 import { ApiError } from '@/lib/api';
 import type {
   AppNotification,
   Certificate,
+  DashboardBatch,
   DashboardCourse,
   Paginated,
   StudentAssignment,
@@ -392,5 +393,103 @@ describe('Dashboard — role routing', () => {
     const overdueCard = screen.getByText('Overdue work').closest('a');
     expect(pendingCard).toHaveTextContent('0');
     expect(overdueCard).toHaveTextContent('0');
+  });
+});
+
+function dashboardBatch(overrides: Partial<DashboardBatch> = {}): DashboardBatch {
+  return {
+    id: 'batch-1',
+    code: 'GRS-B-001',
+    name: 'Morning batch',
+    course_title: 'Linux Essentials',
+    status: 'active',
+    start_date: '2026-01-01',
+    end_date: '2026-06-01',
+    ...overrides,
+  };
+}
+
+describe('summarizeBatchStatuses', () => {
+  it('groups real batch rows by status, in a fixed order, skipping statuses with nothing in them', () => {
+    const result = summarizeBatchStatuses([
+      dashboardBatch({ id: 'a', status: 'active' }),
+      dashboardBatch({ id: 'b', status: 'active' }),
+      dashboardBatch({ id: 'c', status: 'completed' }),
+      dashboardBatch({ id: 'd', status: 'upcoming' }),
+    ]);
+    expect(result).toEqual([
+      { label: 'Active', value: 2 },
+      { label: 'Upcoming', value: 1 },
+      { label: 'Completed', value: 1 },
+    ]);
+  });
+
+  it('returns an empty list for no batches, never a slice of zero', () => {
+    expect(summarizeBatchStatuses([])).toEqual([]);
+  });
+});
+
+describe('Dashboard — trainer batch-status chart', () => {
+  it('renders the real batch-status breakdown through DonutChart, fed by the same fetch as the rest of the page', async () => {
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: true,
+          media: query,
+          onchange: null,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          addListener: () => {},
+          removeListener: () => {},
+          dispatchEvent: () => false,
+        }) as unknown as MediaQueryList,
+    );
+
+    useAuthMock.value = { user: { first_name: 'Tina', role: 'trainer' } };
+    const trainerData: TrainerDashboard = {
+      is_trainer: true,
+      batches: [
+        dashboardBatch({ id: 'a', status: 'active' }),
+        dashboardBatch({ id: 'b', status: 'active' }),
+        dashboardBatch({ id: 'c', status: 'completed' }),
+      ],
+      today_classes: [],
+      upcoming_classes: [],
+      student_count: 40,
+      courses: [],
+      work: { pending: 0, overdue: 0 },
+    };
+    getTrainerDashboard.mockResolvedValue(trainerData);
+
+    const { container } = render(<Dashboard />);
+    await screen.findByText('Batch status mix');
+
+    await waitFor(() => expect(container.querySelector('.recharts-pie-sector')).toBeInTheDocument());
+
+    // Every real count still exists as text in the chart's own visually
+    // hidden data table — not only as a shape on the page.
+    const table = within(screen.getByRole('table', { hidden: true }));
+    expect(table.getByText('Active')).toBeInTheDocument();
+    expect(table.getByText('2')).toBeInTheDocument();
+    expect(table.getByText('Completed')).toBeInTheDocument();
+    expect(table.getByText('1')).toBeInTheDocument();
+  });
+
+  it('shows the chart empty state, not a broken shape, for a trainer with no batches yet', async () => {
+    useAuthMock.value = { user: { first_name: 'Tina', role: 'trainer' } };
+    const trainerData: TrainerDashboard = {
+      is_trainer: true,
+      batches: [],
+      today_classes: [],
+      upcoming_classes: [],
+      student_count: 0,
+      courses: [],
+      work: { pending: 0, overdue: 0 },
+    };
+    getTrainerDashboard.mockResolvedValue(trainerData);
+
+    render(<Dashboard />);
+    await screen.findByText('Batch status mix');
+    expect(screen.getByText('No batches assigned yet.')).toBeInTheDocument();
   });
 });

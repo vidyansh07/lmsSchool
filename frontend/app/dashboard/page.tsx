@@ -53,6 +53,7 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { DonutChart, type DonutDatum } from '@/components/ui/charts';
 import { ApiError } from '@/lib/api';
 import { listMyAssignments } from '@/lib/assignments';
 import { getStudentDashboard, getTrainerDashboard } from '@/lib/batches';
@@ -76,13 +77,37 @@ import { listMyCertificates } from '@/lib/progress';
 import { listMyProjects } from '@/lib/projects';
 import type {
   AppNotification,
+  BatchStatus,
   CalendarEvent,
   Certificate,
+  DashboardBatch,
   StudentAssignment,
   StudentDashboard,
   StudentProject,
   TrainerDashboard,
 } from '@/types/api';
+
+/**
+ * A trainer's own batches, grouped by status — composition of a whole
+ * (every batch this trainer teaches), fed entirely by `TrainerDashboard
+ * .batches`, which the page already fetches. Fixed status order (not
+ * count-sorted) so the same status always lands in the same slice of the
+ * palette across a re-fetch, matching `paletteColor`'s own "never a hash or
+ * random assignment" rule. Statuses with nothing in them are left out
+ * rather than shown as an empty slice.
+ */
+const BATCH_STATUS_ORDER: BatchStatus[] = ['active', 'upcoming', 'completed', 'cancelled', 'archived'];
+
+export function summarizeBatchStatuses(batches: DashboardBatch[]): DonutDatum[] {
+  const counts = new Map<BatchStatus, number>();
+  for (const batch of batches) {
+    counts.set(batch.status, (counts.get(batch.status) ?? 0) + 1);
+  }
+  return BATCH_STATUS_ORDER.filter((status) => (counts.get(status) ?? 0) > 0).map((status) => ({
+    label: BATCH_STATUS_LABEL[status],
+    value: counts.get(status) as number,
+  }));
+}
 
 function ClassList({ events, empty }: { events: CalendarEvent[]; empty: string }) {
   if (events.length === 0) return <p className="text-sm text-muted-foreground">{empty}</p>;
@@ -500,6 +525,21 @@ function TrainerView({ data }: { data: TrainerDashboard }) {
           </Card>
         </Link>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Batch status mix</CardTitle>
+          <CardDescription>Every batch you teach, by where it stands right now.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DonutChart
+            data={summarizeBatchStatuses(data.batches)}
+            centerLabel="Batches"
+            emptyMessage="No batches assigned yet."
+            ariaLabel="Your batches by status"
+          />
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>

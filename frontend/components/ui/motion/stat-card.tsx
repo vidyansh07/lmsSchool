@@ -55,6 +55,11 @@ const ACCENT_CLASSES: Record<StatAccent, { card: string; disc: string; label: st
 export interface StatCardProps {
   label: string;
   value: number | string | null | undefined;
+  /** What window this figure covers — "This week", "All-time", "As of today".
+   *  Rendered right beside the label, muted, so a reader never has to guess
+   *  whether a number is a snapshot or a running total. Omitted entirely
+   *  when the label already says so on its own. */
+  period?: string;
   /** Rendered under the number. One short line, not a paragraph. */
   hint?: string;
   suffix?: string;
@@ -76,6 +81,7 @@ export interface StatCardProps {
 export function StatCard({
   label,
   value,
+  period,
   hint,
   suffix,
   prefix,
@@ -107,15 +113,27 @@ export function StatCard({
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-2">
+      {/* No wrapper around `label` itself, on purpose: it stays the row's
+          first direct child at the same depth it always was, so nothing
+          that locates a tile by walking up from the label text (a test, or
+          any future caller) has to know a `period` was ever added. The
+          icon's own `ml-auto` — not `justify-between` on the row — is what
+          keeps it pinned to the far end with `period` free to sit directly
+          beside the label. */}
+      <div className="flex items-start gap-2">
         <span className={cn('text-xs font-semibold', tone ? tone.label : 'text-muted-foreground')}>
           {label}
         </span>
+        {period ? (
+          <span className={cn('text-2xs font-normal opacity-75', tone ? tone.label : 'text-muted-foreground')}>
+            · {period}
+          </span>
+        ) : null}
         {Icon ? (
           tone ? (
             <span
               className={cn(
-                'flex size-9 shrink-0 items-center justify-center rounded-xl',
+                'ml-auto flex size-9 shrink-0 items-center justify-center rounded-xl',
                 tone.disc,
               )}
             >
@@ -123,7 +141,7 @@ export function StatCard({
             </span>
           ) : (
             <Icon
-              className="size-4 shrink-0 text-muted-foreground transition-colors duration-[var(--duration-quick)] group-hover:text-primary"
+              className="ml-auto size-4 shrink-0 text-muted-foreground transition-colors duration-[var(--duration-quick)] group-hover:text-primary"
               aria-hidden="true"
             />
           )
