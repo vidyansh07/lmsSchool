@@ -6,12 +6,11 @@ import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
 import { ErrorState, LoadingState } from '@/components/states';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { AreaChart } from '@/components/ui/charts';
 import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
 import { WarningsStrip } from '@/components/warnings-strip';
-import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { ApiError } from '@/lib/api';
 import { formatNumber, formatPercent, NO_DATA } from '@/lib/format';
 import { adminDashboard, attendanceTrend } from '@/lib/reporting';
@@ -203,40 +202,15 @@ function Overview() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {trend.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No registers taken yet.</p>
-          ) : (
-            <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
-              <Table>
-                <thead>
-                  <tr>
-                    <Th className="sticky top-0 z-10 bg-muted">Week</Th>
-                    <Th className="sticky top-0 z-10 bg-muted text-right">Counted</Th>
-                    <Th className="sticky top-0 z-10 bg-muted text-right">Attended</Th>
-                    <Th className="sticky top-0 z-10 bg-muted text-right">Rate</Th>
-                  </tr>
-                </thead>
-                <tbody className="stagger">
-                  {trend.map((point) => (
-                    <tr key={point.week} className="animate-fade-in hover:bg-muted/40">
-                      <Td>{point.week}</Td>
-                      <Td className="text-right tabular-nums">{formatNumber(point.counted)}</Td>
-                      <Td className="text-right tabular-nums">{formatNumber(point.attended)}</Td>
-                      <Td className="text-right">
-                        {point.percent === null ? (
-                          <span className="text-muted-foreground">{NO_DATA}</span>
-                        ) : (
-                          <Badge variant={point.percent >= 75 ? 'success' : 'warning'}>
-                            {formatPercent(point.percent)}
-                          </Badge>
-                        )}
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </TableWrapper>
-          )}
+          <AreaChart
+            data={trend.map((point) => ({ date: point.week, value: point.percent }))}
+            series={[{ key: 'value', label: 'Attendance rate' }]}
+            xLabel="Week"
+            height={280}
+            valueFormatter={(value) => formatPercent(value)}
+            emptyMessage="No registers taken yet."
+            ariaLabel="Attendance rate by week"
+          />
         </CardContent>
       </Card>
     </div>
