@@ -6,6 +6,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ActivityTypesPage from "@/app/admin/activity-types/page";
+import { ApiError } from "@/lib/api";
 import type { ActivityType } from "@/types/api";
 
 const useApi = vi.hoisted(() => vi.fn());
@@ -125,5 +126,55 @@ describe("ActivityTypesPage", () => {
       ),
     );
     await waitFor(() => expect(reload).toHaveBeenCalled());
+  });
+});
+
+describe("ActivityTypeDialog — Phase R7 Target 3", () => {
+  it("uses the app-wide sm:grid-cols-2 convention for the Duration/Reminder and Weight/Risk pairs, not a bare grid-cols-2", () => {
+    mockUseApi([]);
+    const { container } = render(<ActivityTypesPage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "New type" })[0]!);
+
+    // Both pairs collapse to one column below `sm:`, same as every other
+    // multi-column field grid in the app (e.g. `create-student-dialog.tsx`).
+    expect(container.querySelectorAll(".grid.gap-4.sm\\:grid-cols-2").length).toBe(2);
+    // No leftover bare `grid-cols-2` (no `sm:` prefix) anywhere in the dialog.
+    const bareTwoColumnGrids = Array.from(container.querySelectorAll<HTMLElement>("div")).filter(
+      (el) => el.classList.contains("grid-cols-2") && !el.classList.contains("sm:grid-cols-2"),
+    );
+    expect(bareTwoColumnGrids).toHaveLength(0);
+  });
+
+  it("groups the two role-checkbox groups under one shared heading — the one real grouping the form implies", () => {
+    mockUseApi([]);
+    render(<ActivityTypesPage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "New type" })[0]!);
+
+    const rolesGroup = screen.getByText("Roles").closest("fieldset");
+    expect(rolesGroup).not.toBeNull();
+    expect(rolesGroup).toContainElement(screen.getByRole("group", { name: "Who may create it" }));
+    expect(rolesGroup).toContainElement(
+      screen.getByRole("group", { name: "Who may be assigned it" }),
+    );
+  });
+
+  it("wires a role-checkbox group's error through aria-describedby, not a bare disconnected <p>", async () => {
+    mockUseApi([]);
+    createActivityType.mockRejectedValue(
+      new ApiError(400, "validation_error", "The submitted data is invalid.", "req-1", {
+        allowed_creator_roles: ["Choose at least one role."],
+      }),
+    );
+    render(<ActivityTypesPage />);
+    fireEvent.click(screen.getAllByRole("button", { name: "New type" })[0]!);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
+      target: { value: "Doubt Session" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Create type" }));
+
+    const message = await screen.findByText("Choose at least one role.");
+    const group = screen.getByRole("group", { name: "Who may create it" });
+    expect(group).toHaveAttribute("aria-describedby", message.id);
   });
 });

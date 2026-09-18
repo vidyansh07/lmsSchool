@@ -33,7 +33,7 @@ import {
   testAutomationRule,
   updateAutomationRule,
 } from "@/lib/automation";
-import { errorMessage } from "@/lib/api";
+import { errorMessage, fieldErrors } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
 import {
   AUTOMATION_RULE_STATUS_LABEL,
@@ -69,6 +69,11 @@ export function RuleBuilder({ id }: { id: string }) {
 
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  // Field-level errors from `save()`, same `fieldErrors(cause)` pattern
+  // every other form in this app uses (see `create-student-dialog.tsx`) —
+  // wired to Name/Trigger/Description below instead of only ever showing
+  // as the one generic `failure` Alert.
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
@@ -137,12 +142,13 @@ export function RuleBuilder({ id }: { id: string }) {
   async function save() {
     setIsSaving(true);
     setFailure(null);
+    setErrors({});
     try {
       await updateAutomationRule(id, { name, description, trigger, conditions, actions });
       setNotice("Changes saved.");
       reload();
     } catch (cause) {
-      setFailure(errorMessage(cause, "Could not save this rule."));
+      setErrors(fieldErrors(cause));
     } finally {
       setIsSaving(false);
     }
@@ -245,6 +251,7 @@ export function RuleBuilder({ id }: { id: string }) {
 
       {notice ? <Alert variant="success">{notice}</Alert> : null}
       {failure ? <Alert variant="error">{failure}</Alert> : null}
+      {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
       {dirty ? (
         <Alert variant="warning">
           Unsaved changes — save before testing or activating so either one reflects what you
@@ -257,7 +264,7 @@ export function RuleBuilder({ id }: { id: string }) {
           <CardTitle>Details</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Name" htmlFor="rule-name">
+          <Field label="Name" htmlFor="rule-name" error={errors.name} required>
             <Input
               id="rule-name"
               disabled={!mayManage}
@@ -271,6 +278,8 @@ export function RuleBuilder({ id }: { id: string }) {
           <Field
             label="Trigger"
             htmlFor="rule-trigger"
+            error={errors.trigger}
+            required
             hint={
               canEditTrigger
                 ? "Changing this clears the conditions below."
@@ -294,7 +303,12 @@ export function RuleBuilder({ id }: { id: string }) {
               ))}
             </Select>
           </Field>
-          <Field label="Description" htmlFor="rule-description" className="sm:col-span-2">
+          <Field
+            label="Description"
+            htmlFor="rule-description"
+            error={errors.description}
+            className="sm:col-span-2"
+          >
             <Textarea
               id="rule-description"
               rows={2}

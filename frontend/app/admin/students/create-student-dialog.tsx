@@ -18,6 +18,31 @@ import { fieldErrors } from '@/lib/api';
 import { QUALIFICATION_OPTIONS } from '@/lib/labels';
 import { createStudent } from '@/lib/people';
 
+/** The two fields this dialog actually marks `required` (see `Field`'s own
+ *  `*` indicator on Email/First name below) — kept to that same pair here
+ *  so on-blur validation never disagrees with what the form already tells
+ *  a person is required. */
+type RequiredField = 'email' | 'first_name';
+
+/**
+ * A person finding out a required field is empty (or, for email, obviously
+ * malformed) the moment they leave it, rather than only after the create
+ * request round-trips and fails. This never changes which fields are
+ * required — that stays exactly what `Field`'s `required` prop already
+ * marks — and never replaces the server's own validation: `onSubmit` below
+ * is untouched, still sends the request and still repopulates `errors` from
+ * whatever the server says.
+ */
+function onBlurMessage(field: RequiredField, value: string): string | undefined {
+  if (value.trim() === '') {
+    return field === 'email' ? 'Email is required.' : 'First name is required.';
+  }
+  if (field === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
+    return 'Enter a valid email address.';
+  }
+  return undefined;
+}
+
 /**
  * Create a student account and profile in one step.
  *
@@ -42,6 +67,24 @@ export function CreateStudentDialog({
   const [branchId, setBranchId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  // On-blur only — additive to, never a replacement for, the server
+  // validation `onSubmit` below still runs unchanged. Clears a client-side
+  // message once the field is fixed; leaves any other field's error (e.g.
+  // one that just came back from the server) untouched.
+  function onRequiredBlur(field: RequiredField, value: string) {
+    const message = onBlurMessage(field, value);
+    setErrors((current) => {
+      if (!message) {
+        if (!(field in current)) return current;
+        const rest = { ...current };
+        delete rest[field];
+        return rest;
+      }
+      if (current[field] === message) return current;
+      return { ...current, [field]: message };
+    });
+  }
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -83,13 +126,18 @@ export function CreateStudentDialog({
                 type="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
+                onBlur={(event) => onRequiredBlur('email', event.target.value)}
               />
             </Field>
             <Field label="Phone" htmlFor="new-phone" error={errors.phone}>
               <Input value={phone} onChange={(event) => setPhone(event.target.value)} />
             </Field>
             <Field label="First name" htmlFor="new-first" error={errors.first_name} required>
-              <Input value={firstName} onChange={(event) => setFirstName(event.target.value)} />
+              <Input
+                value={firstName}
+                onChange={(event) => setFirstName(event.target.value)}
+                onBlur={(event) => onRequiredBlur('first_name', event.target.value)}
+              />
             </Field>
             <Field label="Last name" htmlFor="new-last" error={errors.last_name}>
               <Input value={lastName} onChange={(event) => setLastName(event.target.value)} />

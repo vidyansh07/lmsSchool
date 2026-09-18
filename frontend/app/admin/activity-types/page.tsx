@@ -107,36 +107,62 @@ function toInput(type: ActivityType): ActivityTypeInput {
   };
 }
 
-/** A checkbox group over `UserRole` — used for both allowed-role fields. */
+/**
+ * A checkbox group over `UserRole` — used for both allowed-role fields.
+ *
+ * Its error is wired to the group the same way `Field` wires one to an
+ * `<input>` (`aria-describedby` on the group, an `id`-matched message right
+ * below it) rather than as a bare, unconnected `<p>` — this group isn't an
+ * `<input>` `Field` can clone props onto, so the same contract is applied
+ * by hand instead.
+ */
 function RoleCheckboxes({
   legend,
+  groupId,
   values,
   onChange,
+  error,
 }: {
   legend: string;
+  /** Unique per group, so its own error has a stable id to point at. */
+  groupId: string;
   values: string[];
   onChange: (next: string[]) => void;
+  error?: string;
 }) {
   const selected = new Set(values);
+  const errorId = `${groupId}-error`;
   return (
-    <div className="space-y-1.5" role="group" aria-label={legend}>
-      <p className="text-sm font-medium">{legend}</p>
-      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-        {ASSIGNABLE_ROLES.map((role) => (
-          <label key={role} className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={selected.has(role)}
-              onCheckedChange={(checked) => {
-                const next = new Set(selected);
-                if (checked) next.add(role);
-                else next.delete(role);
-                onChange(Array.from(next));
-              }}
-            />
-            {ROLE_LABEL[role]}
-          </label>
-        ))}
+    <div className="space-y-1.5">
+      <div
+        className="space-y-1.5"
+        role="group"
+        aria-label={legend}
+        aria-describedby={error ? errorId : undefined}
+      >
+        <p className="text-sm font-medium">{legend}</p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          {ASSIGNABLE_ROLES.map((role) => (
+            <label key={role} className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={selected.has(role)}
+                onCheckedChange={(checked) => {
+                  const next = new Set(selected);
+                  if (checked) next.add(role);
+                  else next.delete(role);
+                  onChange(Array.from(next));
+                }}
+              />
+              {ROLE_LABEL[role]}
+            </label>
+          ))}
+        </div>
       </div>
+      {error ? (
+        <p id={errorId} className="text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -174,6 +200,32 @@ function ActivityTypeDialog({
   }
 
   const isEdit = Boolean(editing);
+
+  // Real progressive disclosure for the one form in the app that genuinely
+  // dumped all ~15 fields on one screen at once (R1's audit finding). Native
+  // <details>/<summary> again, not a new primitive — same convention
+  // `app/students/[id]/page.tsx` already uses for the same reason: this
+  // codebase's `components/ui/*` has no collapsible yet, and inventing one
+  // for two call sites is a bigger change than this phase's brief allows.
+  // Only Name/Slug/Description/Category (the four most load-bearing, and the
+  // only three that are ever `required`) stay unconditionally visible; the
+  // rest is staged behind three sections a person opens when it is relevant
+  // to what they are doing.
+  //
+  // A section starts open when editing an existing type (so nothing already
+  // set is hidden from someone who came here to change it) and starts
+  // closed for a new one (so creating a type shows the essentials first).
+  // Either way, a section forces itself open the moment the server returns
+  // an error for one of its own fields, so a validation failure is never
+  // hidden inside a collapsed section — and, because that computed value
+  // only changes when `isEdit` or the error itself changes, a person can
+  // still freely collapse a section by hand afterwards without React
+  // fighting the click on the next unrelated re-render.
+  const assignmentHasError = Boolean(errors.allowed_creator_roles || errors.allowed_assignee_roles);
+  const schedulingHasError = Boolean(
+    errors.default_duration_minutes || errors.reminder_minutes_before || errors.form,
+  );
+  const scoringHasError = Boolean(errors.performance_weight || errors.risk_effect || errors.status);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -269,181 +321,221 @@ function ActivityTypeDialog({
             </Select>
           </Field>
 
-          <RoleCheckboxes
-            legend="Who may create it"
-            values={input.allowed_creator_roles}
-            onChange={(next) =>
-              setInput((current) => ({ ...current, allowed_creator_roles: next }))
-            }
-          />
-          {errors.allowed_creator_roles ? (
-            <p className="text-xs text-destructive">{errors.allowed_creator_roles}</p>
-          ) : null}
+          <details
+            className="space-y-4 rounded-[var(--radius-card)] border border-border p-3"
+            open={isEdit || assignmentHasError}
+          >
+            <summary className="cursor-pointer select-none text-sm font-medium hover:text-foreground">
+              Who can do this, and who sees it
+            </summary>
+            <div className="space-y-4 pt-3">
+              {/* The one real grouping this form already implies (per the R1
+                  audit): both role-checkbox groups answer the same "who" the
+                  file's own docstring names ("who may create and be assigned
+                  it") — grouped under one shared heading rather than sitting
+                  as two unrelated fields among the other ~13. */}
+              <fieldset className="space-y-4 rounded-[var(--radius-card)] border border-border p-3">
+                <legend className="px-1 text-sm font-medium">Roles</legend>
+                <RoleCheckboxes
+                  legend="Who may create it"
+                  groupId="at-creator-roles"
+                  values={input.allowed_creator_roles}
+                  onChange={(next) =>
+                    setInput((current) => ({ ...current, allowed_creator_roles: next }))
+                  }
+                  error={errors.allowed_creator_roles}
+                />
+                <RoleCheckboxes
+                  legend="Who may be assigned it"
+                  groupId="at-assignee-roles"
+                  values={input.allowed_assignee_roles}
+                  onChange={(next) =>
+                    setInput((current) => ({ ...current, allowed_assignee_roles: next }))
+                  }
+                  error={errors.allowed_assignee_roles}
+                />
+              </fieldset>
 
-          <RoleCheckboxes
-            legend="Who may be assigned it"
-            values={input.allowed_assignee_roles}
-            onChange={(next) =>
-              setInput((current) => ({ ...current, allowed_assignee_roles: next }))
-            }
-          />
-          {errors.allowed_assignee_roles ? (
-            <p className="text-xs text-destructive">{errors.allowed_assignee_roles}</p>
-          ) : null}
-
-          <div className="flex items-center justify-between rounded-md border border-border p-3">
-            <div>
-              <p className="text-sm font-medium">Visible to the student</p>
-              <p className="text-xs text-muted-foreground">
-                An activity of this type may still be hidden on its own; it can never be
-                made visible when the type is not.
-              </p>
+              <div className="flex items-center justify-between rounded-md border border-border p-3">
+                <div>
+                  <p className="text-sm font-medium">Visible to the student</p>
+                  <p className="text-xs text-muted-foreground">
+                    An activity of this type may still be hidden on its own; it can never be
+                    made visible when the type is not.
+                  </p>
+                </div>
+                <Switch
+                  checked={input.visible_to_student}
+                  onCheckedChange={(checked) =>
+                    setInput((current) => ({ ...current, visible_to_student: checked }))
+                  }
+                />
+              </div>
             </div>
-            <Switch
-              checked={input.visible_to_student}
-              onCheckedChange={(checked) =>
-                setInput((current) => ({ ...current, visible_to_student: checked }))
-              }
-            />
-          </div>
+          </details>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Field
-              label="Default duration (minutes)"
-              htmlFor="at-duration"
-              error={errors.default_duration_minutes}
-            >
-              <Input
-                id="at-duration"
-                type="number"
-                min={0}
-                value={input.default_duration_minutes ?? ""}
-                onChange={(event) =>
-                  setInput((current) => ({
-                    ...current,
-                    default_duration_minutes:
-                      event.target.value === "" ? null : Number(event.target.value),
-                  }))
-                }
-              />
-            </Field>
-            <Field
-              label="Reminder (minutes before)"
-              htmlFor="at-reminder"
-              error={errors.reminder_minutes_before}
-            >
-              <Input
-                id="at-reminder"
-                type="number"
-                min={0}
-                value={input.reminder_minutes_before ?? ""}
-                onChange={(event) =>
-                  setInput((current) => ({
-                    ...current,
-                    reminder_minutes_before:
-                      event.target.value === "" ? null : Number(event.target.value),
-                  }))
-                }
-              />
-            </Field>
-          </div>
+          <details
+            className="space-y-4 rounded-[var(--radius-card)] border border-border p-3"
+            open={isEdit || schedulingHasError}
+          >
+            <summary className="cursor-pointer select-none text-sm font-medium hover:text-foreground">
+              Scheduling and its form
+            </summary>
+            <div className="space-y-4 pt-3">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Default duration (minutes)"
+                  htmlFor="at-duration"
+                  error={errors.default_duration_minutes}
+                >
+                  <Input
+                    id="at-duration"
+                    type="number"
+                    min={0}
+                    value={input.default_duration_minutes ?? ""}
+                    onChange={(event) =>
+                      setInput((current) => ({
+                        ...current,
+                        default_duration_minutes:
+                          event.target.value === "" ? null : Number(event.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+                <Field
+                  label="Reminder (minutes before)"
+                  htmlFor="at-reminder"
+                  error={errors.reminder_minutes_before}
+                >
+                  <Input
+                    id="at-reminder"
+                    type="number"
+                    min={0}
+                    value={input.reminder_minutes_before ?? ""}
+                    onChange={(event) =>
+                      setInput((current) => ({
+                        ...current,
+                        reminder_minutes_before:
+                          event.target.value === "" ? null : Number(event.target.value),
+                      }))
+                    }
+                  />
+                </Field>
+              </div>
 
-          <Field label="Form" htmlFor="at-form" error={errors.form} hint="Pinned at creation for every activity of this type.">
-            <Select
-              id="at-form"
-              value={input.form ?? ""}
-              onChange={(event) =>
-                setInput((current) => ({
-                  ...current,
-                  form: event.target.value || null,
-                }))
-              }
-            >
-              <option value="">No form</option>
-              {formOptions.map((form) => (
-                <option key={form.id} value={form.id}>
-                  {form.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-
-          <div className="flex items-center justify-between rounded-md border border-border p-3">
-            <div>
-              <p className="text-sm font-medium">Requires review</p>
-              <p className="text-xs text-muted-foreground">
-                Completion goes to Under review instead of Completed.
-              </p>
-            </div>
-            <Switch
-              checked={input.requires_review}
-              onCheckedChange={(checked) =>
-                setInput((current) => ({ ...current, requires_review: checked }))
-              }
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <Field
-              label="Performance weight"
-              htmlFor="at-weight"
-              error={errors.performance_weight}
-              hint="0 = no effect on the performance component."
-            >
-              <Input
-                id="at-weight"
-                type="number"
-                min={0}
-                max={99.99}
-                step="0.1"
-                value={input.performance_weight}
-                onChange={(event) =>
-                  setInput((current) => ({
-                    ...current,
-                    performance_weight: event.target.value,
-                  }))
-                }
-              />
-            </Field>
-            <Field label="Risk effect" htmlFor="at-risk" error={errors.risk_effect}>
-              <Select
-                id="at-risk"
-                value={input.risk_effect}
-                onChange={(event) =>
-                  setInput((current) => ({
-                    ...current,
-                    risk_effect: event.target.value as ActivityRiskEffect,
-                  }))
-                }
+              <Field
+                label="Form"
+                htmlFor="at-form"
+                error={errors.form}
+                hint="Pinned at creation for every activity of this type."
               >
-                {(Object.keys(ACTIVITY_RISK_EFFECT_LABEL) as ActivityRiskEffect[]).map(
-                  (value) => (
-                    <option key={value} value={value}>
-                      {ACTIVITY_RISK_EFFECT_LABEL[value]}
+                <Select
+                  id="at-form"
+                  value={input.form ?? ""}
+                  onChange={(event) =>
+                    setInput((current) => ({
+                      ...current,
+                      form: event.target.value || null,
+                    }))
+                  }
+                >
+                  <option value="">No form</option>
+                  {formOptions.map((form) => (
+                    <option key={form.id} value={form.id}>
+                      {form.name}
                     </option>
-                  ),
-                )}
-              </Select>
-            </Field>
-          </div>
+                  ))}
+                </Select>
+              </Field>
 
-          {isEdit ? (
-            <Field label="Status" htmlFor="at-status" error={errors.status}>
-              <Select
-                id="at-status"
-                value={input.status}
-                onChange={(event) =>
-                  setInput((current) => ({
-                    ...current,
-                    status: event.target.value as "active" | "disabled",
-                  }))
-                }
-              >
-                <option value="active">{ACTIVITY_TYPE_STATUS_LABEL.active}</option>
-                <option value="disabled">{ACTIVITY_TYPE_STATUS_LABEL.disabled}</option>
-              </Select>
-            </Field>
-          ) : null}
+              <div className="flex items-center justify-between rounded-md border border-border p-3">
+                <div>
+                  <p className="text-sm font-medium">Requires review</p>
+                  <p className="text-xs text-muted-foreground">
+                    Completion goes to Under review instead of Completed.
+                  </p>
+                </div>
+                <Switch
+                  checked={input.requires_review}
+                  onCheckedChange={(checked) =>
+                    setInput((current) => ({ ...current, requires_review: checked }))
+                  }
+                />
+              </div>
+            </div>
+          </details>
+
+          <details
+            className="space-y-4 rounded-[var(--radius-card)] border border-border p-3"
+            open={isEdit || scoringHasError}
+          >
+            <summary className="cursor-pointer select-none text-sm font-medium hover:text-foreground">
+              Scoring{isEdit ? " and status" : ""}
+            </summary>
+            <div className="space-y-4 pt-3">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Performance weight"
+                  htmlFor="at-weight"
+                  error={errors.performance_weight}
+                  hint="0 = no effect on the performance component."
+                >
+                  <Input
+                    id="at-weight"
+                    type="number"
+                    min={0}
+                    max={99.99}
+                    step="0.1"
+                    value={input.performance_weight}
+                    onChange={(event) =>
+                      setInput((current) => ({
+                        ...current,
+                        performance_weight: event.target.value,
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="Risk effect" htmlFor="at-risk" error={errors.risk_effect}>
+                  <Select
+                    id="at-risk"
+                    value={input.risk_effect}
+                    onChange={(event) =>
+                      setInput((current) => ({
+                        ...current,
+                        risk_effect: event.target.value as ActivityRiskEffect,
+                      }))
+                    }
+                  >
+                    {(Object.keys(ACTIVITY_RISK_EFFECT_LABEL) as ActivityRiskEffect[]).map(
+                      (value) => (
+                        <option key={value} value={value}>
+                          {ACTIVITY_RISK_EFFECT_LABEL[value]}
+                        </option>
+                      ),
+                    )}
+                  </Select>
+                </Field>
+              </div>
+
+              {isEdit ? (
+                <Field label="Status" htmlFor="at-status" error={errors.status}>
+                  <Select
+                    id="at-status"
+                    value={input.status}
+                    onChange={(event) =>
+                      setInput((current) => ({
+                        ...current,
+                        status: event.target.value as "active" | "disabled",
+                      }))
+                    }
+                  >
+                    <option value="active">{ACTIVITY_TYPE_STATUS_LABEL.active}</option>
+                    <option value="disabled">{ACTIVITY_TYPE_STATUS_LABEL.disabled}</option>
+                  </Select>
+                </Field>
+              ) : null}
+            </div>
+          </details>
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>

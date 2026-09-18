@@ -9,6 +9,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RuleBuilder } from "@/components/automation/rule-builder";
+import { ApiError } from "@/lib/api";
 import type { ActivityTypeListResponse } from "@/lib/work";
 import type { AutomationDryRunResult, AutomationRuleDetail } from "@/types/api";
 
@@ -198,6 +199,59 @@ describe("RuleBuilder — dry run", () => {
     // The breakdown is the occurrence's own context, flattened — visible once expanded.
     fireEvent.click(screen.getAllByText("Occurrence data")[0]!);
     expect(screen.getByText(/activity\.type: "mock-interview"/)).toBeInTheDocument();
+  });
+});
+
+describe("RuleBuilder — Details field-level errors (Phase R7 Target 2)", () => {
+  it("marks Name and Trigger required — the two fields `save()`'s own PATCH payload always sends and the backend rejects blank — but not Description", () => {
+    mockUseApi(RULE);
+    render(<RuleBuilder id="rule-1" />);
+
+    // Not `getByLabelText` for Name/Trigger: both are now `required`, and
+    // `Field` renders the `*` as an `aria-hidden` sibling span, which
+    // testing-library's label matcher includes in the label's plain text
+    // ("Name*") while the real accessible-name algorithm `getByRole` uses
+    // correctly excludes it (see `activity-types-page.test.tsx` for the
+    // same note against the same `Field` component).
+    expect(screen.getByRole("textbox", { name: "Name" })).toBeRequired();
+    expect(screen.getByRole("combobox", { name: "Trigger" })).toBeRequired();
+    expect(screen.getByLabelText("Description")).not.toBeRequired();
+  });
+
+  it("wires a save failure's field errors onto Name/Trigger/Description instead of only the generic top Alert", async () => {
+    mockUseApi(RULE);
+    updateAutomationRule.mockRejectedValue(
+      new ApiError(400, "validation_error", "The submitted data is invalid.", "req-1", {
+        name: ["This field may not be blank."],
+        trigger: ["This field may not be blank."],
+        description: ["Ensure this field has no more than 2000 characters."],
+      }),
+    );
+
+    render(<RuleBuilder id="rule-1" />);
+    // Any edit marks the form dirty, which is what enables Save changes.
+    fireEvent.change(screen.getByRole("textbox", { name: "Name" }), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(updateAutomationRule).toHaveBeenCalled());
+    // Both Name and Trigger show their own message, not just one shared one.
+    expect(await screen.findAllByText("This field may not be blank.")).toHaveLength(2);
+    expect(
+      screen.getByText("Ensure this field has no more than 2000 characters."),
+    ).toBeInTheDocument();
+  });
+
+  it("still shows a plain top-of-page message when the server error carries no field detail — the pre-existing fallback `fieldErrors` already provides", async () => {
+    mockUseApi(RULE);
+    updateAutomationRule.mockRejectedValue(
+      new ApiError(500, "server_error", "Could not save this rule.", "req-2"),
+    );
+
+    render(<RuleBuilder id="rule-1" />);
+    fireEvent.change(screen.getByLabelText("Description"), { target: { value: "updated" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    expect(await screen.findByText("Could not save this rule.")).toBeInTheDocument();
   });
 });
 
