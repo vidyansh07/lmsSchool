@@ -85,6 +85,51 @@ dependencies that "ship two hundred things to upgrade forever."
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R2 — Charting system (2026-09-18, commits `c57c898`, `2cb02c2`)
+
+Recharts 3.10.1 installed; themed chart wrappers (`LineChart`, `AreaChart`,
+`BarChart`, `DonutChart`, hand-rolled `RadialProgress`) added under
+`components/ui/charts/`, applied to `app/admin/overview/page.tsx`'s
+attendance trend. Review found one real finding, rated minor and not
+auto-fixed by the workflow: the new chart plots only `percent`, so the
+`counted`/`attended` figures the old table showed disappeared from the page
+entirely — not in the chart, not in its own accessible data table. I judged
+this a genuine functionality-preservation regression (the brief is explicit:
+"do not remove functionality simply because the UI is being redesigned")
+regardless of the review's severity label, and fixed it myself rather than
+carrying it forward: a "Show exact figures" toggle now swaps the chart for
+the original table on demand, with its own test
+(`admin-overview-page.test.tsx`) proving both the toggle and the real
+counted/attended values appear.
+
+Independently re-verified: read `chart-colors.ts` and confirmed every color
+is a `var(--color-*)` reference, zero hardcoded hex anywhere in the
+directory (grepped myself); confirmed every wrapper imports the same
+`useReducedMotion` hook `Sparkline`/`StatCard` already use, not a second
+mechanism; confirmed `chart-data-table.tsx` is a real `sr-only` text
+alternative present in the DOM for every chart; confirmed via `git diff`
+that no other dashboard (manager/trainer/counsellor/student) was touched —
+R4's scope, not this phase's. Ran `tsc --noEmit`, `lint`, the full frontend
+suite (130 files / 1173 tests after my own fix's added test), and
+`npm run build` myself — all clean, including the production build that
+would surface any Recharts SSR/hydration-specific failure.
+
+Live on staging: `GET /api/v1/reports/metrics/attendance-trend/?weeks=12`
+returns real, non-trivial data (e.g. `{"week":"2026-06-22","counted":2057,
+"attended":1251,"percent":60.82}`, dozens of weeks) — confirming the fixed
+toggle has real numbers to show, not an edge case with nothing to display.
+`docker compose logs frontend` shows a clean start with no runtime errors.
+A true visual check was attempted via claude-in-chrome both before and after
+deploying; the extension was not connected either time. Since this app's
+pages are client-rendered behind `RequireAuth` (confirmed by fetching the
+live page's raw HTML — the server shell has no visible content until client
+hydration runs), a curl-based HTML fetch cannot substitute for an actual
+screenshot here; the evidence above (component-code review, real API data,
+clean container logs, a green production build with SSR checks, and a full
+local test suite including my own new toggle test) is real but is not the
+same as having looked at the rendered page. Worth a manual look next time
+the browser extension is available, not treated as a blocker.
+
 ### R1 — Foundation audit + token cleanup (2026-09-18, commit `95e577b`)
 
 Review found zero findings. Independently re-verified given this phase
