@@ -30,10 +30,11 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { Bookmark } from "lucide-react";
 
+import { DataTable, type DataTableColumn } from "@/components/data-table";
 import { RequireAuth } from "@/components/require-auth";
 import { ActivityDrawer } from "@/components/work/activity-drawer";
 import { Confirm } from "@/components/confirm";
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { LoadingState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -41,7 +42,6 @@ import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 import { Pagination } from "@/components/pagination";
 import { Popover, PopoverContent, PopoverHeading, PopoverTrigger } from "@/components/ui/popover";
-import { Table, TableWrapper, Td, Th, Tr } from "@/components/ui/table";
 import { ApiError } from "@/lib/api";
 import { categoryVariant } from "@/components/ui/badge";
 import { Capability } from "@/lib/capabilities";
@@ -291,6 +291,60 @@ function ActivitiesWorkspace() {
 
   const rows = state.data?.results ?? [];
 
+  const columns: DataTableColumn<Activity>[] = [
+    {
+      key: "title",
+      header: "Title",
+      sticky: "start",
+      render: (row) => (
+        <button
+          type="button"
+          className="text-left font-medium underline-offset-2 hover:underline"
+          onClick={() => setSelectedId(row.id)}
+        >
+          {row.title}
+        </button>
+      ),
+    },
+    {
+      key: "student",
+      header: "Student",
+      render: (row) => (
+        <>
+          {row.student.name}
+          <span className="block text-xs text-muted-foreground">{row.student.student_id}</span>
+        </>
+      ),
+    },
+    {
+      key: "type",
+      header: "Type",
+      render: (row) => (
+        <Badge variant={categoryVariant(row.type.category)}>{row.type.name}</Badge>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      render: (row) => (
+        <Badge variant={ACTIVITY_STATUS_VARIANT[row.status]}>
+          {ACTIVITY_STATUS_LABEL[row.status]}
+        </Badge>
+      ),
+    },
+    { key: "priority", header: "Priority", render: (row) => ACTIVITY_PRIORITY_LABEL[row.priority] },
+    {
+      key: "assigned_to",
+      header: "Assigned to",
+      render: (row) => (row.assigned_to ? row.assigned_to.name : NOT_ASSIGNED),
+    },
+    {
+      key: "due_at",
+      header: "Due",
+      render: (row) => <span className="whitespace-nowrap">{formatDateTime(row.due_at)}</span>,
+    },
+  ];
+
   return (
     <div className="animate-rise-in space-y-6">
       <div className="space-y-1">
@@ -431,86 +485,30 @@ function ActivitiesWorkspace() {
         onCancel={cancelDiscard}
       />
 
-      {state.isLoading ? (
-        <LoadingState label="Loading activities…" rows={6} />
-      ) : state.error ? (
-        <ErrorState
-          title="Could not load activities"
-          message={state.error.message}
-          requestId={state.error.requestId || undefined}
-          onRetry={reload}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(row) => row.id}
+        isLoading={state.isLoading}
+        loadingLabel="Loading activities…"
+        error={state.error ? { message: state.error.message, requestId: state.error.requestId } : null}
+        errorTitle="Could not load activities"
+        onRetry={reload}
+        emptyTitle="No activities match these filters"
+        emptyDescription="Widen the filters, or check back once work is assigned."
+        onRowActivate={(row) => setSelectedId(row.id)}
+        caption="Activities"
+        densityStorageKey="grras.activities-density"
+      />
+      {state.data ? (
+        <Pagination
+          page={state.data.page}
+          totalPages={state.data.total_pages}
+          count={state.data.count}
+          pageSize={state.data.page_size}
+          onPageChange={(page) => updateFilters({ page })}
         />
-      ) : rows.length === 0 ? (
-        <EmptyState
-          title="No activities match these filters"
-          description="Widen the filters, or check back once work is assigned."
-        />
-      ) : (
-        <>
-          <TableWrapper>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Title</Th>
-                  <Th>Student</Th>
-                  <Th>Type</Th>
-                  <Th>Status</Th>
-                  <Th>Priority</Th>
-                  <Th>Assigned to</Th>
-                  <Th>Due</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <Tr
-                    key={row.id}
-                    className="cursor-pointer"
-                    onClick={() => setSelectedId(row.id)}
-                  >
-                    <Td>
-                      <button
-                        type="button"
-                        className="text-left font-medium underline-offset-2 hover:underline"
-                        onClick={() => setSelectedId(row.id)}
-                      >
-                        {row.title}
-                      </button>
-                    </Td>
-                    <Td>
-                      {row.student.name}
-                      <span className="block text-xs text-muted-foreground">
-                        {row.student.student_id}
-                      </span>
-                    </Td>
-                    <Td>
-                      <Badge variant={categoryVariant(row.type.category)}>
-                        {row.type.name}
-                      </Badge>
-                    </Td>
-                    <Td>
-                      <Badge variant={ACTIVITY_STATUS_VARIANT[row.status]}>
-                        {ACTIVITY_STATUS_LABEL[row.status]}
-                      </Badge>
-                    </Td>
-                    <Td>{ACTIVITY_PRIORITY_LABEL[row.priority]}</Td>
-                    <Td>{row.assigned_to ? row.assigned_to.name : NOT_ASSIGNED}</Td>
-                    <Td className="whitespace-nowrap">{formatDateTime(row.due_at)}</Td>
-                  </Tr>
-                ))}
-              </tbody>
-            </Table>
-          </TableWrapper>
-          {state.data ? (
-            <Pagination
-              page={state.data.page}
-              totalPages={state.data.total_pages}
-              count={state.data.count}
-              pageSize={state.data.page_size}
-              onPageChange={(page) => updateFilters({ page })}
-            />
-          ) : null}
-        </>
-      )}
+      ) : null}
 
       <ActivityDrawer
         activityId={selectedId}

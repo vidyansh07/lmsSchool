@@ -5,15 +5,14 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
+import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
-import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/input';
-import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { useList } from '@/hooks/use-list';
 import {
   BATCH_STATUS_LABEL,
@@ -39,8 +38,57 @@ function BatchList() {
   const router = useRouter();
 
   const isAdmin = can(Capability.batchViewAny);
-  const sortDirection = list.query.ordering?.startsWith('-') ? 'desc' : 'asc';
-  const sortField = list.query.ordering?.replace(/^-/, '');
+
+  const columns: DataTableColumn<BatchListRow>[] = [
+    { key: 'code', header: 'Code', sticky: 'start', width: '8rem', render: (batch) => batch.code },
+    {
+      key: 'name',
+      header: 'Batch',
+      render: (batch) => (
+        <Link
+          href={`/admin/batches/${batch.id}`}
+          className="font-medium hover:text-primary hover:underline"
+        >
+          {batch.name}
+        </Link>
+      ),
+    },
+    { key: 'course_title', header: 'Course', render: (batch) => batch.course_title },
+    { key: 'trainer_name', header: 'Trainer', render: (batch) => batch.trainer_name || '—' },
+    {
+      key: 'start_date',
+      header: 'Runs',
+      sortable: true,
+      render: (batch) => (
+        <span className="whitespace-nowrap text-muted-foreground">
+          {formatDate(batch.start_date)} – {formatDate(batch.end_date)}
+        </span>
+      ),
+    },
+    {
+      key: 'seats',
+      header: 'Seats',
+      render: (batch) => (
+        <>
+          {batch.enrolled_count} / {batch.capacity}
+          {batch.seats_available === 0 ? (
+            <Badge variant="warning" className="ml-2">
+              Full
+            </Badge>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (batch) => (
+        <Badge variant={BATCH_STATUS_VARIANT[batch.status]}>
+          {BATCH_STATUS_LABEL[batch.status]}
+        </Badge>
+      ),
+    },
+  ];
 
   return (
     <div className="animate-rise-in space-y-4">
@@ -97,99 +145,37 @@ function BatchList() {
         </div>
       </ListToolbar>
 
-      {list.isLoading ? (
-        <LoadingState label="Loading batches…" rows={6} />
-      ) : list.error ? (
-        <ErrorState
-          title="Could not load batches"
-          message={list.error.message}
-          requestId={list.error.requestId || undefined}
-          onRetry={list.reload}
-        />
-      ) : list.data && list.data.count === 0 ? (
-        <EmptyState
-          title={isAdmin ? 'No batches yet' : 'No batches assigned to you'}
-          description={
-            isAdmin
-              ? 'Create the first batch to start enrolling students.'
-              : 'An administrator assigns the batches you teach.'
-          }
-        />
-      ) : (
-        <>
-          <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
-            <Table>
-              <thead>
-                <tr>
-                  <Th className="sticky top-0 z-10 bg-muted">Code</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Batch</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Course</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Trainer</Th>
-                  <Th
-                    sortable
-                    active={sortField === 'start_date'}
-                    direction={sortDirection}
-                    onSort={() => list.toggleSort('start_date')}
-                    className="sticky top-0 z-10 bg-muted"
-                  >
-                    Runs
-                  </Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Seats</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Status</Th>
-                </tr>
-              </thead>
-              <tbody className="stagger">
-                {list.data?.results.map((batch) => (
-                  <tr
-                    key={batch.id}
-                    onClick={() => router.push(`/admin/batches/${batch.id}`)}
-                    className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/60 active:bg-muted"
-                  >
-                    <Td className="font-mono text-xs">{batch.code}</Td>
-                    <Td className="font-medium">
-                      <Link
-                        href={`/admin/batches/${batch.id}`}
-                        onClick={(event) => event.stopPropagation()}
-                        className="hover:text-primary hover:underline"
-                      >
-                        {batch.name}
-                      </Link>
-                    </Td>
-                    <Td>{batch.course_title}</Td>
-                    <Td>{batch.trainer_name || '—'}</Td>
-                    <Td className="whitespace-nowrap text-muted-foreground">
-                      {formatDate(batch.start_date)} – {formatDate(batch.end_date)}
-                    </Td>
-                    <Td>
-                      {batch.enrolled_count} / {batch.capacity}
-                      {batch.seats_available === 0 ? (
-                        <Badge variant="warning" className="ml-2">
-                          Full
-                        </Badge>
-                      ) : null}
-                    </Td>
-                    <Td>
-                      <Badge variant={BATCH_STATUS_VARIANT[batch.status]}>
-                        {BATCH_STATUS_LABEL[batch.status]}
-                      </Badge>
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </TableWrapper>
+      <DataTable
+        columns={columns}
+        rows={list.data?.results ?? []}
+        getRowId={(batch) => batch.id}
+        isLoading={list.isLoading}
+        loadingLabel="Loading batches…"
+        error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}
+        errorTitle="Could not load batches"
+        onRetry={list.reload}
+        emptyTitle={isAdmin ? 'No batches yet' : 'No batches assigned to you'}
+        emptyDescription={
+          isAdmin
+            ? 'Create the first batch to start enrolling students.'
+            : 'An administrator assigns the batches you teach.'
+        }
+        sort={list.query.ordering}
+        onSortChange={list.toggleSort}
+        onRowActivate={(batch) => router.push(`/admin/batches/${batch.id}`)}
+        caption="Batches"
+        densityStorageKey="grras.admin-batches-density"
+      />
 
-          {list.data ? (
-            <Pagination
-              page={list.data.page}
-              totalPages={list.data.total_pages}
-              count={list.data.count}
-              pageSize={list.data.page_size}
-              onPageChange={list.setPage}
-            />
-          ) : null}
-        </>
-      )}
+      {list.data ? (
+        <Pagination
+          page={list.data.page}
+          totalPages={list.data.total_pages}
+          count={list.data.count}
+          pageSize={list.data.page_size}
+          onPageChange={list.setPage}
+        />
+      ) : null}
     </div>
   );
 }

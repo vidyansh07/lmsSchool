@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
+import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { Pagination } from '@/components/pagination';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
@@ -29,7 +30,6 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
-import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { useApi } from '@/hooks/use-api';
 import { fieldErrors } from '@/lib/api';
 import { Capability, can } from '@/lib/capabilities';
@@ -178,6 +178,45 @@ export function TemplatesTab() {
     );
   }
 
+  const columns: DataTableColumn<MessageTemplate>[] = [
+    {
+      key: 'key',
+      header: 'Key',
+      sticky: 'start',
+      render: (row) => (
+        <Link
+          href={`/admin/communication/templates/${row.key}`}
+          className="font-mono text-xs font-medium underline-offset-2 hover:underline"
+        >
+          {row.key}
+        </Link>
+      ),
+    },
+    { key: 'name', header: 'Name', render: (row) => row.name },
+    { key: 'channel', header: 'Channel', render: (row) => COMMUNICATION_CHANNEL_LABEL[row.channel] },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (row) => (
+        <Badge variant={TEMPLATE_STATUS_VARIANT[row.status]}>{TEMPLATE_STATUS_LABEL[row.status]}</Badge>
+      ),
+    },
+    {
+      key: 'current_version',
+      header: 'Published',
+      render: (row) => (row.current_version ? `v${row.current_version.number}` : '—'),
+    },
+    {
+      key: 'draft_version',
+      header: 'In progress',
+      render: (row) =>
+        row.draft_version
+          ? `v${row.draft_version.number}${row.draft_version.approved_at ? ' (approved)' : ''}`
+          : '—',
+    },
+    { key: 'updated_at', header: 'Updated', render: (row) => formatDateTime(row.updated_at) },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -208,49 +247,13 @@ export function TemplatesTab() {
           }
         />
       ) : (
-        <TableWrapper>
-          <Table>
-            <thead>
-              <tr>
-                <Th>Key</Th>
-                <Th>Name</Th>
-                <Th>Channel</Th>
-                <Th>Status</Th>
-                <Th>Published</Th>
-                <Th>In progress</Th>
-                <Th>Updated</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.key} className="hover:bg-muted/40">
-                  <Td>
-                    <Link
-                      href={`/admin/communication/templates/${row.key}`}
-                      className="font-mono text-xs font-medium underline-offset-2 hover:underline"
-                    >
-                      {row.key}
-                    </Link>
-                  </Td>
-                  <Td>{row.name}</Td>
-                  <Td>{COMMUNICATION_CHANNEL_LABEL[row.channel]}</Td>
-                  <Td>
-                    <Badge variant={TEMPLATE_STATUS_VARIANT[row.status]}>
-                      {TEMPLATE_STATUS_LABEL[row.status]}
-                    </Badge>
-                  </Td>
-                  <Td>{row.current_version ? `v${row.current_version.number}` : '—'}</Td>
-                  <Td>
-                    {row.draft_version
-                      ? `v${row.draft_version.number}${row.draft_version.approved_at ? ' (approved)' : ''}`
-                      : '—'}
-                  </Td>
-                  <Td>{formatDateTime(row.updated_at)}</Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </TableWrapper>
+        <DataTable
+          columns={columns}
+          rows={rows}
+          getRowId={(row) => row.key}
+          caption="Templates"
+          densityStorageKey="grras.templates-density"
+        />
       )}
 
       {data && data.count > 0 ? (

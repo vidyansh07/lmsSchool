@@ -3,16 +3,15 @@
 import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
+import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
-import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
-import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { useList } from '@/hooks/use-list';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
@@ -36,8 +35,65 @@ function TrainersTable() {
     }
   }
 
-  const sortDirection = list.query.ordering?.startsWith('-') ? 'desc' : 'asc';
-  const sortField = list.query.ordering?.replace(/^-/, '');
+  const columns: DataTableColumn<TrainerListRow>[] = [
+    {
+      key: 'trainer_id',
+      header: 'Trainer ID',
+      sticky: 'start',
+      sortable: true,
+      width: '9rem',
+      render: (row) => <span className="font-mono text-xs">{row.trainer_id}</span>,
+    },
+    { key: 'full_name', header: 'Name', render: (row) => <span className="font-medium">{row.full_name || '—'}</span> },
+    { key: 'professional_title', header: 'Title', render: (row) => row.professional_title || '—' },
+    {
+      key: 'skills',
+      header: 'Skills',
+      render: (row) => (
+        <div className="flex flex-wrap gap-1">
+          {row.skills.length === 0
+            ? '—'
+            : row.skills.slice(0, 3).map((skill) => <Badge key={skill}>{skill}</Badge>)}
+          {row.skills.length > 3 ? (
+            <span className="text-xs text-muted-foreground">+{row.skills.length - 3}</span>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      key: 'years_of_experience',
+      header: 'Experience',
+      sortable: true,
+      render: (row) => row.years_of_experience ?? '—',
+    },
+    {
+      key: 'availability',
+      header: 'Availability',
+      render: (row) =>
+        can(Capability.trainerUpdateAny) ? (
+          <Button
+            size="sm"
+            variant={row.is_accepting_assignments ? 'outline' : 'primary'}
+            onClick={() => void toggleAvailability(row)}
+          >
+            {row.is_accepting_assignments ? 'Accepting' : 'Not accepting'}
+          </Button>
+        ) : (
+          <Badge variant={row.is_accepting_assignments ? 'success' : 'neutral'}>
+            {row.is_accepting_assignments ? 'Accepting' : 'Not accepting'}
+          </Badge>
+        ),
+    },
+    {
+      key: 'is_active',
+      header: 'Account',
+      render: (row) => (
+        <Badge variant={row.is_active ? 'success' : 'error'}>
+          {row.is_active ? 'Active' : 'Inactive'}
+        </Badge>
+      ),
+    },
+  ];
 
   return (
     <div className="animate-rise-in space-y-4">
@@ -100,109 +156,32 @@ function TrainersTable() {
 
       {actionError ? <Alert variant="error">{actionError}</Alert> : null}
 
-      {list.isLoading ? (
-        <LoadingState label="Loading trainers…" rows={6} />
-      ) : list.error ? (
-        <ErrorState
-          title="Could not load trainers"
-          message={list.error.message}
-          requestId={list.error.requestId || undefined}
-          onRetry={list.reload}
-        />
-      ) : list.data && list.data.count === 0 ? (
-        <EmptyState
-          title="No trainers match these filters"
-          description="Try a different search term, or add the first trainer."
-        />
-      ) : (
-        <>
-          <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
-            <Table>
-              <thead>
-                <tr>
-                  <Th
-                    sortable
-                    active={sortField === 'trainer_id'}
-                    direction={sortDirection}
-                    onSort={() => list.toggleSort('trainer_id')}
-                    className="sticky top-0 z-10 bg-muted"
-                  >
-                    Trainer ID
-                  </Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Name</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Title</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Skills</Th>
-                  <Th
-                    sortable
-                    active={sortField === 'years_of_experience'}
-                    direction={sortDirection}
-                    onSort={() => list.toggleSort('years_of_experience')}
-                    className="sticky top-0 z-10 bg-muted"
-                  >
-                    Experience
-                  </Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Availability</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Account</Th>
-                </tr>
-              </thead>
-              <tbody className="stagger">
-                {list.data?.results.map((row) => (
-                  <tr key={row.id} className="animate-fade-in transition-colors hover:bg-muted/40">
-                    <Td className="font-mono text-xs">{row.trainer_id}</Td>
-                    <Td className="font-medium">{row.full_name || '—'}</Td>
-                    <Td>{row.professional_title || '—'}</Td>
-                    <Td>
-                      <div className="flex flex-wrap gap-1">
-                        {row.skills.length === 0
-                          ? '—'
-                          : row.skills
-                              .slice(0, 3)
-                              .map((skill) => <Badge key={skill}>{skill}</Badge>)}
-                        {row.skills.length > 3 ? (
-                          <span className="text-xs text-muted-foreground">
-                            +{row.skills.length - 3}
-                          </span>
-                        ) : null}
-                      </div>
-                    </Td>
-                    <Td>{row.years_of_experience ?? '—'}</Td>
-                    <Td>
-                      {can(Capability.trainerUpdateAny) ? (
-                        <Button
-                          size="sm"
-                          variant={row.is_accepting_assignments ? 'outline' : 'primary'}
-                          onClick={() => void toggleAvailability(row)}
-                        >
-                          {row.is_accepting_assignments ? 'Accepting' : 'Not accepting'}
-                        </Button>
-                      ) : (
-                        <Badge variant={row.is_accepting_assignments ? 'success' : 'neutral'}>
-                          {row.is_accepting_assignments ? 'Accepting' : 'Not accepting'}
-                        </Badge>
-                      )}
-                    </Td>
-                    <Td>
-                      <Badge variant={row.is_active ? 'success' : 'error'}>
-                        {row.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </TableWrapper>
+      <DataTable
+        columns={columns}
+        rows={list.data?.results ?? []}
+        getRowId={(row) => row.id}
+        isLoading={list.isLoading}
+        loadingLabel="Loading trainers…"
+        error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}
+        errorTitle="Could not load trainers"
+        onRetry={list.reload}
+        emptyTitle="No trainers match these filters"
+        emptyDescription="Try a different search term, or add the first trainer."
+        sort={list.query.ordering}
+        onSortChange={list.toggleSort}
+        caption="Trainers"
+        densityStorageKey="grras.admin-trainers-density"
+      />
 
-          {list.data ? (
-            <Pagination
-              page={list.data.page}
-              totalPages={list.data.total_pages}
-              count={list.data.count}
-              pageSize={list.data.page_size}
-              onPageChange={list.setPage}
-            />
-          ) : null}
-        </>
-      )}
+      {list.data ? (
+        <Pagination
+          page={list.data.page}
+          totalPages={list.data.total_pages}
+          count={list.data.count}
+          pageSize={list.data.page_size}
+          onPageChange={list.setPage}
+        />
+      ) : null}
     </div>
   );
 }

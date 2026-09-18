@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, ArrowUpRight, IndianRupee, Users } from 'lucide-react';
 
+import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -24,7 +25,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input, Select } from '@/components/ui/input';
-import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
 import { ApiError } from '@/lib/api';
 import { getActivityFeed, getActivityScorecards } from '@/lib/activity';
 import { Capability } from '@/lib/capabilities';
@@ -212,6 +212,73 @@ export function ActivityReview() {
   const loadFeed = useCallback(() => setFeedAttempt((value) => value + 1), []);
 
   const selectedCard = cards?.cards.find((card) => card.user_id === actor);
+
+  const feedColumns: DataTableColumn<ActivityFeedEntry>[] = [
+    {
+      key: 'created_at',
+      header: 'When',
+      render: (row) => (
+        <span className="whitespace-nowrap text-muted-foreground">
+          <span title={formatDateTime(row.created_at)}>{formatRelative(row.created_at)}</span>
+          <span className="block text-xs">{formatDateTime(row.created_at)}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'actor',
+      header: 'Who',
+      render: (row) => (
+        <>
+          <button
+            type="button"
+            className="text-left font-medium hover:text-primary"
+            onClick={() => {
+              if (row.actor_id) {
+                setActor(row.actor_id);
+                setPage(1);
+              }
+            }}
+          >
+            {row.actor_label}
+          </button>
+          <span className="block text-xs text-muted-foreground">
+            {row.actor_role ? ROLE_LABEL[row.actor_role] : 'System'}
+            {row.actor_branch ? ` · ${row.actor_branch}` : ''}
+          </span>
+        </>
+      ),
+    },
+    {
+      key: 'action',
+      header: 'What',
+      render: (row) => (
+        <>
+          <span className="font-medium">{row.action_label}</span>
+          <span className="block text-sm text-muted-foreground">{row.summary}</span>
+        </>
+      ),
+    },
+    {
+      key: 'kind',
+      header: 'Kind',
+      render: (row) => (
+        <Badge variant={ACTIVITY_KIND_VARIANT[row.kind]}>{ACTIVITY_KIND_LABEL[row.kind]}</Badge>
+      ),
+    },
+    {
+      key: 'open',
+      header: 'Open',
+      align: 'right',
+      render: (row) =>
+        row.href ? (
+          <Button asChild size="sm" variant="ghost" className="text-muted-foreground">
+            <Link href={row.href} aria-label={`Open ${row.resource_type}`}>
+              <ArrowUpRight className="size-4" aria-hidden="true" />
+            </Link>
+          </Button>
+        ) : null,
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -401,72 +468,20 @@ export function ActivityReview() {
             />
           ) : feed ? (
             <>
-              <TableWrapper className={feedLoading ? 'opacity-60' : undefined}>
-                <Table>
-                  <thead>
-                    <tr>
-                      <Th>When</Th>
-                      <Th>Who</Th>
-                      <Th>What</Th>
-                      <Th>Kind</Th>
-                      <Th className="text-right">Open</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {feed.results.map((row) => (
-                      <Tr key={row.id}>
-                        <Td className="whitespace-nowrap text-muted-foreground">
-                          <span title={formatDateTime(row.created_at)}>
-                            {formatRelative(row.created_at)}
-                          </span>
-                          <span className="block text-xs">{formatDateTime(row.created_at)}</span>
-                        </Td>
-                        <Td>
-                          <button
-                            type="button"
-                            className="text-left font-medium hover:text-primary"
-                            onClick={() => {
-                              if (row.actor_id) {
-                                setActor(row.actor_id);
-                                setPage(1);
-                              }
-                            }}
-                          >
-                            {row.actor_label}
-                          </button>
-                          <span className="block text-xs text-muted-foreground">
-                            {row.actor_role ? ROLE_LABEL[row.actor_role] : 'System'}
-                            {row.actor_branch ? ` · ${row.actor_branch}` : ''}
-                          </span>
-                        </Td>
-                        <Td>
-                          <span className="font-medium">{row.action_label}</span>
-                          <span className="block text-sm text-muted-foreground">{row.summary}</span>
-                        </Td>
-                        <Td>
-                          <Badge variant={ACTIVITY_KIND_VARIANT[row.kind]}>
-                            {ACTIVITY_KIND_LABEL[row.kind]}
-                          </Badge>
-                        </Td>
-                        <Td className="text-right">
-                          {row.href ? (
-                            <Button
-                              asChild
-                              size="sm"
-                              variant="ghost"
-                              className="text-muted-foreground"
-                            >
-                              <Link href={row.href} aria-label={`Open ${row.resource_type}`}>
-                                <ArrowUpRight className="size-4" aria-hidden="true" />
-                              </Link>
-                            </Button>
-                          ) : null}
-                        </Td>
-                      </Tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </TableWrapper>
+              {/* A new page loading keeps the last answer on screen, dimmed,
+                  rather than flashing a skeleton over data already read —
+                  `isLoading` stays false here (the branches above already
+                  handle the true first-load and error cases), so `DataTable`
+                  only ever renders the real rows in this branch. */}
+              <div className={feedLoading ? 'opacity-60' : undefined}>
+                <DataTable
+                  columns={feedColumns}
+                  rows={feed.results}
+                  getRowId={(row) => row.id}
+                  caption="Activity record"
+                  densityStorageKey="grras.activity-feed-density"
+                />
+              </div>
               <Pagination
                 page={feed.page}
                 totalPages={feed.total_pages}

@@ -22,16 +22,16 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
+import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { money } from '@/components/fees/fee-ledger';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
-import { EmptyState, ErrorState, LoadingState } from '@/components/states';
+import { EmptyState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
-import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { useList } from '@/hooks/use-list';
 import { listBatches, listEnrollments } from '@/lib/batches';
 import {
@@ -60,9 +60,6 @@ export function AdmissionsList() {
       .catch(() => setBatches([]));
   }, []);
 
-  const sortDirection = list.query.ordering?.startsWith('-') ? 'desc' : 'asc';
-  const sortField = list.query.ordering?.replace(/^-/, '');
-
   // The API cannot filter by registration date, so this narrows only the rows
   // already on the page rather than pretending to search the whole table.
   const visibleRows = useMemo(() => {
@@ -77,6 +74,95 @@ export function AdmissionsList() {
   }, [list.data, registeredFrom, registeredTo]);
 
   const dateFilterActive = Boolean(registeredFrom || registeredTo);
+
+  const columns: DataTableColumn<Enrollment>[] = [
+    {
+      key: 'student',
+      header: 'Student',
+      sticky: 'start',
+      render: (row) => (
+        <>
+          <span className="font-medium">
+            {row.student_id ? (
+              <Link href={`/admissions/${row.student_id}`} className="hover:text-primary">
+                {row.student_name || row.student_email || 'Unnamed student'}
+              </Link>
+            ) : (
+              row.student_name || row.student_email || 'Unnamed student'
+            )}
+          </span>
+          <span className="block font-mono text-xs text-muted-foreground">
+            {row.student_code || 'No student code'}
+          </span>
+        </>
+      ),
+    },
+    { key: 'course_title', header: 'Course', render: (row) => row.course_title || 'Not available' },
+    {
+      key: 'batch',
+      header: 'Batch',
+      render: (row) => (
+        <>
+          {row.batch_name || 'Not available'}
+          <span className="block font-mono text-xs text-muted-foreground">
+            {row.batch_code || ''}
+          </span>
+        </>
+      ),
+    },
+    {
+      key: 'trainer_name',
+      header: 'Trainer',
+      render: (row) =>
+        row.trainer_name || (
+          <Badge variant="warning" dot>
+            No trainer
+          </Badge>
+        ),
+    },
+    {
+      key: 'fee',
+      header: 'Fee',
+      align: 'right',
+      render: (row) =>
+        row.fee_payable === null || row.fee_payable === undefined ? (
+          <span className="text-xs text-muted-foreground">Not set</span>
+        ) : Number(row.fee_balance) > 0 ? (
+          <>
+            <span className="font-medium text-amber">{money(row.fee_balance)} due</span>
+            <span className="block text-xs text-muted-foreground">
+              {money(row.fee_paid)} of {money(row.fee_payable)}
+              {row.fee_next_due_on ? ` · by ${formatDate(row.fee_next_due_on)}` : ''}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="font-medium text-emerald">Paid</span>
+            <span className="block text-xs text-muted-foreground">{money(row.fee_payable)}</span>
+          </>
+        ),
+    },
+    {
+      key: 'enrolled_at',
+      header: 'Registered',
+      sortable: true,
+      render: (row) => (
+        <span className="whitespace-nowrap text-muted-foreground">
+          {formatDate(row.enrolled_at)}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortable: true,
+      render: (row) => (
+        <Badge variant={ENROLLMENT_STATUS_VARIANT[row.status]}>
+          {ENROLLMENT_STATUS_LABEL[row.status]}
+        </Badge>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -187,16 +273,7 @@ export function AdmissionsList() {
         </div>
       </ListToolbar>
 
-      {list.isLoading ? (
-        <LoadingState label="Loading admissions…" rows={6} />
-      ) : list.error ? (
-        <ErrorState
-          title="Could not load admissions"
-          message={list.error.message}
-          requestId={list.error.requestId || undefined}
-          onRetry={list.reload}
-        />
-      ) : list.data && list.data.count === 0 ? (
+      {!list.isLoading && !list.error && list.data && list.data.count === 0 ? (
         <EmptyState
           title="No registrations match these filters"
           description="Try a different search term, or register the first student."
@@ -208,113 +285,31 @@ export function AdmissionsList() {
         />
       ) : (
         <>
-          <p aria-live="polite" className="text-sm text-muted-foreground">
-            {visibleRows.length} of {list.data?.count ?? 0} shown
-            {dateFilterActive ? ' — narrowed to this page by registration date' : ''}.
-          </p>
-          {visibleRows.length === 0 ? (
-            <EmptyState
-              title="Nothing on this page falls in that date range"
-              description="Clear the date filter, or turn the page to look further back."
-            />
-          ) : (
-            <TableWrapper className="animate-fade-in">
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>Student</Th>
-                    <Th>Course</Th>
-                    <Th>Batch</Th>
-                    <Th>Trainer</Th>
-                    <Th className="text-right">Fee</Th>
-                    <Th
-                      sortable
-                      active={sortField === 'enrolled_at'}
-                      direction={sortDirection}
-                      onSort={() => list.toggleSort('enrolled_at')}
-                    >
-                      Registered
-                    </Th>
-                    <Th
-                      sortable
-                      active={sortField === 'status'}
-                      direction={sortDirection}
-                      onSort={() => list.toggleSort('status')}
-                    >
-                      Status
-                    </Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleRows.map((row) => (
-                    <tr key={row.id}>
-                      <Td className="font-medium">
-                        {row.student_id ? (
-                          <Link
-                            href={`/admissions/${row.student_id}`}
-                            className="hover:text-primary"
-                          >
-                            {row.student_name || row.student_email || 'Unnamed student'}
-                          </Link>
-                        ) : (
-                          row.student_name || row.student_email || 'Unnamed student'
-                        )}
-                        <span className="block font-mono text-xs text-muted-foreground">
-                          {row.student_code || 'No student code'}
-                        </span>
-                      </Td>
-                      <Td>{row.course_title || 'Not available'}</Td>
-                      <Td>
-                        {row.batch_name || 'Not available'}
-                        <span className="block font-mono text-xs text-muted-foreground">
-                          {row.batch_code || ''}
-                        </span>
-                      </Td>
-                      <Td>
-                        {row.trainer_name || (
-                          <Badge variant="warning" dot>
-                            No trainer
-                          </Badge>
-                        )}
-                      </Td>
-                      <Td className="whitespace-nowrap text-right tabular-nums">
-                        {row.fee_payable === null || row.fee_payable === undefined ? (
-                          <span className="text-xs text-muted-foreground">Not set</span>
-                        ) : Number(row.fee_balance) > 0 ? (
-                          <>
-                            <span className="font-medium text-amber">
-                              {money(row.fee_balance)} due
-                            </span>
-                            <span className="block text-xs text-muted-foreground">
-                              {money(row.fee_paid)} of {money(row.fee_payable)}
-                              {row.fee_next_due_on
-                                ? ` · by ${formatDate(row.fee_next_due_on)}`
-                                : ''}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="font-medium text-emerald">Paid</span>
-                            <span className="block text-xs text-muted-foreground">
-                              {money(row.fee_payable)}
-                            </span>
-                          </>
-                        )}
-                      </Td>
-                      <Td className="whitespace-nowrap text-muted-foreground">
-                        {formatDate(row.enrolled_at)}
-                      </Td>
-                      <Td>
-                        <Badge variant={ENROLLMENT_STATUS_VARIANT[row.status]}>
-                          {ENROLLMENT_STATUS_LABEL[row.status]}
-                        </Badge>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </TableWrapper>
-          )}
+          {!list.isLoading && !list.error && list.data ? (
+            <p aria-live="polite" className="text-sm text-muted-foreground">
+              {visibleRows.length} of {list.data.count} shown
+              {dateFilterActive ? ' — narrowed to this page by registration date' : ''}.
+            </p>
+          ) : null}
+
+          <DataTable
+            columns={columns}
+            rows={visibleRows}
+            getRowId={(row) => row.id}
+            isLoading={list.isLoading}
+            loadingLabel="Loading admissions…"
+            error={
+              list.error ? { message: list.error.message, requestId: list.error.requestId } : null
+            }
+            errorTitle="Could not load admissions"
+            onRetry={list.reload}
+            emptyTitle="Nothing on this page falls in that date range"
+            emptyDescription="Clear the date filter, or turn the page to look further back."
+            sort={list.query.ordering}
+            onSortChange={list.toggleSort}
+            caption="Admissions"
+            densityStorageKey="grras.admissions-density"
+          />
 
           {list.data ? (
             <Pagination

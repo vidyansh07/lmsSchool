@@ -125,7 +125,9 @@ export function DataTable<Row>({
   rows,
   getRowId,
   isLoading = false,
+  loadingLabel,
   error,
+  errorTitle,
   onRetry,
   emptyTitle = 'No results',
   emptyDescription,
@@ -141,7 +143,12 @@ export function DataTable<Row>({
   rows: Row[];
   getRowId: (row: Row) => string;
   isLoading?: boolean;
+  /** An sr-only label announced while `isLoading` — the same role
+   *  `LoadingState`'s own `label` plays for a screen this table replaces. */
+  loadingLabel?: string;
   error?: { message: string; requestId?: string } | null;
+  /** Passed straight through to the underlying `ErrorState`'s own `title`. */
+  errorTitle?: string;
   onRetry?: () => void;
   emptyTitle?: string;
   emptyDescription?: string;
@@ -149,7 +156,23 @@ export function DataTable<Row>({
   sort?: string;
   /** Matches `useList`'s `toggleSort`: called with the plain field name. */
   onSortChange?: (field: string) => void;
-  /** Wire up `useBulkSelection` here to get header/row checkboxes and shift-click ranges. */
+  /**
+   * Wire up `useBulkSelection` here to get header/row checkboxes and
+   * shift-click ranges, then drive `components/bulk-actions.tsx`'s
+   * `BulkActionsBar` off the same hook for the action buttons.
+   *
+   * Deliberately unused by every table migrated onto `DataTable` in Phase
+   * R6 (`docs/uiux/UIUX_REDESIGN_PLAN.md`): that phase's own "Delivers" line
+   * says "row/bulk actions standardized," but none of the migrated screens
+   * (students, activities, activities feed, deliveries, …) had a bulk
+   * operation to standardize going in — each one only ever exposed
+   * single-row actions (open a record, retry one delivery, and so on), and
+   * this redesign's own ground rule is "no new business functionality."
+   * Fabricating a bulk action against no real backend/product need just to
+   * light up this prop would be exactly that, so it stays built and ready
+   * for the first screen that gets a genuine, approved bulk operation,
+   * rather than switched on speculatively.
+   */
   selection?: UseBulkSelectionResult<string>;
   onRowActivate?: (row: Row) => void;
   /** `localStorage` key for the density preference. Share one across a family
@@ -243,11 +266,21 @@ export function DataTable<Row>({
       </div>
 
       {error ? (
-        <ErrorState message={error.message} requestId={error.requestId} onRetry={onRetry} />
+        <ErrorState
+          title={errorTitle}
+          message={error.message}
+          requestId={error.requestId}
+          onRetry={onRetry}
+        />
       ) : !isLoading && rows.length === 0 ? (
         <EmptyState title={emptyTitle} description={emptyDescription} />
       ) : (
         <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
+          {isLoading && loadingLabel ? (
+            <span className="sr-only" role="status" aria-live="polite">
+              {loadingLabel}
+            </span>
+          ) : null}
           <Table aria-busy={isLoading || undefined}>
             {caption ? <caption className="sr-only">{caption}</caption> : null}
             <thead>

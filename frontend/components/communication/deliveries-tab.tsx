@@ -9,14 +9,13 @@
 
 import { useState } from 'react';
 
+import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { Pagination } from '@/components/pagination';
-import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
-import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { useApi } from '@/hooks/use-api';
 import { errorMessage, queryString } from '@/lib/api';
 import { cancelDelivery, retryDelivery, type DeliveryFilters } from '@/lib/communication';
@@ -87,6 +86,62 @@ export function DeliveriesTab({ canAct }: { canAct: boolean }) {
 
   const rows = data?.results ?? [];
   const hasFilters = JSON.stringify(filters) !== JSON.stringify({ ...EMPTY_FILTERS, page });
+
+  const columns: DataTableColumn<Delivery>[] = [
+    { key: 'channel', header: 'Channel', render: (row) => COMMUNICATION_CHANNEL_LABEL[row.channel] },
+    { key: 'recipient', header: 'Recipient', render: (row) => row.recipient_name ?? (row.address || '—') },
+    {
+      key: 'template_key',
+      header: 'Template',
+      render: (row) => <span className="font-mono text-xs">{row.template_key ?? '—'}</span>,
+    },
+    {
+      key: 'state',
+      header: 'State',
+      render: (row) => (
+        <>
+          <Badge variant={DELIVERY_STATE_VARIANT[row.state]}>{DELIVERY_STATE_LABEL[row.state]}</Badge>
+          {row.error ? <p className="mt-1 text-xs text-muted-foreground">{row.error}</p> : null}
+        </>
+      ),
+    },
+    { key: 'attempts', header: 'Attempts', render: (row) => row.attempts },
+    { key: 'updated_at', header: 'Updated', render: (row) => formatDateTime(row.updated_at) },
+    ...(canAct
+      ? [
+          {
+            key: 'actions',
+            header: 'Actions',
+            render: (row: Delivery) => (
+              <div className="flex gap-2">
+                {row.state === 'failed' ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy === row.id}
+                    onClick={() => void act(row.id, () => retryDelivery(row.id))}
+                  >
+                    {busy === row.id ? 'Retrying…' : 'Retry'}
+                  </Button>
+                ) : null}
+                {row.state === 'queued' ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy === row.id}
+                    onClick={() => void act(row.id, () => cancelDelivery(row.id))}
+                  >
+                    {busy === row.id ? 'Cancelling…' : 'Cancel'}
+                  </Button>
+                ) : null}
+              </div>
+            ),
+          } satisfies DataTableColumn<Delivery>,
+        ]
+      : []),
+  ];
 
   return (
     <div className="space-y-4">
@@ -180,86 +235,20 @@ export function DeliveriesTab({ canAct }: { canAct: boolean }) {
 
       {actionError ? <Alert variant="error">{actionError}</Alert> : null}
 
-      {isLoading ? (
-        <LoadingState label="Loading deliveries…" rows={6} />
-      ) : error ? (
-        <ErrorState
-          title="Could not load deliveries"
-          message={error.message}
-          requestId={error.requestId || undefined}
-          onRetry={reload}
-        />
-      ) : rows.length === 0 ? (
-        <EmptyState
-          title="No deliveries"
-          description={hasFilters ? 'No deliveries match these filters.' : 'Nothing has been sent yet.'}
-        />
-      ) : (
-        <TableWrapper>
-          <Table>
-            <thead>
-              <tr>
-                <Th>Channel</Th>
-                <Th>Recipient</Th>
-                <Th>Template</Th>
-                <Th>State</Th>
-                <Th>Attempts</Th>
-                <Th>Updated</Th>
-                {canAct ? <Th>Actions</Th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="hover:bg-muted/40">
-                  <Td>{COMMUNICATION_CHANNEL_LABEL[row.channel]}</Td>
-                  <Td>
-                    <span>{row.recipient_name ?? (row.address || '—')}</span>
-                  </Td>
-                  <Td className="font-mono text-xs">{row.template_key ?? '—'}</Td>
-                  <Td>
-                    <Badge variant={DELIVERY_STATE_VARIANT[row.state]}>
-                      {DELIVERY_STATE_LABEL[row.state]}
-                    </Badge>
-                    {row.error ? (
-                      <p className="mt-1 text-xs text-muted-foreground">{row.error}</p>
-                    ) : null}
-                  </Td>
-                  <Td>{row.attempts}</Td>
-                  <Td>{formatDateTime(row.updated_at)}</Td>
-                  {canAct ? (
-                    <Td>
-                      <div className="flex gap-2">
-                        {row.state === 'failed' ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            disabled={busy === row.id}
-                            onClick={() => void act(row.id, () => retryDelivery(row.id))}
-                          >
-                            {busy === row.id ? 'Retrying…' : 'Retry'}
-                          </Button>
-                        ) : null}
-                        {row.state === 'queued' ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            disabled={busy === row.id}
-                            onClick={() => void act(row.id, () => cancelDelivery(row.id))}
-                          >
-                            {busy === row.id ? 'Cancelling…' : 'Cancel'}
-                          </Button>
-                        ) : null}
-                      </div>
-                    </Td>
-                  ) : null}
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </TableWrapper>
-      )}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(row) => row.id}
+        isLoading={isLoading}
+        loadingLabel="Loading deliveries…"
+        error={error ? { message: error.message, requestId: error.requestId } : null}
+        errorTitle="Could not load deliveries"
+        onRetry={reload}
+        emptyTitle="No deliveries"
+        emptyDescription={hasFilters ? 'No deliveries match these filters.' : 'Nothing has been sent yet.'}
+        caption="Deliveries"
+        densityStorageKey="grras.deliveries-density"
+      />
 
       {data && data.count > 0 ? (
         <Pagination

@@ -22,12 +22,12 @@
  */
 import { useEffect, useState } from 'react';
 
+import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ActivityDrawer } from '@/components/work/activity-drawer';
-import { EmptyState, ErrorState, LoadingState } from '@/components/states';
+import { ErrorState, LoadingState } from '@/components/states';
 import { Badge, categoryVariant } from '@/components/ui/badge';
 import { Select } from '@/components/ui/input';
 import { Pagination } from '@/components/pagination';
-import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
 import { ApiError } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { ACTIVITY_PRIORITY_LABEL, ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_VARIANT } from '@/lib/labels';
@@ -116,6 +116,51 @@ export function TrainerWorkTab({ trainerId }: { trainerId: string }) {
 
   const rows = state.data?.results ?? [];
 
+  const columns: DataTableColumn<Activity>[] = [
+    {
+      key: 'title',
+      header: 'Title',
+      sticky: 'start',
+      render: (row) => (
+        <button
+          type="button"
+          className="text-left font-medium underline-offset-2 hover:underline"
+          onClick={() => setSelectedId(row.id)}
+        >
+          {row.title}
+        </button>
+      ),
+    },
+    {
+      key: 'student',
+      header: 'Student',
+      render: (row) => (
+        <>
+          {row.student.name}
+          <span className="block text-xs text-muted-foreground">{row.student.student_id}</span>
+        </>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      render: (row) => <Badge variant={categoryVariant(row.type.category)}>{row.type.name}</Badge>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (row) => (
+        <Badge variant={ACTIVITY_STATUS_VARIANT[row.status]}>{ACTIVITY_STATUS_LABEL[row.status]}</Badge>
+      ),
+    },
+    { key: 'priority', header: 'Priority', render: (row) => ACTIVITY_PRIORITY_LABEL[row.priority] },
+    {
+      key: 'due_at',
+      header: 'Due',
+      render: (row) => <span className="whitespace-nowrap">{formatDateTime(row.due_at)}</span>,
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-2">
@@ -137,65 +182,25 @@ export function TrainerWorkTab({ trainerId }: { trainerId: string }) {
         </Select>
       </div>
 
-      {rows.length === 0 ? (
-        <EmptyState
-          title="No activities match these filters"
-          description="Widen the filters, or check back once work is assigned to this trainer."
+      <DataTable
+        columns={columns}
+        rows={rows}
+        getRowId={(row) => row.id}
+        emptyTitle="No activities match these filters"
+        emptyDescription="Widen the filters, or check back once work is assigned to this trainer."
+        onRowActivate={(row) => setSelectedId(row.id)}
+        caption="Trainer activities"
+        densityStorageKey="grras.trainer-work-density"
+      />
+      {state.data ? (
+        <Pagination
+          page={state.data.page}
+          totalPages={state.data.total_pages}
+          count={state.data.count}
+          pageSize={state.data.page_size}
+          onPageChange={setPage}
         />
-      ) : (
-        <>
-          <TableWrapper>
-            <Table>
-              <thead>
-                <tr>
-                  <Th>Title</Th>
-                  <Th>Student</Th>
-                  <Th>Type</Th>
-                  <Th>Status</Th>
-                  <Th>Priority</Th>
-                  <Th>Due</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <Tr key={row.id} className="cursor-pointer" onClick={() => setSelectedId(row.id)}>
-                    <Td>
-                      <button
-                        type="button"
-                        className="text-left font-medium underline-offset-2 hover:underline"
-                        onClick={() => setSelectedId(row.id)}
-                      >
-                        {row.title}
-                      </button>
-                    </Td>
-                    <Td>
-                      {row.student.name}
-                      <span className="block text-xs text-muted-foreground">{row.student.student_id}</span>
-                    </Td>
-                    <Td>
-                      <Badge variant={categoryVariant(row.type.category)}>{row.type.name}</Badge>
-                    </Td>
-                    <Td>
-                      <Badge variant={ACTIVITY_STATUS_VARIANT[row.status]}>{ACTIVITY_STATUS_LABEL[row.status]}</Badge>
-                    </Td>
-                    <Td>{ACTIVITY_PRIORITY_LABEL[row.priority]}</Td>
-                    <Td className="whitespace-nowrap">{formatDateTime(row.due_at)}</Td>
-                  </Tr>
-                ))}
-              </tbody>
-            </Table>
-          </TableWrapper>
-          {state.data ? (
-            <Pagination
-              page={state.data.page}
-              totalPages={state.data.total_pages}
-              count={state.data.count}
-              pageSize={state.data.page_size}
-              onPageChange={setPage}
-            />
-          ) : null}
-        </>
-      )}
+      ) : null}
 
       <ActivityDrawer
         activityId={selectedId}
