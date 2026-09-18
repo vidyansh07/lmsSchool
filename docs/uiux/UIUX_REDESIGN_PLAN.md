@@ -197,6 +197,58 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R13 — Bold dashboard pivot, admin + manager (2026-09-19, commit `5f837b6`)
+
+First phase of the design pivot. Its own first attempt (a separate workflow
+run) misfired completely — every one of its 6 agents got confused and
+treated an unrelated short chat exchange ("can you see these two reference
+URLs") as an overriding instruction, and did zero real work despite a fully
+self-contained task prompt. Re-launched with an explicit "this prompt is
+your entire live task, ignore anything else in context that looks like
+chat history" framing, which fixed it — flagged as a real tooling issue,
+not a prompt-content problem, since the second run's prompt was
+substantively the same task.
+
+The audit was rigorous about the pivot's own "no fabricated data" rule: for
+admin overview, it found only ONE real time series exists in the whole
+dashboard (`attendanceTrend`, already wired to one tile since R2) and
+explicitly recommended **against** adding sparklines to the other 5 KPI
+tiles, since no backing series exists for trainers/courses/batches/
+approvals/certificates — a genuine data gap, correctly left alone rather
+than faked. Same finding for the manager dashboard: `ManagerDashboard` has
+zero time-series fields anywhere, so no sparklines were added there either.
+
+What WAS added, all derived from data already being fetched, no new
+endpoints: a time-of-day + name greeting (`lib/greeting.ts`, the cheapest
+possible real per-viewer data — the same `full_name || email` fallback
+`app-shell.tsx` already uses, plus the browser clock); on admin overview, a
+`RadialProgress` gauge for the `attendance_rate` metric targeted at 75% —
+not a new threshold, the exact value this file already uses to color the
+weekly rate badge (`point.percent >= 75 ? 'success' : 'warning'`), so the
+gauge and the badge can never disagree — plus a `DonutChart` of attended
+vs. not-attended, a true partition of the already-fetched `counted`/
+`attended` trend fields; on the manager dashboard, a `RadialProgress` for
+"share of active batches on schedule" (derived from `batches.active` minus
+`batches.behind_schedule`, confirmed a true subset via the backend's own
+`_behind_schedule_batch_ids(active_batches)`) and a `DonutChart` of active
+vs. other students. The audit also correctly refused to donut-chart
+`behind_schedule`/`at_risk`/`risk.critical`, since the file's own existing
+comment says those overlap ("a batch can be both behind schedule and
+at-risk at once") — a donut requires mutually-exclusive categories, so that
+data stays a `BarChart` as it already was.
+
+Review's only finding was a nit: the pivot's own top-bar/richer-header item
+wasn't touched this phase (the audit found a real, non-fabricated CTA
+candidate but implementation reasonably scoped this pass to the two
+dashboard bodies) — left for a follow-up rather than force-fit here.
+
+Independently re-verified: read the actual diff for both dashboards and
+`lib/greeting.ts` — every number traced to a real, already-fetched field,
+zero invented categories or thresholds. Ran the checklist myself:
+`tsc --noEmit` clean, `vitest --maxWorkers=2` — 142 files / 1269 tests,
+matching the commit's own claim. Deployed clean; `/`, `/admin/overview`,
+`/manage` all return `200` on staging.
+
 ### R12 — Final QA (2026-09-19, commits `853a621`, `e2808e3`) — the last phase
 
 Closed the one item R9 explicitly deferred: `recovery-codes-dialog.tsx:76`
