@@ -274,7 +274,7 @@ function UserAdministration({ userId }: { userId: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Details</CardTitle>
+          <CardTitle as="h2">Details</CardTitle>
           <CardDescription>
             Everything about this account that an administrator may set.
             Changing the email address signs the account out and sends a fresh

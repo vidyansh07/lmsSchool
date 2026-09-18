@@ -117,7 +117,7 @@ function Projects() {
       {isOpen ? (
         <Card>
           <CardHeader>
-            <CardTitle>New project</CardTitle>
+            <CardTitle as="h2">New project</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={submit}>

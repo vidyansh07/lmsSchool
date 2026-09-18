@@ -142,7 +142,7 @@ export function TrainerDetail({ trainerId }: { trainerId: string }) {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Workload</CardTitle>
+                <CardTitle as="h2">Workload</CardTitle>
               </CardHeader>
               <CardContent>
                 <StatGrid>

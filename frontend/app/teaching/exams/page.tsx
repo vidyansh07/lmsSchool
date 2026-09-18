@@ -120,7 +120,7 @@ function Exams() {
       {isOpen ? (
         <Card>
           <CardHeader>
-            <CardTitle>New examination</CardTitle>
+            <CardTitle as="h2">New examination</CardTitle>
             <CardDescription>
               It starts as a draft. Publishing checks the bank has enough questions first.
             </CardDescription>

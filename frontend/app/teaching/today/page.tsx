@@ -105,7 +105,7 @@ function ClassCompleteSummary({
   return (
     <Card className="animate-rise-in">
       <CardHeader>
-        <CardTitle>Class complete</CardTitle>
+        <CardTitle as="h2">Class complete</CardTitle>
         <CardDescription>
           {fallback(session.batch_name)} · {formatDate(session.session_date)}
         </CardDescription>
@@ -497,7 +497,7 @@ export function ClassWorkspace({
 
       <Card>
         <CardHeader>
-          <CardTitle>Register</CardTitle>
+          <CardTitle as="h2">Register</CardTitle>
           <CardDescription>
             {formatNumber(register.entries.length)} student{register.entries.length === 1 ? '' : 's'}
           </CardDescription>

@@ -301,6 +301,7 @@ export function ActivityReview() {
                 type="button"
                 size="sm"
                 variant={period === option.id ? 'primary' : 'ghost'}
+                aria-pressed={period === option.id}
                 onClick={() => {
                   setPeriod(option.id);
                   setPage(1);

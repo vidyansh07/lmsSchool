@@ -123,7 +123,7 @@ function ThreadView({ threadId }: { threadId: string }) {
 
       <Card className="animate-rise-in">
         <CardHeader>
-          <CardTitle>Replies ({thread.replies.length})</CardTitle>
+          <CardTitle as="h2">Replies ({thread.replies.length})</CardTitle>
           <CardDescription>
             A trainer&apos;s answer is marked, so it is findable in a long thread.
           </CardDescription>

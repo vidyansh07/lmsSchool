@@ -172,7 +172,7 @@ export function ImportFlow() {
       {!run ? (
         <Card className="animate-rise-in">
           <CardHeader>
-            <CardTitle>Choose a file</CardTitle>
+            <CardTitle as="h2">Choose a file</CardTitle>
             <CardDescription>
               Columns can be named loosely — &ldquo;Email&rdquo;, &ldquo;email address&rdquo; and
               &ldquo;e mail&rdquo; all work. Only email and first name are required.
@@ -224,7 +224,7 @@ export function ImportFlow() {
         <>
           <Card className="animate-rise-in">
             <CardHeader>
-              <CardTitle>{run.original_filename || 'Import preview'}</CardTitle>
+              <CardTitle as="h2">{run.original_filename || 'Import preview'}</CardTitle>
               <CardDescription>
                 {isConfirmed
                   ? 'This import has been confirmed.'

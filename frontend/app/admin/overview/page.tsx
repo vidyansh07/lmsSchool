@@ -215,7 +215,7 @@ function Overview() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Metrics</CardTitle>
+          <CardTitle as="h2">Metrics</CardTitle>
           <CardDescription>
             Each carries its definition. Hover or read below — the number is only meaningful with
             it.

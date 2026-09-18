@@ -72,7 +72,9 @@ function MyExams() {
           description="Examinations appear here once your trainer publishes them."
         />
       ) : (
-        exams.map((exam) => {
+        <>
+        <h2 className="sr-only">Examinations</h2>
+        {exams.map((exam) => {
           const mine = byExam.get(exam.id);
           return (
             <Card key={exam.id} data-testid="exam-card" className="animate-rise-in">
@@ -140,7 +142,8 @@ function MyExams() {
               </CardContent>
             </Card>
           );
-        })
+        })}
+        </>
       )}
 
       {attempts.length > 0 ? (

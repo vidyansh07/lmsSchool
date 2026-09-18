@@ -135,7 +135,7 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>{register.entries.length} students</CardTitle>
+          <CardTitle as="h2">{register.entries.length} students</CardTitle>
           <CardDescription>
             Mark the room, then save once. Re-saving records a correction rather than overwriting
             the history.

@@ -95,7 +95,7 @@ function Imports() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Students</CardTitle>
+          <CardTitle as="h2">Students</CardTitle>
           <CardDescription>
             Columns: <code>email</code> and <code>first name</code> are required;{' '}
             <code>last name</code> and <code>phone</code> are optional. An address that

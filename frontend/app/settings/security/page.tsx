@@ -60,7 +60,7 @@ function SecuritySettings() {
 
       <Card className="animate-rise-in">
         <CardHeader>
-          <CardTitle>Change password</CardTitle>
+          <CardTitle as="h2">Change password</CardTitle>
           <CardDescription>
             Changing your password signs you out of every other device.
           </CardDescription>

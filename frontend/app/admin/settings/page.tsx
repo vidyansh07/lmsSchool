@@ -196,7 +196,7 @@ function InstitutionSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Identity and contact</CardTitle>
+          <CardTitle as="h2">Identity and contact</CardTitle>
           <CardDescription>
             The name signs off every email this system sends. The contact details appear there too,
             and on the profile screen every signed-in person can open.

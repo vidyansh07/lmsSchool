@@ -117,7 +117,7 @@ function BrandingSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Brand colour</CardTitle>
+          <CardTitle as="h2">Brand colour</CardTitle>
           <CardDescription>
             Used for the logo mark in the corner of every screen. Buttons, links and highlights
             keep the navy of the design, so whatever you pick here stays readable everywhere else.

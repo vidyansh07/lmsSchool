@@ -174,7 +174,7 @@ export function BatchDetail({ batchId }: { batchId: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Attendance</CardTitle>
+          <CardTitle as="h2">Attendance</CardTitle>
           <CardDescription>Across every class held on this batch so far.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">

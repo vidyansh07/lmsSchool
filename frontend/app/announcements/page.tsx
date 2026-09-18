@@ -174,7 +174,7 @@ function Announcements() {
       {isOpen ? (
         <Card className="animate-rise-in">
           <CardHeader>
-            <CardTitle>New announcement</CardTitle>
+            <CardTitle as="h2">New announcement</CardTitle>
             <CardDescription>
               It starts as a draft. Publishing puts it on the board and tells the people it is for.
             </CardDescription>
@@ -321,7 +321,9 @@ function Announcements() {
       {rows.length === 0 ? (
         <EmptyState title="Nothing on the board" description="No announcements to show." />
       ) : (
-        rows.map((row) => (
+        <>
+          <h2 className="sr-only">Announcements</h2>
+          {rows.map((row) => (
           <Card key={row.id} data-testid="announcement-card" className="animate-rise-in">
             <CardHeader className="gap-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -408,7 +410,8 @@ function Announcements() {
               ) : null}
             </CardContent>
           </Card>
-        ))
+          ))}
+        </>
       )}
     </div>
   );

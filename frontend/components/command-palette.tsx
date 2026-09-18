@@ -228,6 +228,7 @@ export function CommandPalette({
             aria-label="Command palette"
             role="combobox"
             aria-expanded="true"
+            aria-autocomplete="list"
             aria-controls="command-palette-list"
             aria-activedescendant={flatItems[boundedIndex] ? `command-palette-item-${boundedIndex}` : undefined}
             className="h-12 border-0 px-0 shadow-none focus-visible:outline-none"

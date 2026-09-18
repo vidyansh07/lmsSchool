@@ -65,7 +65,7 @@ function MyResults() {
 
       <Card className="animate-rise-in">
         <CardHeader>
-          <CardTitle>Results</CardTitle>
+          <CardTitle as="h2">Results</CardTitle>
           <CardDescription>Marks recorded against you.</CardDescription>
         </CardHeader>
         <CardContent>

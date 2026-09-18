@@ -132,7 +132,7 @@ function AcademicRules() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Settings</CardTitle>
+          <CardTitle as="h2">Settings</CardTitle>
           <CardDescription>
             These decide pass marks, attendance requirements and the defaults new work is created
             with. No deployment is needed to change them.

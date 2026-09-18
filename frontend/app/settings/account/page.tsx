@@ -41,7 +41,7 @@ function AccountSettings() {
 
       <Card className="animate-rise-in">
         <CardHeader>
-          <CardTitle>Account details</CardTitle>
+          <CardTitle as="h2">Account details</CardTitle>
           <CardDescription>
             Your email address and role are managed by an administrator.
           </CardDescription>

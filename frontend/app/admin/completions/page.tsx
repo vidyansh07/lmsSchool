@@ -182,6 +182,7 @@ function Completions() {
         />
       ) : (
         <div className="stagger space-y-4">
+          <h2 className="sr-only">Matching completions</h2>
           {rows.map((row) => {
             // Both of these are optional on the API type, so a completion whose
             // student record is incomplete would otherwise put the literal text

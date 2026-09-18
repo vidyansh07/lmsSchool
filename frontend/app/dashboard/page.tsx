@@ -273,7 +273,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
       {data.continue_learning?.last_lesson_id ? (
         <Card className="animate-rise-in">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle as="h2" className="flex items-center gap-2">
               <PlayCircle className="size-5 text-primary" aria-hidden="true" />
               Continue learning
             </CardTitle>

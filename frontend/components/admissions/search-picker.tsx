@@ -88,6 +88,7 @@ export function SearchPicker({
           role="combobox"
           aria-expanded={options.length > 0}
           aria-controls={listId}
+          aria-autocomplete="list"
           autoComplete="off"
           autoFocus={autoFocus}
           value={query}

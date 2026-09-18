@@ -82,7 +82,9 @@ function MyProgress() {
           description="Progress appears here once you are enrolled on a course."
         />
       ) : (
-        rows.map((row) => {
+        <>
+        <h2 className="sr-only">Progress by course</h2>
+        {rows.map((row) => {
           const { progress, completion } = row;
           const certificate = byCourse.get(progress.course_title);
           return (
@@ -176,7 +178,8 @@ function MyProgress() {
               </CardContent>
             </Card>
           );
-        })
+        })}
+        </>
       )}
     </div>
   );

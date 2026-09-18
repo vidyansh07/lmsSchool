@@ -694,7 +694,7 @@ export function RegistrationWizard() {
       {step === 'student' ? (
         <Card className="animate-rise-in">
           <CardHeader>
-            <CardTitle>Student details</CardTitle>
+            <CardTitle as="h2">Student details</CardTitle>
             <CardDescription>
               The student receives an email invitation and sets their own password.
             </CardDescription>

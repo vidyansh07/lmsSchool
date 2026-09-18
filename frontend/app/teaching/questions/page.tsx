@@ -134,7 +134,7 @@ function QuestionBank() {
       {isOpen ? (
         <Card>
           <CardHeader>
-            <CardTitle>New question</CardTitle>
+            <CardTitle as="h2">New question</CardTitle>
             <CardDescription>
               A question with no correct answer would mark every candidate wrong, so the server
               refuses one.

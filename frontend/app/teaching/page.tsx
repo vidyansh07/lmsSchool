@@ -88,6 +88,7 @@ function Teaching() {
         />
       ) : (
         <div className="stagger space-y-4">
+          <h2 className="sr-only">Today&rsquo;s classes</h2>
           {sessions.map((session) => (
             <Card
               key={session.id}

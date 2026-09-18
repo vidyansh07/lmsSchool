@@ -454,7 +454,7 @@ export function AdmissionsDashboardContent() {
 
       <Card className="animate-rise-in">
         <CardHeader>
-          <CardTitle>Where the pipeline is stuck</CardTitle>
+          <CardTitle as="h2">Where the pipeline is stuck</CardTitle>
           <CardDescription>
             The same figures as the tiles above, compared side by side.
           </CardDescription>

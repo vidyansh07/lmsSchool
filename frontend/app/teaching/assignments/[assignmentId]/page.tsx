@@ -134,7 +134,7 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>The brief</CardTitle>
+          <CardTitle as="h2">The brief</CardTitle>
           <CardDescription>
             Due {formatDateTime(assignment.due_at)}
             {assignment.allow_late ? ' · late work accepted and flagged' : ' · no late work'}

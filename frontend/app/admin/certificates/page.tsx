@@ -134,7 +134,7 @@ function Certificates() {
       {isOpen ? (
         <Card>
           <CardHeader>
-            <CardTitle>New certificate template</CardTitle>
+            <CardTitle as="h2">New certificate template</CardTitle>
             <CardDescription>
               The body accepts {'{student_name}'}, {'{course_title}'}, {'{completion_date}'},{' '}
               {'{certificate_number}'}, {'{batch_code}'} and {'{institution_name}'}. Anything else

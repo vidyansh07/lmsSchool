@@ -141,7 +141,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>The brief</CardTitle>
+          <CardTitle as="h2">The brief</CardTitle>
           <CardDescription>Due {project.end_date ?? 'no date set'}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

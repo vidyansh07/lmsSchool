@@ -97,7 +97,9 @@ function MyLearning() {
           description="This fills up once you are enrolled and have opened a lesson."
         />
       ) : (
-        home.map((row) => (
+        <>
+        <h2 className="sr-only">Your courses</h2>
+        {home.map((row) => (
           <Card key={row.enrollment_id} data-testid="learning-card" className="animate-rise-in">
             <CardHeader className="gap-1">
               <span className="font-mono text-xs text-muted-foreground">{row.batch_code}</span>
@@ -160,7 +162,8 @@ function MyLearning() {
               ) : null}
             </CardContent>
           </Card>
-        ))
+        ))}
+        </>
       )}
 
       <Card className="animate-rise-in">

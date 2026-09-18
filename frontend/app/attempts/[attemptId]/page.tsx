@@ -67,7 +67,7 @@ function Review({ attemptId }: { attemptId: string }) {
 
       <Card className="animate-rise-in">
         <CardHeader>
-          <CardTitle data-testid="review-score">
+          <CardTitle as="h2" data-testid="review-score">
             {attempt.total_score} / {attempt.max_score}
           </CardTitle>
           <CardDescription>

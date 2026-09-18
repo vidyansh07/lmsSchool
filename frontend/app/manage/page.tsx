@@ -208,7 +208,7 @@ function ManagerOverview() {
 
       <Card>
         <CardHeader>
-          <CardTitle>What needs attention, by kind</CardTitle>
+          <CardTitle as="h2">What needs attention, by kind</CardTitle>
           <CardDescription>
             The same kinds of problem the strip below names individually, compared side by side.
           </CardDescription>

@@ -139,6 +139,7 @@ function MyProjects() {
         </Alert>
       ) : null}
 
+      <h2 className="sr-only">Required projects</h2>
       {progress.map((row) => (
         <Card key={row.enrollment_id} data-testid="required-progress" className="animate-rise-in">
           <CardHeader>

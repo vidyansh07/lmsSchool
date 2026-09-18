@@ -136,7 +136,7 @@ export function BranchesContent() {
       {adding ? (
         <Card className="animate-rise-in">
           <CardHeader>
-            <CardTitle>Open a centre</CardTitle>
+            <CardTitle as="h2">Open a centre</CardTitle>
             <CardDescription>Staff, students and batches are then placed in it.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -155,7 +155,7 @@ export function BranchesContent() {
       {editing ? (
         <Card className="animate-rise-in">
           <CardHeader>
-            <CardTitle>Edit {editing.name}</CardTitle>
+            <CardTitle as="h2">Edit {editing.name}</CardTitle>
           </CardHeader>
           <CardContent>
             <BranchForm

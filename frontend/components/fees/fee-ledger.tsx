@@ -1064,7 +1064,7 @@ export function FeeLedger({
     <Card className="animate-rise-in">
       <CardHeader className="flex-row items-start justify-between gap-3">
         <div className="space-y-1">
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle as="h2" className="flex items-center gap-2">
             <Wallet className="size-5 text-primary" aria-hidden="true" />
             {title}
           </CardTitle>

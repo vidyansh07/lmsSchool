@@ -140,7 +140,7 @@ function ExamDetail({ examId }: { examId: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Readiness</CardTitle>
+          <CardTitle as="h2">Readiness</CardTitle>
           <CardDescription>
             Whether the bank has enough questions for every section.
           </CardDescription>

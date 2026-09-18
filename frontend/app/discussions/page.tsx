@@ -93,7 +93,7 @@ function Discussions() {
       {isOpen ? (
         <Card className="animate-rise-in">
           <CardHeader>
-            <CardTitle>Ask a question</CardTitle>
+            <CardTitle as="h2">Ask a question</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={submit}>

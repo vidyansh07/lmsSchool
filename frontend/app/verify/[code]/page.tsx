@@ -71,7 +71,7 @@ function Verify({ code }: { code: string }) {
               {certificate.is_valid ? 'Valid certificate' : 'Not valid'}
             </Badge>
           </div>
-          <CardTitle data-testid="verified-student">{certificate.student_name}</CardTitle>
+          <CardTitle as="h2" data-testid="verified-student">{certificate.student_name}</CardTitle>
           <CardDescription data-testid="verified-course">
             {certificate.course_title}
           </CardDescription>

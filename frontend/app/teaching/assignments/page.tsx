@@ -128,7 +128,7 @@ function Assignments() {
       {isOpen ? (
         <Card>
           <CardHeader>
-            <CardTitle>New assignment</CardTitle>
+            <CardTitle as="h2">New assignment</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={submit}>

@@ -118,7 +118,7 @@ function Assessments() {
       {isOpen ? (
         <Card>
           <CardHeader>
-            <CardTitle>New test</CardTitle>
+            <CardTitle as="h2">New test</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={submit}>

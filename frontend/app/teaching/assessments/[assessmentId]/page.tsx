@@ -169,7 +169,7 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Import results</CardTitle>
+          <CardTitle as="h2">Import results</CardTitle>
           <CardDescription>
             Upload a .csv or .xlsx with a `student_id` and `marks` column. Nothing is saved until
             you confirm the preview.

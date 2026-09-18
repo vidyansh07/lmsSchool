@@ -51,6 +51,7 @@ export default function HomePage() {
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <h2 className="sr-only">What this platform provides</h2>
           {foundations.map(({ icon: Icon, title, description }) => (
             <Card key={title}>
               <CardHeader>
@@ -91,6 +92,7 @@ export default function HomePage() {
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <h2 className="sr-only">Quick links</h2>
         {user.role !== 'admin' ? (
           <Card>
             <CardHeader>

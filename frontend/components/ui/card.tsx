@@ -21,8 +21,16 @@ export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
   return <div className={cn('flex flex-col gap-1 p-5 pb-3', className)} {...props} />;
 }
 
-export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn('text-base font-semibold leading-tight', className)} {...props} />;
+export function CardTitle({
+  className,
+  as: Comp = 'h3',
+  ...props
+}: React.HTMLAttributes<HTMLHeadingElement> & { as?: 'h2' | 'h3' }) {
+  // Defaults to h3, since a card most often sits inside an h2-labelled
+  // section. A page whose first heading-bearing content after its own h1 is
+  // a bare top-level Card (no wrapping h2) should pass `as="h2"` instead, so
+  // the heading order never skips a level.
+  return <Comp className={cn('text-base font-semibold leading-tight', className)} {...props} />;
 }
 
 export function CardDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {

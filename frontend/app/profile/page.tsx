@@ -23,7 +23,7 @@ function ProfileContent() {
 
       <Card className="animate-rise-in">
         <CardHeader>
-          <CardTitle>Photo</CardTitle>
+          <CardTitle as="h2">Photo</CardTitle>
           <CardDescription>Shown next to your name across the platform.</CardDescription>
         </CardHeader>
         <CardContent>

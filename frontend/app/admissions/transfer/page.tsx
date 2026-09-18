@@ -499,7 +499,7 @@ export function TransferContent() {
 
       <Card className="animate-rise-in">
         <CardHeader>
-          <CardTitle>{mode === 'student' ? 'Move one student' : 'Move a whole batch'}</CardTitle>
+          <CardTitle as="h2">{mode === 'student' ? 'Move one student' : 'Move a whole batch'}</CardTitle>
           <CardDescription>
             {mode === 'student'
               ? 'Find the student, pick the enrolment to move, and choose where it goes.'

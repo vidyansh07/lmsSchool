@@ -89,7 +89,7 @@ function CreateBatchInline({ onCreated }: { onCreated: () => void }) {
   return (
     <Card className="animate-rise-in">
       <CardHeader>
-        <CardTitle>New batch</CardTitle>
+        <CardTitle as="h2">New batch</CardTitle>
         <CardDescription>
           Starts as upcoming, with no trainer — assign one afterwards.
         </CardDescription>

@@ -157,6 +157,7 @@ function ExamPlayer({ examId }: { examId: string }) {
         </Alert>
       ) : null}
 
+      <h2 className="sr-only">Questions</h2>
       {paper.questions.map((question) => {
         const current = answers[question.id] ?? question;
         return (

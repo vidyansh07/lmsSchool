@@ -674,7 +674,7 @@ function BatchDetailView({ batchId }: { batchId: string }) {
       {batch.can_manage ? (
         <Card>
           <CardHeader>
-            <CardTitle>Status</CardTitle>
+            <CardTitle as="h2">Status</CardTitle>
             <CardDescription>
               Cancelling a batch cancels its enrolments; completing it completes them.
             </CardDescription>

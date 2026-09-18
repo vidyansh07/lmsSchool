@@ -139,7 +139,7 @@ function Reports() {
       {definition ? (
         <Card>
           <CardHeader>
-            <CardTitle>{definition.label}</CardTitle>
+            <CardTitle as="h2">{definition.label}</CardTitle>
             <CardDescription>{definition.description}</CardDescription>
           </CardHeader>
           <CardContent>

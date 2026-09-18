@@ -89,6 +89,7 @@ function MyBatches() {
         />
       ) : (
         <div className="stagger space-y-4">
+          <h2 className="sr-only">Batches</h2>
           {enrollments.map((enrollment) => {
             const batch = batches[enrollment.batch_id];
             return (

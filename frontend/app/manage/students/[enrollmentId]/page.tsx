@@ -252,7 +252,7 @@ export function StudentPerformance({
 
           <Card>
             <CardHeader>
-              <CardTitle>Attendance</CardTitle>
+              <CardTitle as="h2">Attendance</CardTitle>
             </CardHeader>
             <CardContent>
               {performance.attendance.has_records ? (

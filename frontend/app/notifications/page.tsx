@@ -173,7 +173,7 @@ function Notifications() {
       {preferences ? (
         <Card className="animate-rise-in">
           <CardHeader>
-            <CardTitle>Email settings</CardTitle>
+            <CardTitle as="h2">Email settings</CardTitle>
             <CardDescription>
               Turning a category off stops the emails. You still see everything here.
             </CardDescription>

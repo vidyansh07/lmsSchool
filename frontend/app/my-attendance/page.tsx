@@ -71,7 +71,9 @@ function MyAttendancePage_() {
           description="Attendance appears here once your trainer has taken a register."
         />
       ) : (
-        rows.map((row) => {
+        <>
+        <h2 className="sr-only">Attendance by course</h2>
+        {rows.map((row) => {
           const { summary } = row;
           return (
             <Card key={row.enrollment_id} className="animate-rise-in">
@@ -155,7 +157,8 @@ function MyAttendancePage_() {
               </CardContent>
             </Card>
           );
-        })
+        })}
+        </>
       )}
     </div>
   );
