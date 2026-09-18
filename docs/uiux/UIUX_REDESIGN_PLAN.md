@@ -114,6 +114,65 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R5 — Loading/error/empty states (2026-09-18, commit `bc94d22`)
+
+The plan doc's own R5 row ("only 7/95 pages use Skeleton") was stale — a
+raw-component-usage undercount. The real picture, confirmed before this
+phase started: `components/states.tsx` already exports
+`LoadingState`/`ErrorState`/`EmptyState`, and 79 of 95 pages already use at
+least one, most of the rest by delegating to a child component or to
+`components/data-table.tsx` (itself built on the same shared states). This
+phase triaged the real 21-file gap and found **all 21 were genuine
+non-gaps** — every one either delegates to a component that already handles
+its own states, or is a static page with no async fetch at all. Sampled
+~30 of the 79 existing `EmptyState` call sites and found real, specific
+copy everywhere already, with genuine CTAs tied to real reachable actions
+(e.g. "Register a student" → `/admissions/new`) — zero changes needed
+there either. The one real, concrete finding: `app/admin/overview/page.tsx`
+combined `adminDashboard()` and `attendanceTrend()` in one `Promise.all`, so
+a trend-fetch failure replaced the *entire page* — including six
+already-loaded KPI tiles and the metrics list — with a full-page error.
+Fixed by splitting the trend into its own effect/state with an
+independently-scoped `LoadingState`/`ErrorState` and its own retry, matching
+the same pattern `useDashboardSection`/`ManagerOverview` already use
+elsewhere in this app.
+
+**Review caught something serious mid-run**, worth recording plainly: it
+found the working tree contained an uncommitted, unrelated 555-insertion
+rewrite of `app/globals.css` into a "gradients/glassmorphism/shimmer-rainbow"
+visual overhaul that had nothing to do with this phase and directly
+contradicted every design decision R1's own audit documented (restrained
+tokens, no second visual system, light-only by deliberate choice). The
+review correctly flagged it as a blocker rather than letting it ride along
+with the legitimate fix, and the fix round discarded it entirely — the
+final commit contains only the two legitimate files
+(`app/admin/overview/page.tsx` + its test). I independently confirmed this
+myself: `git status`/`git diff` in the worktree show nothing of that content
+anywhere, not in the working tree, not in any commit, and a targeted grep
+for its own hallmark keywords (`glassmorphism`, `shimmer-rainbow`,
+`blob-morph`, `confetti-pop`, `spin-glow`) across the current
+`globals.css` returns zero matches — the only "gradient" hits are a
+pre-existing, unrelated `radial-gradient` in the spotlight-cursor effect
+from 2026-09-08, long before this redesign started. Whether that content
+originated from the other concurrent session this repo has running, or was
+scope creep by an earlier draft of this same phase's own implementer, is
+not fully resolved — but the actual safeguard (review reading the real
+diff before commit, plus my own git-status habit before every push) caught
+it cleanly either way, and nothing from it reached a commit or staging.
+
+I also hit a real false alarm of my own during independent verification,
+worth recording so it does not get mistaken for a regression later: my
+first `npx vitest run` came back with 9 failed files / 11 failed tests, all
+`[vitest-pool-runner]: Timeout waiting for worker to respond` — worker-pool
+resource contention (this machine had several unrelated heavy processes
+running), not a real regression. A second run with `--maxWorkers=2` came
+back clean: 130 files / 1197 tests, exactly matching Finalize's own claim.
+`tsc --noEmit`, `lint`, and `npm run build` all clean on my own independent
+run too.
+
+Live on staging: login and `/admin/overview` both return `200`, container
+logs clean. claude-in-chrome still not connected.
+
 ### R4 — Dashboard redesign (2026-09-18, commit `c7a33b2`)
 
 The biggest scope so far: five dashboard screens, one of them (manager,
