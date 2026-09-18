@@ -193,7 +193,11 @@ export function ImportFlow() {
               {targetBatch ? (
                 <p className="text-sm text-muted-foreground">
                   Chosen: {targetBatch.name} ({targetBatch.code}).{' '}
-                  <button type="button" className="underline" onClick={() => setTargetBatch(null)}>
+                  <button
+                    type="button"
+                    className="underline hover:text-foreground"
+                    onClick={() => setTargetBatch(null)}
+                  >
                     Clear
                   </button>
                 </p>

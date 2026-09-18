@@ -52,7 +52,7 @@ export function Checkbox({
   return (
     <label
       className={cn(
-        'relative inline-flex size-4 shrink-0 cursor-pointer items-center justify-center',
+        'press relative inline-flex size-4 shrink-0 cursor-pointer items-center justify-center',
         'before:absolute before:-inset-3.5 before:content-[""]', // ≥44px tap target, invisible
         disabled && 'cursor-not-allowed opacity-50',
         className,
@@ -77,7 +77,9 @@ export function Checkbox({
         className={cn(
           'flex size-4 items-center justify-center rounded border transition-colors',
           'peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary',
-          isChecked || isIndeterminate ? 'border-primary bg-primary' : 'border-border bg-surface',
+          isChecked || isIndeterminate
+            ? 'border-primary bg-primary'
+            : 'border-border bg-surface peer-hover:border-primary',
         )}
       >
         {isIndeterminate ? (

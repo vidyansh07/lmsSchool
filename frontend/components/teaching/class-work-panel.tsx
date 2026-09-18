@@ -77,7 +77,7 @@ function AssignmentQuickCreate({
       {created ? (
         <Alert variant="success" role="status">
           Assignment {created} created.{' '}
-          <button type="button" className="underline" onClick={() => setCreated(null)}>
+          <button type="button" className="underline hover:text-foreground" onClick={() => setCreated(null)}>
             Create another
           </button>
         </Alert>
@@ -149,7 +149,7 @@ function AssessmentQuickCreate({ batchId }: { batchId: string }) {
       {created ? (
         <Alert variant="success" role="status">
           Assessment {created} created.{' '}
-          <button type="button" className="underline" onClick={() => setCreated(null)}>
+          <button type="button" className="underline hover:text-foreground" onClick={() => setCreated(null)}>
             Create another
           </button>
         </Alert>

@@ -287,7 +287,7 @@ export function RoleBuilder({ slug }: { slug?: string }) {
                 type="button"
                 onClick={() => setStep(number)}
                 aria-current={step === number ? "step" : undefined}
-                className={`rounded-full px-3 py-1 ${step === number ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                className={`rounded-full px-3 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${step === number ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}
               >
                 {number}. {label}
               </button>

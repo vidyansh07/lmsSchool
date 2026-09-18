@@ -161,7 +161,7 @@ function ScorePopover({ performance }: { performance: Student360Response['perfor
 function RiskPopover({ risk, onOpenTab }: { risk: Student360Response['risk']; onOpenTab: () => void }) {
   const hasTriggers = risk.triggered.length > 0;
   const badge = (
-    <Badge variant={RISK_LEVEL_VARIANT[risk.level]} className="cursor-pointer">
+    <Badge variant={RISK_LEVEL_VARIANT[risk.level]} className="cursor-pointer transition-colors hover:opacity-80">
       {RISK_LEVEL_LABEL[risk.level]}
     </Badge>
   );

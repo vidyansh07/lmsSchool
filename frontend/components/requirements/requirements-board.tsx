@@ -247,7 +247,7 @@ function RequirementCard({
             type="button"
             onClick={onToggle}
             aria-expanded={isExpanded}
-            className="text-left"
+            className="press text-left hover:text-primary"
           >
             <CardTitle className="text-base">{row.title}</CardTitle>
           </button>
@@ -277,7 +277,7 @@ function RequirementCard({
       </CardHeader>
 
       {isExpanded ? (
-        <CardContent className="space-y-4">
+        <CardContent className="animate-rise-in space-y-4">
           {row.details ? (
             <p className="whitespace-pre-line text-sm">{row.details}</p>
           ) : (

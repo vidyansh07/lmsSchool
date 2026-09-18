@@ -972,7 +972,7 @@ export function RegistrationWizard() {
             {batchHasTrainer ? (
               <Alert variant="info">
                 This batch already has a trainer ({pickedBatch?.trainer_name}). Change that from{' '}
-                <Link href="/admissions/batches" className="underline">
+                <Link href="/admissions/batches" className="underline hover:text-foreground">
                   the batch list
                 </Link>{' '}
                 rather than here, since it affects everyone on it.

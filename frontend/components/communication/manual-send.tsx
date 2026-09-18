@@ -313,7 +313,12 @@ export function ManualSend() {
                   >
                     {entry.title}
                     {phase === 'idle' ? (
-                      <button type="button" aria-label={`Remove ${entry.title}`} onClick={() => removeStudent(entry.id)}>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${entry.title}`}
+                        onClick={() => removeStudent(entry.id)}
+                        className="rounded-full transition-colors hover:bg-border hover:text-foreground"
+                      >
                         ×
                       </button>
                     ) : null}

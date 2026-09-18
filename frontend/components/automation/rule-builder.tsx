@@ -445,7 +445,7 @@ function DryRunResults({
               </Badge>
             </div>
             <details className="mt-2">
-              <summary className="cursor-pointer text-xs text-muted-foreground">
+              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                 Occurrence data
               </summary>
               <ul className="mt-1 space-y-1 pl-4 text-xs">

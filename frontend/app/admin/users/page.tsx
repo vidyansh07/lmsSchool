@@ -160,11 +160,11 @@ function UsersTable() {
 
       <p className="text-xs text-muted-foreground">
         Students and trainers have richer records under{' '}
-        <Link href="/admin/students" className="underline">
+        <Link href="/admin/students" className="underline hover:text-foreground">
           Students
         </Link>{' '}
         and{' '}
-        <Link href="/admin/trainers" className="underline">
+        <Link href="/admin/trainers" className="underline hover:text-foreground">
           Trainers
         </Link>
         .

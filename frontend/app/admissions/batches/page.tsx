@@ -160,7 +160,7 @@ function RosterRow({ batch }: { batch: BatchListRow }) {
   }, [batch.id]);
 
   return (
-    <tr>
+    <tr className="animate-fade-in">
       <Td colSpan={7} className="bg-muted/40">
         {failed ? <Alert variant="error">Could not load this roster.</Alert> : null}
         {roster === null && !failed ? <LoadingState label="Loading roster…" rows={2} /> : null}

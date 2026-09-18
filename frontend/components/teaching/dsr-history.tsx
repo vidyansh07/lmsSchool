@@ -126,7 +126,7 @@ export function DsrHistory({ dsrId }: { dsrId: string }) {
         {isOpen ? 'Hide history' : 'View history'}
       </Button>
       {isOpen ? (
-        <div className="rounded-[var(--radius-card)] border border-border bg-muted/30 p-2 text-xs">
+        <div className="animate-rise-in rounded-[var(--radius-card)] border border-border bg-muted/30 p-2 text-xs">
           {isLoading ? <LoadingState label="Loading history…" rows={2} /> : null}
           {error ? (
             <ErrorState

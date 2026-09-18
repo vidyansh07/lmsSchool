@@ -121,7 +121,7 @@ export function RadioGroupItem({ value, disabled, className, id, ...props }: Rad
   return (
     <label
       className={cn(
-        'relative inline-flex size-4 shrink-0 items-center justify-center',
+        'press relative inline-flex size-4 shrink-0 items-center justify-center',
         'before:absolute before:-inset-3.5 before:content-[""]', // ≥44px tap target, invisible
         isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
         className,
@@ -144,7 +144,7 @@ export function RadioGroupItem({ value, disabled, className, id, ...props }: Rad
         className={cn(
           'flex size-4 items-center justify-center rounded-full border transition-colors',
           'peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary',
-          isChecked ? 'border-primary' : 'border-border bg-surface',
+          isChecked ? 'border-primary' : 'border-border bg-surface peer-hover:border-primary',
         )}
       >
         {isChecked ? <span className="size-2 rounded-full bg-primary" /> : null}

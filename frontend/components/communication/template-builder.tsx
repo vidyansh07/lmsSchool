@@ -344,7 +344,7 @@ export function TemplateBuilder({ templateKey }: { templateKey: string }) {
                           type="button"
                           aria-label={`Remove ${name}`}
                           onClick={() => removeVariable(name)}
-                          className="ml-0.5"
+                          className="ml-0.5 rounded-full transition-colors hover:bg-border hover:text-foreground"
                         >
                           <X className="size-3" aria-hidden="true" />
                         </button>
@@ -493,7 +493,7 @@ export function TemplateBuilder({ templateKey }: { templateKey: string }) {
                   </p>
                   <TemplateHtmlPreview html={preview.html} title={`${template.name} preview`} />
                   <details>
-                    <summary className="cursor-pointer text-xs text-muted-foreground">Plain text</summary>
+                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">Plain text</summary>
                     <pre className="mt-1 whitespace-pre-wrap text-xs">{preview.text}</pre>
                   </details>
                 </div>
