@@ -94,7 +94,7 @@ function Scorecard({
         </div>
         <Badge variant="neutral">{card.total_actions} actions</Badge>
       </div>
-      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
+      <dl className="mt-3 grid gap-x-3 gap-y-2 sm:grid-cols-2">
         {card.figures.slice(0, 4).map((figure) => (
           <div key={figure.key}>
             <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">

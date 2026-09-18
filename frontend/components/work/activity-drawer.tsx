@@ -398,7 +398,7 @@ export function ActivityDrawer({
               </Badge>
             </div>
 
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
               <div>
                 <dt className="text-xs uppercase tracking-wide text-muted-foreground">
                   Student
@@ -497,7 +497,7 @@ export function ActivityDrawer({
                         }
                       />
                     </Field>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
                       <Field label="Planned at" htmlFor="ad-planned" error={editErrors.planned_at}>
                         <Input
                           id="ad-planned"

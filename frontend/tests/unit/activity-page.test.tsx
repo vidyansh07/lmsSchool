@@ -111,3 +111,21 @@ describe('ActivityReview', () => {
     expect(await screen.findByText('Nothing recorded')).toBeInTheDocument();
   });
 });
+
+describe('ActivityReview — Phase R9 (responsive scorecard grid)', () => {
+  it('uses the app-wide sm:grid-cols-2 convention for the scorecard figures grid, not a bare grid-cols-2', async () => {
+    getActivityScorecards.mockResolvedValue(cards);
+    getActivityFeed.mockResolvedValue(feed([]));
+    const { container } = render(<ActivityReview />);
+    await screen.findByText('Kiran Counsellor');
+
+    // Collapses to one column below `sm:`, same convention as every other
+    // multi-column field/figure grid in the app.
+    expect(container.querySelector('dl.grid.gap-x-3.gap-y-2.sm\\:grid-cols-2')).not.toBeNull();
+    // No leftover bare `grid-cols-2` (no `sm:` prefix) anywhere on the page.
+    const bareTwoColumnGrids = Array.from(container.querySelectorAll<HTMLElement>('dl, div')).filter(
+      (el) => el.classList.contains('grid-cols-2') && !el.classList.contains('sm:grid-cols-2'),
+    );
+    expect(bareTwoColumnGrids).toHaveLength(0);
+  });
+});

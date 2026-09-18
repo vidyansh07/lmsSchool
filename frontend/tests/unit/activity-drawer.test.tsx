@@ -220,3 +220,26 @@ describe("ActivityDrawer", () => {
     );
   });
 });
+
+describe("ActivityDrawer — Phase R9 (responsive grids)", () => {
+  it("uses the app-wide sm:grid-cols-2 convention for the detail and edit-form grids, not a bare grid-cols-2", async () => {
+    getActivity.mockResolvedValue(detail({ status: "assigned" }));
+    const { container } = render(
+      <ActivityDrawer activityId="act-1" onOpenChange={vi.fn()} onChanged={vi.fn()} />,
+    );
+
+    // The read-only detail `<dl>` (Student/Type/Batch/Duration).
+    await screen.findByText(/Asha Rao/);
+    expect(container.querySelector("dl.grid.gap-x-4.gap-y-3.sm\\:grid-cols-2")).not.toBeNull();
+    // The edit-form's Planned at/Due at pair — `canEdit` is true for
+    // `assigned`, one of `EDITABLE_STATUSES`.
+    expect(await screen.findByLabelText("Planned at")).toBeInTheDocument();
+    expect(container.querySelector("div.grid.gap-3.sm\\:grid-cols-2")).not.toBeNull();
+
+    // No leftover bare `grid-cols-2` (no `sm:` prefix) anywhere in the drawer.
+    const bareTwoColumnGrids = Array.from(container.querySelectorAll<HTMLElement>("dl, div")).filter(
+      (el) => el.classList.contains("grid-cols-2") && !el.classList.contains("sm:grid-cols-2"),
+    );
+    expect(bareTwoColumnGrids).toHaveLength(0);
+  });
+});
