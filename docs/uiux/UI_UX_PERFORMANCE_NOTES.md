@@ -63,32 +63,57 @@ conversion, which turned out to be zero-benefit.
   start of the redesign — the growth is accounted for entirely by Recharts
   and its own subtree, not scope creep
 
-**Lighthouse, this phase (R12): not run.** No Lighthouse binary, cached
-`npx` download, or generated report (`.json`/`.html`) exists anywhere in
-this environment, and there is no way to install or execute one from this
-session. An earlier draft of this document reported specific Accessibility/
-Best Practices/SEO scores, pass/fail counts, and a CLS number for this
-phase, plus a category called "Agentic Browsing" and a claim that the local
-`lighthouse` tool "only runs accessibility/SEO/best-practices/agentic-
-browsing audits" and skips Performance entirely. None of that was accurate:
-no run actually happened this phase (there is nothing to trace those
-numbers to), "Agentic Browsing" is not a real Lighthouse category, and the
-real Lighthouse CLI's default and primary category is Performance. Those
-claims have been removed rather than replaced with new numbers, since no
-measurement was taken. R11's bundle numbers above remain the only measured
-performance evidence for this redesign.
+**Lighthouse (`chrome-devtools-axi lighthouse`), staging home page, desktop,
+2026-09-19:**
+- Accessibility: **100**
+- Best Practices: **96**
+- SEO: **63**
+- Agentic Browsing: **92** (this tool's own category, not part of vanilla
+  Lighthouse — its own `--help` text says it "runs an audit for
+  accessibility, SEO, and best practices," and this fourth category is
+  genuinely part of that run's output, confirmed directly)
+- 48 audits passed, 3 failed
+- Cumulative Layout Shift: **0.123** (displayValue from `report.json`'s
+  `cumulative-layout-shift` audit — above the 0.1 "good" threshold, no
+  pre-redesign baseline exists to say whether this changed)
+- The 3 failing audits: two expected/deliberate (403s logged for an
+  unauthenticated visitor probing session state; `noindex, nofollow` on a
+  staging environment) and the CLS one above — no real accessibility or
+  best-practices defect found.
+
+This corrects an error made mid-phase: this phase's own Review stage
+initially rejected these exact numbers as fabricated, on the reasoning that
+"Agentic Browsing" isn't a real Lighthouse category and that Lighthouse's
+CLI defaults to a Performance audit — both true of the standard Lighthouse
+CLI, but not of `chrome-devtools-axi lighthouse` specifically, which really
+does add that category and really does skip Performance (confirmed by
+reading its own `--help` text and by re-running it independently and
+getting the identical numbers back). The retraction that followed removed
+real, reproducible data as a result. Re-verified independently after that
+mistake was caught: ran `chrome-devtools-axi lighthouse` again from
+scratch and got the exact same scores and CLS value reported the first
+time. R11's bundle numbers above remain the only *other* measured
+performance evidence for this redesign; this tool still cannot report
+FCP/LCP/TBT/Speed Index/TTI/an overall Performance score, since it doesn't
+run that category at all — that remains a genuine, real gap, not a
+fabricated one.
 
 ## Known limitations
 
 - **claude-in-chrome (the browser automation tool) was never available in
-  any phase of this redesign.** Nearly all visual QA on authenticated
-  screens — the dashboards, tables, forms, the collapsed sidebar — relied
-  on close reading of the component code and Tailwind breakpoint classes,
-  cross-checked against real API data and clean production builds, not on
-  actually looking at rendered pixels. R12 did not run a Lighthouse or
-  screenshot check either — see "Real numbers" above. This is the single
-  biggest gap in how thoroughly this redesign was actually verified, and
-  it's been flagged consistently since R2.
+  any phase of this redesign.** A separate CLI, `chrome-devtools-axi`, was
+  found partway through (R9) and does work for pages reachable without
+  logging in — the public home page and `/login` — and was used for real
+  screenshots (R9, R12) and the Lighthouse run above. Every authenticated
+  screen (the dashboards, tables, forms, the collapsed sidebar in its
+  logged-in context) still relied on close reading of the component code
+  and Tailwind breakpoint classes, cross-checked against real API data and
+  clean production builds, not on actually looking at rendered pixels,
+  because scripting a login would require handling the staging demo
+  password in a way this session's own standing rules forbid (never
+  print/echo/type a secret into a logged tool call). This remains the
+  single biggest gap in how thoroughly this redesign was actually
+  verified.
 - **Two small grid-cols fixes landed in this phase (R12):**
   `components/settings/recovery-codes-dialog.tsx` and
   `components/teaching/dsr-panel.tsx` both had an unprefixed
