@@ -47,9 +47,9 @@ const ACCENT_CLASSES: Record<StatAccent, { card: string; disc: string; label: st
   amber: { card: 'bg-amber-tint', disc: 'bg-amber-soft text-amber', label: 'text-amber' },
   violet: { card: 'bg-violet-tint', disc: 'bg-violet-soft text-violet', label: 'text-violet' },
   rose: { card: 'bg-rose-tint', disc: 'bg-rose-soft text-rose', label: 'text-rose' },
-  blue: { card: 'bg-blue-tint', disc: 'bg-blue-soft text-blue', label: 'text-blue' },
-  green: { card: 'bg-green-tint', disc: 'bg-green-soft text-green', label: 'text-green' },
-  pink: { card: 'bg-pink-tint', disc: 'bg-pink-soft text-pink', label: 'text-pink' },
+  blue: { card: 'bg-sky-tint', disc: 'bg-sky-soft text-sky', label: 'text-sky' },
+  green: { card: 'bg-emerald-tint', disc: 'bg-emerald-soft text-emerald', label: 'text-emerald' },
+  pink: { card: 'bg-fuchsia-tint', disc: 'bg-fuchsia-soft text-fuchsia', label: 'text-fuchsia' },
 };
 
 export interface StatCardProps {

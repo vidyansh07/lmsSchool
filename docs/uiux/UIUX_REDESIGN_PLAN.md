@@ -84,3 +84,297 @@ dependencies that "ship two hundred things to upgrade forever."
 
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
+
+## R1 follow-up audit findings
+
+Read-only investigation (Part 1 of R1). No code was changed for any finding
+in this section — each is a target for the phase named in parentheses, not
+work done here. Every finding below is cited by file (and line, where a
+single line matters); nothing here is inferred without reading the code.
+
+### Forms
+
+**`app/admin/students/create-student-dialog.tsx`** (145 lines) + the shared
+`components/admissions/student-background-fields.tsx` it renders — the
+student creation form (there is no separate "wizard" route; it is one dialog
+with one nested progressive section):
+
+- Grouping: reasonable. Identity fields (email/phone/name/city/qualification/
+  fee/branch) sit in one `sm:grid-cols-2` grid, and the "who is registering"
+  background section is visually separated as its own `<fieldset>` below it.
+- Progressive disclosure: partial and real, but only for one sub-section.
+  `StudentBackgroundFields` (lines 110–211) genuinely defers: it shows three
+  radio cards first (College / Working / Not sure) and only reveals the
+  matching two fields (college name + graduation year, or company + title)
+  after a choice — `value.kind === 'college' ? (...) : null` /
+  `value.kind === 'employer' ? (...) : null`. But the eight fields above it
+  (email, phone, first/last name, city, qualification, fee, branch) are all
+  shown at once with no staging — a flat form, not a wizard, despite the
+  plan doc's working name for it. Not necessarily wrong for eight fields, but
+  worth naming precisely since "wizard" implies steps that do not exist.
+- Validation timing: on-submit only. `onSubmit` (line 46) calls
+  `createStudent(...)` and populates `errors` from `fieldErrors(cause)` —
+  the server's response. There is no client-side per-field validation on
+  blur or on keystroke anywhere in this file; a required field left empty is
+  only caught after a round trip. The `<input>`s render with plain
+  `onChange` handlers and no `onBlur`.
+- Required-field indication: present and correct. `Field` (see
+  `components/ui/field.tsx`) renders a `*` for `required` props, but only
+  `Email` and `First name` carry `required` in this file (line 81, 91) even
+  though the backend presumably requires more (e.g. `last_name` is optional
+  here per the UI, which may or may not match the server's own validation —
+  not verified against the backend in this read-only pass).
+- Error placement: good and consistent. `Field` wires `aria-describedby` to
+  an error `<p>` directly under the input (see `components/ui/field.tsx`
+  lines 43–54), so the message sits where a person is already looking and a
+  screen reader announces it.
+
+**`components/automation/rule-builder.tsx`** (453 lines) — the automation
+rule builder, reached via `app/admin/automation/[id]/page.tsx`:
+
+- Grouping: the strongest example in the app. Four `Card`s — Details,
+  Conditions, Actions, Test — each a self-contained section a person can
+  visit in any order (the file's own docstring, lines 3–12, explains this is
+  deliberate: "not a modal wizard... a person moves back and forth between
+  them"). The list screen's own "New rule" dialog (`app/admin/automation/
+  page.tsx`, `NewRuleDialog`, lines 48–136) only asks for name + trigger
+  before handing off here — genuine progressive disclosure at the
+  screen-to-screen level, matching the file's own docstring claim.
+- Validation timing: on-submit only, same as the student dialog — `save()`
+  (line 137) surfaces failure through one page-level `Alert`, not per field.
+- **Real inconsistency, not present elsewhere**: this builder has no
+  field-level error state at all. Unlike every other form read in this
+  audit (student dialog, `NewRuleDialog`, activity type dialog), the `Name`,
+  `Trigger` and `Description` `Field`s here (lines 260–308) are never passed
+  an `error` prop, and none of the three carries `required` either — a
+  validation failure from the server surfaces only as the one generic
+  `Alert variant="error"` banner at the top (line 247), not attached to the
+  field that caused it. Worth standardizing in R7.
+
+**`app/admin/activity-types/page.tsx`** (621 lines) — the activity type
+editor, a single `Dialog` (`ActivityTypeDialog`, lines 144–460) with no
+separate detail route (the file's own docstring, lines 3–9, says this is
+deliberate: no version history to justify one):
+
+- Grouping: present but shallow — related pairs share a `grid-cols-2` (not
+  even Duration/Reminder and Weight/Risk get their own visual section
+  headers the way `rule-builder.tsx`'s Cards do), and the two role-checkbox
+  groups (`RoleCheckboxes`, lines 111–142) are the only visually distinct
+  sub-sections.
+- **Progressive disclosure: none. This is the one form in the audit that
+  genuinely dumps every field on one screen**, exactly the pattern the task
+  brief asked to check for. All ~15 fields (name, slug, description,
+  category, two role-checkbox groups, visible-to-student switch, duration,
+  reminder, form picker, requires-review switch, performance weight, risk
+  effect, and — when editing — status) render unconditionally regardless of
+  category or of each other's values, unlike `student-background-fields.tsx`
+  in the same audit, which stages its fields behind a choice. The dialog
+  compensates with `max-h-[85vh] overflow-y-auto` (line 196) so it scrolls
+  rather than overflowing the viewport, but nothing is hidden until
+  relevant — a real R7 target given its field count.
+- Validation timing: on-submit only, same pattern as the rest — `submit()`
+  (line 178) populates `errors` from the server's `fieldErrors(cause)`. One
+  small, real exception: the Slug field auto-derives from Name as it is
+  typed (`slugify(value)`, line 219) until the person edits Slug directly,
+  which is live, on-keystroke behavior — but it is a convenience default,
+  not validation.
+- Required-field indication: Name, Slug and Category carry `required`
+  (lines 209, 229, 253); the rest do not, which is plausible (most really
+  are optional on this record) but not verified against the backend
+  serializer in this read-only pass.
+- Error placement: consistent with the rest of the app for `Field`-wrapped
+  inputs. The two `RoleCheckboxes` groups are the one exception — they are
+  plain `<div>`s, not `Field`s, so their errors are hand-rendered as a bare
+  `<p className="text-xs text-destructive">` right after each group (lines
+  279–281, 290–292) rather than through `aria-describedby` — visually
+  identical to `Field`'s own error styling but not wired to the checkbox
+  group's accessible name the way `Field` wires an `<input>`.
+- **Responsive, file+line-cited**: lines 310 and 386 each use a bare
+  `grid grid-cols-2 gap-4` for a field pair (Default duration / Reminder,
+  and Performance weight / Risk effect) with no `sm:` prefix — unlike every
+  other multi-column field grid found in this audit, which all collapse to
+  one column below `sm:` (e.g. `create-student-dialog.tsx` line 80:
+  `grid gap-4 sm:grid-cols-2`). At 375px, inside a dialog with `p-5` padding
+  and no `max-w` override below `sm` (`components/ui/dialog.tsx`: base
+  variant is `w-full` with a `max-w-md` cap), each of these two columns
+  works out to roughly 140–150px — enough to render but visibly cramped for
+  a labelled number input with a spinner, and inconsistent with the rest of
+  the app's own convention. A real, narrow R7/R9 fix (add `sm:` before
+  `grid-cols-2` at both lines), not a redesign.
+
+### Tables
+
+Read `components/data-table.tsx` (the shared primitive), `hooks/use-list.ts`
+(the shared server-pagination hook), and all four named table
+implementations.
+
+- **Server-pagination discipline: confirmed everywhere, no exceptions
+  found.** `hooks/use-list.ts` sends `page`/`page_size`/`ordering`/filters as
+  query-string parameters on every request and holds only the current page's
+  `results` in state (lines 32, 56); nothing slices a larger array
+  client-side. All four target tables confirmed independently:
+  - **Batch roster** — `app/manage/batches/[batchId]/students/page.tsx`
+    (`BatchRoster`, lines 39–172): `useList` bound to `listBatchStudents`
+    (`lib/manage.ts` lines 179–188), which calls
+    `GET /api/v1/batches/{batchId}/students/${queryString(query)}` — a real
+    server round trip per page.
+  - **Students list** — `app/admin/students/page.tsx` (`StudentsTable`,
+    lines 34–332): `useList(listStudents)`, same query-string pattern via
+    `lib/people.ts`.
+  - **Activities feed** — `app/admin/activity/page.tsx`
+    (`ActivityReview`, lines 120–491): does not use `useList`/`useApi` (its
+    own request-identity-keyed `useState`/`useEffect` pair, lines 172–212)
+    but still sends `page`/`page_size: 25` plus every active filter to
+    `getActivityFeed` (line 181) and only ever holds one page's
+    `feed.results` — genuinely server-paginated, just a different (older,
+    pre-`useList`) implementation of the same discipline.
+  - **Deliveries** — `components/communication/deliveries-tab.tsx`
+    (`DeliveriesTab`, lines 35–276): `useApi` against
+    `` `/api/v1/deliveries/${queryString(filters)}` `` (line 61–63) with
+    `page` in `filters` — same pattern.
+  - A broader repo grep for `.map(` over a full unpaginated array in any
+    table-shaped component (searched every `useApi<T[]>`/`useApi<Array...>`
+    call site, since a non-paginated `useApi` fetching a whole collection is
+    the shape a client-side-sliced list would take) found exactly three:
+    `app/admin/roles/page.tsx`, `app/admin/policies/page.tsx` and
+    `components/warnings-strip.tsx`. All three are legitimately bounded,
+    non-growing collections (the platform's own finite role list, its finite
+    policy catalog, and one staff member's own active warnings), not
+    unbounded user/record lists — not a violation.
+- **Row density / sticky headers: real, consistent gap found.** Only
+  `components/data-table.tsx` (used by the batch roster, via `DataTable`)
+  has the comfortable/compact density toggle (`toggleDensity`, lines
+  182–188, persisted to `localStorage`) and roving-tabIndex keyboard row
+  navigation. The other three target tables (students list, activities
+  feed, deliveries) each hand-roll a plain `<Table>`/`<TableWrapper>`
+  directly instead of using the shared `DataTable` component:
+  - `app/admin/students/page.tsx` does replicate sticky headers by hand
+    (`sticky top-0 z-10 bg-surface` repeated on every `<Th>`, lines
+    163–183) but has no density toggle and no keyboard row navigation.
+  - `app/admin/activity/page.tsx`'s feed table (lines 404–469) has neither
+    sticky headers nor a density toggle — a plain `<TableWrapper><Table>`
+    with no positioning classes on its `<Th>`s at all.
+  - `components/communication/deliveries-tab.tsx`'s table (lines 198–262)
+    is the same — no sticky header, no density toggle.
+  - Net: of the four target tables, only one (batch roster) gets the
+    density toggle, keyboard nav and sticky-header behavior `DataTable`
+    provides; the other three each reimplement a subset by hand with
+    varying completeness. A real R6 target: migrate the other three onto
+    `DataTable`, or accept the inconsistency as intentional and document
+    why (e.g. the activities feed mixes rich multi-line cells that
+    `DataTable`'s column-render shape may not suit as cleanly — not
+    evaluated here).
+  - `TableWrapper`/`Table` (`components/ui/table.tsx`, lines 11–24) both
+    apply regardless: the wrapper scrolls horizontally
+    (`overflow-x-auto`) and the table itself has `min-w-[42rem]`, so a
+    wide table's *own* scroll area moves sideways rather than the page —
+    this holds for all four tables checked, including the two that skip
+    `DataTable`.
+
+### Responsive (375px / 768px)
+
+Checked by reading Tailwind breakpoint classes closely across the main
+dashboard (`app/dashboard/page.tsx`), the students table (the large-table
+screen, `app/admin/students/page.tsx`) and the activity type editor (the
+form screen, `app/admin/activity-types/page.tsx`), plus the shared shell,
+table, dialog and button primitives those pages build on.
+
+- **Dashboard** (`app/dashboard/page.tsx`): every stat/card grid found
+  starts at `grid-cols-1` and only widens at `sm:`/`lg:`/`xl:` (lines 276,
+  343, 381, 464, 485, 504, 538) — confirmed to stack cleanly to one column
+  at 375px, with no bare (non-responsive) multi-column grid found in this
+  file.
+- **Students table / large-table screens generally**: at 375px, the
+  students table (10 columns) does not fit and is not meant to —
+  `TableWrapper`'s `overflow-x-auto` plus `Table`'s `min-w-[42rem]`
+  (`components/ui/table.tsx` lines 11–24, comment: "a wide table never
+  forces the whole page sideways on a phone") means the table scrolls
+  *within its own bordered card*, not the page. This is confirmed
+  deliberate, working behavior, not a bug — flagging it here only because
+  the task asked to check for horizontal scroll at 375px specifically: it
+  is present, by design, and contained.
+- **Activity type dialog / form screens**: the one real, precise finding is
+  the `grid-cols-2` (no `sm:`) at `app/admin/activity-types/page.tsx` lines
+  310 and 386, already detailed above under Forms — cramped, not cut off,
+  at 375px.
+- **Touch targets**: checked because it is a common 375px failure mode.
+  Not a real finding — `components/ui/button.tsx`'s `sm` and `md` sizes
+  (lines 24–25) keep a compact *visible* box (`h-8`/`h-10`) but expand the
+  actual *hit* area to 44px with a centred `before:h-11` pseudo-element,
+  specifically so a toolbar of compact buttons (like the app shell's
+  header icons, `components/app-shell.tsx` lines 343–353, at `size-9`
+  visible) still meets the 44px guideline. Checked directly against the
+  guideline rather than assumed; the app shell's own header buttons use
+  this pattern and are fine at 375px.
+- **768px**: the `sm:` breakpoint (640px in this Tailwind config, the
+  default) is already crossed by 768px for every grid cited above, so
+  every "single column at 375" case above is multi-column and clear of the
+  phone-only cases by 768px. No 768px-specific breakage found in the three
+  screens read.
+- Not independently loaded in a browser at either width for this pass —
+  done by close reading of the breakpoint classes and the primitives they
+  compose, per the task's own stated alternative to a live dev-server
+  check. A later phase (R9) that touches these screens should still do a
+  live check before calling them done, since a class-reading pass cannot
+  catch a runtime-only issue (e.g. content that overflows because of
+  actual data length, not a missing breakpoint class).
+
+### `AuthProvider` (`components/auth-provider.tsx`)
+
+**Already fine — no fix needed, and no fix invented.** Read in full (114
+lines). There is no background session-refresh tick of any kind: the only
+places `setUser`/`setError`/`setIsLoading` are called are (1) the one
+`useEffect` that runs once on mount (lines 61–83, empty dependency array)
+to ask `GET` "who am I" once, and (2) `refresh()`/`signOut()`, both only
+ever invoked by a consumer's own explicit action, never on a timer or
+interval. There is no `setInterval`, no polling, nothing in this file fires
+on its own after mount. The context value is correctly memoized:
+`useMemo(() => ({...}), [user, isLoading, error, load, signOut])` (lines
+93–104) — `load` and `signOut` are themselves `useCallback`s with empty
+dependency arrays (lines 44, 85), so the memo's dependency list is stable
+apart from the three pieces of state that are meant to cause a re-render
+when they actually change. Every consumer of `useAuth()` re-renders only
+when `user`, `isLoading` or `error` genuinely change (mount-resolution,
+sign-out, or an explicit `refresh()` call) — not on some unrelated tick.
+This matches the plan doc's own audit note (line 27: "no obvious
+duplicate-fetch pattern") and closes out the "AuthProvider's render width"
+open question from the starting-point audit with a plain answer: it was
+never a problem.
+
+### `'use client'` sweep
+
+For each of the six files the plan doc flagged, plus a full-repo grep for
+every other `'use client'` `page.tsx` with no interactive hook at its own
+top level (methodology: grepped every `app/**/page.tsx` starting with
+`'use client'` for `useState|useEffect|useCallback|useMemo|useReducer|
+useRef|onClick|onChange|onSubmit|useAuth|useApi|useList|use(` at the file's
+own level, i.e. not inside a component it merely renders):
+
+| File | Verdict | Why |
+| --- | --- | --- |
+| `app/admin/communication/page.tsx` | **Genuinely needs client** | `CommunicationCenter` (the file's own component, not a child) calls `useAuth()` directly (line 18) to gate which `TabsTrigger`s render (`mayViewDeliveries`/`maySend`, lines 19–21) — the tab set itself is capability-dependent, not just what is inside a tab. |
+| `app/admin/communication/templates/[key]/page.tsx` | **Could plausibly become server-rendered** | Zero hooks of its own — the entire body is `const { key } = use(params); return <RequireAuth ...><TemplateBuilder .../></RequireAuth>`. `RequireAuth` and `TemplateBuilder` are already independently `'use client'`, so this file's own `'use client'` does nothing but force the file itself to also be treated as client; a Server Component `page.tsx` that `await`s `params` (Next 15+ async params, no `use()` needed) and renders the same already-client children would be equivalent. Not converted here per the brief. |
+| `app/calendar/page.tsx` | **Could plausibly become server-rendered** | Zero hooks anywhere in the file (20 lines total) — `export default function CalendarPage()` renders static JSX plus `<RequireAuth><CalendarView /></RequireAuth>`, both already `'use client'` themselves. The only broader grep hit with genuinely *no* hooks at all, not even `use(params)`. |
+| `app/my-fees/page.tsx` | **Genuinely needs client** | `MyFees` (the file's own component) calls the `useStudentFees` hook directly (line 14: `useStudentFees(getMyFees, [])`) — a hook call at this file's own level, not merely rendering an already-client child. |
+| `app/profile/page.tsx` | **Genuinely needs client** | `ProfileContent` (the file's own component) calls `useAuth()` directly (line 13) and branches which form renders on `user?.profile_type` (lines 36–37) — the page's own structure, not just a child's, depends on client-fetched session state. |
+| `app/page.tsx` | **Genuinely needs client** | `HomePage` calls `useAuth()` directly (line 35) and the entire page body — signed-out marketing content vs. a per-role signed-in dashboard-links grid — depends on it. Also structurally hard to make server-rendered without a broader change: the file's own comment on `AuthProvider` (line 6 of that file) notes the session lives in an HttpOnly cookie "the browser cannot read", i.e. today's session check is a client-side fetch to `/api/v1/me`-equivalent, not something this page could read server-side without a different auth-reading mechanism — out of scope for a rename/no-behavior-change phase. |
+
+**Two more found by the broader grep, same shape as the
+`templates/[key]` case** (thin pass-through detail pages whose only
+"hook" is `use(params)`, wrapping already-`'use client'` children) —
+**could plausibly become server-rendered**, same reasoning:
+
+- `app/admin/automation/[id]/page.tsx` (20 lines: `use(params)` →
+  `<RequireAuth><RuleBuilder id={id} /></RequireAuth>`)
+- `app/admin/forms/[slug]/page.tsx` (20 lines: same shape, `FormDetail`)
+- `app/admin/roles/[slug]/page.tsx` (19 lines: same shape, `RoleBuilder`)
+
+No other `'use client'` `page.tsx` in the repo was found with zero
+interactive hooks at its own level beyond the ones listed above — every
+other page either calls a hook directly (most commonly `useState`/
+`useEffect` for its own local fetch-and-render logic, predating `useList`/
+`useApi` in some older screens) or reads `useSearchParams`/`useRouter`
+itself. None of those were converted in this phase; this table is a
+findings list for a later phase (the brief's own instruction, since a
+wrong conversion here would itself be an architecture change beyond
+polish).

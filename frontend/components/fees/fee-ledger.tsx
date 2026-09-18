@@ -99,10 +99,10 @@ function isoToday(): string {
 
 const FIGURE_TONES = {
   neutral: 'bg-muted/60',
-  green: 'bg-green-tint',
+  green: 'bg-emerald-tint',
   amber: 'bg-amber-tint',
   rose: 'bg-rose-tint',
-  blue: 'bg-blue-tint',
+  blue: 'bg-sky-tint',
 } as const;
 
 function Figure({
@@ -878,7 +878,7 @@ export function FeePlanCard({
           <div
             className={cn(
               'h-full rounded-full transition-[width] duration-500',
-              percent >= 100 ? 'bg-green' : 'bg-primary',
+              percent >= 100 ? 'bg-emerald' : 'bg-primary',
             )}
             style={{ width: `${percent}%` }}
           />

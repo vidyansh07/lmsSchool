@@ -26,17 +26,17 @@ const badgeVariants = cva(
     variants: {
       variant: {
         neutral: 'bg-muted text-muted-foreground',
-        success: 'bg-green-soft text-green',
+        success: 'bg-emerald-soft text-emerald',
         warning: 'bg-amber-soft text-amber',
         error: 'bg-rose-soft text-rose',
         violet: 'bg-violet-soft text-violet',
         indigo: 'bg-indigo-soft text-indigo',
-        pink: 'bg-pink-soft text-pink',
+        pink: 'bg-fuchsia-soft text-fuchsia',
         amber: 'bg-amber-soft text-amber',
         cyan: 'bg-cyan-soft text-cyan',
         teal: 'bg-teal-soft text-teal',
-        blue: 'bg-blue-soft text-blue',
-        green: 'bg-green-soft text-green',
+        blue: 'bg-sky-soft text-sky',
+        green: 'bg-emerald-soft text-emerald',
         rose: 'bg-rose-soft text-rose',
       },
       /** A leading dot in the text colour — the reference's status pills. On

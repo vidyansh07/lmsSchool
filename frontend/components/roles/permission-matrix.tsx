@@ -50,7 +50,7 @@ const ICON: Record<
 };
 
 const TONE: Record<MatrixCell, string> = {
-  explicit: "text-green",
+  explicit: "text-emerald",
   inherited: "text-foreground",
   locked: "text-amber",
   denied: "text-muted-foreground",

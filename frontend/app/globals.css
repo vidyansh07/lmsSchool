@@ -133,25 +133,6 @@
   --color-fuchsia-tint: oklch(96.4% 0.021 338.9);
   --color-fuchsia-soft: oklch(92.1% 0.052 337.8);
 
-  /* Back-compat aliases for the pre-rename names (`blue`/`green`/`pink`):
-     identical values to `sky`/`emerald`/`fuchsia` above. Some call sites
-     (app/admin/activity, app/admin/students, app/admissions) and
-     tests/unit/theme-contrast.test.ts still use the old names and were not
-     part of this rewrite's diff — migrate them to the new names and drop
-     these three trios rather than reintroducing a seventh/eighth/ninth
-     distinct hue. */
-  --color-blue: oklch(49% 0.135 237.8);
-  --color-blue-tint: oklch(96.9% 0.019 234.8);
-  --color-blue-soft: oklch(92.4% 0.045 234.6);
-
-  --color-green: oklch(49% 0.135 152.6);
-  --color-green-tint: oklch(97% 0.028 156.9);
-  --color-green-soft: oklch(92.9% 0.06 156.4);
-
-  --color-pink: oklch(52.7% 0.228 335.2);
-  --color-pink-tint: oklch(96.4% 0.021 338.9);
-  --color-pink-soft: oklch(92.1% 0.052 337.8);
-
   /* Three more, pill-only: a status table can need more distinct categories
      than a six-tile dashboard does. `indigo` reuses the primary hue — it was
      missing its base token here (only `-soft` was defined), left over from

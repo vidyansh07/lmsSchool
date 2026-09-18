@@ -105,7 +105,7 @@ function Scorecard({
         ))}
       </dl>
       {collected > 0 ? (
-        <p className="mt-3 flex items-center gap-1.5 text-sm text-green">
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-emerald">
           <IndianRupee className="size-4" aria-hidden="true" />
           {formatCurrency(card.fees_collected)} collected
         </p>

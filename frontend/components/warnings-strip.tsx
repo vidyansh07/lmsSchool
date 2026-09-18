@@ -32,7 +32,7 @@ const TONE: Record<
 > = {
   error: { icon: AlertOctagon, row: 'text-rose', badge: 'error' },
   warning: { icon: AlertTriangle, row: 'text-amber', badge: 'warning' },
-  info: { icon: Info, row: 'text-blue', badge: 'neutral' },
+  info: { icon: Info, row: 'text-sky', badge: 'neutral' },
 };
 
 function WarningRow({ warning }: { warning: StaffWarning }) {
@@ -101,7 +101,7 @@ export function WarningsStrip({ className }: { className?: string }) {
         <div className="space-y-1">
           <CardTitle className="flex items-center gap-2">
             {data && data.length === 0 ? (
-              <ShieldCheck className="size-5 text-green" aria-hidden="true" />
+              <ShieldCheck className="size-5 text-emerald" aria-hidden="true" />
             ) : (
               <AlertTriangle className="size-5 text-amber" aria-hidden="true" />
             )}

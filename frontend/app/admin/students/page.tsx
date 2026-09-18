@@ -241,7 +241,7 @@ function StudentsTable() {
                         <span className="text-xs text-muted-foreground">Not decided</span>
                       )}
                     </Td>
-                    <Td className="whitespace-nowrap text-right tabular-nums text-green">
+                    <Td className="whitespace-nowrap text-right tabular-nums text-emerald">
                       {Number(row.fee_paid) > 0 ? (
                         formatCurrency(row.fee_paid)
                       ) : (
@@ -261,7 +261,7 @@ function StudentsTable() {
                           </span>
                         </>
                       ) : Number(row.fee_payable) > 0 ? (
-                        <span className="text-xs font-medium text-green">Settled</span>
+                        <span className="text-xs font-medium text-emerald">Settled</span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}

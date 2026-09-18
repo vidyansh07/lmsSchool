@@ -294,7 +294,7 @@ export function AdmissionsList() {
                           </>
                         ) : (
                           <>
-                            <span className="font-medium text-green">Paid</span>
+                            <span className="font-medium text-emerald">Paid</span>
                             <span className="block text-xs text-muted-foreground">
                               {money(row.fee_payable)}
                             </span>

@@ -77,7 +77,7 @@ const PAIRS: [string, string, number, string][] = [
   // Each accent is small text on its own tint (a dashboard tile) and on its
   // soft (a pill, an icon disc). The reference these came from fails three of
   // these; the tokens were darkened until they pass.
-  ...(['amber', 'violet', 'rose', 'blue', 'green', 'pink'] as const).flatMap(
+  ...(['amber', 'violet', 'rose', 'sky', 'emerald', 'fuchsia'] as const).flatMap(
     (accent): [string, string, number, string][] => [
       [accent, `${accent}-tint`, 4.5, `${accent} label on its tile`],
       [accent, `${accent}-soft`, 4.5, `${accent} label in its pill`],
