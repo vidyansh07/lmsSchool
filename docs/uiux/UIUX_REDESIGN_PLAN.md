@@ -114,6 +114,63 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R6 — Tables (2026-09-18, commit `ab712d2`)
+
+Migrated every remaining hand-rolled `<TableWrapper>`/`<Table>` large list
+onto the shared `components/data-table.tsx` primitive: `admin/students`,
+`admin/trainers`, `admin/users`, `admin/batches`, `admissions`,
+`activities`, `admin/activity`, `teaching/work`, plus four tab components
+(`communication/deliveries-tab`, `communication/templates-tab`,
+`manage/trainer-work-tab`, `students/student-activities-tab`) — 12 files.
+`DataTable` gained two backward-compatible props these migrations needed:
+`loadingLabel` (sr-only loading copy) and `errorTitle` (passed to the
+internal `ErrorState`), since several pages had existing tests asserting
+specific loading/error copy the primitive previously hardcoded generically.
+Correctly left alone as structurally incompatible: `teaching/register-editor`
+(a deliberate P/A/L/E keyboard-chord model, documented in its own file, not
+a generic table) and `admissions/batches` (an inline expand-to-roster
+feature inserting extra `<tr>` rows between data rows).
+
+Original triage undercounted by one file — `app/activities/page.tsx` was
+missed from the initial grep and never categorized. Review caught this as a
+major finding; the fix round migrated it too, confirmed by me directly
+(`DataTable` import at line 33, `<DataTable` usage at line 488) and via the
+final commit's file list.
+
+One real, deliberately-unfixed gap review surfaced and I independently
+confirmed: `app/admin/certificates/page.tsx` calls `listCertificates()` with
+no `page`/`page_size` param and has no `Pagination` control at all, so
+anything past the server's default first page is invisible with no way to
+reach it. Confirmed via grep — only the import and two call sites, no
+pagination machinery anywhere in the file. Left unfixed on purpose: it's a
+pre-existing gap, not something this phase's table migration touched or
+caused, and fixing it means guessing at intended default page size/UX
+rather than a mechanical migration — flagging for a future phase instead of
+guessing.
+
+**Unresolved, worth recording plainly:** two pre-existing untracked files
+(`docs/ER_DIAGRAM.mmd`, `docs/SCHEMA.md` — never git-tracked, first noted in
+R3, consistently excluded from every phase's commits since) were flagged
+again by this phase's review as a false-positive "contamination" re-flag.
+While checking that finding I found both files **physically gone from
+disk** (`ls -la` → "No such file or directory" for both), directly
+contradicting this phase's own Finalize commit message, which explicitly
+states they "remain untracked and untouched." Since neither file was ever
+git-tracked, there is no commit or reflog to recover them from, and I could
+not find an explicit deletion step in this phase's own instructions or
+prompts that would explain it. They are unrelated to the redesign's own
+content (an ER diagram and schema doc, not app code), so this does not
+block or compromise R6's actual work, but the discrepancy itself is real
+and I'm not glossing over it: something deleted two files this phase's own
+report claimed it left untouched, and I don't have a confirmed cause.
+
+Independent verification: `tsc --noEmit` clean, `lint` clean,
+`npx vitest run --maxWorkers=2` — 136 files / 1230 tests, all passed,
+matching Finalize's own claim exactly. `npm run build` succeeded cleanly.
+
+Live on staging: login and a sample of the 12 migrated table pages return
+`200`, container logs clean. claude-in-chrome still not connected.
+
 ### R5 — Loading/error/empty states (2026-09-18, commit `bc94d22`)
 
 The plan doc's own R5 row ("only 7/95 pages use Skeleton") was stale — a
