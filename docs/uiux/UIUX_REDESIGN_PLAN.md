@@ -114,6 +114,65 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R11 — Network + render performance (2026-09-19, commit `f093ee9`)
+
+Audit covered all four line items real (not guessed) evidence:
+- **`'use client'` conversion**: re-checked the two candidates R1 deferred
+  (`admin/communication/templates/[key]/page.tsx`, `app/calendar/page.tsx`).
+  Inspected the actual built `page_client-reference-manifest.js` files —
+  converting either is genuinely zero-benefit (their only children are
+  already independently client components, so nothing leaves the client
+  bundle) — correctly left alone rather than converted for its own sake.
+- **Duplicate-fetch sweep**: read `use-api.ts`/`use-list.ts` in full,
+  checked dependency arrays across ~90 fetch-effects in ~60 files. Found
+  exactly one real duplicate: `app/manage/page.tsx` and the
+  `ManagerAttentionStrip` it renders both independently call
+  `GET /api/v1/dashboards/manager/` — but the page's own docstring already
+  defends this as deliberate ("a second cheap GET to an idempotent,
+  already-cached endpoint, not a second implementation"), so fixing it
+  would fight the file's own stated design intent. Correctly left as a
+  judgment call, not force-deduped.
+- **Double-submission protection**: the three R7-named forms were already
+  correctly guarded (confirmed, not redone). Found 4 real, unguarded
+  status-change/delete actions with no busy/disabled state, each in a file
+  that already knows the pattern for a sibling action or has an exact
+  guarded sibling screen (`admissions/[studentId]/page.tsx`) — fixed all 4
+  (batch roster suspend/reactivate/remove, course module publish/delete,
+  lesson publish/delete, "sign out everywhere").
+- **Bundle check**: real build, real numbers — `.next/static/chunks` totals
+  3.9M, the largest chunk (Recharts, 415KB) traced via the client-reference
+  manifests and confirmed still route-scoped to the four chart dashboards
+  only. Dependency count 25 total (10 dependencies + 15 dev), up from R1's
+  22 — growth accounted for by Recharts (R2) and its own listed subtree,
+  not scope creep.
+
+**Extra, legitimate finding beyond the audit's own scope**: the fixer
+converted `admin/batches/[batchId]/page.tsx` and
+`admin/courses/[courseId]/page.tsx` from client to real Server Components,
+extracting the actual interactive logic into new sibling files
+(`batch-detail-view.tsx`, `course-editor.tsx`) as the client boundary —
+independently verified both `page.tsx` files are now `async function`
+components with no `'use client'`, reading route params server-side and
+rendering `<RequireAuth>` (itself client) wrapping the extracted client
+view; the split components (`RosterPanel`, `ModulePanel`) are re-exported
+from the original path so existing tests still import from the same
+location. This is a real, more substantive Server-Component conversion
+than the two candidates the audit checked, and unlike those two, this one
+does move genuinely interactive code out of the initial page module.
+
+**Process note**: review correctly caught a real process gap — nothing had
+been committed after Implement (a repeat of R9's discipline miss, this time
+"zero commits" rather than "wrong label"). Review-fix/Finalize corrected it
+with the single `f093ee9` commit reviewed here; independently confirmed via
+`git log` that only one R11 commit exists.
+
+Independently re-verified: read the diff for both page/detail-view splits
+myself, confirmed `RequireAuth` truly is the client boundary. Ran the
+checklist myself: `tsc --noEmit` clean, `vitest --maxWorkers=2` — 141 files
+/ 1257 tests, matching Finalize's own claim. `npm run build` clean.
+Deployed clean; `/`, `/admin/batches/x`, `/admin/courses/x` all return
+`200` on staging.
+
 ### R10 — Accessibility pass (2026-09-19, commit `9b7b36f`)
 
 Adjusted scope going in, since R9 already landed heading hierarchy: audited
