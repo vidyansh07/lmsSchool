@@ -63,6 +63,86 @@ sparklines and gauge/bullet-style target visuals stay hand-rolled SVG/CSS
 Recharts into every tile — matching this codebase's own stated bias against
 dependencies that "ship two hundred things to upgrade forever."
 
+## Design pivot (2026-09-19): bold, multi-color, feature-rich dashboards
+
+**Supersedes, deliberately, the "sparing accents" instinct in R1's own
+original brief for dashboard/analytics screens specifically.** The owner
+pointed at two live reference screens — a WhatsApp-business SaaS dashboard
+(`https://ai-greentick-dashboard.vercel.app/dashboard` and `/analytics`) —
+and asked for that level of visual boldness and feature density, with an
+explicit instruction to update this document (the "core prompt") before
+building anything. Screenshots taken and read directly (not guessed from
+the URL) before writing this section.
+
+**What the reference actually does, precisely, so this isn't cargo-culted:**
+it is NOT random rainbow color — it's a clean white/neutral base with ONE
+dominant brand accent (their green) for primary actions and status, and a
+DIFFERENT distinct hue assigned per data series/metric (a metric's KPI
+number, its own inline sparkline, and its own chart line/bar all share one
+color, so color carries meaning: "this line is Delivery Rate," not
+decoration). On top of that restrained-but-varied palette, the real
+difference from this app's current dashboards is density and feature
+variety per screen: every KPI tile carries its own colored sparkline (not
+just one hero tile); a single dashboard mixes an area chart, a donut with a
+legend, a radial gauge with a center readout, a bar chart, and a data
+table, not just one chart type; there's a friendly greeting header ("Good
+evening, X 👋"); the top bar carries a global search field, a notification
+bell, a status/balance chip, and one prominent pill-shaped CTA button next
+to the avatar; and there are real secondary feature widgets alongside the
+core metrics — a "needs attention" count chip, a segmented time-range
+toggle (Today/7D/30D), a system-health list with live status dots, and an
+onboarding/setup-progress card with a radial percentage and a "continue"
+CTA.
+
+**What this means concretely for this app, translated to real ERP data —
+no invented numbers, no fake widgets a real screen can't back:**
+- Every KPI tile gets its own accent color AND its own real sparkline
+  (`StatCard` already supports both — R2 only wired the sparkline onto one
+  hero tile per dashboard; extend it to every tile that has a real trend
+  series behind it, and stop reusing one accent across all tiles).
+- Each dashboard should use more than one chart type where the underlying
+  data genuinely supports it — `components/ui/charts/` already ships
+  `LineChart`/`AreaChart`/`BarChart`/`DonutChart`/`RadialProgress`; this
+  pivot is mostly about USING more of that existing library per screen
+  more densely, not building new chart primitives.
+  `RadialProgress` in particular (built in R2, used nowhere on a real
+  dashboard yet) is the direct analogue of the reference's gauge/setup
+  widgets — obvious real fits: attendance/completion rate, fee-collection
+  rate, a batch's capacity-fill percentage, onboarding/setup completion for
+  a new trainer or branch.
+- A `DonutChart` breakdown belongs wherever a metric already decomposes
+  into real named categories server-side (the reference's "Charges Split")
+  — e.g. batch-status mix, fee-payment-method split, activity-type mix —
+  reuse `DonutChart`, don't invent new categories.
+- Top bar: this app's `app-shell.tsx` header already has *some* of this
+  (search, notifications). Enrich it toward the reference's pattern where
+  a real equivalent exists (a prominent primary CTA appropriate to the
+  viewer's role, an avatar menu) — do not add a "wallet balance" chip or a
+  "refer & earn" card, since neither corresponds to anything this ERP
+  actually does; the reference's own domain-specific marketing widgets
+  (mobile app download card, referral card, floating chat-launcher bubble)
+  are explicitly NOT copied — they're WhatsApp-SaaS growth features with no
+  ERP equivalent, and inventing one would violate the standing "no
+  fabricated features" rule.
+- A warm, human greeting header ("Good evening/afternoon/morning, {name}")
+  is a real, cheap, high-value copy change — adopt it on every role
+  dashboard.
+- More real feature widgets per dashboard, matching data this app already
+  has: a system-health-style list (already exists in some form — check
+  before rebuilding), a "needs attention" count chip (batches/admissions
+  already have attention-strip components — surface a count chip
+  consistently), a segmented date-range control wherever a dashboard
+  currently has no range control at all but its underlying data supports
+  one.
+
+**Still standing, unchanged:** no new business functionality, no fabricated
+metrics/categories, no backend changes unless a specific problem requires
+one, WCAG AA contrast on every real fg/bg pair (this is why the new palette
+work reuses the EXISTING 6 accent trios + 5 chart tokens, already proven to
+clear AA via `theme-contrast.test.ts`, rather than inventing new raw hex),
+`prefers-reduced-motion` respected, every existing route/permission/
+workflow preserved, real data only.
+
 ## Phases
 
 | Phase | Name | Depends on | Delivers |
@@ -79,6 +159,9 @@ dependencies that "ship two hundred things to upgrade forever."
 | R10 | Accessibility pass | R2–R9 | Skip link, remaining aria gaps, keyboard nav through drawers/modals/comboboxes — heading hierarchy already landed in R9 (`63d3484`), verify rather than redo |
 | R11 | Network + render performance | R1 | The broader duplicate-fetch sweep the first audit pass couldn't finish, `AuthProvider` render-width fix if needed, the `'use client'` sweep, double-submission protection audit, bundle check |
 | R12 | Visual + performance QA, docs | all | Cross-page consistency sweep, `docs/uiux/UI_UX_PERFORMANCE_NOTES.md` (practical notes, not a system), final verification |
+| R13 | Bold dashboard pivot — admin + manager | R2, R4 | Per-tile colored sparklines on every KPI, a RadialProgress gauge and a DonutChart on the flagship admin/manager dashboards, friendlier greeting header, richer top bar |
+| R14 | Bold dashboard pivot — trainer + student + counsellor | R13 | Same treatment extended to the remaining role dashboards, using each role's own real data |
+| R15 | Bold pivot QA | R13–R14 | Contrast re-check on the wider palette use, consistency sweep, real visual verification, phase-log |
 
 ## R4 dashboard route map
 
