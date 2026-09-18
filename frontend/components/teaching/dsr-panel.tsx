@@ -204,7 +204,7 @@ export function DsrPanel({
               </Button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid sm:grid-cols-2 gap-3">
             <Field label="Online" htmlFor={onlineId} error={fieldErrors.online_count}>
               <Input
                 type="number"
