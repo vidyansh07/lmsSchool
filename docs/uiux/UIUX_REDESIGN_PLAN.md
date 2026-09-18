@@ -197,6 +197,45 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R14 — Bold dashboard pivot, trainer + student + counsellor (2026-09-19, commit `8aeff8b`)
+
+Extended R13's treatment to the three remaining role dashboards, with the
+same discipline: no fabricated series, no invented targets. Confirmed
+`TrainerDashboard`, `StudentDashboard`, and `CounsellorDashboard` all carry
+zero time-series fields (checked against the real backend builders, not
+assumed) — no sparklines added anywhere in this phase, matching R13's own
+conclusion for admin/manager's non-attendance tiles.
+
+What was real and added: Trainer's 5 KPI tiles (assigned batches, students,
+courses taught, pending/overdue work) had **zero accent color at all**
+before this phase — not even a repeated one, a real gap R13's own tiles
+didn't have — converted to `StatCard` with 5 distinct accents, no trend
+prop since none is backed. Student gets a `RadialProgress` comparing
+average attendance against the *backend's own configured risk threshold*
+(`apps/performance/risk.py`'s `_attendance_risk`, which always stamps a
+real `numbers.threshold` value whether or not it triggered) — not an
+app-invented target, and a `DonutChart` of every batch the student has
+ever enrolled on by status, reusing the same `summarizeBatchStatuses()`
+helper R8 already built for Trainer's donut rather than duplicating it (a
+student's own batch history is a genuinely different, more varied dataset
+than a trainer's, so this isn't a duplicate chart of the same data). The
+audit explicitly recommended **against** a RadialProgress for Trainer,
+since the only candidate (batch seat-fill rate) would have been new math
+this view never displays elsewhere, unlike Student's/R13's gauges which
+each reuse a value or threshold already shown somewhere else on the same
+page — a real, principled distinction, correctly not overridden by
+Implement. Greeting added to the shared Trainer/Student header. Counsellor
+dashboard: confirmed all 8 existing tiles already carry one of 4 accents
+from R4, correctly left unrepainted (no requirement to use all 6 accents,
+and repainting shipped/tested tiles isn't warranted by the pivot).
+
+Independently re-verified: read the actual diff — the `attendanceThreshold`
+helper's real backend citation checks out, the reused `averageMetric`/
+`summarizeBatchStatuses` helpers are genuinely imported not reimplemented.
+Ran the checklist myself: `tsc --noEmit` clean, `vitest --maxWorkers=2` —
+142 files / 1278 tests, matching the commit's own claim. Deployed clean;
+`/`, `/dashboard`, `/admissions/dashboard` all return `200` on staging.
+
 ### R13 — Bold dashboard pivot, admin + manager (2026-09-19, commit `5f837b6`)
 
 First phase of the design pivot. Its own first attempt (a separate workflow
