@@ -38,7 +38,13 @@ vi.mock('next/navigation', () => ({
 
 function grantedAuth() {
   useAuthMock.value = {
-    user: { id: 'u1', role: 'manager', capabilities: [Capability.performanceViewAny] },
+    user: {
+      id: 'u1',
+      role: 'manager',
+      capabilities: [Capability.performanceViewAny],
+      full_name: 'Arjun Mehta',
+      email: 'arjun@example.com',
+    },
     isLoading: false,
     can: (capability: string) => capability === Capability.performanceViewAny,
   };
@@ -224,6 +230,56 @@ describe('ManagePage — real data', () => {
     const links = screen.getAllByRole('link').map((link) => link.getAttribute('href'));
     expect(links).toContain('/manage/batches');
     expect(links).toContain('/manage/trainers');
+  });
+});
+
+/** The design-pivot additions (R13): a time-of-day greeting, a real
+ *  on-schedule-share gauge derived from `batches.active`/`behind_schedule`,
+ *  and a real active/other students donut — both derived from data this
+ *  page already fetches, no new endpoint. */
+describe('ManagePage — design pivot additions', () => {
+  it('greets the signed-in manager by name, derived from the mocked useAuth() user', async () => {
+    mockSharedFetches(dashboard());
+    getManagerDashboard.mockResolvedValue(dashboard());
+
+    render(<ManagePage />);
+
+    await screen.findByText('Manager overview');
+    expect(screen.getByText(/Arjun Mehta/)).toBeInTheDocument();
+  });
+
+  it('renders a RadialProgress gauge for the on-schedule share, derived from batches.active and batches.behind_schedule', async () => {
+    mockSharedFetches(dashboard());
+    getManagerDashboard.mockResolvedValue(
+      dashboard({ batches: { total: 42, active: 20, behind_schedule: 5, at_risk: 3 } }),
+    );
+
+    render(<ManagePage />);
+
+    await screen.findByRole('heading', { name: 'Batches on schedule' });
+    // (20 - 5) / 20 = 75%
+    expect(await screen.findByText('75%')).toBeInTheDocument();
+    expect(screen.getByText(/of batches on schedule/)).toBeInTheDocument();
+  });
+
+  it('renders a DonutChart of active vs. other students, a real exclusive partition of students.total', async () => {
+    mockSharedFetches(dashboard());
+    getManagerDashboard.mockResolvedValue(
+      dashboard({ students: { total: 610, active: 540, at_risk: 18 } }),
+    );
+
+    render(<ManagePage />);
+
+    await screen.findByRole('heading', { name: 'Students, active vs. other' });
+    await waitFor(() => expect(document.querySelector('.recharts-pie')).toBeInTheDocument());
+
+    const tables = screen.getAllByRole('table', { hidden: true });
+    const donutTable = tables.find((table) => within(table).queryByText('Active students'));
+    expect(donutTable).toBeTruthy();
+    const scoped = within(donutTable as HTMLElement);
+    expect(scoped.getByText('540')).toBeInTheDocument();
+    expect(scoped.getByText('Other')).toBeInTheDocument();
+    expect(scoped.getByText('70')).toBeInTheDocument();
   });
 });
 

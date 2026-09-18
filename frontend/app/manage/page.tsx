@@ -31,16 +31,19 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ClipboardCheck, GraduationCap, Layers, Users } from 'lucide-react';
 
+import { useAuth } from '@/components/auth-provider';
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { RequireAuth } from '@/components/require-auth';
 import { ErrorState, LoadingState } from '@/components/states';
-import { BarChart, type CategoryDatum } from '@/components/ui/charts';
+import { BarChart, DonutChart, RadialProgress, type CategoryDatum } from '@/components/ui/charts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
 import { WarningsStrip } from '@/components/warnings-strip';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
+import { formatNumber } from '@/lib/format';
+import { greeting } from '@/lib/greeting';
 import { getManagerDashboard, type ManagerDashboard } from '@/lib/manage';
 
 /**
@@ -66,6 +69,7 @@ function attentionBreakdown(data: ManagerDashboard): CategoryDatum[] {
 }
 
 function ManagerOverview() {
+  const { user } = useAuth();
   // Same "compare during render, never `setState` unconditionally inside the
   // effect body" pattern `Dashboard()` (`app/dashboard/page.tsx`) and every
   // `useDashboardSection` call site already use in this app — an
@@ -175,10 +179,33 @@ function ManagerOverview() {
     },
   ] as const;
 
+  // `behind_schedule` is a subset of `active` (`_behind_schedule_batch_ids`
+  // in `backend/apps/reporting/dashboards.py` filters from the active set),
+  // so this is a real, trivially-derived share — the positive-framing
+  // counterpart to the "Behind schedule" bar the chart below already shows,
+  // not a second, invented figure.
+  const onTrackPercent =
+    data.batches.active > 0
+      ? Math.max(
+          0,
+          Math.min(100, ((data.batches.active - data.batches.behind_schedule) / data.batches.active) * 100),
+        )
+      : null;
+
+  // A genuine, mutually-exclusive partition of `students.total` (active vs.
+  // not-currently-active) — unlike `batches.behind_schedule`/`at_risk`/
+  // `risk.critical`, which this file's own comment above says can overlap
+  // and are deliberately kept as a bar chart, not a donut, for exactly that
+  // reason. This one is a real composition question, not a comparison one.
+  const otherStudents = Math.max(0, data.students.total - data.students.active);
+
   return (
     <div className="animate-rise-in space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
+          <p className="text-sm font-medium text-muted-foreground">
+            {greeting(user?.full_name || user?.email)}
+          </p>
           <h1 className="text-2xl font-semibold tracking-tight">Manager overview</h1>
           <p className="text-sm text-muted-foreground">
             Every cohort, trainer and student under your review, before you drill into either hub.
@@ -206,19 +233,73 @@ function ManagerOverview() {
         ))}
       </BentoGrid>
 
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle as="h2">What needs attention, by kind</CardTitle>
+            <CardDescription>
+              The same kinds of problem the strip below names individually, compared side by side.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BarChart
+              data={attentionBreakdown(data)}
+              height={260}
+              emptyMessage="Nothing needs attention right now."
+              ariaLabel="What needs attention, by kind"
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2">Batches on schedule</CardTitle>
+            <CardDescription>
+              The positive counterpart to &ldquo;Behind schedule&rdquo; on the left — the same figure,
+              read the other way.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center justify-center gap-2">
+            {onTrackPercent !== null ? (
+              <>
+                <RadialProgress
+                  value={onTrackPercent}
+                  target={100}
+                  label="of batches on schedule"
+                  valueFormatter={(value) => `${Math.round(value)}%`}
+                />
+                <p className="sr-only">
+                  {`${Math.round(onTrackPercent)}% of active batches (${
+                    data.batches.active - data.batches.behind_schedule
+                  } of ${data.batches.active}) are on schedule.`}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">No active batches right now.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle as="h2">What needs attention, by kind</CardTitle>
+          <CardTitle as="h2">Students, active vs. other</CardTitle>
           <CardDescription>
-            The same kinds of problem the strip below names individually, compared side by side.
+            A real, mutually-exclusive split of the total headcount above — unlike the overlapping
+            risk figures on the left, a student is either active or not.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <BarChart
-            data={attentionBreakdown(data)}
-            height={260}
-            emptyMessage="Nothing needs attention right now."
-            ariaLabel="What needs attention, by kind"
+          <DonutChart
+            data={[
+              { label: 'Active students', value: data.students.active },
+              { label: 'Other', value: otherStudents },
+            ]}
+            centerLabel="All students"
+            height={220}
+            valueFormatter={(value) => formatNumber(value)}
+            ariaLabel="Active students vs. other students"
+            emptyMessage="No students on record."
           />
         </CardContent>
       </Card>

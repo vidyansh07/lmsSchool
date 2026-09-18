@@ -21,7 +21,7 @@ vi.mock('@/lib/reporting', () => ({ adminDashboard, attendanceTrend }));
 vi.mock('@/hooks/use-api', () => ({ useApi }));
 vi.mock('@/components/auth-provider', () => ({
   useAuth: () => ({
-    user: { id: 'u1', role: 'admin', capabilities: [] },
+    user: { id: 'u1', role: 'admin', capabilities: [], full_name: 'Priya Sharma', email: 'priya@example.com' },
     isLoading: false,
     can: () => true,
   }),
@@ -52,10 +52,17 @@ const realTrend: TrendPoint[] = [
   { week: '2026-W03', counted: 38, attended: 34, percent: 89.5 },
 ];
 
-/** The sr-only text-alternative table every chart wrapper renders — scoped
- *  here because the trend's week labels also appear as SVG axis ticks. */
+/** The sr-only text-alternative table the AreaChart wrapper renders —
+ *  scoped here because the trend's week labels also appear as SVG axis
+ *  ticks, and because the attendance card's own DonutChart (design-pivot
+ *  addition, R13) renders a second sr-only table alongside it. Found by its
+ *  own "Week" column header, which the donut's Category/Value table does
+ *  not have. */
 function dataTable(): HTMLElement {
-  return screen.getByRole('table', { hidden: true });
+  const tables = screen.getAllByRole('table', { hidden: true });
+  const table = tables.find((candidate) => within(candidate).queryByText('Week'));
+  if (!table) throw new Error('Could not find the attendance trend data table');
+  return table;
 }
 
 beforeEach(() => {
@@ -131,7 +138,12 @@ describe('OverviewPage — attendance trend', () => {
     // The chart is gone, replaced by the real table with the counted/attended
     // columns the chart itself never plots.
     expect(container.querySelector('.recharts-area')).not.toBeInTheDocument();
-    const table = within(screen.getByRole('table'));
+    // The donut's own sr-only data table (design-pivot addition, R13) also
+    // matches `getByRole('table')`, so the real visible table is found by
+    // its own "Counted" column header instead of assuming there is only one.
+    const visibleTable = screen.getAllByRole('table').find((candidate) => within(candidate).queryByText('Counted'));
+    if (!visibleTable) throw new Error('Could not find the visible attendance figures table');
+    const table = within(visibleTable);
     expect(table.getByText('40')).toBeInTheDocument(); // counted, week 1
     expect(table.getByText('32')).toBeInTheDocument(); // attended, week 1
 
@@ -180,5 +192,76 @@ describe('OverviewPage — attendance trend', () => {
       expect(attendanceTrend.mock.calls.length).toBe(trendCallsBeforeRetry + 1),
     );
     expect(adminDashboard.mock.calls.length).toBe(dashboardCallsBeforeRetry);
+  });
+});
+
+/** The design-pivot additions (R13): a time-of-day greeting, a real
+ *  `attendance_rate`-backed gauge, and a real attended/not-attended donut —
+ *  all derived from data this page already fetches, no new endpoint. */
+describe('OverviewPage — design pivot additions', () => {
+  it('greets the signed-in viewer by name, derived from the mocked useAuth() user', async () => {
+    adminDashboard.mockResolvedValue(dashboard());
+    attendanceTrend.mockResolvedValue(realTrend);
+
+    render(<OverviewPage />);
+
+    await screen.findByText('Overview');
+    expect(screen.getByText(/Priya Sharma/)).toBeInTheDocument();
+  });
+
+  it('renders a RadialProgress gauge for the real attendance_rate metric, against the 75% target this page already uses', async () => {
+    adminDashboard.mockResolvedValue(
+      dashboard({
+        metrics: [
+          {
+            key: 'attendance_rate',
+            label: 'Attendance rate',
+            definition: 'Attended sessions over sessions counted.',
+            unit: 'percent',
+            value: 62,
+            numerator: 234,
+            denominator: 300,
+          },
+        ],
+      }),
+    );
+    attendanceTrend.mockResolvedValue(realTrend);
+
+    render(<OverviewPage />);
+
+    await screen.findByText('Attendance by week');
+    const gauge = await screen.findByTestId('attendance-rate-gauge');
+    expect(within(gauge).getByText('62%')).toBeInTheDocument();
+    expect(within(gauge).getByText(/of 75% target/)).toBeInTheDocument();
+    expect(within(gauge).getAllByText(/234 of 300/).length).toBeGreaterThan(0);
+  });
+
+  it('does not render the gauge when the dashboard has no attendance_rate metric — a real data gap, not a fabricated 0', async () => {
+    adminDashboard.mockResolvedValue(dashboard({ metrics: [] }));
+    attendanceTrend.mockResolvedValue(realTrend);
+
+    render(<OverviewPage />);
+
+    await screen.findByText('Attendance by week');
+    expect(screen.queryByTestId('attendance-rate-gauge')).not.toBeInTheDocument();
+  });
+
+  it('renders a DonutChart of attended vs. not-attended sessions, summed from the already-fetched trend weeks', async () => {
+    adminDashboard.mockResolvedValue(dashboard());
+    attendanceTrend.mockResolvedValue(realTrend);
+
+    render(<OverviewPage />);
+
+    await screen.findByText('Attendance by week');
+    await waitFor(() => expect(document.querySelector('.recharts-pie')).toBeInTheDocument());
+
+    // attended: 32 + 33 + 34 = 99; counted: 40 + 44 + 38 = 122; not attended: 23
+    const tables = screen.getAllByRole('table', { hidden: true });
+    const donutTable = tables.find((table) => within(table).queryByText('Attended'));
+    expect(donutTable).toBeTruthy();
+    const scoped = within(donutTable as HTMLElement);
+    expect(scoped.getByText('99')).toBeInTheDocument();
+    expect(scoped.getByText('Not attended')).toBeInTheDocument();
+    expect(scoped.getByText('23')).toBeInTheDocument();
   });
 });
