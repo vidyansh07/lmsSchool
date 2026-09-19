@@ -233,29 +233,29 @@ function ManagerOverview() {
         ))}
       </BentoGrid>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle as="h2">What needs attention, by kind</CardTitle>
-            <CardDescription>
-              The same kinds of problem the strip below names individually, compared side by side.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BarChart
-              data={attentionBreakdown(data)}
-              height={260}
-              emptyMessage="Nothing needs attention right now."
-              ariaLabel="What needs attention, by kind"
-            />
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle as="h2">What needs attention, by kind</CardTitle>
+          <CardDescription>
+            The same kinds of problem the strip below names individually, compared side by side.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BarChart
+            data={attentionBreakdown(data)}
+            height={260}
+            emptyMessage="Nothing needs attention right now."
+            ariaLabel="What needs attention, by kind"
+          />
+        </CardContent>
+      </Card>
 
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle as="h2">Batches on schedule</CardTitle>
             <CardDescription>
-              The positive counterpart to &ldquo;Behind schedule&rdquo; on the left — the same figure,
+              The positive counterpart to &ldquo;Behind schedule&rdquo; above — the same figure,
               read the other way.
             </CardDescription>
           </CardHeader>
@@ -279,30 +279,30 @@ function ManagerOverview() {
             )}
           </CardContent>
         </Card>
-      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle as="h2">Students, active vs. other</CardTitle>
-          <CardDescription>
-            A real, mutually-exclusive split of the total headcount above — unlike the overlapping
-            risk figures on the left, a student is either active or not.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DonutChart
-            data={[
-              { label: 'Active students', value: data.students.active },
-              { label: 'Other', value: otherStudents },
-            ]}
-            centerLabel="All students"
-            height={220}
-            valueFormatter={(value) => formatNumber(value)}
-            ariaLabel="Active students vs. other students"
-            emptyMessage="No students on record."
-          />
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2">Students, active vs. other</CardTitle>
+            <CardDescription>
+              A real, mutually-exclusive split of the total headcount above — unlike the overlapping
+              risk figures above, a student is either active or not.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DonutChart
+              data={[
+                { label: 'Active students', value: data.students.active },
+                { label: 'Other', value: otherStudents },
+              ]}
+              centerLabel="All students"
+              height={220}
+              valueFormatter={(value) => formatNumber(value)}
+              ariaLabel="Active students vs. other students"
+              emptyMessage="No students on record."
+            />
+          </CardContent>
+        </Card>
+      </div>
 
       <ManagerAttentionStrip />
 

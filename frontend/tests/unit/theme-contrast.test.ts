@@ -82,6 +82,15 @@ const PAIRS: [string, string, number, string][] = [
       [accent, `${accent}-tint`, 4.5, `${accent} label on its tile`],
       [accent, `${accent}-soft`, 4.5, `${accent} label in its pill`],
       [accent, 'surface', 4.5, `${accent} as small text on a card`],
+      // R15: the bold-pivot `StatCard` (rolled out to every dashboard across
+      // R13/R14) tints the whole tile (`bg-${accent}-tint`), not only the
+      // label checked above — the KPI figure, its delta and its hint line
+      // all render directly on that same tint, so those are the real fg/bg
+      // pairs the wider palette use put on screen.
+      ['foreground', `${accent}-tint`, 4.5, `the KPI figure on a ${accent} tile`],
+      ['muted-foreground', `${accent}-tint`, 4.5, `secondary text on a ${accent} tile`],
+      ['success', `${accent}-tint`, 4.5, `a positive delta on a ${accent} tile`],
+      ['destructive', `${accent}-tint`, 4.5, `a negative delta on a ${accent} tile`],
     ],
   ),
   ...(['indigo', 'cyan', 'teal'] as const).flatMap((accent): [string, string, number, string][] => [

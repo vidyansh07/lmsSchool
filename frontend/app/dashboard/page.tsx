@@ -55,7 +55,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DonutChart, RadialProgress, type DonutDatum } from '@/components/ui/charts';
-import { StatCard } from '@/components/ui/motion';
+import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
 import { ApiError } from '@/lib/api';
 import { listMyAssignments } from '@/lib/assignments';
 import { getStudentDashboard, getTrainerDashboard } from '@/lib/batches';
@@ -557,38 +557,45 @@ export function StudentView({ data }: { data: StudentDashboard }) {
 function TrainerView({ data }: { data: TrainerDashboard }) {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard
-          label="Assigned batches"
-          value={data.batches.length}
-          icon={CalendarClock}
-          accent="blue"
-        />
-        <StatCard label="Students" value={data.student_count} icon={Users} accent="violet" />
-        <StatCard
-          label="Courses taught"
-          value={data.courses.length}
-          icon={BookOpen}
-          accent="green"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <StatCard
-          label="Pending work"
-          value={data.work.pending}
-          icon={ClipboardList}
-          accent="amber"
-          href="/teaching/work"
-        />
-        <StatCard
-          label="Overdue work"
-          value={data.work.overdue}
-          icon={AlertTriangle}
-          accent="rose"
-          href="/teaching/work?overdue=1"
-        />
-      </div>
+      <BentoGrid>
+        <BentoTile span={4} index={0}>
+          <StatCard
+            label="Assigned batches"
+            value={data.batches.length}
+            icon={CalendarClock}
+            accent="blue"
+          />
+        </BentoTile>
+        <BentoTile span={4} index={1}>
+          <StatCard label="Students" value={data.student_count} icon={Users} accent="violet" />
+        </BentoTile>
+        <BentoTile span={4} index={2}>
+          <StatCard
+            label="Courses taught"
+            value={data.courses.length}
+            icon={BookOpen}
+            accent="green"
+          />
+        </BentoTile>
+        <BentoTile span={4} index={3}>
+          <StatCard
+            label="Pending work"
+            value={data.work.pending}
+            icon={ClipboardList}
+            accent="amber"
+            href="/teaching/work"
+          />
+        </BentoTile>
+        <BentoTile span={4} index={4}>
+          <StatCard
+            label="Overdue work"
+            value={data.work.overdue}
+            icon={AlertTriangle}
+            accent="rose"
+            href="/teaching/work?overdue=1"
+          />
+        </BentoTile>
+      </BentoGrid>
 
       <Card>
         <CardHeader>
