@@ -197,6 +197,62 @@ a dashboard of widgets" design intent quoted above.
 (Filled in as each phase completes — same evidence bar as the ERP
 programme: independently re-verified, not just the workflow's own report.)
 
+### R15 — Bold pivot QA, final phase (2026-09-19, commit `f6ff9ea`)
+
+Closes the design pivot (R13–R15). Contrast audit read the actual chart
+component source (`radial-progress.tsx`, `donut-chart.tsx`, `chart-legend.tsx`,
+`chart-tooltip.tsx`) rather than guessing, and confirmed every text/
+background pair those components produce was already covered by
+`theme-contrast.test.ts`'s existing rows — R13/R14's own claim of reusing
+only existing accent tokens held up under direct verification. One real
+gap it (correctly) surfaced instead: `StatCard`'s tile-wide tint background
+(the KPI figure, delta, and hint text all render directly on
+`bg-{accent}-tint` now, not just the label the original test checked) had
+no dedicated coverage — added as 4 new rows per accent (figure, secondary
+text, positive delta, negative delta on tint), and all pass real WCAG AA
+checks, not just added and assumed.
+
+Consistency sweep found two genuine layout gaps, both fixed: Trainer's 5
+newly-colored KPI tiles (R14) were the only ones NOT wrapped in the shared
+`BentoGrid`/`BentoTile` component every other R13/R14 dashboard uses,
+so they had no entrance-animation stagger and a different grid structure —
+now wrapped to match. Manager's `RadialProgress` and `DonutChart` were
+placed in unrelated, non-adjacent cards unlike every other dashboard's
+side-by-side gauge+donut pairing — regrouped to pair up, with the "on the
+left" copy corrected to "above" to match.
+
+Real visual verification: fresh `chrome-devtools-axi` screenshots of the
+public home page and `/login` at 1440px confirmed no shared-component
+regression leaked into the app shell — genuinely looked at both, no
+overflow or broken layout. The four dashboards' own new charts/gauges
+could not be visually screenshotted (they require an authenticated
+session, and this session's standing rule against ever handling the
+staging demo password in a scripted browser action still applies) — code-
+level verification (real diffs, real passing contrast tests) is the
+evidence bar for those, same limitation every phase since R2 has had.
+
+**Process note**: review again caught zero commits existing after
+Implement — the fifth time this exact class of gap has shown up across the
+whole redesign (R9, R11, R12 also had it). Review-fix/Finalize corrected it
+with the single `f6ff9ea` commit reviewed here.
+
+Independently re-verified: read the new contrast rows and the BentoGrid/
+manager-grid diff myself. Ran the checklist myself: `tsc --noEmit` clean,
+`vitest --maxWorkers=2` — 142 files / 1302 tests (the 24 new contrast
+assertions genuinely pass, not just added), matching Finalize's own claim.
+Deployed clean; `/`, `/dashboard`, `/manage` all return `200` on staging.
+
+**This closes the bold-dashboard design pivot (R13–R15)**, requested after
+the owner pointed at a live reference dashboard mid-session: every KPI tile
+across all 5 role dashboards now carries a distinct real accent (and a real
+sparkline where genuine trend data exists), 4 dashboards gained a real
+RadialProgress gauge and/or DonutChart derived from data already being
+fetched, every dashboard got a friendly time-of-day greeting, and the
+wider palette use re-cleared WCAG AA under direct testing rather than
+assumption. No fabricated metric, invented category, or ERP-inappropriate
+widget (wallet chip, referral card, floating chat launcher) was added
+anywhere across all three phases.
+
 ### R14 — Bold dashboard pivot, trainer + student + counsellor (2026-09-19, commit `8aeff8b`)
 
 Extended R13's treatment to the three remaining role dashboards, with the
