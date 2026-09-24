@@ -800,7 +800,7 @@ export function RegistrationWizard() {
                 errors={studentErrors}
               />
 
-              <div className="space-y-2 rounded-[var(--radius-card)] border border-dashed border-border p-4">
+              <div className="space-y-2 rounded-card border border-dashed border-border p-4">
                 <p className="text-sm font-medium">Referred by</p>
                 <p className="text-xs text-muted-foreground">
                   If an existing student sent them, pick that student so the referral can be credited later.

@@ -123,7 +123,7 @@ export function CalendarView({ days = 28 }: { days?: number }) {
                 <CalendarDays className="size-4 text-muted-foreground" aria-hidden="true" />
                 {formatEventDay(day)}
               </h3>
-              <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
+              <ul className="divide-y divide-border rounded-card border border-border">
                 {events.map((event, index) => (
                   <li
                     key={`${event.kind}-${event.start}-${index}`}

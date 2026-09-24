@@ -96,8 +96,8 @@ export function Tooltip({ content, children, side = 'top', className }: TooltipP
             // the utility class is tuned for a modal-sized surface, and 220ms
             // for two words of hint text reads as sluggish rather than smooth.
             animation: open
-              ? 'fade-in var(--duration-quick) var(--ease-out-quick) both'
-              : `fade-in ${EXIT_DURATION_MS}ms var(--ease-out-quick) reverse both`,
+              ? 'fade-in 150ms var(--ease-out) both'
+              : `fade-in ${EXIT_DURATION_MS}ms var(--ease-out) reverse both`,
           }}
         >
           {content}

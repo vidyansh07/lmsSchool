@@ -37,7 +37,7 @@ export function AuthSplitShell({
 }) {
   return (
     <div className="mx-auto w-full max-w-4xl animate-fade-in">
-      <div className="overflow-hidden rounded-[var(--radius-card)] border border-border bg-surface shadow-sm lg:grid lg:grid-cols-2">
+      <div className="overflow-hidden rounded-card border border-border bg-surface shadow-sm lg:grid lg:grid-cols-2">
         <div className="relative overflow-hidden bg-primary px-6 py-8 text-primary-foreground sm:px-10 sm:py-10 lg:flex lg:min-h-full lg:flex-col lg:justify-center lg:py-12">
           {/* Decorative only — the brand hue as a large fill, never carrying
               text. Blurred and kept away from the copy below so it can never

@@ -108,7 +108,7 @@ export function RadialProgress({
           strokeLinecap="round"
           strokeDasharray={halfCircumference}
           strokeDashoffset={offset}
-          style={reduced ? undefined : { transition: 'stroke-dashoffset var(--duration-slow) var(--ease-out-quick)' }}
+          style={reduced ? undefined : { transition: 'stroke-dashoffset 320ms var(--ease-out)' }}
         />
         {/* The target tick — a fixed reference mark on the scale itself,
             independent of the fill, so "where is the goal" reads even when

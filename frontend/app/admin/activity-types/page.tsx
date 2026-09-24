@@ -322,7 +322,7 @@ function ActivityTypeDialog({
           </Field>
 
           <details
-            className="space-y-4 rounded-[var(--radius-card)] border border-border p-3"
+            className="space-y-4 rounded-card border border-border p-3"
             open={isEdit || assignmentHasError}
           >
             <summary className="cursor-pointer select-none text-sm font-medium hover:text-foreground">
@@ -334,7 +334,7 @@ function ActivityTypeDialog({
                   file's own docstring names ("who may create and be assigned
                   it") — grouped under one shared heading rather than sitting
                   as two unrelated fields among the other ~13. */}
-              <fieldset className="space-y-4 rounded-[var(--radius-card)] border border-border p-3">
+              <fieldset className="space-y-4 rounded-card border border-border p-3">
                 <legend className="px-1 text-sm font-medium">Roles</legend>
                 <RoleCheckboxes
                   legend="Who may create it"
@@ -375,7 +375,7 @@ function ActivityTypeDialog({
           </details>
 
           <details
-            className="space-y-4 rounded-[var(--radius-card)] border border-border p-3"
+            className="space-y-4 rounded-card border border-border p-3"
             open={isEdit || schedulingHasError}
           >
             <summary className="cursor-pointer select-none text-sm font-medium hover:text-foreground">
@@ -466,7 +466,7 @@ function ActivityTypeDialog({
           </details>
 
           <details
-            className="space-y-4 rounded-[var(--radius-card)] border border-border p-3"
+            className="space-y-4 rounded-card border border-border p-3"
             open={isEdit || scoringHasError}
           >
             <summary className="cursor-pointer select-none text-sm font-medium hover:text-foreground">

@@ -132,7 +132,7 @@ export function ReviewsDueWorkspace() {
           description="No performance review currently needs action under these filters."
         />
       ) : (
-        <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
+        <ul className="divide-y divide-border rounded-card border border-border">
           {rows.map((review) => {
             const href = subjectHref(review);
             const due = isDue(review, today);

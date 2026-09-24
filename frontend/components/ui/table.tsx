@@ -12,7 +12,7 @@ export function TableWrapper({ className, ...props }: React.HTMLAttributes<HTMLD
   return (
     <div
       className={cn(
-        'w-full overflow-x-auto rounded-[var(--radius-card)] border border-border bg-surface shadow-[var(--shadow-card)]',
+        'w-full overflow-x-auto rounded-card border border-border bg-surface',
         className,
       )}
       {...props}
@@ -79,7 +79,7 @@ export function Tr({ className, ...props }: React.HTMLAttributes<HTMLTableRowEle
   return (
     <tr
       className={cn(
-        'transition-colors duration-[var(--duration-quick)] hover:bg-muted',
+        'transition-colors duration-150 hover:bg-muted',
         className,
       )}
       {...props}

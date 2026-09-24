@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Sora } from 'next/font/google';
 import { headers } from 'next/headers';
 
 import { AppShell } from '@/components/app-shell';
@@ -11,19 +11,39 @@ import { Toaster, ToastProvider } from '@/components/ui/toast';
 import './globals.css';
 
 /**
- * Inter, self-hosted by Next rather than fetched from Google at runtime.
+ * Two families, both self-hosted by Next rather than fetched from Google at
+ * runtime.
  *
- * It is what grras.com uses, so the ERP and the public site read as one
- * organisation. Self-hosting matters twice over here: the Content-Security-
- * Policy in `middleware.ts` does not allow a third-party font origin, and a
- * webfont fetched on first paint is the classic cause of text appearing a
- * beat late. `display: swap` means the fallback shows immediately and is
- * replaced, rather than the page holding blank text while it waits.
+ * Inter carries everything a person reads at length -- tables, forms, body
+ * copy -- because it was built for interfaces at small sizes and has a real
+ * tabular-figure set, which a gradebook and a ledger both depend on.
+ *
+ * Sora carries the headings and the KPI figures. At this density the type
+ * scale cannot afford large size jumps to signal hierarchy, so hierarchy
+ * comes from the family change instead: a heading is a different voice, not
+ * a bigger one. `globals.css` wires it to `--font-heading` and applies it to
+ * `h1`-`h4` in the base layer, so a screen gets it without asking.
+ *
+ * Self-hosting matters twice over: the Content-Security-Policy in
+ * `middleware.ts` sets `font-src 'self' data:` and allows no third-party font
+ * origin, so a Google Fonts URL would yield unstyled text in production and
+ * nowhere else; and a webfont fetched on first paint is the classic cause of
+ * text appearing a beat late. `display: swap` shows the fallback immediately
+ * and replaces it, rather than holding blank text while it waits.
  */
 const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-inter',
+});
+
+const sora = Sora({
+  subsets: ['latin'],
+  // Only the weight the headings actually use. Each extra weight is another
+  // font file on the wire for a hierarchy that is already legible.
+  weight: ['600'],
+  display: 'swap',
+  variable: '--font-sora',
 });
 
 export const metadata: Metadata = {
@@ -60,7 +80,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   await headers();
 
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${sora.variable}`}>
       <body className="font-sans antialiased">
         <BrandTheme />
         {/* Outside `AppShell` so a toast survives a route change and is not

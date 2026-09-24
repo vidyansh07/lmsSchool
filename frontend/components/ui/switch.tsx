@@ -76,7 +76,7 @@ export function Switch({
           'inline-block size-5 translate-x-0.5 rounded-full bg-surface shadow transition-transform',
           isChecked && 'translate-x-[1.375rem]',
         )}
-        style={{ transitionDuration: 'var(--duration-quick)', transitionTimingFunction: 'var(--ease-out-quick)' }}
+        style={{ transitionDuration: '150ms', transitionTimingFunction: 'var(--ease-out)' }}
       />
     </button>
   );

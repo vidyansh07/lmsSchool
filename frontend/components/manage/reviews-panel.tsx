@@ -82,7 +82,7 @@ export function ReviewsPanel({ subjectType, subjectId, canManage }: ReviewsPanel
       ) : reviews.length === 0 ? (
         <EmptyState title="No reviews yet" description="Nobody has recorded a performance review here." />
       ) : (
-        <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
+        <ul className="divide-y divide-border rounded-card border border-border">
           {reviews.map((review) => (
             <li
               key={review.id}

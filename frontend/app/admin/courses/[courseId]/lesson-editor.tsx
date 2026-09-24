@@ -185,7 +185,7 @@ export function LessonEditor({
   return (
     <form
       onSubmit={onSubmit}
-      className="space-y-4 rounded-[var(--radius-card)] border border-border p-4"
+      className="space-y-4 rounded-card border border-border p-4"
       noValidate
     >
       {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}

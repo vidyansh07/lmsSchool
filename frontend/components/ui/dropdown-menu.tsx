@@ -151,7 +151,7 @@ export function DropdownMenuContent({
       )}
       style={
         !open
-          ? { animation: `scale-in ${EXIT_DURATION_MS}ms var(--ease-out-quick) reverse both` }
+          ? { animation: `fade-in ${EXIT_DURATION_MS}ms var(--ease-out) reverse both` }
           : undefined
       }
       {...props}

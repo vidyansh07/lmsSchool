@@ -78,7 +78,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 }
 
 const dialogContentVariants = cva(
-  'relative w-full rounded-[var(--radius-card)] border border-border bg-surface p-5 shadow-lg',
+  'relative w-full rounded-card border border-border bg-surface p-5 shadow-lg',
   {
     variants: {
       size: {
@@ -119,7 +119,7 @@ export function DialogContent({ className, size, hideCloseButton, children, ...p
       <div
         aria-hidden="true"
         className={cn('absolute inset-0 bg-foreground/40', open ? 'animate-fade-in' : undefined)}
-        style={!open ? { animation: 'fade-in var(--duration-quick) var(--ease-out-quick) reverse both' } : undefined}
+        style={!open ? { animation: 'fade-in 150ms var(--ease-out) reverse both' } : undefined}
       />
       <div
         ref={containerRef}
@@ -130,7 +130,7 @@ export function DialogContent({ className, size, hideCloseButton, children, ...p
         className={cn(dialogContentVariants({ size }), open ? '' : undefined, className)}
         style={
           !open
-            ? { animation: `scale-in ${EXIT_DURATION_MS}ms var(--ease-out-quick) reverse both` }
+            ? { animation: `fade-in ${EXIT_DURATION_MS}ms var(--ease-out) reverse both` }
             : undefined
         }
         {...props}

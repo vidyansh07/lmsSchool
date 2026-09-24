@@ -186,7 +186,7 @@ export function RegisterEditor({
       <div
         aria-live="polite"
         aria-atomic="true"
-        className="flex flex-wrap gap-x-4 gap-y-1 rounded-[var(--radius-card)] border border-border bg-muted/50 px-4 py-2.5 text-sm"
+        className="flex flex-wrap gap-x-4 gap-y-1 rounded-card border border-border bg-muted/50 px-4 py-2.5 text-sm"
       >
         <span>
           <strong className="tabular-nums">{formatNumber(counts.present)}</strong> present

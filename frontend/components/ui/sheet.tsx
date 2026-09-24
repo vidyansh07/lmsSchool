@@ -98,7 +98,7 @@ export function SheetContent({ className, size, hideCloseButton, children, ...pr
         aria-hidden="true"
         className={cn('fixed inset-0 z-50 bg-foreground/40', open ? 'animate-fade-in' : undefined)}
         style={
-          !open ? { animation: 'fade-in var(--duration-quick) var(--ease-out-quick) reverse both' } : undefined
+          !open ? { animation: 'fade-in 150ms var(--ease-out) reverse both' } : undefined
         }
         onMouseDown={() => onOpenChange(false)}
       />
@@ -111,7 +111,7 @@ export function SheetContent({ className, size, hideCloseButton, children, ...pr
         className={cn(sheetContentVariants({ size }), open ? 'animate-slide-in-right' : undefined, className)}
         style={
           !open
-            ? { animation: `slide-in-right ${EXIT_DURATION_MS}ms var(--ease-out-quick) reverse both` }
+            ? { animation: `slide-in-right ${EXIT_DURATION_MS}ms var(--ease-out) reverse both` }
             : undefined
         }
         {...props}

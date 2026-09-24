@@ -1,250 +1,280 @@
 @import 'tailwindcss';
 
 /*
- * Design tokens — v2.
+ * The design system, rebuilt from zero.
  *
- * Rebuilt from scratch. The previous palette solved for a specific brand mark
- * (Grras orange) sitting on a pure-white, shadow-only surface. That's an
- * unusual constraint outside that one context, and it's the thing this pass
- * removes: everywhere else, a page and a card should not be forced to be the
- * exact same color. Two changes drive the whole file:
+ * What was here before was the end state of fifteen incremental passes that
+ * finished on a "bold, multi-colour dashboard" brief: six accent colour
+ * trios, three more pill-only accents, an indigo action colour, tinted
+ * two-layer card shadows, and a motion vocabulary of eight keyframes. Ninety
+ * tokens, and a dashboard that read as six colours competing before a single
+ * number had been read.
  *
- *  1. The page is now a faint cool-tinted off-white (`--color-background`)
- *     and cards are true white (`--color-surface`). That's how the products
- *     this kind of tool gets compared against — Linear, Attio, the Vercel
- *     and Stripe dashboards — do it, and it's why their screens read as
- *     "layered" at a glance instead of needing the eye to find a hairline.
- *     The border and shadow are kept too, but now as reinforcement, not the
- *     only signal.
+ * This file is not an edit of that one. The direction comes from a reference
+ * product whose UI was studied directly rather than described: a 68px dark
+ * icon rail as the only dark surface, a light top bar, white cards on a cool
+ * off-white page separated by hairlines and space rather than shadow, 12px
+ * radii, and colour used strictly to carry state.
  *
- *  2. The action color moved from navy to indigo (`--color-primary`,
- *     oklch for #4F46E5-family blue-violet). Navy reads as "static document";
- *     indigo is what most category-leading SaaS dashboards converged on for
- *     "click this" precisely because it separates cleanly from both pure
- *     informational blue (links, info states) and pure black (text), which
- *     matters a lot in a dense LMS/ERP screen with grades, ledgers and
- *     statuses all competing for attention on the same page.
+ * Three rules hold the whole thing together:
  *
- * Everything else — the six dashboard-tile accents, the three pill-only
- * accents, chart series, semantic states, type scale, radii, shadow and
- * motion vocabulary — was rebuilt to match, not left over from the old file.
+ *  1. Colour means state. `info`, `success`, `warning`, `danger` -- and
+ *     nothing else. There are no decorative colours and no per-metric hues,
+ *     so a tinted thing on screen is always saying something.
+ *  2. Separation is a hairline and space, not elevation. Exactly one shadow
+ *     exists and only overlays use it. A card is `--color-surface` with a
+ *     `--color-line` border.
+ *  3. The brand is a fill, never an action. Grras orange (#EF7220, which
+ *     `backend/apps/branding/` treats as the default and a tenant can
+ *     override) is 2.96:1 on white. It cannot carry white button text, so
+ *     `--color-action` is a darkened orange at 5.18:1 and `--color-brand`
+ *     paints the logo. That split is why both tokens exist, and
+ *     `tests/unit/theme-contrast.test.ts` pins it in both directions.
  *
- * Contrast
- * --------
- * Every foreground/background pair actually used by the interface targets
- * WCAG AA (4.5:1 body text, 3:1 large text/UI) at minimum; the primary,
- * destructive and foreground colors clear AAA on their usual backgrounds.
- * `tests/unit/theme-contrast.test.ts` parses this file and checks each pair
- * — a token changed here without checking it fails there. This also means:
- * if you darken an accent for AA text use, keep the *tint/soft* pair as-is
- * — those are large fills, not text, and re-darkening them would flatten the
- * six-color dashboard system into near-uniform gray.
+ * Every value below was measured, not estimated, and the pairs the interface
+ * actually puts on screen are asserted in that test file. AA is 4.5:1 for
+ * body text and 3:1 for large text and interactive boundaries.
  *
  * Light only, deliberately
  * ------------------------
- * No `prefers-color-scheme` branch. An LMS/ERP screen — a grade book, a
- * ledger, a status board — needs to be the same screen on a projector, in a
- * screenshot in a support ticket, and on a teacher's laptop with dark mode
- * on by default for everything else. One theme means "what does the product
- * look like" has one answer.
+ * No `prefers-color-scheme` branch. A grade book, a ledger, a status board
+ * needs to be the same screen on a projector, in a screenshot in a support
+ * ticket, and on a laptop with dark mode on for everything else. One theme
+ * means "what does the product look like" has one answer.
+ * `e2e/interface.spec.ts` paints the page background to a canvas and
+ * requires every channel above 230, so a darker canvas fails a test that
+ * looks unrelated to colour.
  */
 @theme {
-  /* ---- Surfaces -------------------------------------------------------- */
-  /* Page: a hair off pure white, cool-tinted so it reads as "backdrop"
-     without being gray enough to look unfinished. Card: true white, which
-     is what actually lifts off the page now — see the note above. */
-  --color-background: oklch(98.1% 0.004 262);
-  --color-surface: oklch(100% 0 0);
-  --color-surface-raised: oklch(100% 0 0);
+  /* ---- Surfaces ---------------------------------------------------------
+     Page is a cool off-white, cards are true white. That difference is what
+     makes a screen read as layered at a glance instead of needing the eye to
+     hunt for a hairline. */
+  --color-canvas: oklch(98.4% 0.003 247.9); /* #F8FAFC */
+  --color-surface: oklch(100% 0 89.9); /* #FFFFFF */
+  --color-sunken: oklch(96.8% 0.007 247.9); /* #F1F5F9 - toolbars, table head, tracks */
+  --color-line: oklch(92.9% 0.013 255.5); /* #E2E8F0 - hairlines, input borders */
+  --color-line-strong: oklch(86.9% 0.02 252.9); /* #CBD5E1 - hover borders, dividers */
 
-  --color-foreground: oklch(19.8% 0.023 264);
-  --color-muted: oklch(96.4% 0.006 260);
-  --color-muted-foreground: oklch(48% 0.026 262);
-  --color-border: oklch(91% 0.009 262);
-  --color-border-strong: oklch(85% 0.013 262);
+  /* ---- The rail ---------------------------------------------------------
+     The one dark surface in the product. Warm charcoal rather than a dark
+     neutral, so it belongs to the orange instead of fighting it. */
+  --color-rail: oklch(23.9% 0.029 51.8); /* #2A1B12 */
+  --color-rail-fg: oklch(92.3% 0.003 48.7); /* #E7E5E4 - 13.2:1 on the rail */
+  --color-rail-active: oklch(83.7% 0.117 66.3); /* #FDBA74 - 9.9:1 on the rail */
 
-  /* ---- Action color: indigo --------------------------------------------
-     10.3:1 on --color-background, comfortably AAA at body-text sizes and
-     unmistakable as "the thing you click" next to informational blue. */
-  --color-primary: oklch(47.1% 0.211 264.1);
-  --color-primary-hover: oklch(41.5% 0.211 264.1);
-  --color-primary-foreground: oklch(99% 0.004 260);
+  /* ---- Ink --------------------------------------------------------------
+     Three weights, all of which clear AA on canvas, surface and sunken.
+     `ink-faint` is the floor: the reference uses #94A3B8 for its 11px column
+     headers, which is 2.56:1 and fails. This is that role at 5.43:1 on a card
+     and 4.95:1 on the sunken band a table head sits on. */
+  --color-ink: oklch(20.8% 0.04 265.8); /* #0F172A - 17.9:1 on surface */
+  --color-ink-muted: oklch(47.9% 0.043 257.4); /* #4E5E76 - secondary text */
+  --color-ink-faint: oklch(52.3% 0.038 256.8); /* #5C6B80 - column heads, meta */
 
-  /* Selected-state wash: sidebar's active item, a chosen table row. Pale
-     enough that indigo and ink text both stay AA written on top of it. */
-  --color-accent: oklch(95.3% 0.024 265.5);
-  --color-accent-foreground: oklch(38% 0.176 264.4);
+  /* ---- Action -----------------------------------------------------------
+     A darkened orange, because the brand orange cannot carry a white label.
+     See rule 3 above. */
+  --color-action: oklch(55.3% 0.174 38.4); /* #C2410B - 5.18:1 with white */
+  --color-action-hover: oklch(47% 0.143 37.3); /* #9A3412 - 7.31:1 */
+  --color-action-fg: oklch(100% 0 89.9); /* #FFFFFF */
 
-  /* Brand mark only — the product's own logo/wordmark color, kept apart from
-     the action palette so it never gets mistaken for "click here". A warm
-     teal-emerald, chosen to sit as far from the indigo primary on the wheel
-     as the six dashboard accents need room to spread without a collision. */
-  --color-brand: oklch(56.5% 0.121 172.3);
+  /* The chosen-state wash: the active nav item, a selected table row. Pale
+     enough that both the action colour and ink stay AA written on top. */
+  --color-selected: oklch(97.1% 0.018 59.5); /* #FFF3EA */
+  --color-selected-fg: oklch(47% 0.143 37.3); /* #9A3412 */
+
+  /* ---- Brand ------------------------------------------------------------
+     The logo mark, and the only token a tenant overrides at runtime
+     (`lib/brand.ts` writes exactly this property; `backend/apps/branding/`
+     stores it). Kept off text by contract. */
+  --color-brand: oklch(68.9% 0.176 47.9); /* #EF7220 */
 
   /* ---- Semantic states --------------------------------------------------
-     Held apart from every dashboard accent below so "this failed" is never
-     also "this card happens to be rose". */
-  --color-destructive: oklch(50.8% 0.199 25.3);
-  --color-destructive-foreground: oklch(99% 0.006 25);
-  --color-destructive-tint: oklch(97.3% 0.021 22.4);
-  --color-warning: oklch(51.9% 0.138 70.1);
-  --color-warning-foreground: oklch(99% 0.01 85);
-  --color-warning-tint: oklch(97.8% 0.034 90.5);
-  --color-success: oklch(51.3% 0.135 152.6);
-  --color-success-foreground: oklch(99% 0.006 155);
-  --color-success-tint: oklch(97.2% 0.03 155.8);
-  --color-info: oklch(51.6% 0.135 237.8);
-  --color-info-foreground: oklch(99% 0.005 235);
-  --color-info-tint: oklch(97% 0.02 235.4);
+     The entire colour vocabulary. Each is AA as small text on surface and on
+     its own wash, and each has a white-label variant for a filled badge. */
+  --color-info: oklch(50% 0.119 242.7); /* #0469A1 - 5.93:1 */
+  --color-info-fg: oklch(100% 0 89.9);
+  --color-info-wash: oklch(97% 0.014 254.6); /* #EFF6FF */
 
-  /* ---- Dashboard tile accents --------------------------------------------
-     Six colors for stat cards / tiles, each as three tokens: the color
-     itself (AA-legible as small text on its own `tint`), a `tint` for a
-     whole card wash, and a `soft` for the icon disc or pill that sits on
-     top of the tint. Spread evenly around the wheel and away from indigo so
-     a dashboard of six tiles never has two that read as "the same color". */
-  /* amber, rose, sky and emerald are darkened 2-3L below where the wheel
-     math first put them: at the original lightness each cleared its `tint`
-     but fell under 4.5:1 on its own `soft` (4.19, 4.43, 4.27 and 4.41:1) —
-     the pill background, not just the tile wash. Hue and chroma are
-     untouched, so each still reads as the same color, per the file-level
-     contrast note above. */
-  --color-amber: oklch(52% 0.158 63.2);
-  --color-amber-tint: oklch(97.9% 0.03 85.9);
-  --color-amber-soft: oklch(93.9% 0.075 78.4);
+  --color-success: oklch(50.8% 0.105 165.6); /* #047857 - 5.48:1 */
+  --color-success-fg: oklch(100% 0 89.9);
+  --color-success-wash: oklch(97.9% 0.021 166.1); /* #ECFDF5 */
 
-  --color-violet: oklch(49.6% 0.242 302.8);
-  --color-violet-tint: oklch(96.4% 0.023 302.4);
-  --color-violet-soft: oklch(92.3% 0.048 303.5);
+  --color-warning: oklch(55.5% 0.146 49); /* #B45307 - 5.02:1 */
+  --color-warning-fg: oklch(100% 0 89.9);
+  --color-warning-wash: oklch(96.2% 0.058 95.6); /* #FEF3C7 */
 
-  --color-rose: oklch(52% 0.211 15.9);
-  --color-rose-tint: oklch(96.6% 0.019 12.6);
-  --color-rose-soft: oklch(92.3% 0.045 12.9);
+  --color-danger: oklch(50.5% 0.19 27.5); /* #B91C1C - 6.47:1 */
+  --color-danger-fg: oklch(100% 0 89.9);
+  --color-danger-wash: oklch(93.6% 0.031 17.7); /* #FEE2E2 */
 
-  --color-sky: oklch(49% 0.135 237.8);
-  --color-sky-tint: oklch(96.9% 0.019 234.8);
-  --color-sky-soft: oklch(92.4% 0.045 234.6);
+  /* ---- Chart series -----------------------------------------------------
+     Anchored on the action orange and walked around the wheel for
+     perceptual separation at roughly equal lightness, so a five-series chart
+     does not need its legend to tell the lines apart. Names unchanged:
+     `chart-colors.ts` and five `var()` sites read them. */
+  --color-chart-1: oklch(55.3% 0.174 38.4);
+  --color-chart-2: oklch(50% 0.119 242.7);
+  --color-chart-3: oklch(50.8% 0.105 165.6);
+  --color-chart-4: oklch(55.5% 0.146 49);
+  --color-chart-5: oklch(47.9% 0.043 257.4);
 
-  --color-emerald: oklch(49% 0.135 152.6);
-  --color-emerald-tint: oklch(97% 0.028 156.9);
-  --color-emerald-soft: oklch(92.9% 0.06 156.4);
-
-  --color-fuchsia: oklch(52.7% 0.228 335.2);
-  --color-fuchsia-tint: oklch(96.4% 0.021 338.9);
-  --color-fuchsia-soft: oklch(92.1% 0.052 337.8);
-
-  /* Three more, pill-only: a status table can need more distinct categories
-     than a six-tile dashboard does. `indigo` reuses the primary hue — it was
-     missing its base token here (only `-soft` was defined), left over from
-     this rewrite's rename pass. */
-  --color-indigo: oklch(47.1% 0.211 264.1);
-  --color-indigo-soft: oklch(90.8% 0.052 265.9);
-  --color-cyan: oklch(48.9% 0.098 213.5);
-  --color-cyan-soft: oklch(93.6% 0.052 208.1);
-  --color-teal: oklch(47.3% 0.087 180.4);
-  --color-teal-soft: oklch(93.1% 0.055 177.6);
-
-  /* ---- Chart series -------------------------------------------------------
-     Primary indigo, then two hues chosen for maximum perceptual separation
-     from it and from each other at equal lightness, so a 3-series chart
-     never needs a legend to tell the lines apart. */
-  --color-chart-1: oklch(47.1% 0.211 264.1);
-  --color-chart-2: oklch(64.6% 0.152 219.4);
-  --color-chart-3: oklch(58.1% 0.184 39.8);
-  --color-chart-4: oklch(56.2% 0.198 316.6);
-  --color-chart-5: oklch(59.4% 0.146 152.1);
-
-  /* ---- Type ---------------------------------------------------------------
-     Inter, for the same reason most of the tools this competes with use it:
-     genuinely built for UI at small sizes, a real tabular-figure set, and no
-     licensing friction. `--font-mono` is separated out for IDs, codes and
-     ledger references, where a grading-glance needs to tell "O" from "0". */
+  /* ---- Type -------------------------------------------------------------
+     Sora for headings and figures, Inter for everything read at length.
+     Both self-hosted through `next/font` in `app/layout.tsx` --
+     `middleware.ts` sets `font-src 'self' data:`, so a Google Fonts URL here
+     would produce unstyled text in production and nowhere else.
+     `--font-mono` is a system stack: the old file pointed it at
+     `--font-geist-mono`, which was never defined anywhere, so `font-mono` in
+     66 files had been silently falling back for its whole life. */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-heading: var(--font-sora), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
 
-  /* One step up from the old scale across the board. The previous 14px base
-     was tuned tight enough that an accessibility pass would flag it in a
-     product with a non-trivial older or low-vision user base (a real
-     concern for both school-facing LMS screens and back-office ERP staff) —
-     15px base restores headroom while staying dense enough for data-heavy
-     screens; nothing here is loose. */
-  --text-2xs: 0.6875rem;
-  --text-xs: 0.75rem;
-  --text-sm: 0.8125rem;
-  --text-base: 0.9375rem;
-  --text-lg: 1.0625rem;
-  --text-xl: 1.25rem;
-  --text-2xl: 1.5rem;
-  --text-3xl: 1.875rem;
-  --text-4xl: 2.25rem;
+  /* 14px base, tight scale. The reference runs body at 16px but puts content
+     at 13px and micro-labels at 11px, which is what a screen full of tables
+     actually needs; naming those sizes means a screen never has to reach for
+     an arbitrary value to get one. */
+  --text-2xs: 0.6875rem; /* 11px - column heads, chips */
+  --text-xs: 0.75rem; /* 12px - button labels, meta */
+  --text-sm: 0.8125rem; /* 13px - table cells, dense body */
+  --text-base: 0.875rem; /* 14px */
+  --text-lg: 1rem; /* 16px - section titles */
+  --text-xl: 1.125rem; /* 18px */
+  --text-2xl: 1.375rem; /* 22px - page titles */
+  --text-3xl: 1.75rem; /* 28px - a KPI figure */
+  --text-4xl: 2.25rem; /* 36px */
 
-  /* Slightly larger, slightly softer radius than the old 14px card —
-     current SaaS dashboards (Linear, Attio, Vercel) sit in the 10–16px
-     range for cards and this splits the difference while staying crisp at
-     small tile sizes. Inputs and pills get their own, smaller radius so a
-     16px-rounded card doesn't force every control inside it to match. */
-  --radius-card: 1rem;
+  /* ---- Geometry ---------------------------------------------------------
+     12px cards, 8px controls, matching the reference. A control inside a
+     card gets the smaller radius so a rounded card does not force
+     everything within it to match. */
   --radius-control: 0.5rem;
+  --radius-card: 0.75rem;
   --radius-pill: 999px;
 
-  /* Two-layer card shadow, now genuinely doing separation work since the
-     page tint alone doesn't fully carry it. Tinted very slightly toward the
-     primary instead of pure black — a common trick in this generation of
-     dashboards (Linear/Vercel again) that makes elevation read as "part of
-     this product" instead of a generic Material shadow. */
-  --shadow-card: 0 1px 2px rgba(30, 41, 82, 0.05), 0 4px 16px -8px rgba(30, 41, 82, 0.09);
-  --shadow-card-hover: 0 2px 4px rgba(30, 41, 82, 0.06), 0 16px 40px -14px rgba(43, 58, 110, 0.18);
-  --shadow-popover: 0 4px 12px rgba(30, 41, 82, 0.08), 0 24px 48px -16px rgba(30, 41, 82, 0.22);
+  /* One shadow, for overlays only -- a dialog, popover, sheet, dropdown,
+     tooltip. Anything that is *on* the page rather than *above* it separates
+     with a border. */
+  --shadow-overlay: 0 4px 12px rgb(15 23 42 / 0.08), 0 24px 48px -16px rgb(15 23 42 / 0.22);
 
-  /* Motion vocabulary, unchanged in shape from the previous pass — it wasn't
-     the part that needed replacing. Exits stay faster than entrances. */
-  --ease-out-quick: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
-  --duration-instant: 90ms;
-  --duration-quick: 150ms;
-  --duration-base: 220ms;
-  --duration-slow: 320ms;
+  /* ---- Motion -----------------------------------------------------------
+     One curve. Durations are literals at the call site (`duration-150`),
+     because `--duration-*` is not a Tailwind v4 theme namespace -- v4 reads
+     `--transition-duration-*` -- so a bare `duration-quick` compiles to
+     nothing at all. `tests/unit/theme-tokens.test.ts` guards against it. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ---- Compatibility shim ----------------------------------------------
+     Every token name the old system used, aliased onto the new one.
+     The screens are restyled area by area; until a screen has been through
+     that, its existing classes keep rendering something coherent instead of
+     nothing at all -- which is what a Tailwind v4 token rename does,
+     silently, with `build`, `lint` and `typecheck` all still green.
+     This block is deleted once no screen references it, and
+     `tests/unit/theme-tokens.test.ts` is what turns the leftovers into a
+     punch list rather than a surprise. */
+  --color-background: var(--color-canvas);
+  --color-surface-raised: var(--color-surface);
+  --color-foreground: var(--color-ink);
+  --color-muted: var(--color-sunken);
+  --color-muted-foreground: var(--color-ink-muted);
+  --color-border: var(--color-line);
+  --color-border-strong: var(--color-line-strong);
+
+  --color-primary: var(--color-action);
+  --color-primary-hover: var(--color-action-hover);
+  --color-primary-foreground: var(--color-action-fg);
+  --color-accent: var(--color-selected);
+  --color-accent-foreground: var(--color-selected-fg);
+
+  --color-destructive: var(--color-danger);
+  --color-destructive-foreground: var(--color-danger-fg);
+  --color-destructive-tint: var(--color-danger-wash);
+  --color-warning-foreground: var(--color-warning-fg);
+  --color-warning-tint: var(--color-warning-wash);
+  --color-success-foreground: var(--color-success-fg);
+  --color-success-tint: var(--color-success-wash);
+  --color-info-foreground: var(--color-info-fg);
+  --color-info-tint: var(--color-info-wash);
+
+  /* The six accent trios and three pill accents collapse onto the four
+     semantic states. Where a screen used a hue to mean something ("amber =
+     needs attention") the alias preserves the meaning; where it used one for
+     variety, the variety is what this rebuild removes. */
+  --color-amber: var(--color-warning);
+  --color-amber-tint: var(--color-warning-wash);
+  --color-amber-soft: var(--color-warning-wash);
+  --color-rose: var(--color-danger);
+  --color-rose-tint: var(--color-danger-wash);
+  --color-rose-soft: var(--color-danger-wash);
+  --color-emerald: var(--color-success);
+  --color-emerald-tint: var(--color-success-wash);
+  --color-emerald-soft: var(--color-success-wash);
+  --color-sky: var(--color-info);
+  --color-sky-tint: var(--color-info-wash);
+  --color-sky-soft: var(--color-info-wash);
+  --color-violet: var(--color-action);
+  --color-violet-tint: var(--color-selected);
+  --color-violet-soft: var(--color-selected);
+  --color-fuchsia: var(--color-action);
+  --color-fuchsia-tint: var(--color-selected);
+  --color-fuchsia-soft: var(--color-selected);
+  --color-indigo: var(--color-action);
+  --color-indigo-soft: var(--color-selected);
+  --color-cyan: var(--color-info);
+  --color-cyan-soft: var(--color-info-wash);
+  --color-teal: var(--color-success);
+  --color-teal-soft: var(--color-success-wash);
+
+  /* Cards no longer carry elevation, so the two card shadows resolve to
+     nothing rather than to something smaller -- a card with a faint shadow
+     *and* a hairline is exactly the look this replaces. */
+  --shadow-card: 0 0 #0000;
+  --shadow-card-hover: 0 0 #0000;
+  --shadow-popover: var(--shadow-overlay);
 }
 
 @layer base {
   * {
-    border-color: var(--color-border);
+    border-color: var(--color-line);
   }
 
   html {
-    /* Light regardless of the operating system — see the note above the
-       token block for why this stays fixed rather than following
-       `prefers-color-scheme`. */
+    /* Light regardless of the operating system -- see the note above the
+       token block for why this stays fixed. */
     color-scheme: light;
   }
 
   body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
     font-size: var(--text-base);
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
 
-  /* Headings carry weight rather than size jumps in a dense interface: at
-     this scale a heading two steps larger would push the content it
-     introduces off-screen, so hierarchy comes from weight and color. */
+  /* Headings carry weight and family rather than size jumps: at this density
+     a heading two steps larger would push the content it introduces off
+     screen, so hierarchy comes from Sora against Inter, and from weight. */
   h1,
   h2,
   h3,
   h4 {
+    font-family: var(--font-heading);
     font-weight: 600;
     letter-spacing: -0.011em;
     line-height: 1.25;
-    color: var(--color-foreground);
+    color: var(--color-ink);
   }
 
   /* Digits in a column must line up. Proportional figures make a table of
-     marks, invoice totals or attendance percentages shift sideways as
-     values change, which reads as a rendering bug and makes a column
-     impossible to scan down — exactly the failure mode an LMS gradebook or
-     ERP ledger can't afford. */
+     marks, invoice totals or attendance percentages shift sideways as values
+     change, which reads as a rendering bug and makes a column impossible to
+     scan -- exactly the failure an LMS gradebook or an ERP ledger cannot
+     afford. `[data-numeric]` is how a single figure opts in. */
   table,
   [data-numeric],
   .tabular {
@@ -259,20 +289,23 @@
   }
 
   /* Visible focus for keyboard users is an accessibility requirement, not a
-     style preference: never remove it without an equivalent replacement. */
+     style preference: never remove it without an equivalent replacement.
+     An `outline` specifically -- `e2e/interface.spec.ts` asserts a non-`none`
+     computed `outlineStyle` on a nav link, so a `box-shadow` ring, however
+     pretty, fails it. */
   :focus-visible {
-    outline: 2px solid var(--color-primary);
+    outline: 2px solid var(--color-action);
     outline-offset: 2px;
     border-radius: 2px;
   }
 
   ::selection {
-    background-color: var(--color-accent);
-    color: var(--color-accent-foreground);
+    background-color: var(--color-selected);
+    color: var(--color-selected-fg);
   }
 
-  /* A person who has asked their operating system for less movement has
-     said something specific. Honour it everywhere at once rather than per
+  /* A person who has asked their operating system for less movement has said
+     something specific. Honour it everywhere at once rather than per
      component, so a new animation cannot forget. */
   @media (prefers-reduced-motion: reduce) {
     *,
@@ -288,22 +321,18 @@
 
 @layer utilities {
   /*
-   * Motion utilities.
+   * Motion, in full.
    *
-   * Hand-written rather than pulled from a plugin: the whole set is five
-   * keyframes, and a dependency that ships two hundred is a dependency to
-   * upgrade forever. Each one animates only `transform` and `opacity`, which
-   * the compositor can do without touching layout — animating width, height
-   * or top forces a reflow every frame and is what makes an interface feel
-   * cheap.
+   * A fade for content arriving, three directional slides for the sheets,
+   * and the skeleton shimmer. That is the entire vocabulary, and each one
+   * animates only `transform` or `opacity` -- the two things a compositor can
+   * do without touching layout, where animating width, height or top forces
+   * a reflow every frame.
    *
-   * A fade, three directional slides for the sheets, and the skeleton
-   * shimmer. What used to also live here — a rise-in on every tile, a
-   * scale-in on every overlay, a per-child stagger, a cursor-tracking
-   * spotlight gradient, a sparkline drawing itself, a press dip — was motion
-   * that decorated rather than explained, on screens whose job is to show a
-   * number. It is gone, along with the `motion` package that drove the
-   * JavaScript half of it.
+   * What used to also live here: a rise-in on every tile, a scale-in on every
+   * overlay, a per-child stagger, a cursor-tracking spotlight gradient, a
+   * sparkline drawing itself, and a press dip. Motion that decorated rather
+   * than explained, on screens whose job is to show a number.
    */
   @keyframes fade-in {
     from {
@@ -336,27 +365,27 @@
   }
 
   .animate-fade-in {
-    animation: fade-in var(--duration-base) var(--ease-out-quick) both;
+    animation: fade-in 200ms var(--ease-out) both;
   }
 
   .animate-slide-in-right {
-    animation: slide-in-right var(--duration-base) var(--ease-out-quick) both;
+    animation: slide-in-right 200ms var(--ease-out) both;
   }
 
   .animate-slide-in-left {
-    animation: slide-in-left var(--duration-base) var(--ease-out-quick) both;
+    animation: slide-in-left 200ms var(--ease-out) both;
   }
 
-  /* A sheet from the bottom is the right shape on a phone — it arrives from
+  /* A sheet from the bottom is the right shape on a phone -- it arrives from
      the thumb rather than from an edge the hand is nowhere near. */
   .animate-slide-in-bottom {
-    animation: slide-in-bottom var(--duration-base) var(--ease-out-quick) both;
+    animation: slide-in-bottom 200ms var(--ease-out) both;
   }
 
   /* The sweep across a loading placeholder. Paired with a `::before` the
      caller positions; the keyframe only moves it, so nothing here forces a
      reflow. */
   .animate-shimmer {
-    animation: shimmer 1.4s var(--ease-in-out-soft) infinite;
+    animation: shimmer 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 }

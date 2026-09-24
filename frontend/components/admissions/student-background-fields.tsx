@@ -120,7 +120,7 @@ export function StudentBackgroundFields({
               key={option.value || 'unknown'}
               htmlFor={id}
               className={cn(
-                'flex cursor-pointer items-start gap-3 rounded-[var(--radius-card)] border p-3 transition-colors duration-[var(--duration-quick)]',
+                'flex cursor-pointer items-start gap-3 rounded-card border p-3 transition-colors duration-150',
                 'has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary',
                 checked
                   ? 'border-primary bg-accent'

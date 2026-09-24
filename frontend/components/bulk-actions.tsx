@@ -61,7 +61,7 @@ export function BulkActionsBar({
       role="region"
       aria-label="Bulk actions"
       className={cn(
-        'flex flex-wrap items-center gap-3 rounded-[var(--radius-card)] border border-primary/30 bg-accent px-4 py-3 text-sm',
+        'flex flex-wrap items-center gap-3 rounded-card border border-primary/30 bg-accent px-4 py-3 text-sm',
         className,
       )}
     >

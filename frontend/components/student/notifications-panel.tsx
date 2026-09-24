@@ -57,7 +57,7 @@ export function NotificationsPanel({
               </>
             );
             return (
-              <li key={item.id} className="rounded-[var(--radius-card)] border border-border p-2.5">
+              <li key={item.id} className="rounded-card border border-border p-2.5">
                 {item.link_path ? (
                   <Link href={item.link_path} className="block hover:text-primary">
                     {body}

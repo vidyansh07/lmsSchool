@@ -140,12 +140,12 @@ function ToastItem({ toast, onDismiss }: { toast: ToastRecord; onDismiss: () => 
   return (
     <div
       className={cn(
-        'pointer-events-auto flex w-full items-start gap-3 rounded-[var(--radius-card)] border border-border bg-surface p-4 shadow-lg',
+        'pointer-events-auto flex w-full items-start gap-3 rounded-card border border-border bg-surface p-4 shadow-lg',
         !toast.closing && 'animate-slide-in-right',
       )}
       style={
         toast.closing
-          ? { animation: `slide-in-right ${EXIT_DURATION_MS}ms var(--ease-out-quick) reverse both` }
+          ? { animation: `slide-in-right ${EXIT_DURATION_MS}ms var(--ease-out) reverse both` }
           : undefined
       }
     >

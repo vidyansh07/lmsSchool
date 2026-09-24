@@ -8,18 +8,19 @@
  *
  * What it does *not* touch, and why
  * ---------------------------------
- * Only `--color-brand` — the logo mark. Buttons, links, the focus ring and the
- * selected row all use `--color-primary`, which stays the navy of the design
- * whatever the brand colour is. That is a decision, not an omission: the
- * owner asked for the navy palette with the orange kept on the logo, and an
- * earlier version of this file derived a button colour from the brand and
- * painted every action orange the moment a brand colour was saved — which is
- * how the whole interface turned orange while the stylesheet said navy.
+ * Only `--color-brand` — the logo mark. Buttons, links, the focus ring and
+ * the selected row all read `--color-action`, which does not move whatever
+ * the brand colour is. That is a decision, not an omission: an earlier
+ * version of this file derived a button colour from the brand and painted
+ * every action in it the moment a brand colour was saved, so one settings
+ * change restyled the entire product.
  *
  * A brand colour also cannot be relied on for text. Grras orange is 2.96:1
  * against white; as a logo fill that is fine, as a button label it is
  * unreadable, and a colour chosen for the first job should not silently take
- * on the second.
+ * on the second. `--color-action` exists precisely so the action colour can
+ * be a darker relative of the brand that carries a white label at 5.18:1 —
+ * `tests/unit/theme-contrast.test.ts` pins both halves of that.
  */
 
 /** The tokens a brand colour overrides. Everything else is left alone. */

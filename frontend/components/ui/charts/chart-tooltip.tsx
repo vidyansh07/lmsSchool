@@ -23,7 +23,7 @@ export function ChartTooltipContent({
   if (!active || !payload || payload.length === 0) return null;
 
   return (
-    <div className="min-w-[9rem] rounded-md border border-border bg-surface px-3 py-2 text-xs shadow-[var(--shadow-popover)]">
+    <div className="min-w-[9rem] rounded-md border border-border bg-surface px-3 py-2 text-xs shadow-overlay">
       {label !== undefined && label !== null && label !== '' ? (
         <p className="mb-1.5 font-medium text-foreground">{label}</p>
       ) : null}

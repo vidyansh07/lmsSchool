@@ -116,7 +116,7 @@ export function Confirm({
       <div
         aria-hidden="true"
         className={cn('absolute inset-0 bg-foreground/40', open ? 'animate-fade-in' : undefined)}
-        style={!open ? { animation: 'fade-in var(--duration-quick) var(--ease-out-quick) reverse both' } : undefined}
+        style={!open ? { animation: 'fade-in 150ms var(--ease-out) reverse both' } : undefined}
       />
       <div
         ref={dialogRef}
@@ -125,12 +125,12 @@ export function Confirm({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         className={cn(
-          'relative w-full max-w-sm rounded-[var(--radius-card)] border border-border bg-surface p-5 shadow-lg',
+          'relative w-full max-w-sm rounded-card border border-border bg-surface p-5 shadow-lg',
           open ? '' : undefined,
         )}
         style={
           !open
-            ? { animation: `scale-in ${EXIT_DURATION_MS}ms var(--ease-out-quick) reverse both` }
+            ? { animation: `fade-in ${EXIT_DURATION_MS}ms var(--ease-out) reverse both` }
             : undefined
         }
       >

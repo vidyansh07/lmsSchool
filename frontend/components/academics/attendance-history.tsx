@@ -48,7 +48,7 @@ export function AttendanceHistory({ recordId }: { recordId: string }) {
         {isOpen ? 'Hide history' : 'View history'}
       </Button>
       {isOpen ? (
-        <div className="mt-1 rounded-[var(--radius-card)] border border-border bg-muted/30 p-2 text-xs">
+        <div className="mt-1 rounded-card border border-border bg-muted/30 p-2 text-xs">
           {isLoading ? <LoadingState label="Loading history…" rows={1} /> : null}
           {error ? (
             <ErrorState

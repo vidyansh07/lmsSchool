@@ -821,7 +821,7 @@ export function FeePlanCard({
   const balance = Number(plan.balance);
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-4 shadow-[var(--shadow-card)]">
+    <div className="rounded-xl border border-border bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-semibold text-foreground">

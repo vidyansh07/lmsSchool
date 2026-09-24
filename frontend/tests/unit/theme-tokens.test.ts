@@ -181,22 +181,19 @@ const BUILT_IN: RegExp[] = [
  * `@tailwindcss/postcss`. The arbitrary form `duration-[var(--duration-quick)]`
  * does work, which is why most call sites look fine and these do not.
  *
- * Every call site today happens to use the arbitrary form, so nothing is
- * currently broken and this list is empty. It stays as an assertion because
- * the bare form is the natural thing to reach for during the token rewrite,
- * and reaching for it costs a transition with no error anywhere.
+ * The token rewrite removed the `--duration-*` tokens entirely and moved
+ * every call site to a literal (`duration-150`), so this list is empty. It
+ * stays as an assertion because a named duration is the natural thing to
+ * reach for, and reaching for it costs a transition with no error anywhere.
  */
 const DEAD_DURATION_CLASSES: string[] = [];
 
-/** Custom properties set at runtime by a component, never declared in `@theme`. */
+/** Custom properties set outside `@theme`, so the scan must not demand them. */
 const RUNTIME_PROPERTIES = new Set([
-  // components/ui/motion/spotlight-card.tsx writes the pointer position
-  'spotlight-x',
-  'spotlight-y',
-  'spotlight-opacity',
-  // next/font injects these; app/layout.tsx passes them to --font-sans/--font-mono
+  // next/font injects these as class-scoped properties; app/layout.tsx wires
+  // them into --font-sans and --font-heading.
   'font-inter',
-  'font-geist-mono',
+  'font-sora',
 ]);
 
 /* ------------------------------------------------------------------- collect */
@@ -288,8 +285,11 @@ describe('design tokens', () => {
 
   it('finds enough references for the scan to be meaningful', () => {
     // A refactor that breaks the walk or the literal parser would otherwise
-    // make this whole file pass by checking nothing at all.
+    // make this whole file pass by checking nothing at all. The `var()` floor
+    // is deliberately low: the token rewrite converted 99 arbitrary-value
+    // classes (`rounded-[var(--radius-card)]`) into named utilities
+    // (`rounded-card`), so most token reads are now counted as utilities.
     expect(utilities.length).toBeGreaterThan(500);
-    expect(variables.length).toBeGreaterThan(100);
+    expect(variables.length).toBeGreaterThan(25);
   });
 });

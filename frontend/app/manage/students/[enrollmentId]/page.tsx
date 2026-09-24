@@ -125,7 +125,7 @@ function StudentFeedbackSection({ studentCode }: { studentCode: string | null })
     return <EmptyState title="No feedback yet" description="Nothing has been left for this student." />;
   }
   return (
-    <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
+    <ul className="divide-y divide-border rounded-card border border-border">
       {items.map((item) => (
         <li
           key={item.id}

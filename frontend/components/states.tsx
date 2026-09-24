@@ -68,7 +68,7 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-border px-6 py-12 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-card border border-dashed border-border px-6 py-12 text-center">
       <Inbox className="size-6 text-muted-foreground" aria-hidden="true" />
       <p className="font-medium">{title}</p>
       {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}

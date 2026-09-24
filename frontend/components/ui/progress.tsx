@@ -49,8 +49,8 @@ export function Progress({ value, max = 100, label, className, ...props }: Progr
         )}
         style={{
           transform: `scaleX(${fraction})`,
-          transitionDuration: 'var(--duration-base)',
-          transitionTimingFunction: 'var(--ease-out-quick)',
+          transitionDuration: '200ms',
+          transitionTimingFunction: 'var(--ease-out)',
         }}
       />
     </div>

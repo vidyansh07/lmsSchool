@@ -249,7 +249,7 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
         <aside className="lg:sticky lg:top-4 lg:self-start">
           <nav
             aria-label="Course outline"
-            className="max-h-[70vh] overflow-y-auto rounded-[var(--radius-card)] border border-border"
+            className="max-h-[70vh] overflow-y-auto rounded-card border border-border"
           >
             {course.modules.map((module) => (
               <div key={module.id}>

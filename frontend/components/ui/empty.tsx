@@ -18,7 +18,7 @@ export function Empty({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return (
     <div
       className={cn(
-        'flex flex-col items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-border px-6 py-12 text-center',
+        'flex flex-col items-center gap-2 rounded-card border border-dashed border-border px-6 py-12 text-center',
         className,
       )}
       {...props}

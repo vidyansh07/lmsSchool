@@ -30,7 +30,7 @@ export function AttentionChip({ value, onClear }: { value: string; onClear: () =
   return (
     <div
       role="status"
-      className="flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border border-primary/30 bg-accent px-3 py-2 text-sm"
+      className="flex flex-wrap items-center gap-2 rounded-card border border-primary/30 bg-accent px-3 py-2 text-sm"
     >
       <span>
         Showing <span className="font-semibold text-primary">{label}</span>

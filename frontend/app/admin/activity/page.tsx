@@ -78,7 +78,7 @@ function Scorecard({
       onClick={onSelect}
       aria-pressed={selected}
       className={cn(
-        'w-full rounded-xl border bg-surface p-4 text-left shadow-[var(--shadow-card)] transition-colors',
+        'w-full rounded-xl border bg-surface p-4 text-left transition-colors',
         selected
           ? 'border-primary ring-2 ring-primary/20'
           : 'border-border hover:border-primary/50',

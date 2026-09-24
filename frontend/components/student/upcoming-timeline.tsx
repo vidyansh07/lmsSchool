@@ -67,7 +67,7 @@ export function UpcomingTimeline({
 
   if (events.length === 0) {
     return (
-      <p className="rounded-[var(--radius-card)] border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
         Nothing on your calendar for the next week.
       </p>
     );

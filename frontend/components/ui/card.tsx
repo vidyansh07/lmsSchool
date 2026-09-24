@@ -9,7 +9,7 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
         // A white card on a white page: the hairline draws the edge and the
         // shadow lifts it. Neither is heavy on its own, and together they do
         // the job a grey page used to.
-        'rounded-[var(--radius-card)] border border-border bg-surface shadow-[var(--shadow-card)]',
+        'rounded-card border border-border bg-surface',
         className,
       )}
       {...props}

@@ -59,7 +59,7 @@ function CategoryAdmin() {
 
       <form
         onSubmit={onCreate}
-        className="flex flex-wrap items-end gap-3 rounded-[var(--radius-card)] border border-border p-4"
+        className="flex flex-wrap items-end gap-3 rounded-card border border-border p-4"
       >
         <Field label="Name" htmlFor="category-name" error={errors.name} className="min-w-[14rem] flex-1">
           <Input value={name} onChange={(event) => setName(event.target.value)} />

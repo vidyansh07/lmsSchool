@@ -83,7 +83,7 @@ function VideoPanel({ lessonId }: { lessonId: string }) {
 
   if (!playback?.playback_url) {
     return (
-      <div className="flex aspect-video items-center justify-center rounded-[var(--radius-card)] border border-dashed border-border bg-muted text-center">
+      <div className="flex aspect-video items-center justify-center rounded-card border border-dashed border-border bg-muted text-center">
         <div className="space-y-1 px-6">
           <p className="text-sm font-medium">Video player</p>
           <p className="text-xs text-muted-foreground">
@@ -102,7 +102,7 @@ function VideoPanel({ lessonId }: { lessonId: string }) {
       controls
       preload="metadata"
       controlsList="nodownload"
-      className="aspect-video w-full rounded-[var(--radius-card)] border border-border bg-black"
+      className="aspect-video w-full rounded-card border border-border bg-black"
     >
       <source src={playback.playback_url} />
       Your browser cannot play this video.

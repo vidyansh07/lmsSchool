@@ -143,7 +143,7 @@ function NavLink({ item, active, collapsed = false }: { item: NavItem; active: b
       href={item.href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'group flex items-center gap-3 rounded-lg py-2 text-sm transition-colors duration-[var(--duration-quick)]',
+        'group flex items-center gap-3 rounded-lg py-2 text-sm transition-colors duration-150',
         collapsed ? 'justify-center px-2' : 'px-3',
         'hover:bg-muted hover:text-foreground',
         // Marked three ways on purpose: colour alone is not a signal for
@@ -154,7 +154,7 @@ function NavLink({ item, active, collapsed = false }: { item: NavItem; active: b
     >
       <Icon
         className={cn(
-          'size-[18px] shrink-0 transition-colors duration-[var(--duration-quick)]',
+          'size-[18px] shrink-0 transition-colors duration-150',
           active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
         )}
         strokeWidth={1.75}
@@ -179,8 +179,9 @@ function NavLink({ item, active, collapsed = false }: { item: NavItem; active: b
 /**
  * The logo lockup. The mark is the one place `--color-brand` — the true Grras
  * orange — appears in the shell: it is a fill to look at, not text to read,
- * and the owner asked for it to stay exactly this colour while the rest of the
- * interface went navy. The environment badge rides alongside so a
+ * and it stays exactly this colour while every action in the product uses the
+ * darker `--color-action`, which can carry a label. The environment badge
+ * rides alongside so a
  * non-production build never looks like the real thing — the one thing this
  * component renders that is a safety signal rather than decoration, so it
  * survives `compact` in some form rather than simply vanishing with the
@@ -198,7 +199,7 @@ function Brand({ compact = false, showEnvDot = false }: { compact?: boolean; sho
       <Link href="/" className="relative flex min-w-0 items-center gap-2.5">
         <span
           aria-hidden="true"
-          className="flex size-9 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white shadow-[var(--shadow-card)]"
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white"
           style={{ backgroundColor: 'var(--color-brand)' }}
         >
           G
@@ -293,7 +294,7 @@ function AccountCard({ collapsed = false }: { collapsed?: boolean }) {
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-2.5 shadow-[var(--shadow-card)]">
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-2.5">
       <Avatar size="md" className="bg-accent text-primary">
         <AvatarFallback className="text-primary">{initials(name)}</AvatarFallback>
       </Avatar>
@@ -471,7 +472,7 @@ function SidebarToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: 
           onClick={onToggle}
           aria-label={label}
           aria-expanded={!collapsed}
-          className="flex size-6 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground shadow-[var(--shadow-card)] transition-colors duration-[var(--duration-quick)] hover:text-foreground"
+          className="flex size-6 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground transition-colors duration-150 hover:text-foreground"
         >
           <Icon className="size-3.5" aria-hidden="true" strokeWidth={2} />
         </button>
@@ -533,7 +534,7 @@ function Shell({
           own JS-driven motion. */}
       <aside
         className={cn(
-          'relative hidden shrink-0 border-r border-border bg-surface transition-[width] duration-[var(--duration-base)] lg:block',
+          'relative hidden shrink-0 border-r border-border bg-surface transition-[width] duration-200 lg:block',
           collapsed ? 'lg:w-20' : 'lg:w-[17rem]',
         )}
       >

@@ -90,7 +90,7 @@ export function DsrReviewQueue({ batchId, onReviewed }: { batchId: string; onRev
   }
 
   return (
-    <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
+    <ul className="divide-y divide-border rounded-card border border-border">
       {rows.map((row) => (
         <li
           key={row.id}

@@ -33,7 +33,7 @@ export function FeedbackPanel({
 
   if (feedback.length === 0) {
     return (
-      <p className="rounded-[var(--radius-card)] border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
         No feedback has been shared with you yet.
       </p>
     );
@@ -42,7 +42,7 @@ export function FeedbackPanel({
   return (
     <ul className="space-y-3">
       {feedback.map((item) => (
-        <li key={item.id} className="rounded-[var(--radius-card)] border border-border p-3">
+        <li key={item.id} className="rounded-card border border-border p-3">
           <div className="flex items-start gap-2.5">
             <MessageSquareText className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <div className="min-w-0 flex-1">

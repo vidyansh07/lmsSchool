@@ -49,7 +49,7 @@ export function CertificatesPanel({
 
   if (certificates.length === 0) {
     return (
-      <p className="rounded-[var(--radius-card)] border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
         No certificates yet. One appears here as soon as a course is complete and it is issued.
       </p>
     );
@@ -64,7 +64,7 @@ export function CertificatesPanel({
         {shown.map((certificate) => (
           <li
             key={certificate.id}
-            className="flex flex-wrap items-start justify-between gap-3 rounded-[var(--radius-card)] border border-border p-3"
+            className="flex flex-wrap items-start justify-between gap-3 rounded-card border border-border p-3"
           >
             <div className="flex min-w-0 items-start gap-2.5">
               <Award className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />

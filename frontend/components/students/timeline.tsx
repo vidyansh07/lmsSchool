@@ -241,7 +241,7 @@ export function StudentTimeline({
                         <span className="absolute -left-[1.4rem] top-1 flex size-6 items-center justify-center rounded-full bg-muted text-muted-foreground">
                           <Icon className="size-3.5" aria-hidden="true" />
                         </span>
-                        <div className="rounded-[var(--radius-card)] border border-border p-3">
+                        <div className="rounded-card border border-border p-3">
                           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                             <p className="font-medium">
                               {entry.href ? (
