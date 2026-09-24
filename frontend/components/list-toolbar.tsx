@@ -1,13 +1,22 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 
 import { Input } from '@/components/ui/input';
+import { Toolbar } from '@/components/ui/toolbar';
 
 /**
  * Search box plus filter slot for a list page.
  *
  * The search input is debounced so typing does not fire a request per keystroke.
+ *
+ * The input's id is generated rather than written down. It used to be the
+ * literal `list-search`, so a screen with two lists rendered two elements with
+ * the same id and the second label pointed at the first input — clicking it
+ * focused the wrong box.
+ *
+ * The `gap-3` override keeps the spacing these nineteen screens already ship;
+ * `Toolbar`'s own `gap-2` is the default for strips written from here on.
  */
 export function ListToolbar({
   search,
@@ -20,6 +29,7 @@ export function ListToolbar({
   placeholder?: string;
   children?: ReactNode;
 }) {
+  const searchId = useId();
   const [value, setValue] = useState(search);
 
   useEffect(() => {
@@ -30,13 +40,13 @@ export function ListToolbar({
   }, [value, search, onSearchChange]);
 
   return (
-    <div className="flex flex-wrap items-end gap-3">
+    <Toolbar className="gap-3">
       <div className="min-w-[16rem] flex-1">
-        <label htmlFor="list-search" className="mb-1.5 block text-sm font-medium">
+        <label htmlFor={searchId} className="mb-1.5 block text-sm font-medium">
           Search
         </label>
         <Input
-          id="list-search"
+          id={searchId}
           type="search"
           placeholder={placeholder}
           value={value}
@@ -44,6 +54,6 @@ export function ListToolbar({
         />
       </div>
       {children}
-    </div>
+    </Toolbar>
   );
 }
