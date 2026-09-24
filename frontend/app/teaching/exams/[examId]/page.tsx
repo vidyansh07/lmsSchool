@@ -117,7 +117,7 @@ function ExamDetail({ examId }: { examId: string }) {
   if (!exam) return null;
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={LIFECYCLE_VARIANT[exam.status]}>{LIFECYCLE_LABEL[exam.status]}</Badge>
@@ -226,7 +226,7 @@ function ExamDetail({ examId }: { examId: string }) {
           {queue.length === 0 ? (
             <EmptyState title="Nothing to mark" description="No written answers are pending." />
           ) : (
-            <div className="stagger space-y-4">
+            <div className="space-y-4">
               {queue.map((row) => (
                 <div key={row.id} className="animate-fade-in rounded-md border border-border p-3">
                   <div className="text-sm font-medium">
@@ -304,7 +304,7 @@ function ExamDetail({ examId }: { examId: string }) {
                     <Th className="sticky top-0 z-10 bg-muted">Status</Th>
                   </tr>
                 </thead>
-                <tbody className="stagger">
+                <tbody className="">
                   {attempts.map((attempt) => (
                     <tr key={attempt.id} className="animate-fade-in transition-colors hover:bg-muted/40">
                       <Td>

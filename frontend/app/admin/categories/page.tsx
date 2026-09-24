@@ -49,7 +49,7 @@ function CategoryAdmin() {
   }
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Course categories</h1>
         <p className="text-sm text-muted-foreground">
@@ -108,7 +108,7 @@ function CategoryAdmin() {
                   <Th className="sticky top-0 z-10 bg-muted">Actions</Th>
                 </tr>
               </thead>
-              <tbody className="stagger">
+              <tbody className="">
                 {list.data?.results.map((category) => (
                   <tr key={category.id} className="animate-fade-in transition-colors hover:bg-muted/40">
                     <Td className="font-medium">{category.name}</Td>

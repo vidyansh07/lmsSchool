@@ -249,7 +249,12 @@ describe('StudentView — full data', () => {
     render(<StudentView data={emptyStudentDashboard()} />);
     await waitForBucketsToSettle();
 
-    expect(await screen.findByText('62%')).toBeInTheDocument();
+    // `findAllByText`, not `findByText`: the attendance figure legitimately
+    // appears twice now — once in the standing panel's own readout and once
+    // in the tile above it. It used to appear once only because the tile
+    // animated up from zero and never advanced under jsdom, so the honest
+    // number was the one thing this assertion could not see.
+    expect((await screen.findAllByText('62%')).length).toBeGreaterThan(0);
     // Assessment average has nothing recorded — a real "Not available", not 0% or NaN%.
     expect(screen.getAllByText('Not available').length).toBeGreaterThan(0);
     expect(screen.getByText(/62% attended/)).toBeInTheDocument();
@@ -583,8 +588,8 @@ describe('StudentView — attendance gauge and batch-status chart', () => {
   });
 });
 
-describe('Dashboard — trainer KPI tiles get distinct accents', () => {
-  it('renders all 5 trainer tiles as accented StatCards, not bare unaccented cards', async () => {
+describe('Dashboard — the trainer tiles', () => {
+  it('renders every trainer tile with a label and a figure', async () => {
     useAuthMock.value = { user: { first_name: 'Tina', role: 'trainer' } };
     const trainerData: TrainerDashboard = {
       is_trainer: true,
@@ -597,82 +602,20 @@ describe('Dashboard — trainer KPI tiles get distinct accents', () => {
     };
     getTrainerDashboard.mockResolvedValue(trainerData);
 
-    const { container } = render(<Dashboard />);
+    render(<Dashboard />);
     await screen.findByText('Assigned batches');
 
-    // Each of the 6 accent trios paints its tile with a `bg-*-tint` class —
-    // a bare `Card` (the old shape) carries none. At least 5 distinct tints
-    // should now be present across the trainer tiles.
-    const tintClasses = new Set(
-      Array.from(container.querySelectorAll('[class*="-tint"]')).map(
-        (el) => (el.getAttribute('class') ?? '').match(/\bbg-\S+-tint\b/)?.[0],
-      ),
-    );
-    expect(tintClasses.size).toBeGreaterThanOrEqual(5);
-  });
-});
-
-describe('Dashboard — trainer batch-status chart', () => {
-  it('renders the real batch-status breakdown through DonutChart, fed by the same fetch as the rest of the page', async () => {
-    vi.spyOn(window, 'matchMedia').mockImplementation(
-      (query: string) =>
-        ({
-          matches: true,
-          media: query,
-          onchange: null,
-          addEventListener: () => {},
-          removeEventListener: () => {},
-          addListener: () => {},
-          removeListener: () => {},
-          dispatchEvent: () => false,
-        }) as unknown as MediaQueryList,
-    );
-
-    useAuthMock.value = { user: { first_name: 'Tina', role: 'trainer' } };
-    const trainerData: TrainerDashboard = {
-      is_trainer: true,
-      batches: [
-        dashboardBatch({ id: 'a', status: 'active' }),
-        dashboardBatch({ id: 'b', status: 'active' }),
-        dashboardBatch({ id: 'c', status: 'completed' }),
-      ],
-      today_classes: [],
-      upcoming_classes: [],
-      student_count: 40,
-      courses: [],
-      work: { pending: 0, overdue: 0 },
-    };
-    getTrainerDashboard.mockResolvedValue(trainerData);
-
-    const { container } = render(<Dashboard />);
-    await screen.findByText('Batch status mix');
-
-    await waitFor(() => expect(container.querySelector('.recharts-pie-sector')).toBeInTheDocument());
-
-    // Every real count still exists as text in the chart's own visually
-    // hidden data table — not only as a shape on the page.
-    const table = within(screen.getByRole('table', { hidden: true }));
-    expect(table.getByText('Active')).toBeInTheDocument();
-    expect(table.getByText('2')).toBeInTheDocument();
-    expect(table.getByText('Completed')).toBeInTheDocument();
-    expect(table.getByText('1')).toBeInTheDocument();
-  });
-
-  it('shows the chart empty state, not a broken shape, for a trainer with no batches yet', async () => {
-    useAuthMock.value = { user: { first_name: 'Tina', role: 'trainer' } };
-    const trainerData: TrainerDashboard = {
-      is_trainer: true,
-      batches: [],
-      today_classes: [],
-      upcoming_classes: [],
-      student_count: 0,
-      courses: [],
-      work: { pending: 0, overdue: 0 },
-    };
-    getTrainerDashboard.mockResolvedValue(trainerData);
-
-    render(<Dashboard />);
-    await screen.findByText('Batch status mix');
-    expect(screen.getByText('No batches assigned yet.')).toBeInTheDocument();
+    // This used to assert that at least five *distinct* `bg-*-tint` classes
+    // were present — one per accent trio — which pinned the six-colour
+    // dashboard palette in a page test. That palette is gone: colour now
+    // means state, not "which metric is this". What the assertion was really
+    // protecting is that all five trainer tiles render, each with its own
+    // label and its own figure, rather than collapsing into a bare card with
+    // no number in it.
+    for (const label of ['Assigned batches', 'Students', 'Courses taught', 'Pending work', 'Overdue work']) {
+      const tile = screen.getByText(label).parentElement?.parentElement;
+      expect(tile).toBeTruthy();
+      expect(tile?.querySelector('[data-numeric]')).toBeInTheDocument();
+    }
   });
 });

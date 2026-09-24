@@ -692,7 +692,7 @@ export function RegistrationWizard() {
       />
 
       {step === 'student' ? (
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle as="h2">Student details</CardTitle>
             <CardDescription>
@@ -845,7 +845,7 @@ export function RegistrationWizard() {
       ) : null}
 
       {step === 'course' ? (
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle>Course</CardTitle>
             <CardDescription>What is {firstName || 'this student'} enrolling on?</CardDescription>
@@ -868,7 +868,7 @@ export function RegistrationWizard() {
       ) : null}
 
       {step === 'batch' ? (
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle>Batch</CardTitle>
             <CardDescription>
@@ -954,7 +954,7 @@ export function RegistrationWizard() {
       ) : null}
 
       {step === 'trainer' ? (
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle>Trainer</CardTitle>
             <CardDescription>
@@ -1017,7 +1017,7 @@ export function RegistrationWizard() {
       ) : null}
 
       {step === 'confirm' ? (
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle>Confirm and enrol</CardTitle>
             <CardDescription>Nothing has been created yet. This is the step that does it.</CardDescription>

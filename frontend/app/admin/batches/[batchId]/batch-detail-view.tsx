@@ -294,7 +294,7 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
         ) : null}
 
         {batch.schedules.length > 0 ? (
-          <ul className="stagger divide-y divide-border rounded-md border border-border">
+          <ul className="divide-y divide-border rounded-md border border-border">
             {batch.schedules.map((schedule) => (
               <li
                 key={schedule.id}
@@ -502,7 +502,7 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
                   {canManage ? <Th className="sticky top-0 z-10 bg-muted">Actions</Th> : null}
                 </tr>
               </thead>
-              <tbody className="stagger">
+              <tbody className="">
                 {roster.map((entry) => (
                   <tr
                     key={entry.id}
@@ -646,7 +646,7 @@ export function BatchDetailView({ batchId }: { batchId: string }) {
   if (!batch) return null;
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">

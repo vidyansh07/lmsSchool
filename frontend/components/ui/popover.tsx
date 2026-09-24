@@ -21,7 +21,7 @@ import { useDismissableLayer } from '@/hooks/use-dismissable-layer';
 import { usePresence } from '@/hooks/use-presence';
 import { cn } from '@/lib/utils';
 
-const EXIT_DURATION_MS = 90; // mirrors --duration-instant, the reverse of .animate-scale-in's --duration-quick
+const EXIT_DURATION_MS = 90; // mirrors --duration-instant, the reverse of .animate-fade-in's --duration-quick
 
 interface PopoverContextValue {
   open: boolean;
@@ -119,7 +119,7 @@ export function PopoverContent({
       className={cn(
         'absolute z-40 mt-1 w-72 rounded-md border border-border bg-surface p-4 shadow-lg outline-none',
         align === 'end' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
-        open ? 'animate-scale-in' : undefined,
+        open ? '' : undefined,
         className,
       )}
       style={

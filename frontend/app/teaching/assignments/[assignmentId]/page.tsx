@@ -109,7 +109,7 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
   if (!assignment) return null;
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={LIFECYCLE_VARIANT[assignment.status]}>
@@ -230,7 +230,7 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
                     <Th className="sticky top-0 z-10 bg-muted">Action</Th>
                   </tr>
                 </thead>
-                <tbody className="stagger">
+                <tbody className="">
                   {submissions.map((row) => (
                     <tr key={row.id} className="animate-fade-in transition-colors hover:bg-muted/40">
                       <Td>

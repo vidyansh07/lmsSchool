@@ -52,7 +52,7 @@ export function Checkbox({
   return (
     <label
       className={cn(
-        'press relative inline-flex size-4 shrink-0 cursor-pointer items-center justify-center',
+        'relative inline-flex size-4 shrink-0 cursor-pointer items-center justify-center',
         'before:absolute before:-inset-3.5 before:content-[""]', // ≥44px tap target, invisible
         disabled && 'cursor-not-allowed opacity-50',
         className,

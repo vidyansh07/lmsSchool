@@ -87,8 +87,8 @@ function MyAssignments() {
   }
 
   return (
-    <div className="stagger space-y-6">
-      <div className="animate-rise-in space-y-1">
+    <div className="space-y-6">
+      <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My assignments</h1>
         <p className="text-sm text-muted-foreground">
           Work set on your courses, with what you have handed in.
@@ -96,7 +96,7 @@ function MyAssignments() {
       </div>
 
       {notice ? (
-        <Alert variant="success" role="status" className="animate-rise-in">
+        <Alert variant="success" role="status" className="">
           {notice}
         </Alert>
       ) : null}
@@ -119,7 +119,7 @@ function MyAssignments() {
                 mine.attempt < assignment.max_attempts));
 
           return (
-            <Card key={assignment.id} data-testid="assignment-card" className="animate-rise-in">
+            <Card key={assignment.id} data-testid="assignment-card" className="">
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-muted-foreground">

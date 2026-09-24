@@ -13,7 +13,7 @@
 import { useEffect, useRef } from 'react';
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
-import { useReducedMotion } from '@/components/ui/motion/use-reduced-motion';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { cn } from '@/lib/utils';
 
 import { CHART_ANIMATION_MS, CHART_PALETTE, DONUT_CATEGORY_WARNING_THRESHOLD, paletteColor } from './chart-colors';

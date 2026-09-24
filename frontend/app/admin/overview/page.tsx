@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AreaChart, DonutChart, RadialProgress } from '@/components/ui/charts';
-import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
+import { Grid, GridItem } from '@/components/ui/layout';
+import { StatCard } from '@/components/ui/stat';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { WarningsStrip } from '@/components/warnings-strip';
 import { ApiError } from '@/lib/api';
@@ -155,7 +156,6 @@ function Overview() {
   const headline = [
     {
       label: 'Active students',
-      accent: 'blue' as const,
       value: data.active_students,
       icon: Users,
       href: '/admin/students',
@@ -163,7 +163,6 @@ function Overview() {
     },
     {
       label: 'Active trainers',
-      accent: 'violet' as const,
       value: data.active_trainers,
       icon: GraduationCap,
       href: '/admin/trainers',
@@ -171,7 +170,6 @@ function Overview() {
     },
     {
       label: 'Published courses',
-      accent: 'amber' as const,
       value: data.published_courses,
       icon: BookOpen,
       href: '/admin/courses',
@@ -179,7 +177,6 @@ function Overview() {
     },
     {
       label: 'Active batches',
-      accent: 'green' as const,
       value: data.active_batches,
       icon: Layers,
       href: '/admin/batches',
@@ -187,7 +184,6 @@ function Overview() {
     },
     {
       label: 'Awaiting approval',
-      accent: 'rose' as const,
       value: data.awaiting_completion_approval,
       icon: ClipboardCheck,
       href: '/admin/completions',
@@ -195,7 +191,6 @@ function Overview() {
     },
     {
       label: 'Certificates issued',
-      accent: 'pink' as const,
       value: data.certificates_issued,
       icon: Award,
       href: '/admin/certificates',
@@ -204,7 +199,7 @@ function Overview() {
   ] as const;
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <p className="text-sm font-medium text-muted-foreground">
@@ -227,9 +222,9 @@ function Overview() {
 
       <WarningsStrip />
 
-      <BentoGrid>
-        {headline.map((figure, index) => (
-          <BentoTile key={figure.label} span={4} index={index}>
+      <Grid>
+        {headline.map((figure) => (
+          <GridItem key={figure.label} span={4}>
             <div data-testid="headline-figure" className="h-full">
               <StatCard
                 label={figure.label}
@@ -237,13 +232,12 @@ function Overview() {
                 icon={figure.icon}
                 hint={figure.hint}
                 href={figure.href}
-                accent={figure.accent}
                 trend={figure.label === 'Active students' ? attendanceSeries : undefined}
               />
             </div>
-          </BentoTile>
+          </GridItem>
         ))}
-      </BentoGrid>
+      </Grid>
 
       <Card>
         <CardHeader>
@@ -364,7 +358,7 @@ function Overview() {
                     <Th className="sticky top-0 z-10 bg-muted text-right">Rate</Th>
                   </tr>
                 </thead>
-                <tbody className="stagger">
+                <tbody className="">
                   {trend.map((point) => (
                     <tr key={point.week} className="animate-fade-in hover:bg-muted/40">
                       <Td>{point.week}</Td>

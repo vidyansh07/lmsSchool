@@ -121,7 +121,7 @@ export function RadioGroupItem({ value, disabled, className, id, ...props }: Rad
   return (
     <label
       className={cn(
-        'press relative inline-flex size-4 shrink-0 items-center justify-center',
+        'relative inline-flex size-4 shrink-0 items-center justify-center',
         'before:absolute before:-inset-3.5 before:content-[""]', // ≥44px tap target, invisible
         isDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
         className,

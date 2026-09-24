@@ -134,7 +134,7 @@ export function BranchesContent() {
       </div>
 
       {adding ? (
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle as="h2">Open a centre</CardTitle>
             <CardDescription>Staff, students and batches are then placed in it.</CardDescription>
@@ -153,7 +153,7 @@ export function BranchesContent() {
       ) : null}
 
       {editing ? (
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle as="h2">Edit {editing.name}</CardTitle>
           </CardHeader>

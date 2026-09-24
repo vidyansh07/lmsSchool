@@ -35,7 +35,7 @@ function CourseAdminList() {
   const [showCreate, setShowCreate] = useState(false);
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">
@@ -115,7 +115,7 @@ function CourseAdminList() {
         />
       ) : (
         <>
-          <div className="stagger grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {list.data?.results.map((course) => (
               <div key={course.id} className="animate-fade-in">
                 <CourseCard course={course} href={`/admin/courses/${course.id}`} showStatus />

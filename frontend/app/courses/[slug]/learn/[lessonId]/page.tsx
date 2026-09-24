@@ -71,7 +71,7 @@ function LessonCompletion({ lessonId }: { lessonId: string }) {
     <div className="space-y-2 rounded-md border border-border p-4">
       {message ? <Alert variant="error">{message}</Alert> : null}
       {completed === true ? (
-        <Alert variant="success" role="status" className="animate-rise-in">
+        <Alert variant="success" role="status" className="">
           Marked complete.
         </Alert>
       ) : null}
@@ -205,7 +205,7 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0 space-y-6">
-          <header className="animate-rise-in space-y-2">
+          <header className="space-y-2">
             <h1 className="text-2xl font-semibold tracking-tight">{lesson.title}</h1>
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <Badge>{CONTENT_TYPE_LABEL[lesson.content_type]}</Badge>

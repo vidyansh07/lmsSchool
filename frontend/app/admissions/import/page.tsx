@@ -150,7 +150,7 @@ export function ImportFlow() {
 
   return (
     <div className="space-y-4">
-      <div className="animate-rise-in flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Import students</h1>
           <p className="text-sm text-muted-foreground">
@@ -170,7 +170,7 @@ export function ImportFlow() {
       {error ? <Alert variant="error">{error}</Alert> : null}
 
       {!run ? (
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle as="h2">Choose a file</CardTitle>
             <CardDescription>
@@ -222,7 +222,7 @@ export function ImportFlow() {
         </Card>
       ) : (
         <>
-          <Card className="animate-rise-in">
+          <Card className="">
             <CardHeader>
               <CardTitle as="h2">{run.original_filename || 'Import preview'}</CardTitle>
               <CardDescription>
@@ -286,7 +286,7 @@ export function ImportFlow() {
             </CardContent>
           </Card>
 
-          <Card className="animate-rise-in">
+          <Card className="">
             <CardHeader>
               <CardTitle>Every row</CardTitle>
               <CardDescription>Valid and invalid rows both, so nothing is hidden.</CardDescription>

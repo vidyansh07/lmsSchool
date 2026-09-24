@@ -266,7 +266,7 @@ export function RoleBuilder({ slug }: { slug?: string }) {
     return <LoadingState label="Loading permissions…" rows={4} />;
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">
           {isEdit ? `Edit role: ${existing?.name}` : "New role"}

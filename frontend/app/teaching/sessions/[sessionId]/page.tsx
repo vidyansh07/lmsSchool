@@ -107,7 +107,7 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
   if (!register) return null;
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Register</h1>
         <p className="text-sm text-muted-foreground">
@@ -172,7 +172,7 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
                   <Th className="sticky top-0 z-10 bg-muted">Note</Th>
                 </tr>
               </thead>
-              <tbody className="stagger">
+              <tbody className="">
                 {register.entries.map((entry) => (
                   <tr key={entry.enrollment_id} className="animate-fade-in transition-colors hover:bg-muted/40">
                     <Td>

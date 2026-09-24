@@ -84,7 +84,7 @@ export function ExportJobsPanel() {
   }, [pending, reload]);
 
   return (
-    <Card id="exports" className="animate-rise-in">
+    <Card id="exports" className="">
       <CardHeader>
         <CardTitle>Your exports</CardTitle>
         <CardDescription>

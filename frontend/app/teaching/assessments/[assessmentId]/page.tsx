@@ -128,7 +128,7 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
   const { assessment } = sheet;
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={LIFECYCLE_VARIANT[assessment.status]}>
@@ -289,7 +289,7 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
                   <Th className="sticky top-0 z-10 bg-muted">Action</Th>
                 </tr>
               </thead>
-              <tbody className="stagger">
+              <tbody className="">
                 {sheet.entries.map((entry) => (
                   <tr key={entry.enrollment_id} className="animate-fade-in transition-colors hover:bg-muted/40">
                     <Td>

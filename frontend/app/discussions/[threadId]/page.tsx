@@ -73,8 +73,8 @@ function ThreadView({ threadId }: { threadId: string }) {
   if (!thread) return null;
 
   return (
-    <div className="stagger space-y-6">
-      <div className="animate-rise-in space-y-1">
+    <div className="space-y-6">
+      <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           {thread.is_pinned ? <Badge variant="warning">Pinned</Badge> : null}
           {thread.is_closed ? <Badge variant="neutral">Closed</Badge> : null}
@@ -88,7 +88,7 @@ function ThreadView({ threadId }: { threadId: string }) {
 
       {formError ? <Alert variant="error">{formError}</Alert> : null}
 
-      <Card className="animate-rise-in">
+      <Card className="">
         <CardContent className="pt-6">
           <p className="whitespace-pre-wrap text-sm">{thread.body}</p>
         </CardContent>
@@ -121,21 +121,21 @@ function ThreadView({ threadId }: { threadId: string }) {
         </div>
       ) : null}
 
-      <Card className="animate-rise-in">
+      <Card className="">
         <CardHeader>
           <CardTitle as="h2">Replies ({thread.replies.length})</CardTitle>
           <CardDescription>
             A trainer&apos;s answer is marked, so it is findable in a long thread.
           </CardDescription>
         </CardHeader>
-        <CardContent className="stagger space-y-3">
+        <CardContent className="space-y-3">
           {thread.replies.map((item) => (
             <div
               key={item.id}
               data-testid="reply"
-              className={`animate-rise-in rounded-md border p-3 ${
-                item.is_hidden ? 'border-dashed border-border opacity-70' : 'border-border'
-              }`}
+              className={`rounded-md border p-3 ${
+ item.is_hidden ? 'border-dashed border-border opacity-70' : 'border-border'
+ }`}
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">{item.author_name}</span>

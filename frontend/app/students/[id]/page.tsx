@@ -498,7 +498,7 @@ export function Student360Content({ studentId }: { studentId: string }) {
   const name = data.profile.user.full_name || data.profile.user.email;
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
         <Link href="/admin/students" className="text-muted-foreground transition-colors hover:text-foreground">
           Students

@@ -225,7 +225,7 @@ export function RegisterEditor({
               <Th className="sticky top-0 z-10 bg-muted">Attendance</Th>
             </tr>
           </thead>
-          <tbody className="stagger">
+          <tbody className="">
             {entries.map((entry, index) => {
               const status = marks[entry.enrollment_id] ?? null;
               const isFocused = focusedIndex === index;

@@ -29,7 +29,7 @@ import { Button, type ButtonProps } from '@/components/ui/button';
 import { usePresence } from '@/hooks/use-presence';
 import { cn } from '@/lib/utils';
 
-const EXIT_DURATION_MS = 90; // mirrors --duration-instant, the reverse of .animate-scale-in's --duration-quick
+const EXIT_DURATION_MS = 90; // mirrors --duration-instant, the reverse of .animate-fade-in's --duration-quick
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -126,7 +126,7 @@ export function Confirm({
         aria-describedby={description ? descriptionId : undefined}
         className={cn(
           'relative w-full max-w-sm rounded-[var(--radius-card)] border border-border bg-surface p-5 shadow-lg',
-          open ? 'animate-scale-in' : undefined,
+          open ? '' : undefined,
         )}
         style={
           !open

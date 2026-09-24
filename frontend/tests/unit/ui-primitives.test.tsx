@@ -3,106 +3,25 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ListToolbar } from '@/components/list-toolbar';
-import { DescriptionItem, DescriptionList } from '@/components/ui/description-list';
 import { Toolbar } from '@/components/ui/toolbar';
-import { NOT_AVAILABLE, fallback } from '@/lib/format';
 
 /**
- * The two shared primitives the detail and list screens were hand-rolling, and
- * the defect the port uncovered on the way through.
+ * The shared toolbar primitives the list screens are built from.
  *
- * The properties pinned here are the ones a later edit could quietly lose: that
- * `DescriptionList` renders a real `<dl>` rather than three divs with the right
- * padding, that it never invents a dash for an absent value (`lib/format.ts`
- * owns that vocabulary and screens may not add to it), and that `className`
- * still comes last so a caller can override the default grid.
+ * `Toolbar`'s properties pinned here are the ones a later edit could quietly
+ * lose: that `className` still comes last, so a caller can override the
+ * default gap rather than ending up with both.
  *
- * `ListToolbar` is here for a different reason. It hardcoded `id="list-search"`,
- * which is invisible on the nineteen screens that render one toolbar and wrong
- * on any screen that renders two: the ids collide and the second label points at
- * the first input, so clicking it focuses the wrong box. That regression never
- * had a test.
+ * `ListToolbar` is here for a different reason. It hardcoded
+ * `id="list-search"`, which is invisible on the nineteen screens that render
+ * one toolbar and wrong on any screen that renders two: the ids collide and
+ * the second label points at the first input, so clicking it focuses the
+ * wrong box. That regression never had a test.
+ *
+ * The `DescriptionList` block that used to live here went with the component
+ * -- it was ported but never adopted, and nothing outside its own test ever
+ * imported it.
  */
-
-describe('DescriptionList', () => {
-  it('renders a real description list, not three divs', () => {
-    const { container } = render(
-      <DescriptionList>
-        <DescriptionItem term="Batch">Evening — Feb 2026</DescriptionItem>
-      </DescriptionList>,
-    );
-
-    expect(container.querySelector('dl')).not.toBeNull();
-    expect(container.querySelector('dt')?.textContent).toBe('Batch');
-    expect(container.querySelector('dd')?.textContent).toBe('Evening — Feb 2026');
-  });
-
-  it('renders every pair it is handed', () => {
-    render(
-      <DescriptionList>
-        <DescriptionItem term="Course">Linux administration</DescriptionItem>
-        <DescriptionItem term="Trainer">Asha Rao</DescriptionItem>
-      </DescriptionList>,
-    );
-
-    expect(screen.getByText('Course')).toBeInTheDocument();
-    expect(screen.getByText('Trainer')).toBeInTheDocument();
-    expect(screen.getByText('Asha Rao')).toBeInTheDocument();
-  });
-
-  it('emits a literal grid class for each column count it offers', () => {
-    // Tailwind v4 scans source text, so an interpolated `sm:grid-cols-${n}`
-    // would emit nothing and the grid would silently collapse to one column.
-    for (const columns of [2, 3, 4, 5] as const) {
-      const { container, unmount } = render(
-        <DescriptionList columns={columns}>
-          <DescriptionItem term="Batch">Evening</DescriptionItem>
-        </DescriptionList>,
-      );
-      expect((container.querySelector('dl') as HTMLElement).className).toContain(
-        `sm:grid-cols-${columns}`,
-      );
-      unmount();
-    }
-  });
-
-  it('merges className and lets it come last', () => {
-    const { container } = render(
-      <DescriptionList className="sm:grid-cols-1">
-        <DescriptionItem term="Batch">Evening</DescriptionItem>
-      </DescriptionList>,
-    );
-
-    const list = container.querySelector('dl') as HTMLElement;
-    expect(list.className).toContain('sm:grid-cols-1');
-    expect(list.className.indexOf('sm:grid-cols-1')).toBeGreaterThan(list.className.indexOf('grid'));
-  });
-
-  it('renders the format fallback for a null value, never 0 and never NaN', () => {
-    render(
-      <DescriptionList>
-        <DescriptionItem term="Average score">{fallback(null)}</DescriptionItem>
-      </DescriptionList>,
-    );
-
-    expect(screen.getByText(NOT_AVAILABLE)).toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/\bNaN\b/);
-    expect(document.body.textContent).not.toMatch(/\b0\b/);
-  });
-
-  it('does not invent its own dash for a value the caller omitted', () => {
-    // The fallback vocabulary is `lib/format.ts`'s and is fixed. A primitive
-    // that substitutes an em dash of its own puts a sixth, untyped member into
-    // it, and "—" cannot be told from "not applicable" or "still loading".
-    const { container } = render(
-      <DescriptionList>
-        <DescriptionItem term="Completed on">{null}</DescriptionItem>
-      </DescriptionList>,
-    );
-
-    expect(container.querySelector('dd')?.textContent).toBe('');
-  });
-});
 
 describe('Toolbar', () => {
   it('renders its children', () => {

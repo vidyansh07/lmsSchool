@@ -118,7 +118,7 @@ export function TrainerDetail({ trainerId }: { trainerId: string }) {
   const { trainer, batches, students, submission, completion, outcomes, pending, student_feedback } = overview;
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <Link href="/manage/trainers" className="inline-block text-sm text-muted-foreground hover:text-foreground">
         ← All trainers
       </Link>
@@ -235,7 +235,7 @@ export function TrainerDetail({ trainerId }: { trainerId: string }) {
                 {student_feedback.length === 0 ? (
                   <EmptyState title="No feedback yet" description="No student has left feedback for this trainer." />
                 ) : (
-                  <ul className="stagger divide-y divide-border rounded-[var(--radius-card)] border border-border">
+                  <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
                     {student_feedback.map((item) => (
                       <li
                         key={item.id}

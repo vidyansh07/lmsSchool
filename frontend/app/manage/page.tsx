@@ -38,7 +38,8 @@ import { RequireAuth } from '@/components/require-auth';
 import { ErrorState, LoadingState } from '@/components/states';
 import { BarChart, DonutChart, RadialProgress, type CategoryDatum } from '@/components/ui/charts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
+import { Grid, GridItem } from '@/components/ui/layout';
+import { StatCard } from '@/components/ui/stat';
 import { WarningsStrip } from '@/components/warnings-strip';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
@@ -153,7 +154,6 @@ function ManagerOverview() {
   const totals = [
     {
       label: 'Total batches',
-      accent: 'blue' as const,
       value: data.batches.total,
       icon: Layers,
       period: 'All-time',
@@ -162,7 +162,6 @@ function ManagerOverview() {
     },
     {
       label: 'Total students',
-      accent: 'green' as const,
       value: data.students.total,
       icon: Users,
       period: 'All-time',
@@ -170,7 +169,6 @@ function ManagerOverview() {
     },
     {
       label: 'Total trainers',
-      accent: 'violet' as const,
       value: data.trainers.total,
       icon: GraduationCap,
       period: 'All-time',
@@ -200,7 +198,7 @@ function ManagerOverview() {
   const otherStudents = Math.max(0, data.students.total - data.students.active);
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <p className="text-sm font-medium text-muted-foreground">
@@ -217,9 +215,9 @@ function ManagerOverview() {
 
       <WarningsStrip />
 
-      <BentoGrid>
-        {totals.map((figure, index) => (
-          <BentoTile key={figure.label} span={4} index={index}>
+      <Grid>
+        {totals.map((figure) => (
+          <GridItem key={figure.label} span={4}>
             <StatCard
               label={figure.label}
               value={figure.value}
@@ -227,11 +225,10 @@ function ManagerOverview() {
               period={figure.period}
               hint={figure.hint}
               href={'href' in figure ? figure.href : undefined}
-              accent={figure.accent}
             />
-          </BentoTile>
+          </GridItem>
         ))}
-      </BentoGrid>
+      </Grid>
 
       <Card>
         <CardHeader>

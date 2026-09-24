@@ -9,7 +9,8 @@ import { money } from '@/components/fees/fee-ledger';
 import { AlertList, type AlertItem } from '@/components/alert-list';
 import { ErrorState, LoadingState } from '@/components/states';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
+import { Grid, GridItem } from '@/components/ui/layout';
+import { StatCard } from '@/components/ui/stat';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDate } from '@/lib/format';
 import type { FeePlanBrief, FeesOverview } from '@/types/api';
@@ -56,48 +57,44 @@ export function FeesPanel({
 
   return (
     <div className="space-y-4">
-      <BentoGrid>
-        <BentoTile span={3} index={0}>
+      <Grid>
+        <GridItem span={3}>
           <Tile isLoading={isLoading}>
             <StatCard
               label="Collected today"
-              accent="green"
               prefix="₹"
               value={value(overview?.collected_today)}
               icon={IndianRupee}
               hint={overview ? `${money(overview.collected_this_week)} this week` : undefined}
             />
           </Tile>
-        </BentoTile>
-        <BentoTile span={3} index={1}>
+        </GridItem>
+        <GridItem span={3}>
           <Tile isLoading={isLoading}>
             <StatCard
               label="Collected this month"
-              accent="blue"
               prefix="₹"
               value={value(overview?.collected_this_month)}
               icon={Wallet}
               hint="Voided payments excluded"
             />
           </Tile>
-        </BentoTile>
-        <BentoTile span={3} index={2}>
+        </GridItem>
+        <GridItem span={3}>
           <Tile isLoading={isLoading}>
             <StatCard
               label="Still owed"
-              accent="amber"
               prefix="₹"
               value={value(overview?.outstanding_total)}
               icon={CalendarClock}
               hint={overview ? `${overview.unpaid_count} with nothing paid yet` : undefined}
             />
           </Tile>
-        </BentoTile>
-        <BentoTile span={3} index={3}>
+        </GridItem>
+        <GridItem span={3}>
           <Tile isLoading={isLoading}>
             <StatCard
               label="Overdue"
-              accent="rose"
               value={failed ? null : overview?.overdue_count}
               icon={AlertTriangle}
               hint={
@@ -107,11 +104,11 @@ export function FeesPanel({
               }
             />
           </Tile>
-        </BentoTile>
-      </BentoGrid>
+        </GridItem>
+      </Grid>
 
-      <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card className="animate-rise-in">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="">
           <CardHeader>
             <CardTitle>Overdue</CardTitle>
             <CardDescription>An expected date has passed and the money has not.</CardDescription>
@@ -136,7 +133,7 @@ export function FeesPanel({
             )}
           </CardContent>
         </Card>
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle>Expected soon</CardTitle>
             <CardDescription>

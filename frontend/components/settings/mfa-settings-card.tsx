@@ -144,7 +144,7 @@ export function MfaSettingsCard() {
   const canConfirm = confirmCode.length === 6;
 
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle>Two-factor authentication</CardTitle>
         <CardDescription>

@@ -61,7 +61,8 @@ import { ActivityDrawer } from '@/components/work/activity-drawer';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
+import { Grid, GridItem } from '@/components/ui/layout';
+import { StatCard } from '@/components/ui/stat';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { getRegister, listTodaySessions, markAttendance } from '@/lib/academics';
@@ -103,7 +104,7 @@ function ClassCompleteSummary({
   onChangeClass?: () => void;
 }) {
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle as="h2">Class complete</CardTitle>
         <CardDescription>
@@ -479,7 +480,7 @@ export function ClassWorkspace({
   }
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <ClassHeader
         session={session}
         attendanceTaken={Boolean(register.attendance_taken_at)}
@@ -643,36 +644,33 @@ export function TodayWorkspace() {
   const registersTaken = todaySessions.filter((session) => session.attendance_taken_at).length;
   const summary = isLoadingToday || todayError
     ? [
-        { label: 'Classes today', value: null, icon: CalendarDays, accent: 'blue' as const },
-        { label: 'Registers taken', value: null, icon: ClipboardCheck, accent: 'green' as const },
-        { label: 'Still to take', value: null, icon: ClipboardList, accent: 'amber' as const },
+        { label: 'Classes today', value: null, icon: CalendarDays },
+        { label: 'Registers taken', value: null, icon: ClipboardCheck },
+        { label: 'Still to take', value: null, icon: ClipboardList },
       ]
     : [
         {
           label: 'Classes today',
           value: todaySessions.length,
           icon: CalendarDays,
-          accent: 'blue' as const,
           hint: todaySessions.length === 1 ? 'One class scheduled' : 'Scheduled on your batches',
         },
         {
           label: 'Registers taken',
           value: registersTaken,
           icon: ClipboardCheck,
-          accent: 'green' as const,
           hint: 'Attendance already filed',
         },
         {
           label: 'Still to take',
           value: todaySessions.length - registersTaken,
           icon: ClipboardList,
-          accent: 'amber' as const,
           hint: 'Waiting on you',
         },
       ];
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Today&rsquo;s class</h1>
         <p className="text-sm text-muted-foreground">
@@ -680,20 +678,19 @@ export function TodayWorkspace() {
         </p>
       </div>
 
-      <BentoGrid>
-        {summary.map((figure, index) => (
-          <BentoTile key={figure.label} span={4} index={index}>
+      <Grid>
+        {summary.map((figure) => (
+          <GridItem key={figure.label} span={4}>
             <StatCard
               label={figure.label}
               value={figure.value}
               icon={figure.icon}
               hint={'hint' in figure ? figure.hint : undefined}
-              accent={figure.accent}
               deltaIntent={figure.label === 'Still to take' ? 'down-is-good' : 'up-is-good'}
             />
-          </BentoTile>
+          </GridItem>
         ))}
-      </BentoGrid>
+      </Grid>
 
       <ClassPicker
         todayIso={today}

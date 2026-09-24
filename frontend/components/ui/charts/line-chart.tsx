@@ -22,7 +22,7 @@ import {
   YAxis,
 } from 'recharts';
 
-import { useReducedMotion } from '@/components/ui/motion/use-reduced-motion';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { cn } from '@/lib/utils';
 
 import { CHART_ANIMATION_MS, CHART_AXIS_TEXT_COLOR, CHART_GRID_COLOR, CHART_PALETTE, paletteColor } from './chart-colors';

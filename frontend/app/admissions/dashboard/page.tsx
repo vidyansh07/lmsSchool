@@ -66,7 +66,8 @@ import { NotYetEnrolledPanel } from '@/components/counsellor/not-yet-enrolled-pa
 import { PendingConfirmationsPanel } from '@/components/counsellor/pending-confirmations-panel';
 import { RecentActivityPanel } from '@/components/counsellor/recent-activity-panel';
 import { BarChart, DonutChart, type CategoryDatum, type DonutDatum } from '@/components/ui/charts';
-import { BentoGrid, BentoTile, StatCard, type StatAccent } from '@/components/ui/motion';
+import { Grid, GridItem } from '@/components/ui/layout';
+import { StatCard } from '@/components/ui/stat';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { RequireAuth } from '@/components/require-auth';
 import { WarningsStrip } from '@/components/warnings-strip';
@@ -193,7 +194,6 @@ function KpiTileSection({
   icon,
   hint,
   href,
-  accent,
 }: {
   label: string;
   value: number;
@@ -205,7 +205,6 @@ function KpiTileSection({
   icon?: LucideIcon;
   hint?: string;
   href?: string;
-  accent?: StatAccent;
 }) {
   if (isLoading) {
     return (
@@ -225,7 +224,6 @@ function KpiTileSection({
       icon={icon}
       hint={hint}
       href={href}
-      accent={accent}
     />
   );
 }
@@ -391,11 +389,10 @@ export function AdmissionsDashboardContent() {
 
       <WarningsStrip />
 
-      <BentoGrid>
-        <BentoTile span={3} index={0}>
+      <Grid>
+        <GridItem span={3}>
           <KpiTileSection
             label="Registered today"
-            accent="blue"
             value={dashboard.data?.new_students_today ?? 0}
             isLoading={dashboard.isLoading}
             failed={Boolean(dashboard.error)}
@@ -403,11 +400,10 @@ export function AdmissionsDashboardContent() {
             hint="New students on the books"
             href="/admissions"
           />
-        </BentoTile>
-        <BentoTile span={3} index={1}>
+        </GridItem>
+        <GridItem span={3}>
           <KpiTileSection
             label="Registered this week"
-            accent="violet"
             value={registeredThisWeek}
             isLoading={recentStudents.isLoading}
             failed={Boolean(recentStudents.error)}
@@ -415,22 +411,20 @@ export function AdmissionsDashboardContent() {
             hint="Rolling seven days"
             href="/admissions"
           />
-        </BentoTile>
-        <BentoTile span={3} index={2}>
+        </GridItem>
+        <GridItem span={3}>
           <KpiTileSection
             label="Pending registrations"
-            accent="amber"
             value={dashboard.data?.pending_registrations ?? 0}
             isLoading={dashboard.isLoading}
             failed={Boolean(dashboard.error)}
             icon={Clock}
             hint="Waiting on a decision"
           />
-        </BentoTile>
-        <BentoTile span={3} index={3}>
+        </GridItem>
+        <GridItem span={3}>
           <KpiTileSection
             label="Batches starting soon"
-            accent="green"
             value={startingSoonCount}
             isLoading={batches.isLoading}
             failed={Boolean(batches.error)}
@@ -438,11 +432,10 @@ export function AdmissionsDashboardContent() {
             hint="Seats still to fill"
             href="/admissions/batches"
           />
-        </BentoTile>
-        <BentoTile span={3} index={4}>
+        </GridItem>
+        <GridItem span={3}>
           <KpiTileSection
             label="Follow-ups due"
-            accent="blue"
             value={dashboard.data?.follow_ups_due ?? 0}
             isLoading={dashboard.isLoading}
             failed={Boolean(dashboard.error)}
@@ -450,11 +443,10 @@ export function AdmissionsDashboardContent() {
             hint="Planned, not yet done"
             href="/activities"
           />
-        </BentoTile>
-        <BentoTile span={3} index={5}>
+        </GridItem>
+        <GridItem span={3}>
           <KpiTileSection
             label="Follow-ups overdue"
-            accent="amber"
             value={dashboard.data?.follow_ups_overdue ?? 0}
             isLoading={dashboard.isLoading}
             failed={Boolean(dashboard.error)}
@@ -462,11 +454,10 @@ export function AdmissionsDashboardContent() {
             hint="Past their due date"
             href="/activities"
           />
-        </BentoTile>
-        <BentoTile span={3} index={6}>
+        </GridItem>
+        <GridItem span={3}>
           <KpiTileSection
             label="Unassigned batch"
-            accent="violet"
             value={dashboard.data?.unassigned_batch ?? 0}
             isLoading={dashboard.isLoading}
             failed={Boolean(dashboard.error)}
@@ -474,11 +465,10 @@ export function AdmissionsDashboardContent() {
             hint="Registered, no batch yet"
             href="/admissions"
           />
-        </BentoTile>
-        <BentoTile span={3} index={7}>
+        </GridItem>
+        <GridItem span={3}>
           <KpiTileSection
             label="Unassigned trainer"
-            accent="green"
             value={dashboard.data?.unassigned_trainer ?? 0}
             isLoading={dashboard.isLoading}
             failed={Boolean(dashboard.error)}
@@ -486,10 +476,10 @@ export function AdmissionsDashboardContent() {
             hint="Batches with nobody teaching them"
             href="/admissions/batches"
           />
-        </BentoTile>
-      </BentoGrid>
+        </GridItem>
+      </Grid>
 
-      <Card className="animate-rise-in">
+      <Card className="">
         <CardHeader>
           <CardTitle as="h2">Where the pipeline is stuck</CardTitle>
           <CardDescription>
@@ -511,7 +501,7 @@ export function AdmissionsDashboardContent() {
         </CardContent>
       </Card>
 
-      <Card className="animate-rise-in">
+      <Card className="">
         <CardHeader>
           <CardTitle as="h2">Recent enrolments by status</CardTitle>
           <CardDescription>
@@ -533,7 +523,7 @@ export function AdmissionsDashboardContent() {
         </CardContent>
       </Card>
 
-      <Card className="animate-rise-in">
+      <Card className="">
         <CardHeader>
           <CardTitle>Registered, not yet enrolled</CardTitle>
           <CardDescription>
@@ -571,8 +561,8 @@ export function AdmissionsDashboardContent() {
         />
       </section>
 
-      <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card className="animate-rise-in">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="">
           <CardHeader>
             <CardTitle>Pending confirmation</CardTitle>
             <CardDescription>Enrolled, but not yet moved to active.</CardDescription>
@@ -588,7 +578,7 @@ export function AdmissionsDashboardContent() {
           </CardContent>
         </Card>
 
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle>Starting soon</CardTitle>
             <CardDescription>Upcoming batches, soonest first.</CardDescription>
@@ -605,8 +595,8 @@ export function AdmissionsDashboardContent() {
         </Card>
       </div>
 
-      <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card className="animate-rise-in">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="">
           <CardHeader>
             <CardTitle>Filling up</CardTitle>
             <CardDescription>Batches with few seats left.</CardDescription>
@@ -622,7 +612,7 @@ export function AdmissionsDashboardContent() {
           </CardContent>
         </Card>
 
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle>Recent activity</CardTitle>
             <CardDescription>Registrations and enrolments, most recent first.</CardDescription>

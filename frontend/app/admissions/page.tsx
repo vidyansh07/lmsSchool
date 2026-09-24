@@ -166,7 +166,7 @@ export function AdmissionsList() {
 
   return (
     <div className="space-y-4">
-      <div className="animate-rise-in flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Admissions</h1>
           <p className="text-sm text-muted-foreground">

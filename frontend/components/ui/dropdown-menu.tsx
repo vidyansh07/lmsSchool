@@ -26,7 +26,7 @@ import { useDismissableLayer } from '@/hooks/use-dismissable-layer';
 import { usePresence } from '@/hooks/use-presence';
 import { cn } from '@/lib/utils';
 
-const EXIT_DURATION_MS = 90; // mirrors --duration-instant, the reverse of .animate-scale-in's --duration-quick
+const EXIT_DURATION_MS = 90; // mirrors --duration-instant, the reverse of .animate-fade-in's --duration-quick
 
 interface DropdownMenuContextValue {
   open: boolean;
@@ -145,7 +145,7 @@ export function DropdownMenuContent({
       className={cn(
         'absolute z-40 mt-1 min-w-[10rem] rounded-md border border-border bg-surface p-1 shadow-lg',
         align === 'end' ? 'right-0' : 'left-0',
-        open ? 'animate-scale-in' : undefined,
+        open ? '' : undefined,
         align === 'end' ? 'origin-top-right' : 'origin-top-left',
         className,
       )}

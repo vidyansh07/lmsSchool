@@ -83,7 +83,7 @@ function Reports() {
   const definition = definitions.find((row) => row.key === selected);
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
         <p className="text-sm text-muted-foreground">
@@ -144,7 +144,7 @@ function Reports() {
           </CardHeader>
           <CardContent>
             {page === null ? (
-              <EmptyState title="Nothing run yet" description="Choose a report and press Run." />
+              <EmptyState title="Nothing run yet" description="Choose a report and Run." />
             ) : page.rows.length === 0 ? (
               <EmptyState title="No rows" description="Nothing matches. Try a different batch." />
             ) : (
@@ -167,7 +167,7 @@ function Reports() {
                         ))}
                       </tr>
                     </thead>
-                    <tbody data-testid="report-body" className="stagger">
+                    <tbody data-testid="report-body" className="">
                       {page.rows.map((row, index) => (
                         <tr key={index} className="animate-fade-in hover:bg-muted/40">
                           {page.columns.map((column) => (

@@ -58,7 +58,7 @@ function Teaching() {
   }
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Teaching today</h1>
         <p className="text-sm text-muted-foreground">
@@ -87,7 +87,7 @@ function Teaching() {
           description="Nothing is scheduled for today on the batches you teach."
         />
       ) : (
-        <div className="stagger space-y-4">
+        <div className="space-y-4">
           <h2 className="sr-only">Today&rsquo;s classes</h2>
           {sessions.map((session) => (
             <Card

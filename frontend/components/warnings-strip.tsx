@@ -96,7 +96,7 @@ export function WarningsStrip({ className }: { className?: string }) {
   const errors = data?.filter((warning) => warning.severity === 'error').length ?? 0;
 
   return (
-    <Card className={cn('animate-rise-in', className)} data-testid="warnings-strip">
+    <Card className={cn('', className)} data-testid="warnings-strip">
       <CardHeader className="flex-row items-start justify-between gap-3">
         <div className="space-y-1">
           <CardTitle className="flex items-center gap-2">

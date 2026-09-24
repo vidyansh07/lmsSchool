@@ -101,7 +101,7 @@ function Projects() {
   }
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
@@ -243,7 +243,7 @@ function Projects() {
                 <Th className="sticky top-0 z-10 bg-muted">Status</Th>
               </tr>
             </thead>
-            <tbody className="stagger">
+            <tbody className="">
               {rows.map((row) => (
                 <tr
                   key={row.id}

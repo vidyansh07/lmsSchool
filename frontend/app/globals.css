@@ -290,30 +290,24 @@
   /*
    * Motion utilities.
    *
-   * Hand-written rather than pulled from a plugin: the whole set is six
+   * Hand-written rather than pulled from a plugin: the whole set is five
    * keyframes, and a dependency that ships two hundred is a dependency to
    * upgrade forever. Each one animates only `transform` and `opacity`, which
    * the compositor can do without touching layout — animating width, height
    * or top forces a reflow every frame and is what makes an interface feel
    * cheap.
+   *
+   * A fade, three directional slides for the sheets, and the skeleton
+   * shimmer. What used to also live here — a rise-in on every tile, a
+   * scale-in on every overlay, a per-child stagger, a cursor-tracking
+   * spotlight gradient, a sparkline drawing itself, a press dip — was motion
+   * that decorated rather than explained, on screens whose job is to show a
+   * number. It is gone, along with the `motion` package that drove the
+   * JavaScript half of it.
    */
   @keyframes fade-in {
     from {
       opacity: 0;
-    }
-  }
-
-  @keyframes rise-in {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-  }
-
-  @keyframes scale-in {
-    from {
-      opacity: 0;
-      transform: scale(0.97);
     }
   }
 
@@ -345,14 +339,6 @@
     animation: fade-in var(--duration-base) var(--ease-out-quick) both;
   }
 
-  .animate-rise-in {
-    animation: rise-in var(--duration-base) var(--ease-out-quick) both;
-  }
-
-  .animate-scale-in {
-    animation: scale-in var(--duration-quick) var(--ease-out-quick) both;
-  }
-
   .animate-slide-in-right {
     animation: slide-in-right var(--duration-base) var(--ease-out-quick) both;
   }
@@ -372,108 +358,5 @@
      reflow. */
   .animate-shimmer {
     animation: shimmer 1.4s var(--ease-in-out-soft) infinite;
-  }
-
-  /*
-   * Stagger for lists. A row appearing 40ms after the one above it reads as
-   * the list arriving; all of them at once reads as a flash, and 200ms
-   * apart reads as slow. Capped at eight because past that the last row is
-   * waiting long enough to feel broken.
-   */
-  .stagger > *:nth-child(1) {
-    animation-delay: 0ms;
-  }
-  .stagger > *:nth-child(2) {
-    animation-delay: 40ms;
-  }
-  .stagger > *:nth-child(3) {
-    animation-delay: 80ms;
-  }
-  .stagger > *:nth-child(4) {
-    animation-delay: 120ms;
-  }
-  .stagger > *:nth-child(5) {
-    animation-delay: 160ms;
-  }
-  .stagger > *:nth-child(6) {
-    animation-delay: 200ms;
-  }
-  .stagger > *:nth-child(7) {
-    animation-delay: 240ms;
-  }
-  .stagger > *:nth-child(n + 8) {
-    animation-delay: 280ms;
-  }
-
-  /*
-   * The cursor spotlight.
-   *
-   * `components/ui/motion/spotlight-card.tsx` writes the pointer position
-   * into `--spotlight-x/y` on the element itself; this draws the wash. Kept
-   * in CSS rather than in the component's inline style so the gradient is
-   * one rule the browser can composite, not a new style object per frame.
-   *
-   * The overlay is a child pseudo-element with `pointer-events: none` — it
-   * sits over the card's own content and must never intercept a click meant
-   * for it.
-   */
-  .spotlight::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    opacity: var(--spotlight-opacity, 0);
-    transition: opacity var(--duration-base) var(--ease-out-quick);
-    background: radial-gradient(
-      260px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
-      color-mix(in oklch, var(--color-primary) 10%, transparent),
-      transparent 70%
-    );
-  }
-
-  /* The card's own border warms toward the primary under the cursor, which
-     is what tells you the whole tile is the target rather than the link
-     inside it. */
-  .spotlight {
-    transition: border-color var(--duration-base) var(--ease-out-quick);
-  }
-
-  .spotlight:hover {
-    border-color: color-mix(in oklch, var(--color-primary) 38%, var(--color-border));
-  }
-
-  /*
-   * A sparkline drawing itself.
-   *
-   * `stroke-dasharray` is set to a length longer than any path this
-   * component produces, so one rule covers every series without measuring
-   * each path in JavaScript first. Overshooting is free; the dash simply
-   * starts fully offset and ends fully drawn.
-   */
-  @keyframes draw-line {
-    from {
-      stroke-dashoffset: 400;
-    }
-    to {
-      stroke-dashoffset: 0;
-    }
-  }
-
-  .sparkline-draw {
-    stroke-dasharray: 400;
-    animation: draw-line var(--duration-slow) var(--ease-out-quick) both;
-  }
-
-  /* A pressable surface dips very slightly. Enough to confirm the press
-     happened, small enough that a person clicking through forty rows of a
-     roster does not notice it at all. */
-  .press {
-    transition:
-      transform var(--duration-instant) var(--ease-out-quick),
-      background-color var(--duration-quick) var(--ease-out-quick);
-  }
-
-  .press:active {
-    transform: scale(0.985);
   }
 }

@@ -147,8 +147,8 @@ function Announcements() {
   }
 
   return (
-    <div className="stagger space-y-6">
-      <div className="animate-rise-in flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Announcements</h1>
           <p className="text-sm text-muted-foreground">
@@ -172,7 +172,7 @@ function Announcements() {
       ) : null}
 
       {isOpen ? (
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle as="h2">New announcement</CardTitle>
             <CardDescription>
@@ -324,7 +324,7 @@ function Announcements() {
         <>
           <h2 className="sr-only">Announcements</h2>
           {rows.map((row) => (
-          <Card key={row.id} data-testid="announcement-card" className="animate-rise-in">
+          <Card key={row.id} data-testid="announcement-card" className="">
             <CardHeader className="gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 {row.is_pinned ? <Badge variant="warning">Pinned</Badge> : null}

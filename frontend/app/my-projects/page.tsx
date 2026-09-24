@@ -125,8 +125,8 @@ function MyProjects() {
   }
 
   return (
-    <div className="stagger space-y-6">
-      <div className="animate-rise-in space-y-1">
+    <div className="space-y-6">
+      <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My projects</h1>
         <p className="text-sm text-muted-foreground">
           Project work set on your courses, and where each one stands.
@@ -134,14 +134,14 @@ function MyProjects() {
       </div>
 
       {notice ? (
-        <Alert variant="success" role="status" className="animate-rise-in">
+        <Alert variant="success" role="status" className="">
           {notice}
         </Alert>
       ) : null}
 
       <h2 className="sr-only">Required projects</h2>
       {progress.map((row) => (
-        <Card key={row.enrollment_id} data-testid="required-progress" className="animate-rise-in">
+        <Card key={row.enrollment_id} data-testid="required-progress" className="">
           <CardHeader>
             <CardTitle>{row.course_title}</CardTitle>
             <CardDescription>
@@ -169,7 +169,7 @@ function MyProjects() {
           const canSubmit = project.is_open && (mine?.is_open_to_student ?? true);
 
           return (
-            <Card key={project.id} data-testid="project-card" className="animate-rise-in">
+            <Card key={project.id} data-testid="project-card" className="">
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-muted-foreground">{project.code}</span>

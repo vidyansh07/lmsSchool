@@ -154,7 +154,7 @@ export function DsrCreateActivity({ dsrId, batchId }: DsrCreateActivityProps) {
     <form
       onSubmit={(event) => void onSubmit(event)}
       aria-label="Create activity from this class"
-      className="animate-rise-in space-y-4 rounded-[var(--radius-card)] border border-border p-4"
+      className="space-y-4 rounded-[var(--radius-card)] border border-border p-4"
       // The browser's own required-field validation would otherwise block
       // the `submit` event entirely on an empty required `<select>` and show
       // its own bubble instead of this form's inline errors below — the

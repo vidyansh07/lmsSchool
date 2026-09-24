@@ -86,7 +86,7 @@ export function ModulePanel({
   }
 
   return (
-    <Card data-testid="module-card" className="animate-rise-in">
+    <Card data-testid="module-card" className="">
       <CardHeader className="gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <CardTitle className="flex-1">{module.title}</CardTitle>
@@ -302,7 +302,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
   }
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -330,7 +330,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
             description="Add the first module to start building the course."
           />
         ) : (
-          <div className="stagger space-y-4">
+          <div className="space-y-4">
             {course.modules.map((module, index) => (
               <ModulePanel
                 key={module.id}

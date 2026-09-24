@@ -22,7 +22,7 @@ import { useId } from 'react';
 
 import { cn } from '@/lib/utils';
 
-import { useReducedMotion } from './use-reduced-motion';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 
 export interface SparklineProps {
   values: readonly (number | null | undefined)[];
@@ -102,7 +102,7 @@ export function Sparkline({
         strokeLinecap="round"
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
-        className={reduced ? undefined : 'sparkline-draw'}
+        className={reduced ? undefined : ''}
       />
     </svg>
   );

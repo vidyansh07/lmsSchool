@@ -99,7 +99,7 @@ export function TrainerProfileForm() {
   if (!profile) return null;
 
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle>Trainer profile</CardTitle>
         <CardDescription>

@@ -143,7 +143,7 @@ function NavLink({ item, active, collapsed = false }: { item: NavItem; active: b
       href={item.href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'press group flex items-center gap-3 rounded-lg py-2 text-sm transition-colors duration-[var(--duration-quick)]',
+        'group flex items-center gap-3 rounded-lg py-2 text-sm transition-colors duration-[var(--duration-quick)]',
         collapsed ? 'justify-center px-2' : 'px-3',
         'hover:bg-muted hover:text-foreground',
         // Marked three ways on purpose: colour alone is not a signal for
@@ -471,7 +471,7 @@ function SidebarToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: 
           onClick={onToggle}
           aria-label={label}
           aria-expanded={!collapsed}
-          className="press flex size-6 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground shadow-[var(--shadow-card)] transition-colors duration-[var(--duration-quick)] hover:text-foreground"
+          className="flex size-6 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground shadow-[var(--shadow-card)] transition-colors duration-[var(--duration-quick)] hover:text-foreground"
         >
           <Icon className="size-3.5" aria-hidden="true" strokeWidth={2} />
         </button>

@@ -396,7 +396,7 @@ export function ActivityReview() {
         )}
       </section>
 
-      <Card className="animate-rise-in">
+      <Card className="">
         <CardHeader className="gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
             <CardTitle className="flex items-center gap-2">

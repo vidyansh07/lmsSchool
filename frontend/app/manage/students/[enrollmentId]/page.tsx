@@ -125,7 +125,7 @@ function StudentFeedbackSection({ studentCode }: { studentCode: string | null })
     return <EmptyState title="No feedback yet" description="Nothing has been left for this student." />;
   }
   return (
-    <ul className="stagger divide-y divide-border rounded-[var(--radius-card)] border border-border">
+    <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
       {items.map((item) => (
         <li
           key={item.id}
@@ -214,7 +214,7 @@ export function StudentPerformance({
   const studentId = enrollment.student_id ?? null;
 
   return (
-    <div className={variant === 'standalone' ? 'animate-rise-in space-y-6' : 'space-y-6'}>
+    <div className={variant === 'standalone' ? 'space-y-6' : 'space-y-6'}>
       {variant === 'standalone' ? (
         <>
           <Link

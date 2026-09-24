@@ -82,7 +82,7 @@ export function CreateBatchDialog({
   }
 
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle>New batch</CardTitle>
         <CardDescription>

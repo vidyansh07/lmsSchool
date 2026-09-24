@@ -117,7 +117,7 @@ function EnrolPanel({ student, onEnrolled }: { student: StudentProfile; onEnroll
   }));
 
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle>Enrol on another batch</CardTitle>
         <CardDescription>Adds a new enrolment without touching any existing one.</CardDescription>
@@ -194,7 +194,7 @@ function EnrolmentHistory({
   }
 
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle>Enrolment history</CardTitle>
         <CardDescription>
@@ -367,7 +367,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
         All admissions
       </Link>
 
-      <div className="animate-rise-in flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">
           {student.user.full_name || student.user.email}
         </h1>
@@ -405,7 +405,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
         }}
       />
 
-      <Card className="animate-rise-in">
+      <Card className="">
         <CardHeader>
           <CardTitle>Contact and background</CardTitle>
         </CardHeader>

@@ -6,7 +6,7 @@ import { PermissionMatrix } from "@/components/roles/permission-matrix";
 export default function MatrixPage() {
   return (
     <RequireAuth>
-      <div className="animate-rise-in space-y-6">
+      <div className="space-y-6">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">
             Permission matrix

@@ -44,7 +44,7 @@ export function AccountDetailsForm() {
   }
 
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle>Account details</CardTitle>
         <CardDescription>

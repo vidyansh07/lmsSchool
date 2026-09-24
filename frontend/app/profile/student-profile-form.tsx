@@ -109,7 +109,7 @@ export function StudentProfileForm() {
   if (!profile) return null;
 
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle>Student profile</CardTitle>
         <CardDescription>

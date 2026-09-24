@@ -62,7 +62,7 @@ export function AuthSplitShell({
           </div>
         </div>
 
-        <div className="animate-rise-in px-6 py-8 sm:px-10 sm:py-10 lg:flex lg:items-center lg:py-12">
+        <div className="px-6 py-8 sm:px-10 sm:py-10 lg:flex lg:items-center lg:py-12">
           <div className="w-full">{children}</div>
         </div>
       </div>

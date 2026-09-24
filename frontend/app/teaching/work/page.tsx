@@ -178,7 +178,7 @@ function MyWorkWorkspace() {
   ];
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My work</h1>
         <p className="text-sm text-muted-foreground">

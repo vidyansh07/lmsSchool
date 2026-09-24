@@ -122,7 +122,7 @@ function Completions() {
   }
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Course completions</h1>
         <p className="text-sm text-muted-foreground">
@@ -181,7 +181,7 @@ function Completions() {
           description="No completions match. Try re-evaluating a batch after changing the rules."
         />
       ) : (
-        <div className="stagger space-y-4">
+        <div className="space-y-4">
           <h2 className="sr-only">Matching completions</h2>
           {rows.map((row) => {
             // Both of these are optional on the API type, so a completion whose

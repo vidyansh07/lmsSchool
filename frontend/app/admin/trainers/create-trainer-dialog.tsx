@@ -56,7 +56,7 @@ export function CreateTrainerDialog({
   }
 
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle>Add a trainer</CardTitle>
         <CardDescription>

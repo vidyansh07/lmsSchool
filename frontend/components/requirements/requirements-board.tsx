@@ -80,7 +80,7 @@ export function RequirementsBoard() {
   const rows = list.data?.results ?? [];
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">
@@ -247,7 +247,7 @@ function RequirementCard({
             type="button"
             onClick={onToggle}
             aria-expanded={isExpanded}
-            className="press text-left hover:text-primary"
+            className="text-left hover:text-primary"
           >
             <CardTitle className="text-base">{row.title}</CardTitle>
           </button>
@@ -277,7 +277,7 @@ function RequirementCard({
       </CardHeader>
 
       {isExpanded ? (
-        <CardContent className="animate-rise-in space-y-4">
+        <CardContent className="space-y-4">
           {row.details ? (
             <p className="whitespace-pre-line text-sm">{row.details}</p>
           ) : (

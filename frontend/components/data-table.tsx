@@ -29,7 +29,7 @@
  *   carrying it off the top of the viewport — the header needs an opaque
  *   background for this to read correctly, which is why it is forced to a
  *   solid `bg-muted` here rather than the primitive's own translucent default.
- *   Data rows fade in with a capped stagger on mount (opacity only — a
+ *   Data rows fade in on mount (opacity only — a
  *   transform on a `<tr>` is the one animation this app avoids, since
  *   `translate`/`scale` on table-row boxes is inconsistently supported); the
  *   loading skeleton does not, since nothing is arriving for it to announce.
@@ -322,7 +322,7 @@ export function DataTable<Row>({
                 })}
               </tr>
             </thead>
-            <tbody className="stagger">
+            <tbody className="">
               {isLoading
                 ? Array.from({ length: 5 }, (_, index) => (
                     <tr key={index}>

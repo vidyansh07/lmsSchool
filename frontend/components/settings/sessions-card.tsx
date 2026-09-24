@@ -129,7 +129,7 @@ export function SessionsCard() {
   const others = sessions?.filter((row) => !row.is_current) ?? [];
 
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle>Active sessions</CardTitle>
         <CardDescription>

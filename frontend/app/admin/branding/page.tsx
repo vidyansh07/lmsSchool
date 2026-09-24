@@ -107,7 +107,7 @@ function BrandingSettings() {
   const isValid = color === '' || HEX.test(color);
 
   return (
-    <div className="max-w-2xl space-y-6 animate-rise-in">
+    <div className="max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl">Branding</h1>
         <p className="text-muted-foreground">
@@ -161,7 +161,7 @@ function BrandingSettings() {
                     type="button"
                     onClick={() => setColor(option.value)}
                     aria-pressed={color.toLowerCase() === option.value.toLowerCase()}
-                    className="press flex items-center gap-2 rounded-full border border-border bg-surface py-1.5 pl-1.5 pr-3 text-xs font-medium hover:bg-muted aria-pressed:border-primary aria-pressed:ring-1 aria-pressed:ring-primary"
+                    className="flex items-center gap-2 rounded-full border border-border bg-surface py-1.5 pl-1.5 pr-3 text-xs font-medium hover:bg-muted aria-pressed:border-primary aria-pressed:ring-1 aria-pressed:ring-primary"
                   >
                     <span
                       aria-hidden="true"

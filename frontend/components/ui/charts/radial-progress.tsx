@@ -4,19 +4,17 @@
  * A single KPI against a target — a gauge, not a chart.
  *
  * Deliberately hand-rolled SVG/CSS, the same house convention as
- * `Sparkline` and `components/ui/motion/progress-ring.tsx`: this has one
- * data point (the current value) and one reference point (the target), not
- * a series, so there is nothing here a real charting library earns its
- * bundle cost drawing. `ProgressRing` already covers "a percentage as a
- * ring" for a tile's own 0–100 figure; this is the KPI-vs-target sibling —
- * a half-circle scale from 0 to `max`, the current value filled in, and a
- * tick marking where the target sits on that scale, so "on track" is a
- * shape (fill past the tick) as well as a color.
+ * `Sparkline`: this has one data point (the current value) and one reference
+ * point (the target), not a series, so there is nothing here a real charting
+ * library earns its bundle cost drawing. A half-circle scale from 0 to
+ * `max`, the current value filled in, and a tick marking where the target
+ * sits on that scale, so "on track" is a shape (fill past the tick) as well
+ * as a color.
  */
 
 import { cn } from '@/lib/utils';
 
-import { useReducedMotion } from '../motion/use-reduced-motion';
+import { useReducedMotion } from '@/hooks/use-reduced-motion';
 
 const STROKE = 10;
 

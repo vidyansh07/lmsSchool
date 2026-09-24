@@ -2,7 +2,7 @@
 
 /**
  * Whether a CSS media query currently matches — the general form of
- * `components/ui/motion/use-reduced-motion.ts`'s `(prefers-reduced-motion:
+ * `hooks/use-reduced-motion.ts`'s `(prefers-reduced-motion:
  * reduce)` check, for any other query a component needs to react to (a
  * breakpoint, most often).
  *

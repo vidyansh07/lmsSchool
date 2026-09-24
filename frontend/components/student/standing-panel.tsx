@@ -22,7 +22,8 @@ import { AlertTriangle, CalendarCheck, CheckCircle2, GaugeCircle, TrendingUp, Tr
 import { AlertList, type AlertItem } from '@/components/alert-list';
 import { ErrorState, LoadingState } from '@/components/states';
 import { BarChart, type CategoryDatum } from '@/components/ui/charts';
-import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
+import { Grid, GridItem } from '@/components/ui/layout';
+import { StatCard } from '@/components/ui/stat';
 import type { StudentPerformanceEntry } from '@/lib/performance';
 
 /** The mean of `pick(entry)` over entries where it is not `null` — `null` if none are. */
@@ -94,10 +95,10 @@ export function StandingPanel({
   // still what the rest of the app uses for a bare figure; this screen is the
   // one a student looks at every day, and it earns the extra weight.
   const tiles = [
-    { label: 'Course progress', value: progress, icon: TrendingUp, accent: 'blue' as const },
-    { label: 'Attendance', value: attendance, icon: CalendarCheck, accent: 'green' as const },
-    { label: 'Assessment average', value: assessment, icon: GaugeCircle, accent: 'violet' as const },
-    { label: 'Overall standing', value: overall, icon: Trophy, accent: 'amber' as const },
+    { label: 'Course progress', value: progress, icon: TrendingUp },
+    { label: 'Attendance', value: attendance, icon: CalendarCheck },
+    { label: 'Assessment average', value: assessment, icon: GaugeCircle },
+    { label: 'Overall standing', value: overall, icon: Trophy },
   ] as const;
 
   // The same four averages as a side-by-side comparison, not a second copy
@@ -113,19 +114,18 @@ export function StandingPanel({
 
   return (
     <div className="space-y-4">
-      <BentoGrid>
-        {tiles.map((tile, index) => (
-          <BentoTile key={tile.label} span={3} index={index}>
+      <Grid>
+        {tiles.map((tile) => (
+          <GridItem key={tile.label} span={3}>
             <StatCard
               label={tile.label}
               value={tile.value}
               icon={tile.icon}
-              accent={tile.accent}
               suffix="%"
             />
-          </BentoTile>
+          </GridItem>
         ))}
-      </BentoGrid>
+      </Grid>
 
       <div className="animate-fade-in rounded-[var(--radius-card)] border border-border p-4">
         <p className="mb-2 text-sm font-medium">Side by side</p>

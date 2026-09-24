@@ -38,7 +38,7 @@ import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { usePresence } from '@/hooks/use-presence';
 import { cn } from '@/lib/utils';
 
-const EXIT_DURATION_MS = 90; // mirrors --duration-instant, the reverse of .animate-scale-in's --duration-quick
+const EXIT_DURATION_MS = 90; // mirrors --duration-instant, the reverse of .animate-fade-in's --duration-quick
 
 interface DialogContextValue {
   open: boolean;
@@ -127,7 +127,7 @@ export function DialogContent({ className, size, hideCloseButton, children, ...p
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={hasDescription ? descriptionId : undefined}
-        className={cn(dialogContentVariants({ size }), open ? 'animate-scale-in' : undefined, className)}
+        className={cn(dialogContentVariants({ size }), open ? '' : undefined, className)}
         style={
           !open
             ? { animation: `scale-in ${EXIT_DURATION_MS}ms var(--ease-out-quick) reverse both` }

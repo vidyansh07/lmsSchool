@@ -55,7 +55,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { DonutChart, RadialProgress, type DonutDatum } from '@/components/ui/charts';
-import { BentoGrid, BentoTile, StatCard } from '@/components/ui/motion';
+import { Grid, GridItem } from '@/components/ui/layout';
+import { StatCard } from '@/components/ui/stat';
 import { ApiError } from '@/lib/api';
 import { listMyAssignments } from '@/lib/assignments';
 import { getStudentDashboard, getTrainerDashboard } from '@/lib/batches';
@@ -295,7 +296,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
   const batchStatusMix = summarizeBatchStatuses(data.batches);
 
   return (
-    <div className="stagger space-y-6">
+    <div className="space-y-6">
       {showStatusLine ? (
         <p aria-live="polite" className="animate-fade-in text-sm text-muted-foreground">
           {buildStatusLine(pendingTotal, riskCount)}
@@ -303,7 +304,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
       ) : null}
 
       {data.continue_learning?.last_lesson_id ? (
-        <Card className="animate-rise-in">
+        <Card className="">
           <CardHeader>
             <CardTitle as="h2" className="flex items-center gap-2">
               <PlayCircle className="size-5 text-primary" aria-hidden="true" />
@@ -328,10 +329,10 @@ export function StudentView({ data }: { data: StudentDashboard }) {
         </Card>
       ) : null}
 
-      <section className="animate-rise-in space-y-3">
+      <section className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">Next up</h2>
-        <div className="stagger grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Card className="min-w-0 animate-rise-in">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card className="min-w-0">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ClipboardList className="size-5 text-primary" aria-hidden="true" />
@@ -353,7 +354,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
             </CardContent>
           </Card>
 
-          <Card className="animate-rise-in">
+          <Card className="">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CalendarClock className="size-5 text-primary" aria-hidden="true" />
@@ -371,7 +372,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
         </div>
       </section>
 
-      <section className="animate-rise-in space-y-3">
+      <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
           <TrendingUp className="size-5 text-primary" aria-hidden="true" />
           How you&apos;re doing
@@ -384,7 +385,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
         />
       </section>
 
-      <section className="animate-rise-in grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Attendance vs. the risk threshold</CardTitle>
@@ -423,7 +424,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
         </Card>
       </section>
 
-      <section className="animate-rise-in space-y-3">
+      <section className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">My courses</h2>
         {data.courses.length === 0 ? (
           <EmptyState
@@ -436,9 +437,9 @@ export function StudentView({ data }: { data: StudentDashboard }) {
             }
           />
         ) : (
-          <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {data.courses.map((course) => (
-              <Card key={course.enrollment_id} className="animate-rise-in">
+              <Card key={course.enrollment_id} className="">
                 <CardHeader className="gap-1">
                   <CardTitle>
                     <Link href={`/courses/${course.course_slug}`} className="hover:text-primary">
@@ -472,10 +473,10 @@ export function StudentView({ data }: { data: StudentDashboard }) {
         )}
       </section>
 
-      <section className="animate-rise-in space-y-3">
+      <section className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">More for you</h2>
-        <div className="stagger grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Card className="animate-rise-in">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Card className="">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <GraduationCap className="size-5 text-primary" aria-hidden="true" />
@@ -505,7 +506,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
             </CardContent>
           </Card>
 
-          <Card className="animate-rise-in">
+          <Card className="">
             <CardHeader>
               <CardTitle>Certificates</CardTitle>
             </CardHeader>
@@ -519,7 +520,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
             </CardContent>
           </Card>
 
-          <Card className="animate-rise-in">
+          <Card className="">
             <CardHeader>
               <CardTitle>Feedback</CardTitle>
               <CardDescription>From your trainers and managers.</CardDescription>
@@ -534,7 +535,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
             </CardContent>
           </Card>
 
-          <Card className="animate-rise-in">
+          <Card className="">
             <CardHeader>
               <CardTitle>Notifications</CardTitle>
             </CardHeader>
@@ -557,45 +558,41 @@ export function StudentView({ data }: { data: StudentDashboard }) {
 function TrainerView({ data }: { data: TrainerDashboard }) {
   return (
     <div className="space-y-6">
-      <BentoGrid>
-        <BentoTile span={4} index={0}>
+      <Grid>
+        <GridItem span={4}>
           <StatCard
             label="Assigned batches"
             value={data.batches.length}
             icon={CalendarClock}
-            accent="blue"
           />
-        </BentoTile>
-        <BentoTile span={4} index={1}>
-          <StatCard label="Students" value={data.student_count} icon={Users} accent="violet" />
-        </BentoTile>
-        <BentoTile span={4} index={2}>
+        </GridItem>
+        <GridItem span={4}>
+          <StatCard label="Students" value={data.student_count} icon={Users} />
+        </GridItem>
+        <GridItem span={4}>
           <StatCard
             label="Courses taught"
             value={data.courses.length}
             icon={BookOpen}
-            accent="green"
           />
-        </BentoTile>
-        <BentoTile span={4} index={3}>
+        </GridItem>
+        <GridItem span={4}>
           <StatCard
             label="Pending work"
             value={data.work.pending}
             icon={ClipboardList}
-            accent="amber"
             href="/teaching/work"
           />
-        </BentoTile>
-        <BentoTile span={4} index={4}>
+        </GridItem>
+        <GridItem span={4}>
           <StatCard
             label="Overdue work"
             value={data.work.overdue}
             icon={AlertTriangle}
-            accent="rose"
             href="/teaching/work?overdue=1"
           />
-        </BentoTile>
-      </BentoGrid>
+        </GridItem>
+      </Grid>
 
       <Card>
         <CardHeader>

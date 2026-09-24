@@ -74,7 +74,7 @@ export function CreateCourseDialog({
   }
 
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle>New course</CardTitle>
         <CardDescription>

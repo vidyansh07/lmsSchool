@@ -87,7 +87,7 @@ function CreateBatchInline({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <Card className="animate-rise-in">
+    <Card className="">
       <CardHeader>
         <CardTitle as="h2">New batch</CardTitle>
         <CardDescription>
@@ -214,7 +214,7 @@ export function BatchBrowser() {
 
   return (
     <div className="space-y-4">
-      <div className="animate-rise-in flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Batches</h1>
           <p className="text-sm text-muted-foreground">

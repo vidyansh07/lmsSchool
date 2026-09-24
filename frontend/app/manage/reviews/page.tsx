@@ -85,7 +85,7 @@ export function ReviewsDueWorkspace() {
     .sort((a, b) => (a.next_review_at ?? '9999-99-99').localeCompare(b.next_review_at ?? '9999-99-99'));
 
   return (
-    <div className="animate-rise-in space-y-6">
+    <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Reviews due</h1>
         <p className="text-sm text-muted-foreground">
@@ -132,7 +132,7 @@ export function ReviewsDueWorkspace() {
           description="No performance review currently needs action under these filters."
         />
       ) : (
-        <ul className="stagger divide-y divide-border rounded-[var(--radius-card)] border border-border">
+        <ul className="divide-y divide-border rounded-[var(--radius-card)] border border-border">
           {rows.map((review) => {
             const href = subjectHref(review);
             const due = isDue(review, today);

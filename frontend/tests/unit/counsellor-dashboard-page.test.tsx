@@ -163,15 +163,16 @@ function kpiTileFor(labelText: string | RegExp): HTMLElement {
 }
 
 /**
- * The number inside a KPI tile, read off `NumberTicker`'s `aria-label`
- * rather than its visible text: the visible figure counts up over ~900ms
- * (`components/ui/motion/number-ticker.tsx`), so asserting on it directly
- * would be a real, if usually-fast-enough, race — the `aria-label` carries
- * the final value from the very first render, unanimated, precisely so a
- * screen reader (and this test) never has to catch it mid-count.
+ * The number inside a KPI tile, read off its visible text.
+ *
+ * This used to read `NumberTicker`'s `aria-label` instead, because the
+ * visible figure counted up over ~900ms and asserting on it directly was a
+ * real race. The tile no longer animates, so the rendered text *is* the
+ * final value from the first render — and a duplicate `aria-label` would now
+ * only give a screen reader the number twice.
  */
 function kpiValue(tile: HTMLElement, value: number): void {
-  expect(tile.querySelector(`[aria-label="${value}"]`)).toBeInTheDocument();
+  expect(tile.querySelector('[data-numeric]')).toHaveTextContent(value.toLocaleString());
 }
 
 function mockEmptyPipeline() {

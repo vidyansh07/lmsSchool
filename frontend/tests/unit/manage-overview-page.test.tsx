@@ -87,10 +87,11 @@ function kpiTileFor(labelText: string | RegExp): HTMLElement {
   return tile as HTMLElement;
 }
 
-/** Reads `NumberTicker`'s `aria-label`, which carries the final value from
- *  the first render — unanimated — rather than racing the ~900ms count-up. */
+/** Reads the tile's figure. This used to read `NumberTicker`'s `aria-label`
+ *  to avoid racing a ~900ms count-up; the tile no longer animates, so the
+ *  rendered text is the value from the first render. */
 function kpiValue(tile: HTMLElement, value: number): void {
-  expect(tile.querySelector(`[aria-label="${value}"]`)).toBeInTheDocument();
+  expect(tile.querySelector('[data-numeric]')).toHaveTextContent(value.toLocaleString());
 }
 
 function dataTable(): HTMLElement {

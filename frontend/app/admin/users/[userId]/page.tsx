@@ -122,7 +122,7 @@ function History({ userId }: { userId: string }) {
                   <Th className="sticky top-0 z-10 bg-muted">By</Th>
                 </tr>
               </thead>
-              <tbody className="stagger">
+              <tbody className="">
                 {entries.map((entry) => (
                   <tr
                     key={entry.id}
@@ -233,7 +233,7 @@ function UserAdministration({ userId }: { userId: string }) {
   const mayAdminister = user.can_administer;
 
   return (
-    <div className="animate-rise-in space-y-4">
+    <div className="space-y-4">
       <Link
         href="/admin/users"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"

@@ -96,7 +96,7 @@ function TrainersTable() {
   ];
 
   return (
-    <div className="animate-rise-in space-y-4">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Trainers</h1>
