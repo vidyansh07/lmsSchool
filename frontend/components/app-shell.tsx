@@ -136,43 +136,61 @@ function useActiveHref(hrefs: string[]): string | null {
   return best;
 }
 
-function NavLink({ item, active, collapsed = false }: { item: NavItem; active: boolean; collapsed?: boolean }) {
+/**
+ * Where the nav item is being rendered.
+ *
+ * The same `NavLink` serves the dark rail and the light drawer on a phone, so
+ * it cannot hardcode either set of colours -- ink on the rail is invisible and
+ * rail-foreground on white is nearly so.
+ */
+type NavTone = 'rail' | 'surface';
+
+function NavLink({
+  item,
+  active,
+  collapsed = false,
+  tone = 'surface',
+}: {
+  item: NavItem;
+  active: boolean;
+  collapsed?: boolean;
+  tone?: NavTone;
+}) {
   const Icon = item.icon;
-  const link = (
+  const onRail = tone === 'rail';
+  return (
     <Link
       href={item.href}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'group flex items-center gap-3 rounded-lg py-2 text-sm transition-colors duration-150',
-        collapsed ? 'justify-center px-2' : 'px-3',
-        'hover:bg-muted hover:text-foreground',
+        'group flex items-center rounded-control transition-colors duration-150',
+        // Collapsed, the rail puts the label *under* the icon rather than
+        // hiding it: an 11px word is legible in 68px and is the difference
+        // between a rail a person can read and a row of guessable glyphs.
+        collapsed
+          ? 'flex-col justify-center gap-1 px-1 py-2 text-center text-2xs'
+          : 'gap-3 px-3 py-2 text-sm',
         // Marked three ways on purpose: colour alone is not a signal for
         // everyone, the weight change survives a screenshot in greyscale, and
         // the filled shape is a positional signal that needs no colour vision.
-        active ? 'bg-accent font-semibold text-primary' : 'text-muted-foreground',
+        onRail
+          ? active
+            ? 'bg-white/10 font-semibold text-rail-active'
+            : 'text-rail-fg/70 hover:bg-white/5 hover:text-rail-fg'
+          : active
+            ? 'bg-selected font-semibold text-selected-fg'
+            : 'text-ink-muted hover:bg-sunken hover:text-ink',
       )}
     >
       <Icon
-        className={cn(
-          'size-[18px] shrink-0 transition-colors duration-150',
-          active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
-        )}
+        className={cn('size-[18px] shrink-0 transition-colors duration-150')}
         strokeWidth={1.75}
         aria-hidden="true"
       />
-      {/* Still in the DOM (and still the link's accessible name) when
-          collapsed — only visually hidden, via the same `sr-only` utility
-          `SheetTitle` and the skip link already use. The tooltip below is
-          the sighted equivalent; a screen reader never loses the label. */}
-      <span className={cn('truncate', collapsed && 'sr-only')}>{item.label}</span>
+      <span className={cn(collapsed ? 'w-full truncate leading-tight' : 'truncate')}>
+        {item.label}
+      </span>
     </Link>
-  );
-  return collapsed ? (
-    <Tooltip content={item.label} side="right">
-      {link}
-    </Tooltip>
-  ) : (
-    link
   );
 }
 
@@ -192,14 +210,23 @@ function NavLink({ item, active, collapsed = false }: { item: NavItem; active: b
  * dot for the *desktop* collapsed sidebar, the one new `compact` caller this
  * phase adds.)
  */
-function Brand({ compact = false, showEnvDot = false }: { compact?: boolean; showEnvDot?: boolean }) {
+function Brand({
+  compact = false,
+  showEnvDot = false,
+  tone = 'surface',
+}: {
+  compact?: boolean;
+  showEnvDot?: boolean;
+  tone?: NavTone;
+}) {
   const nonProduction = env.appEnv !== 'production';
+  const onRail = tone === 'rail';
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       <Link href="/" className="relative flex min-w-0 items-center gap-2.5">
         <span
           aria-hidden="true"
-          className="flex size-9 shrink-0 items-center justify-center rounded-xl text-base font-bold text-white"
+          className="flex size-9 shrink-0 items-center justify-center rounded-card text-base font-bold text-white"
           style={{ backgroundColor: 'var(--color-brand)' }}
         >
           G
@@ -215,10 +242,20 @@ function Brand({ compact = false, showEnvDot = false }: { compact?: boolean; sho
           <span className="sr-only">Grras LMS — Home</span>
         ) : (
           <span className="flex min-w-0 flex-col leading-none">
-            <span className="truncate text-base font-bold tracking-tight text-foreground">
+            <span
+              className={cn(
+                'truncate text-base font-bold tracking-tight',
+                onRail ? 'text-rail-fg' : 'text-ink',
+              )}
+            >
               Grras
             </span>
-            <span className="mt-0.5 text-2xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            <span
+              className={cn(
+                'mt-0.5 text-2xs font-semibold uppercase tracking-[0.14em]',
+                onRail ? 'text-rail-fg/60' : 'text-ink-faint',
+              )}
+            >
               LMS
             </span>
           </span>
@@ -228,7 +265,10 @@ function Brand({ compact = false, showEnvDot = false }: { compact?: boolean; sho
             role="img"
             aria-label={`Environment: ${env.appEnv}`}
             title={`Environment: ${env.appEnv}`}
-            className="absolute -right-1 -top-1 size-2.5 rounded-full border-2 border-surface bg-amber"
+            className={cn(
+              'absolute -right-1 -top-1 size-2.5 rounded-full border-2 bg-warning',
+              onRail ? 'border-rail' : 'border-surface',
+            )}
           />
         ) : null}
       </Link>
@@ -255,8 +295,15 @@ function initials(name: string): string {
  *  only the avatar (its tooltip carries the name and role) and the sign-out
  *  control — the one workflow this card offers, so collapsing it can shrink
  *  the card but never drop what it does. */
-function AccountCard({ collapsed = false }: { collapsed?: boolean }) {
+function AccountCard({
+  collapsed = false,
+  tone = 'surface',
+}: {
+  collapsed?: boolean;
+  tone?: NavTone;
+}) {
   const { user, isLoading, signOut } = useAuth();
+  const onRail = tone === 'rail';
   // Nothing for a visitor: the header already offers "Sign in", and a second
   // copy in the sidebar is a second thing for a screen reader to announce and
   // a second button to keep in step. One way in.
@@ -274,15 +321,26 @@ function AccountCard({ collapsed = false }: { collapsed?: boolean }) {
               information at all, only a mouse can. It stays a plain `span`
               rather than a button: nothing happens on activation, so making
               it look actionable would be the wrong signal. */}
-          <Avatar size="md" tabIndex={0} className="bg-accent text-primary">
-            <AvatarFallback className="text-primary">{initials(name)}</AvatarFallback>
+          <Avatar
+            size="md"
+            tabIndex={0}
+            className={cn(onRail ? 'bg-white/10 text-rail-fg' : 'bg-selected text-selected-fg')}
+          >
+            <AvatarFallback className={cn(onRail ? 'text-rail-fg' : 'text-selected-fg')}>
+              {initials(name)}
+            </AvatarFallback>
           </Avatar>
         </Tooltip>
         <Tooltip content="Sign out" side="right">
           <Button
             variant="ghost"
             size="sm"
-            className="size-8 shrink-0 p-0 text-muted-foreground hover:text-destructive"
+            className={cn(
+              'size-8 shrink-0 p-0',
+              onRail
+                ? 'text-rail-fg/70 hover:bg-white/5 hover:text-rail-fg'
+                : 'text-ink-muted hover:text-danger',
+            )}
             aria-label="Sign out"
             onClick={() => void signOut()}
           >
@@ -294,19 +352,43 @@ function AccountCard({ collapsed = false }: { collapsed?: boolean }) {
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-2.5">
-      <Avatar size="md" className="bg-accent text-primary">
-        <AvatarFallback className="text-primary">{initials(name)}</AvatarFallback>
+    <div
+      className={cn(
+        'flex items-center gap-3 rounded-card p-2.5',
+        onRail ? 'bg-white/5' : 'border border-line bg-surface',
+      )}
+    >
+      <Avatar
+        size="md"
+        className={cn(onRail ? 'bg-white/10 text-rail-fg' : 'bg-selected text-selected-fg')}
+      >
+        <AvatarFallback className={cn(onRail ? 'text-rail-fg' : 'text-selected-fg')}>
+          {initials(name)}
+        </AvatarFallback>
       </Avatar>
       <div className="min-w-0 flex-1 leading-tight">
-        <p className="truncate text-sm font-semibold text-foreground">{name}</p>
-        <p className="truncate text-xs capitalize text-muted-foreground">{user.role}</p>
+        <p className={cn('truncate text-sm font-semibold', onRail ? 'text-rail-fg' : 'text-ink')}>
+          {name}
+        </p>
+        <p
+          className={cn(
+            'truncate text-2xs capitalize',
+            onRail ? 'text-rail-fg/60' : 'text-ink-faint',
+          )}
+        >
+          {user.role}
+        </p>
       </div>
       <Tooltip content="Sign out">
         <Button
           variant="ghost"
           size="sm"
-          className="size-8 shrink-0 p-0 text-muted-foreground hover:text-destructive"
+          className={cn(
+            'size-8 shrink-0 p-0',
+            onRail
+              ? 'text-rail-fg/70 hover:bg-white/5 hover:text-rail-fg'
+              : 'text-ink-muted hover:text-danger',
+          )}
           aria-label="Sign out"
           onClick={() => void signOut()}
         >
@@ -333,14 +415,14 @@ function HeaderAccount() {
   return (
     <div className="flex items-center gap-1 sm:gap-2">
       <Tooltip content="Notifications">
-        <Button asChild variant="ghost" size="sm" className="size-9 p-0 text-muted-foreground">
+        <Button asChild variant="ghost" size="sm" className="size-9 p-0 text-ink-muted">
           <Link href="/notifications" aria-label="Notifications">
             <Bell className="size-[18px]" aria-hidden="true" />
           </Link>
         </Button>
       </Tooltip>
       <Tooltip content="Account settings">
-        <Button asChild variant="ghost" size="sm" className="size-9 p-0 text-muted-foreground">
+        <Button asChild variant="ghost" size="sm" className="size-9 p-0 text-ink-muted">
           <Link href="/settings/account" aria-label="Account settings">
             <Settings className="size-[18px]" aria-hidden="true" />
           </Link>
@@ -348,14 +430,14 @@ function HeaderAccount() {
       </Tooltip>
       <Link
         href="/profile"
-        className="ml-1 flex items-center gap-2.5 rounded-lg py-1 pl-1 pr-2 transition-colors hover:bg-muted"
+        className="ml-1 flex items-center gap-2.5 rounded-control py-1 pl-1 pr-2 transition-colors duration-150 hover:bg-sunken"
       >
-        <Avatar size="sm" className="bg-accent">
-          <AvatarFallback className="text-primary">{initials(name)}</AvatarFallback>
+        <Avatar size="sm" className="bg-selected">
+          <AvatarFallback className="text-selected-fg">{initials(name)}</AvatarFallback>
         </Avatar>
         <span className="hidden min-w-0 flex-col leading-tight md:flex">
-          <span className="truncate text-sm font-semibold text-foreground">{name}</span>
-          <span className="text-xs capitalize text-muted-foreground">
+          <span className="truncate text-sm font-semibold text-ink">{name}</span>
+          <span className="text-2xs capitalize text-ink-faint">
             {user.role}
             {/* Which centre this account is bounded to. Only when there is one —
                 a superadmin belongs to none, and "all of them" is not a value. */}
@@ -376,19 +458,19 @@ function Breadcrumb({ groups, active }: { groups: NavGroup[]; active: string | n
   const item = group?.items.find((candidate) => candidate.href === active);
   return (
     <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 text-sm sm:flex">
-      <Link href="/" className="text-muted-foreground transition-colors hover:text-foreground">
+      <Link href="/" className="text-ink-muted transition-colors duration-150 hover:text-ink">
         Home
       </Link>
       {group?.title ? (
         <>
-          <ChevronRight className="size-3.5 text-muted-foreground/60" aria-hidden="true" />
-          <span className="text-muted-foreground">{group.title}</span>
+          <ChevronRight className="size-3.5 text-ink-faint" aria-hidden="true" />
+          <span className="text-ink-muted">{group.title}</span>
         </>
       ) : null}
       {item ? (
         <>
-          <ChevronRight className="size-3.5 text-muted-foreground/60" aria-hidden="true" />
-          <span className="truncate font-medium text-foreground" aria-current="page">
+          <ChevronRight className="size-3.5 text-ink-faint" aria-hidden="true" />
+          <span className="truncate font-medium text-ink" aria-current="page">
             {item.label}
           </span>
         </>
@@ -407,15 +489,18 @@ function NavGroups({
   groups,
   active,
   collapsed,
+  tone = 'surface',
 }: {
   groups: NavGroup[];
   active: string | null;
   collapsed: boolean;
+  tone?: NavTone;
 }) {
+  const onRail = tone === 'rail';
   return (
     <nav
       aria-label="Main"
-      className={cn('flex h-full flex-col gap-5 overflow-y-auto py-4', collapsed ? 'px-2' : 'px-3')}
+      className={cn('flex h-full flex-col gap-4 overflow-y-auto py-3', collapsed ? 'px-1.5' : 'px-3')}
     >
       {groups.map((group, index) => (
         <div key={group.title ?? `group-${index}`} className="space-y-1">
@@ -431,9 +516,19 @@ function NavGroups({
               carry their own names either way. */}
           {group.title ? (
             collapsed ? (
-              index > 0 ? <hr aria-hidden="true" className="mx-1 border-t border-border" /> : null
+              index > 0 ? (
+                <hr
+                  aria-hidden="true"
+                  className={cn('mx-2 border-t', onRail ? 'border-white/10' : 'border-line')}
+                />
+              ) : null
             ) : (
-              <p className="px-3 pb-1.5 text-2xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <p
+                className={cn(
+                  'px-3 pb-1.5 text-2xs font-semibold uppercase tracking-[0.12em]',
+                  onRail ? 'text-rail-fg/45' : 'text-ink-faint',
+                )}
+              >
                 {group.title}
               </p>
             )
@@ -441,7 +536,12 @@ function NavGroups({
           <ul className="space-y-0.5">
             {group.items.map((item) => (
               <li key={item.href}>
-                <NavLink item={item} active={item.href === active} collapsed={collapsed} />
+                <NavLink
+                  item={item}
+                  active={item.href === active}
+                  collapsed={collapsed}
+                  tone={tone}
+                />
               </li>
             ))}
           </ul>
@@ -472,7 +572,7 @@ function SidebarToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: 
           onClick={onToggle}
           aria-label={label}
           aria-expanded={!collapsed}
-          className="flex size-6 items-center justify-center rounded-full border border-border bg-surface text-muted-foreground transition-colors duration-150 hover:text-foreground"
+          className="flex size-6 items-center justify-center rounded-full border border-line bg-surface text-ink-muted shadow-overlay transition-colors duration-150 hover:text-ink"
         >
           <Icon className="size-3.5" aria-hidden="true" strokeWidth={2} />
         </button>
@@ -534,8 +634,13 @@ function Shell({
           own JS-driven motion. */}
       <aside
         className={cn(
-          'relative hidden shrink-0 border-r border-border bg-surface transition-[width] duration-200 lg:block',
-          collapsed ? 'lg:w-20' : 'lg:w-[17rem]',
+          // The one dark surface in the product, and the reason the rest of
+          // the interface can stay light without looking unframed. 68px
+          // collapsed, matching the reference: wide enough for an icon with a
+          // readable word under it, narrow enough that the table beside it
+          // keeps its columns.
+          'relative hidden shrink-0 bg-rail transition-[width] duration-200 lg:block',
+          collapsed ? 'lg:w-[4.25rem]' : 'lg:w-[17rem]',
         )}
       >
         {/* No `overflow-hidden` here: the collapsed sidebar's nav-item
@@ -549,27 +654,27 @@ function Shell({
         <div className="sticky top-0 flex h-dvh flex-col">
           <div
             className={cn(
-              'flex h-16 shrink-0 items-center border-b border-border',
-              collapsed ? 'justify-center px-2' : 'px-5',
+              'flex h-16 shrink-0 items-center border-b border-white/10',
+              collapsed ? 'justify-center px-2' : 'px-4',
             )}
           >
-            <Brand compact={collapsed} showEnvDot={collapsed} />
+            <Brand compact={collapsed} showEnvDot={collapsed} tone="rail" />
           </div>
-          <NavGroups groups={groups} active={active} collapsed={collapsed} />
-          <div className={cn('border-t border-border', collapsed ? 'p-2' : 'p-3')}>
-            <AccountCard collapsed={collapsed} />
+          <NavGroups groups={groups} active={active} collapsed={collapsed} tone="rail" />
+          <div className={cn('border-t border-white/10', collapsed ? 'p-2' : 'p-3')}>
+            <AccountCard collapsed={collapsed} tone="rail" />
           </div>
         </div>
         <SidebarToggle collapsed={collapsed} onToggle={toggleCollapsed} />
       </aside>
 
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
+        <header className="sticky top-0 z-30 border-b border-line bg-surface">
           <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
             <Button
               variant="ghost"
               size="sm"
-              className="size-9 p-0 text-muted-foreground lg:hidden"
+              className="size-9 p-0 text-ink-muted lg:hidden"
               aria-label="Open navigation menu"
               onClick={() => setOpen(true)}
             >
@@ -585,20 +690,30 @@ function Shell({
             </div>
             <Breadcrumb groups={groups} active={active} />
             <div className="ml-auto flex items-center gap-1 sm:gap-2">
-              {/* Opens the command palette (Phase 11) — the tooltip carries
-                  the chord so the shortcut is discoverable without a person
-                  ever having to click this at all. */}
-              <Tooltip content="Search (Ctrl/⌘K)">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="size-9 p-0 text-muted-foreground"
-                  aria-label="Search"
-                  onClick={onOpenSearch}
-                >
-                  <Search className="size-[18px]" aria-hidden="true" />
-                </Button>
-              </Tooltip>
+              {/* Opens the command palette. A labelled box rather than a bare
+                  magnifier, and the chord printed inside it: a keyboard
+                  shortcut nobody can see is a shortcut nobody uses, and the
+                  tooltip that used to carry it only appeared for people who
+                  had already found the button. Below `sm` there is no room
+                  for the words, so it falls back to the icon and keeps its
+                  accessible name either way. */}
+              <Button
+                variant="outline"
+                size="sm"
+                // One control, two shapes. Below `sm` it is a square icon
+                // button; from `sm` up it grows into a labelled box. Rendering
+                // two buttons and hiding one would give the page two elements
+                // with the accessible name "Search".
+                className="size-9 justify-center gap-2 p-0 text-ink-faint sm:h-9 sm:w-56 sm:justify-start sm:px-2.5 lg:w-72"
+                aria-label="Search"
+                onClick={onOpenSearch}
+              >
+                <Search className="size-[18px] shrink-0" aria-hidden="true" />
+                <span className="hidden truncate sm:inline">Search everything</span>
+                <kbd className="ml-auto hidden rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-2xs text-ink-faint sm:inline">
+                  ⌘K
+                </kbd>
+              </Button>
               <HeaderAccount />
             </div>
           </div>
@@ -635,7 +750,7 @@ function Shell({
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             <Brand />
           </SheetHeader>
-          <div className="-mx-5 flex-1 overflow-y-auto border-y border-border">
+          <div className="-mx-5 flex-1 overflow-y-auto border-y border-line">
             <NavGroups groups={groups} active={active} collapsed={false} />
           </div>
           <SheetFooter className="justify-start">
@@ -674,7 +789,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <>
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-control focus:bg-action focus:px-4 focus:py-2 focus:text-action-fg"
       >
         Skip to content
       </a>
