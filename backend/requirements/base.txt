@@ -28,7 +28,7 @@ redis==8.1.0
 # through HTML: a certificate is a fixed layout, and a browser engine
 # (weasyprint, wkhtmltopdf) would add a large native dependency and an HTML
 # parser to the attack surface for no gain.
-reportlab==4.4.10
+reportlab==5.0.1
 # QR payloads for certificate verification. Renders through Pillow, already a
 # dependency.
 qrcode==8.2
