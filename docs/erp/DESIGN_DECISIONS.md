@@ -1,9 +1,16 @@
 # Design decisions — ERP screens
 
-The product and UI decisions behind the ERP screens. They extend, never
-replace, the LMS design system (`frontend/app/globals.css` tokens, 25
-primitives in `components/ui`, `data-table`, `states`, D-101 light only,
-D-102 two layouts). Speed of operation beats visual novelty (brief §56).
+The product and behaviour decisions behind the ERP screens: what each screen
+is for, which endpoint it loads, which states it must render, and how it
+confirms a destructive action. Speed of operation beats visual novelty
+(brief §56).
+
+This file does not describe how the product *looks*. The visual system --
+tokens, primitives, layout, density, the accessibility contract -- lives in
+[`docs/uiux/DESIGN_SYSTEM.md`](../uiux/DESIGN_SYSTEM.md) and these decisions
+extend it rather than restating it. The design system was rebuilt from zero
+after this file was written, so where the two ever disagree about a colour, a
+size or a shadow, the design system is right and this file is out of date.
 
 ## Screen contract
 

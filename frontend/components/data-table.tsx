@@ -161,17 +161,14 @@ export function DataTable<Row>({
    * shift-click ranges, then drive `components/bulk-actions.tsx`'s
    * `BulkActionsBar` off the same hook for the action buttons.
    *
-   * Deliberately unused by every table migrated onto `DataTable` in Phase
-   * R6 (`docs/uiux/UIUX_REDESIGN_PLAN.md`): that phase's own "Delivers" line
-   * says "row/bulk actions standardized," but none of the migrated screens
-   * (students, activities, activities feed, deliveries, …) had a bulk
-   * operation to standardize going in — each one only ever exposed
-   * single-row actions (open a record, retry one delivery, and so on), and
-   * this redesign's own ground rule is "no new business functionality."
-   * Fabricating a bulk action against no real backend/product need just to
-   * light up this prop would be exactly that, so it stays built and ready
-   * for the first screen that gets a genuine, approved bulk operation,
-   * rather than switched on speculatively.
+   * Deliberately unused by every table currently on `DataTable`: none of
+   * them (students, activities, activities feed, deliveries, …) has a bulk
+   * operation to standardise — each only ever exposed single-row actions
+   * (open a record, retry one delivery, and so on). Fabricating a bulk
+   * action against no real backend or product need just to light this prop
+   * up would be new business functionality wearing a refactor's clothes, so
+   * it stays built and ready for the first screen that gets a genuine,
+   * approved bulk operation rather than switched on speculatively.
    */
   selection?: UseBulkSelectionResult<string>;
   onRowActivate?: (row: Row) => void;

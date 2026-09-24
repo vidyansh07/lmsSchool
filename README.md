@@ -37,7 +37,7 @@ limitations is [`docs/FEATURE_STATUS.md`](docs/FEATURE_STATUS.md):
 | 10 | Release engineering: staging stack, verification script, migration safety, backups |
 | 11 | Role hierarchy (superadmin over admin), user administration, light theme, sidebar navigation |
 | 12 | ERP foundation: counsellor role, DSR, course timeline, performance and risk engine, export jobs, transfers and batch kinds, manager and counsellor hubs, recycle bin, centres (branch scoping), institution settings |
-| 13 | Client delivery: Liner-style design system and animated dashboards for every role, institution branding, admissions wizard for college students and working professionals, referrals, SITP workbook import, one-command deploy, **per-enrolment fee ledger** with receipts, discounts, expected dates and a full change history |
+| 13 | Client delivery: institution branding, admissions wizard for college students and working professionals, referrals, SITP workbook import, one-command deploy, **per-enrolment fee ledger** with receipts, discounts, expected dates and a full change history |
 
 ---
 
@@ -190,6 +190,7 @@ Documentation:
 | [`docs/api.md`](docs/api.md) | Every endpoint, capability matrix, field-level authorization |
 | [`docs/security.md`](docs/security.md) | Controls, upload pipeline, threat coverage, what is deliberately not built |
 | [`docs/environments.md`](docs/environments.md) | Local, development, staging, production; secrets; seeding |
+| [`docs/uiux/DESIGN_SYSTEM.md`](docs/uiux/DESIGN_SYSTEM.md) | Tokens, primitives, layout, density, the accessibility contract, and the silent-failure rule for token renames |
 
 ---
 
