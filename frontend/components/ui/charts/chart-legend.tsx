@@ -13,7 +13,7 @@ export function ChartLegendContent({
   if (!payload || payload.length === 0) return null;
 
   return (
-    <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+    <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-ink-muted">
       {payload.map((entry) => (
         <li key={`${entry.dataKey ?? entry.value}`} className="flex items-center gap-1.5">
           {markShape === 'rect' ? (

@@ -117,7 +117,7 @@ export function PopoverContent({
       tabIndex={-1}
       aria-labelledby={labelId}
       className={cn(
-        'absolute z-40 mt-1 w-72 rounded-md border border-border bg-surface p-4 shadow-lg outline-none',
+        'absolute z-40 mt-1 w-72 rounded-card border border-line bg-surface p-4 shadow-overlay outline-none',
         align === 'end' ? 'right-0 origin-top-right' : 'left-0 origin-top-left',
         open ? '' : undefined,
         className,

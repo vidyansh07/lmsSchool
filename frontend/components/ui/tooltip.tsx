@@ -87,7 +87,7 @@ export function Tooltip({ content, children, side = 'top', className }: TooltipP
           role="tooltip"
           id={id}
           className={cn(
-            'pointer-events-none absolute z-50 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-surface shadow-md',
+            'pointer-events-none absolute z-50 whitespace-nowrap rounded-control bg-ink px-2 py-1 text-2xs text-surface shadow-overlay',
             SIDE_CLASSES[side],
             className,
           )}

@@ -94,7 +94,7 @@ export function TabsList({ className, ...props }: React.HTMLAttributes<HTMLDivEl
       ref={containerRef}
       role="tablist"
       onKeyDown={onKeyDown}
-      className={cn('inline-flex items-center gap-1 border-b border-border', className)}
+      className={cn('inline-flex items-center gap-1 border-b border-line', className)}
       {...props}
     />
   );
@@ -121,14 +121,14 @@ export function TabsTrigger({ value, className, onClick, ...props }: TabsTrigger
         onClick?.(event);
       }}
       className={cn(
-        'relative inline-flex min-h-11 items-center px-3 py-2 text-sm font-medium text-muted-foreground transition-colors', // min-h-11: ≥44px tap target
-        'hover:text-foreground disabled:pointer-events-none disabled:opacity-50',
-        isActive && 'text-foreground',
+        'relative inline-flex min-h-11 items-center px-3 py-2 text-sm font-medium text-ink-muted transition-colors', // min-h-11: ≥44px tap target
+        'hover:text-ink disabled:pointer-events-none disabled:opacity-50',
+        isActive && 'text-ink',
         // The active indicator is a bottom border, not a background swap —
         // colour alone would leave a low-vision or colour-blind reader
         // guessing which tab is selected; the line is a second, positional
         // signal that survives the palette.
-        isActive && 'after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-primary',
+        isActive && 'after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-action',
         className,
       )}
       {...props}

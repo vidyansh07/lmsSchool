@@ -23,9 +23,9 @@ export function ChartTooltipContent({
   if (!active || !payload || payload.length === 0) return null;
 
   return (
-    <div className="min-w-[9rem] rounded-md border border-border bg-surface px-3 py-2 text-xs shadow-overlay">
+    <div className="min-w-[9rem] rounded-md border border-line bg-surface px-3 py-2 text-xs shadow-overlay">
       {label !== undefined && label !== null && label !== '' ? (
-        <p className="mb-1.5 font-medium text-foreground">{label}</p>
+        <p className="mb-1.5 font-medium text-ink">{label}</p>
       ) : null}
       <dl className="space-y-1">
         {payload.map((entry) => {
@@ -38,8 +38,8 @@ export function ChartTooltipContent({
                 className="h-0.5 w-3 shrink-0 rounded-full"
                 style={{ backgroundColor: entry.color }}
               />
-              <dt className="text-muted-foreground">{entry.name}</dt>
-              <dd className="ml-auto font-semibold tabular-nums text-foreground">{display}</dd>
+              <dt className="text-ink-muted">{entry.name}</dt>
+              <dd className="ml-auto font-semibold tabular-nums text-ink">{display}</dd>
             </div>
           );
         })}

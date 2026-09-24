@@ -25,7 +25,7 @@ import { useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ActivityDrawer } from '@/components/work/activity-drawer';
 import { ErrorState, LoadingState } from '@/components/states';
-import { Badge, categoryVariant } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/input';
 import { Pagination } from '@/components/pagination';
 import { ApiError } from '@/lib/api';
@@ -144,7 +144,7 @@ export function TrainerWorkTab({ trainerId }: { trainerId: string }) {
     {
       key: 'type',
       header: 'Type',
-      render: (row) => <Badge variant={categoryVariant(row.type.category)}>{row.type.name}</Badge>,
+      render: (row) => <Badge>{row.type.name}</Badge>,
     },
     {
       key: 'status',

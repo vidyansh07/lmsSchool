@@ -66,7 +66,7 @@ export function Sheet({ open, onOpenChange, children }: SheetProps) {
 }
 
 const sheetContentVariants = cva(
-  'fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col border-l border-border bg-surface p-5 shadow-lg',
+  'fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col border-l border-line bg-surface p-5 shadow-overlay',
   {
     variants: {
       size: {
@@ -96,7 +96,7 @@ export function SheetContent({ className, size, hideCloseButton, children, ...pr
     <>
       <div
         aria-hidden="true"
-        className={cn('fixed inset-0 z-50 bg-foreground/40', open ? 'animate-fade-in' : undefined)}
+        className={cn('fixed inset-0 z-50 bg-ink/40', open ? 'animate-fade-in' : undefined)}
         style={
           !open ? { animation: 'fade-in 150ms var(--ease-out) reverse both' } : undefined
         }
@@ -122,9 +122,9 @@ export function SheetContent({ className, size, hideCloseButton, children, ...pr
             onClick={() => onOpenChange(false)}
             aria-label="Close"
             className={cn(
-              'absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground',
+              'absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-control text-ink-muted',
               'before:absolute before:-inset-2 before:content-[""]', // ≥44px tap target, invisible
-              'hover:bg-muted hover:text-foreground',
+              'hover:bg-sunken hover:text-ink',
             )}
           >
             <X className="size-4" aria-hidden="true" />
@@ -151,7 +151,7 @@ export function SheetDescription({ className, ...props }: React.HTMLAttributes<H
     setHasDescription(true);
     return () => setHasDescription(false);
   }, [setHasDescription]);
-  return <p id={descriptionId} className={cn('text-sm text-muted-foreground', className)} {...props} />;
+  return <p id={descriptionId} className={cn('text-sm text-ink-muted', className)} {...props} />;
 }
 
 export function SheetFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

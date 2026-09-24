@@ -95,7 +95,7 @@ function Figure({
     // its string form happens to be — rendering `"pending"` in the position
     // of a headline metric states something false in the largest type on the
     // page.
-    return <span className="text-muted-foreground">{emptyLabel}</span>;
+    return <span className="text-ink-muted">{emptyLabel}</span>;
   }
 
   const formatted = numeric.toLocaleString(undefined, {
@@ -133,7 +133,7 @@ export function StatCard({
   const body = (
     <div
       className={cn(
-        'flex h-full flex-col justify-between gap-3 rounded-card border border-border bg-surface p-4',
+        'flex h-full flex-col justify-between gap-3 rounded-card border border-line bg-surface p-4',
         href && 'cursor-pointer',
         className,
       )}
@@ -144,16 +144,16 @@ export function StatCard({
           `ml-auto` — not `justify-between` on the row — is what keeps it
           pinned to the far end with `period` free to sit beside the label. */}
       <div className="flex items-start gap-2">
-        <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="text-2xs font-semibold uppercase tracking-wider text-ink-muted">
           {label}
         </span>
         {period ? (
-          <span className="text-2xs font-normal text-muted-foreground opacity-75">
+          <span className="text-2xs font-normal text-ink-muted opacity-75">
             · {period}
           </span>
         ) : null}
         {Icon ? (
-          <Icon className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Icon className="ml-auto size-4 shrink-0 text-ink-muted" aria-hidden="true" />
         ) : null}
       </div>
 
@@ -173,7 +173,7 @@ export function StatCard({
             <p
               className={cn(
                 'mt-1.5 flex items-center gap-1 text-xs font-medium',
-                good ? 'text-success' : 'text-destructive',
+                good ? 'text-success' : 'text-danger',
               )}
             >
               <DeltaIcon className="size-3.5" aria-hidden="true" />
@@ -181,12 +181,12 @@ export function StatCard({
                   colour — and the word says which way is good. */}
               {rising ? '+' : ''}
               {(delta as number).toFixed(1)}%
-              <span className="text-muted-foreground">
+              <span className="text-ink-muted">
                 {good ? 'better' : 'worse'} than last period
               </span>
             </p>
           ) : hint ? (
-            <p className="mt-1.5 text-xs text-muted-foreground">{hint}</p>
+            <p className="mt-1.5 text-xs text-ink-muted">{hint}</p>
           ) : null}
         </div>
 
@@ -203,7 +203,7 @@ export function StatCard({
       </div>
 
       {href ? (
-        <span className="flex items-center gap-1 text-xs font-medium text-primary">
+        <span className="flex items-center gap-1 text-xs font-medium text-action">
           Open
           <ArrowRight className="size-3" aria-hidden="true" />
         </span>

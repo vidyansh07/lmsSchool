@@ -807,7 +807,7 @@ export function RegistrationWizard() {
                 </p>
                 {referrer ? (
                   <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <Badge variant="blue">{referrer.student_id}</Badge>
+                    <Badge dot={false}>{referrer.student_id}</Badge>
                     <span className="font-medium">{referrer.full_name || referrer.email}</span>
                     <Button type="button" variant="ghost" size="sm" onClick={() => setReferrer(null)}>
                       Clear

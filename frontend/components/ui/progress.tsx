@@ -35,12 +35,12 @@ export function Progress({ value, max = 100, label, className, ...props }: Progr
       aria-valuenow={isIndeterminate ? undefined : value}
       aria-valuemin={0}
       aria-valuemax={max}
-      className={cn('h-2 w-full overflow-hidden rounded-full bg-muted', className)}
+      className={cn('h-2 w-full overflow-hidden rounded-full bg-sunken', className)}
       {...props}
     >
       <div
         className={cn(
-          'h-full origin-left rounded-full bg-primary transition-transform',
+          'h-full origin-left rounded-full bg-action transition-transform',
           // No dedicated "indeterminate sweep" keyframe exists in globals.css
           // and this file cannot add one, so an indeterminate bar pulses in
           // place instead — honest about "still working", not a fabricated

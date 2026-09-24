@@ -31,7 +31,7 @@ function useAvatarContext(component: string) {
 }
 
 const avatarVariants = cva(
-  'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted',
+  'relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-sunken',
   {
     variants: {
       size: {
@@ -97,7 +97,7 @@ export function AvatarFallback({ className, ...props }: React.HTMLAttributes<HTM
 
   return (
     <span
-      className={cn('font-medium uppercase text-muted-foreground', className)}
+      className={cn('font-medium uppercase text-ink-muted', className)}
       {...props}
     />
   );

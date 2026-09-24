@@ -53,10 +53,12 @@ describe('DateRangePicker', () => {
     expect(days).toBe(6);
   });
 
-  it('highlights the active preset', () => {
+  it('marks the active preset as pressed, not only as a different colour', () => {
     render(<DateRangePicker value={{ start: today(), end: today() }} onChange={vi.fn()} />);
-    const button = screen.getByRole('button', { name: 'Today' });
-    expect(button.className).toMatch(/bg-primary/);
+    // This used to assert a `bg-primary` class, which pinned one token name
+    // from a page test and told a screen reader nothing.
+    expect(screen.getByRole('button', { name: 'Today', pressed: true })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Last 7 days', pressed: false })).toBeInTheDocument();
   });
 
   it('toggles the custom range inputs open, starting from a matched preset', async () => {

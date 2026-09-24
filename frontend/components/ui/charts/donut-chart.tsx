@@ -104,8 +104,8 @@ export function DonutChart({
         className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
         style={{ paddingBottom: 28 }}
       >
-        <span className="text-xl font-semibold tabular-nums text-foreground">{format(total)}</span>
-        <span className="text-2xs text-muted-foreground">{centerLabel}</span>
+        <span className="text-xl font-semibold tabular-nums text-ink">{format(total)}</span>
+        <span className="text-2xs text-ink-muted">{centerLabel}</span>
       </div>
       <ChartDataTable
         caption={caption}

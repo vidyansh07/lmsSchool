@@ -38,7 +38,7 @@ export function PageHeader({
     <div className={cn('flex flex-wrap items-start justify-between gap-4', className)}>
       <div className="min-w-0">
         <h1 className="text-2xl font-semibold">{title}</h1>
-        {meta ? <p className="mt-1 text-sm text-muted-foreground">{meta}</p> : null}
+        {meta ? <p className="mt-1 text-sm text-ink-muted">{meta}</p> : null}
       </div>
       {children ? <div className="flex flex-wrap items-center gap-2">{children}</div> : null}
     </div>
@@ -61,7 +61,7 @@ export function Section({
       {title ? (
         <div className="flex flex-wrap items-baseline gap-2">
           <h2 className="text-base font-semibold">{title}</h2>
-          {meta ? <span className="text-xs text-muted-foreground">{meta}</span> : null}
+          {meta ? <span className="text-xs text-ink-muted">{meta}</span> : null}
         </div>
       ) : null}
       {children}

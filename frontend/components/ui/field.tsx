@@ -31,10 +31,10 @@ export function Field({
 
   return (
     <div className={cn('space-y-1.5', className)}>
-      <label htmlFor={htmlFor} className="block text-sm font-medium">
+      <label htmlFor={htmlFor} className="block text-xs font-medium text-ink">
         {label}
         {required ? (
-          <span className="ml-1 text-destructive" aria-hidden="true">
+          <span className="ml-1 text-danger" aria-hidden="true">
             *
           </span>
         ) : null}
@@ -48,12 +48,12 @@ export function Field({
           })
         : children}
       {hint && !error ? (
-        <p id={hintId} className="text-xs text-muted-foreground">
+        <p id={hintId} className="text-2xs text-ink-faint">
           {hint}
         </p>
       ) : null}
       {error ? (
-        <p id={errorId} className="text-xs text-destructive">
+        <p id={errorId} className="text-2xs font-medium text-danger">
           {error}
         </p>
       ) : null}

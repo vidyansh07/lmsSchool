@@ -6,10 +6,10 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   return (
     <div
       className={cn(
-        // A white card on a white page: the hairline draws the edge and the
-        // shadow lifts it. Neither is heavy on its own, and together they do
-        // the job a grey page used to.
-        'rounded-card border border-border bg-surface',
+        // A white card on an off-white page. The hairline draws the edge and
+        // the page tint does the lifting -- there is no card shadow, because a
+        // faint shadow *and* a border draws the same edge twice.
+        'rounded-card border border-line bg-surface',
         className,
       )}
       {...props}
@@ -18,7 +18,7 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 }
 
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex flex-col gap-1 p-5 pb-3', className)} {...props} />;
+  return <div className={cn('flex flex-col gap-1 p-4 pb-3', className)} {...props} />;
 }
 
 export function CardTitle({
@@ -30,17 +30,17 @@ export function CardTitle({
   // section. A page whose first heading-bearing content after its own h1 is
   // a bare top-level Card (no wrapping h2) should pass `as="h2"` instead, so
   // the heading order never skips a level.
-  return <Comp className={cn('text-base font-semibold leading-tight', className)} {...props} />;
+  return <Comp className={cn('text-lg font-semibold leading-tight', className)} {...props} />;
 }
 
 export function CardDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn('text-sm text-muted-foreground', className)} {...props} />;
+  return <p className={cn('text-xs text-ink-muted', className)} {...props} />;
 }
 
 export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('p-5 pt-0', className)} {...props} />;
+  return <div className={cn('p-4 pt-0', className)} {...props} />;
 }
 
 export function CardFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex items-center gap-2 p-5 pt-0', className)} {...props} />;
+  return <div className={cn('flex items-center gap-2 p-4 pt-0', className)} {...props} />;
 }

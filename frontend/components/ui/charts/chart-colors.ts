@@ -1,23 +1,22 @@
 /**
- * The chart's own color assignment, drawn only from tokens `app/globals.css`
- * already defines — never a hardcoded hex here or in a caller.
+ * The chart's own colour assignment, drawn only from tokens
+ * `app/globals.css` already defines -- never a hardcoded hex here or in a
+ * caller.
  *
- * Two palettes, because the token file defines two for two different jobs
- * (see `globals.css`'s own comments above each block):
+ * One palette now. `--color-chart-1..5` is anchored on the action orange and
+ * walked around the wheel for perceptual separation at roughly equal
+ * lightness, and `theme-contrast.test.ts` checks each step against the card
+ * it is drawn on at 3:1 -- the threshold for a graphical object rather than
+ * for text.
  *
- * - `CHART_PALETTE` — the 5 `--color-chart-N` tokens, chosen for maximum
- *   perceptual separation from each other and from `--color-primary`. The
- *   default for any chart whose categories are not already tied to a
- *   specific dashboard-tile accent.
- * - `ACCENT_PALETTE` — the 6 dashboard-tile accent hues (amber/violet/rose/
- *   sky/emerald/fuchsia). For a chart whose categories mirror the stat tiles
- *   above it (e.g. a donut of the same six figures `StatCard` already tints),
- *   picking from this palette instead keeps the color meaning the same
- *   figure has everywhere else on the page.
+ * There used to be a second, `ACCENT_PALETTE`, holding the six
+ * dashboard-tile accent hues so that a donut of the same six figures could
+ * match the tiles above it. Those tiles no longer carry a hue each, so the
+ * palette had nothing left to mirror and nothing outside this file read it.
  *
- * Both are read as CSS custom properties, never resolved to a static hex at
- * build time — the whole point is that a token change in `globals.css`
- * repaints every chart without touching this file.
+ * Read as CSS custom properties, never resolved to a static hex at build
+ * time -- the whole point is that a token change in `globals.css` repaints
+ * every chart without touching this file.
  */
 
 export const CHART_PALETTE = [
@@ -26,15 +25,6 @@ export const CHART_PALETTE = [
   'var(--color-chart-3)',
   'var(--color-chart-4)',
   'var(--color-chart-5)',
-] as const;
-
-export const ACCENT_PALETTE = [
-  'var(--color-amber)',
-  'var(--color-violet)',
-  'var(--color-rose)',
-  'var(--color-sky)',
-  'var(--color-emerald)',
-  'var(--color-fuchsia)',
 ] as const;
 
 /**
@@ -56,8 +46,8 @@ export function paletteColor(index: number, palette: readonly string[] = CHART_P
 
 /** Low-contrast, "recessive" per the design system's own muted/border tokens
  *  — gridlines and axis lines should read as structure, not data. */
-export const CHART_GRID_COLOR = 'var(--color-border)';
-export const CHART_AXIS_TEXT_COLOR = 'var(--color-muted-foreground)';
+export const CHART_GRID_COLOR = 'var(--color-line)';
+export const CHART_AXIS_TEXT_COLOR = 'var(--color-ink-faint)';
 
 /** Entrance-animation timing shared by every wrapper: within the 400–700ms
  *  band, and short enough it never reads as blocking the chart's own

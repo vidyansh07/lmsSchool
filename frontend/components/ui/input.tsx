@@ -6,9 +6,10 @@ export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInp
   return (
     <input
       className={cn(
-        'h-10 w-full rounded-md border border-border bg-surface px-3 text-sm',
-        'placeholder:text-muted-foreground disabled:opacity-50',
-        'aria-[invalid=true]:border-destructive',
+        'h-9 w-full rounded-control border border-line bg-surface px-2.5 text-sm text-ink',
+        'transition-colors duration-150 hover:border-line-strong',
+        'placeholder:text-ink-faint disabled:opacity-50',
+        'aria-[invalid=true]:border-danger',
         className,
       )}
       {...props}
@@ -23,9 +24,10 @@ export function Textarea({
   return (
     <textarea
       className={cn(
-        'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm',
-        'placeholder:text-muted-foreground disabled:opacity-50',
-        'aria-[invalid=true]:border-destructive',
+        'w-full rounded-control border border-line bg-surface px-2.5 py-2 text-sm text-ink',
+        'transition-colors duration-150 hover:border-line-strong',
+        'placeholder:text-ink-faint disabled:opacity-50',
+        'aria-[invalid=true]:border-danger',
         className,
       )}
       {...props}

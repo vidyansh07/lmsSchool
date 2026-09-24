@@ -128,10 +128,10 @@ const VARIANT_ICON: Record<ToastVariant, React.ComponentType<React.SVGProps<SVGS
 };
 
 const VARIANT_ICON_CLASS: Record<ToastVariant, string> = {
-  info: 'text-muted-foreground',
+  info: 'text-ink-muted',
   success: 'text-success',
   warning: 'text-warning',
-  error: 'text-destructive',
+  error: 'text-danger',
 };
 
 function ToastItem({ toast, onDismiss }: { toast: ToastRecord; onDismiss: () => void }) {
@@ -140,7 +140,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastRecord; onDismiss: () => 
   return (
     <div
       className={cn(
-        'pointer-events-auto flex w-full items-start gap-3 rounded-card border border-border bg-surface p-4 shadow-lg',
+        'pointer-events-auto flex w-full items-start gap-3 rounded-card border border-line bg-surface p-4 shadow-overlay',
         !toast.closing && 'animate-slide-in-right',
       )}
       style={
@@ -152,16 +152,16 @@ function ToastItem({ toast, onDismiss }: { toast: ToastRecord; onDismiss: () => 
       <Icon className={cn('mt-0.5 size-4 shrink-0', VARIANT_ICON_CLASS[toast.variant])} aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">{toast.title}</p>
-        {toast.description ? <p className="mt-0.5 text-xs text-muted-foreground">{toast.description}</p> : null}
+        {toast.description ? <p className="mt-0.5 text-xs text-ink-muted">{toast.description}</p> : null}
       </div>
       <button
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss notification"
         className={cn(
-          'relative inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground',
+          'relative inline-flex size-6 shrink-0 items-center justify-center rounded-control text-ink-muted',
           'before:absolute before:-inset-2.5 before:content-[""]', // ≥44px tap target, invisible
-          'hover:bg-muted hover:text-foreground',
+          'hover:bg-sunken hover:text-ink',
         )}
       >
         <X className="size-3.5" aria-hidden="true" />

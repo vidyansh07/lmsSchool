@@ -40,11 +40,11 @@ export function ErrorState({
         <AlertTriangle className="size-4" aria-hidden="true" />
         {title}
       </AlertTitle>
-      <p className="text-muted-foreground">{message}</p>
+      <p className="text-ink-muted">{message}</p>
       {requestId ? (
         // Quoting the request id lets support find the matching server log
         // without the user having to share anything sensitive.
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-ink-muted">
           Reference: <code className="font-mono">{requestId}</code>
         </p>
       ) : null}
@@ -68,10 +68,10 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-card border border-dashed border-border px-6 py-12 text-center">
-      <Inbox className="size-6 text-muted-foreground" aria-hidden="true" />
-      <p className="font-medium">{title}</p>
-      {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+    <div className="flex flex-col items-center gap-2 rounded-card border border-dashed border-line px-6 py-12 text-center">
+      <Inbox className="size-6 text-ink-faint" aria-hidden="true" />
+      <p className="text-base font-medium text-ink">{title}</p>
+      {description ? <p className="text-sm text-ink-muted">{description}</p> : null}
       {action}
     </div>
   );

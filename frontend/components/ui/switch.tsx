@@ -65,7 +65,7 @@ export function Switch({
         'relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full',
         'before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-[""]',
         'disabled:pointer-events-none disabled:opacity-50',
-        isChecked ? 'bg-primary' : 'bg-muted',
+        isChecked ? 'bg-action' : 'bg-sunken',
         className,
       )}
       {...aria}

@@ -24,7 +24,7 @@ import { useEffect, useState } from 'react';
 
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ActivityDrawer } from '@/components/work/activity-drawer';
-import { Badge, categoryVariant } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select } from '@/components/ui/input';
@@ -143,7 +143,7 @@ export function StudentActivitiesTab({ studentId }: { studentId: string }) {
     {
       key: 'type',
       header: 'Type',
-      render: (row) => <Badge variant={categoryVariant(row.type.category)}>{row.type.name}</Badge>,
+      render: (row) => <Badge>{row.type.name}</Badge>,
     },
     {
       key: 'status',

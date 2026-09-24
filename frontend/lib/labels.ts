@@ -207,31 +207,6 @@ export const ACTIVITY_KIND_LABEL: Record<ActivityKind, string> = {
   other: "Other",
 };
 
-export const ACTIVITY_KIND_VARIANT: Record<
-  ActivityKind,
-  | "blue"
-  | "green"
-  | "violet"
-  | "amber"
-  | "indigo"
-  | "teal"
-  | "rose"
-  | "cyan"
-  | "pink"
-  | "neutral"
-> = {
-  admissions: "blue",
-  fees: "green",
-  teaching: "violet",
-  reviews: "amber",
-  courses: "indigo",
-  outcomes: "teal",
-  accounts: "rose",
-  communication: "cyan",
-  institution: "pink",
-  other: "neutral",
-};
-
 export const PERMISSION_CATEGORY_LABEL: Record<PermissionCategory, string> = {
   people: "People",
   academic: "Academic",

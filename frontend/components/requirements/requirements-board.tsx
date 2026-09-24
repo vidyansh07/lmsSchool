@@ -256,10 +256,10 @@ function RequirementCard({
               {REQUIREMENT_STATUS_LABEL[row.status]}
             </Badge>
             {row.batch_code ? (
-              <Badge variant="blue">{row.batch_code}</Badge>
+              <Badge dot={false}>{row.batch_code}</Badge>
             ) : null}
             {row.needed_by ? (
-              <Badge variant="amber">
+              <Badge variant="warning">
                 Needed by {formatDate(row.needed_by)}
               </Badge>
             ) : null}

@@ -143,11 +143,11 @@ export function RadioGroupItem({ value, disabled, className, id, ...props }: Rad
         aria-hidden="true"
         className={cn(
           'flex size-4 items-center justify-center rounded-full border transition-colors',
-          'peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary',
-          isChecked ? 'border-primary' : 'border-border bg-surface peer-hover:border-primary',
+          'peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-action',
+          isChecked ? 'border-action' : 'border-line bg-surface peer-hover:border-action',
         )}
       >
-        {isChecked ? <span className="size-2 rounded-full bg-primary" /> : null}
+        {isChecked ? <span className="size-2 rounded-full bg-action" /> : null}
       </span>
     </label>
   );

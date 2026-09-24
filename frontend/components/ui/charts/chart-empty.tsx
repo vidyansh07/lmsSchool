@@ -16,7 +16,7 @@ export function ChartEmpty({
   height?: number;
 }) {
   return (
-    <Empty style={height ? { minHeight: height } : undefined} className="justify-center border-none bg-muted/40 py-8">
+    <Empty style={height ? { minHeight: height } : undefined} className="justify-center border-none bg-sunken/40 py-8">
       <EmptyIcon>
         <BarChart3 aria-hidden="true" />
       </EmptyIcon>

@@ -27,13 +27,15 @@ import { cn } from '@/lib/utils';
  * that rather than compose with it.
  */
 const selectVariants = cva(
-  'w-full rounded-md border border-border bg-surface disabled:opacity-50 aria-[invalid=true]:border-destructive',
+  'w-full rounded-control border border-line bg-surface text-ink transition-colors duration-150 hover:border-line-strong disabled:opacity-50 aria-[invalid=true]:border-danger',
   {
     variants: {
+      // `md` matches `Input`'s 36px box, so a select and a text field sitting
+      // side by side in a filter row line up.
       uiSize: {
-        sm: 'h-8 px-2.5 text-xs',
-        md: 'h-10 px-3 text-sm',
-        lg: 'h-11 px-3.5 text-base',
+        sm: 'h-8 px-2 text-xs',
+        md: 'h-9 px-2.5 text-sm',
+        lg: 'h-11 px-3 text-base',
       },
     },
     defaultVariants: { uiSize: 'md' },

@@ -3,13 +3,22 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/lib/utils';
 
-const alertVariants = cva('rounded-md border px-4 py-3 text-sm', {
+/**
+ * A banner, tinted by what it is telling you.
+ *
+ * Each variant is its semantic wash with a matching hairline, rather than the
+ * state colour at 10% over the page -- a translucent fill picks up whatever
+ * is behind it, so the same alert read differently on a card than on the
+ * page. The washes are opaque and measured: `theme-contrast.test.ts` checks
+ * ink on every one of them.
+ */
+const alertVariants = cva('rounded-control border px-3.5 py-3 text-sm text-ink', {
   variants: {
     variant: {
-      info: 'border-border bg-muted text-foreground',
-      success: 'border-success/40 bg-success/10 text-foreground',
-      warning: 'border-warning/40 bg-warning/10 text-foreground',
-      error: 'border-destructive/40 bg-destructive/10 text-foreground',
+      info: 'border-line bg-info-wash',
+      success: 'border-success/30 bg-success-wash',
+      warning: 'border-warning/30 bg-warning-wash',
+      error: 'border-danger/30 bg-danger-wash',
     },
   },
   defaultVariants: { variant: 'info' },

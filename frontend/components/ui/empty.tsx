@@ -18,7 +18,7 @@ export function Empty({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return (
     <div
       className={cn(
-        'flex flex-col items-center gap-2 rounded-card border border-dashed border-border px-6 py-12 text-center',
+        'flex flex-col items-center gap-2 rounded-card border border-dashed border-line px-6 py-12 text-center',
         className,
       )}
       {...props}
@@ -30,7 +30,7 @@ export function EmptyIcon({ className, ...props }: React.HTMLAttributes<HTMLDivE
   return (
     <div
       aria-hidden="true"
-      className={cn('mb-1 text-muted-foreground [&>svg]:size-6', className)}
+      className={cn('mb-1 text-ink-muted [&>svg]:size-6', className)}
       {...props}
     />
   );
@@ -41,7 +41,7 @@ export function EmptyTitle({ className, ...props }: React.HTMLAttributes<HTMLPar
 }
 
 export function EmptyDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn('max-w-sm text-sm text-muted-foreground', className)} {...props} />;
+  return <p className={cn('max-w-sm text-sm text-ink-muted', className)} {...props} />;
 }
 
 export function EmptyActions({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

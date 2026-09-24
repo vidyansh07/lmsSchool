@@ -12,7 +12,7 @@ import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
 import { Alert } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge, categoryVariant } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -97,7 +97,7 @@ function StudentsTable() {
       header: 'Qualification',
       render: (row) =>
         row.qualification ? (
-          <Badge variant={categoryVariant(row.qualification)}>
+          <Badge>
             {QUALIFICATION_LABEL[row.qualification]}
           </Badge>
         ) : (

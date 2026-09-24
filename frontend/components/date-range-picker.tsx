@@ -106,20 +106,26 @@ export function DateRangePicker({
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       <div role="group" aria-label="Date range presets" className="flex flex-wrap gap-1.5">
-        {presets.map((preset) => (
-          <Button
-            key={preset.id}
-            type="button"
-            size="sm"
-            variant={activePreset?.id === preset.id && !showCustom ? 'primary' : 'outline'}
-            onClick={() => {
-              setShowCustom(false);
-              onChange(preset.range);
-            }}
-          >
-            {preset.label}
-          </Button>
-        ))}
+        {presets.map((preset) => {
+          const active = activePreset?.id === preset.id && !showCustom;
+          return (
+            <Button
+              key={preset.id}
+              type="button"
+              size="sm"
+              variant={active ? 'primary' : 'outline'}
+              // Which preset is in force was carried by the fill alone, which
+              // a screen reader cannot read and a printout does not keep.
+              aria-pressed={active}
+              onClick={() => {
+                setShowCustom(false);
+                onChange(preset.range);
+              }}
+            >
+              {preset.label}
+            </Button>
+          );
+        })}
         <Button
           type="button"
           size="sm"

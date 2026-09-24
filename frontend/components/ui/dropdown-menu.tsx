@@ -143,7 +143,7 @@ export function DropdownMenuContent({
       role="menu"
       onKeyDown={onKeyDown}
       className={cn(
-        'absolute z-40 mt-1 min-w-[10rem] rounded-md border border-border bg-surface p-1 shadow-lg',
+        'absolute z-40 mt-1 min-w-[10rem] rounded-control border border-line bg-surface p-1 shadow-overlay',
         align === 'end' ? 'right-0' : 'left-0',
         open ? '' : undefined,
         align === 'end' ? 'origin-top-right' : 'origin-top-left',
@@ -186,9 +186,9 @@ export function DropdownMenuItem({ className, onSelect, onClick, destructive, ..
       }}
       className={cn(
         'flex min-h-11 w-full items-center gap-2 rounded-sm px-2.5 py-2 text-left text-sm', // min-h-11: ≥44px tap target
-        'hover:bg-muted focus-visible:bg-muted focus-visible:outline-none',
+        'hover:bg-sunken focus-visible:bg-sunken focus-visible:outline-none',
         'disabled:pointer-events-none disabled:opacity-50',
-        destructive ? 'text-destructive' : 'text-foreground',
+        destructive ? 'text-danger' : 'text-ink',
         className,
       )}
       {...props}
@@ -198,10 +198,10 @@ export function DropdownMenuItem({ className, onSelect, onClick, destructive, ..
 
 export function DropdownMenuLabel({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('px-2.5 py-1.5 text-xs font-medium text-muted-foreground', className)} {...props} />
+    <div className={cn('px-2.5 py-1.5 text-xs font-medium text-ink-muted', className)} {...props} />
   );
 }
 
 export function DropdownMenuSeparator({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div role="separator" className={cn('my-1 h-px bg-border', className)} {...props} />;
+  return <div role="separator" className={cn('my-1 h-px bg-line', className)} {...props} />;
 }

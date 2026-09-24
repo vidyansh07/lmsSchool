@@ -12,7 +12,7 @@ export function TableWrapper({ className, ...props }: React.HTMLAttributes<HTMLD
   return (
     <div
       className={cn(
-        'w-full overflow-x-auto rounded-card border border-border bg-surface',
+        'w-full overflow-x-auto rounded-card border border-line bg-surface',
         className,
       )}
       {...props}
@@ -43,10 +43,12 @@ export function Th({
       scope="col"
       aria-sort={active ? (direction === 'asc' ? 'ascending' : 'descending') : undefined}
       className={cn(
-        // Small caps and tracking, as in the reference: a header that is
-        // visibly a different *kind* of text from the rows needs no heavy
-        // fill to separate itself.
-        'border-b border-border bg-surface px-4 py-3 text-left text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground whitespace-nowrap',
+        // 11px, semibold, uppercase, tracked, on the sunken band -- the
+        // reference's exact column-head treatment. A header that is visibly a
+        // different *kind* of text from the rows needs no heavy fill to
+        // separate itself. `ink-faint` is the lightest ink that still clears
+        // AA on this band; the reference's own value for this role does not.
+        'border-b border-line bg-sunken px-5 py-3 text-left text-2xs font-semibold uppercase tracking-[0.055em] text-ink-faint whitespace-nowrap',
         className,
       )}
       {...props}
@@ -59,7 +61,7 @@ export function Th({
           // `text-transform` on buttons, so the header's own small-caps do not
           // reach a sortable heading and it came out in sentence case beside
           // its uppercase neighbours.
-          className="inline-flex items-center gap-1 uppercase tracking-[0.08em] hover:text-primary"
+          className="inline-flex items-center gap-1 uppercase tracking-[0.055em] transition-colors duration-150 hover:text-action"
         >
           {children}
           <span aria-hidden="true" className="text-xs">
@@ -79,7 +81,7 @@ export function Tr({ className, ...props }: React.HTMLAttributes<HTMLTableRowEle
   return (
     <tr
       className={cn(
-        'transition-colors duration-150 hover:bg-muted',
+        'transition-colors duration-150 hover:bg-sunken',
         className,
       )}
       {...props}
@@ -88,5 +90,5 @@ export function Tr({ className, ...props }: React.HTMLAttributes<HTMLTableRowEle
 }
 
 export function Td({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn('border-b border-border px-4 py-3 align-middle', className)} {...props} />;
+  return <td className={cn('border-b border-line px-5 py-3.5 align-middle', className)} {...props} />;
 }

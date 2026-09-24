@@ -31,7 +31,6 @@ import { Input, Select, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { useApi } from "@/hooks/use-api";
-import { categoryVariant } from "@/components/ui/badge";
 import { fieldErrors } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
 import {
@@ -653,7 +652,7 @@ function ActivityTypesList() {
                     </p>
                   </Td>
                   <Td>
-                    <Badge variant={categoryVariant(row.category)}>
+                    <Badge>
                       {ACTIVITY_CATEGORY_LABEL[row.category]}
                     </Badge>
                   </Td>

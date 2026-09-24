@@ -124,8 +124,8 @@ export function RadialProgress({
         />
       </svg>
       <div className="-mt-6 flex flex-col items-center">
-        <span className="text-xl font-semibold tabular-nums text-foreground">{format(value)}</span>
-        <span className="text-2xs text-muted-foreground">{label ?? `of ${format(target)} target`}</span>
+        <span className="text-xl font-semibold tabular-nums text-ink">{format(value)}</span>
+        <span className="text-2xs text-ink-muted">{label ?? `of ${format(target)} target`}</span>
       </div>
     </div>
   );

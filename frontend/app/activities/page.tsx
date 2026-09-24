@@ -43,7 +43,6 @@ import { Input, Select } from "@/components/ui/input";
 import { Pagination } from "@/components/pagination";
 import { Popover, PopoverContent, PopoverHeading, PopoverTrigger } from "@/components/ui/popover";
 import { ApiError } from "@/lib/api";
-import { categoryVariant } from "@/components/ui/badge";
 import { Capability } from "@/lib/capabilities";
 import { formatDateTime, NOT_ASSIGNED } from "@/lib/format";
 import {
@@ -320,7 +319,7 @@ function ActivitiesWorkspace() {
       key: "type",
       header: "Type",
       render: (row) => (
-        <Badge variant={categoryVariant(row.type.category)}>{row.type.name}</Badge>
+        <Badge>{row.type.name}</Badge>
       ),
     },
     {

@@ -29,7 +29,7 @@ import { ApiError } from '@/lib/api';
 import { getActivityFeed, getActivityScorecards } from '@/lib/activity';
 import { Capability } from '@/lib/capabilities';
 import { formatCurrency, formatDateTime, formatRelative } from '@/lib/format';
-import { ACTIVITY_KIND_LABEL, ACTIVITY_KIND_VARIANT, ROLE_LABEL } from '@/lib/labels';
+import { ACTIVITY_KIND_LABEL, ROLE_LABEL } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 import type {
   ActivityFeedEntry,
@@ -262,7 +262,7 @@ export function ActivityReview() {
       key: 'kind',
       header: 'Kind',
       render: (row) => (
-        <Badge variant={ACTIVITY_KIND_VARIANT[row.kind]}>{ACTIVITY_KIND_LABEL[row.kind]}</Badge>
+        <Badge dot={false}>{ACTIVITY_KIND_LABEL[row.kind]}</Badge>
       ),
     },
     {
@@ -402,7 +402,7 @@ export function ActivityReview() {
             <CardTitle className="flex items-center gap-2">
               <Activity className="size-5 text-primary" aria-hidden="true" />
               The record
-              {selectedCard ? <Badge variant="blue">{selectedCard.name}</Badge> : null}
+              {selectedCard ? <Badge dot={false}>{selectedCard.name}</Badge> : null}
             </CardTitle>
             <CardDescription>
               Changes only, newest first. Sign-ins, listings and downloads are left out.
