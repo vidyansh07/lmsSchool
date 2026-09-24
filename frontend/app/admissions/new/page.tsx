@@ -674,7 +674,7 @@ export function RegistrationWizard() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Register a student</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             One screen, start to finish. Nothing is created until you confirm at the end.
           </p>
         </div>
@@ -800,9 +800,9 @@ export function RegistrationWizard() {
                 errors={studentErrors}
               />
 
-              <div className="space-y-2 rounded-card border border-dashed border-border p-4">
+              <div className="space-y-2 rounded-card border border-dashed border-line p-4">
                 <p className="text-sm font-medium">Referred by</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-ink-muted">
                   If an existing student sent them, pick that student so the referral can be credited later.
                 </p>
                 {referrer ? (
@@ -832,7 +832,7 @@ export function RegistrationWizard() {
               </div>
 
               {duplicateChecking ? (
-                <p className="text-xs text-muted-foreground">Checking for existing students…</p>
+                <p className="text-xs text-ink-muted">Checking for existing students…</p>
               ) : null}
               <DuplicateMatch matches={visibleDuplicates} onConfirmDifferentPerson={onContinuePastDuplicate} />
 
@@ -942,7 +942,7 @@ export function RegistrationWizard() {
                     />
                   </Field>
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-ink-muted">
                   The batch is created when you confirm at the end, and starts with no trainer — that
                   is the next step.
                 </p>
@@ -972,7 +972,7 @@ export function RegistrationWizard() {
             {batchHasTrainer ? (
               <Alert variant="info">
                 This batch already has a trainer ({pickedBatch?.trainer_name}). Change that from{' '}
-                <Link href="/admissions/batches" className="underline hover:text-foreground">
+                <Link href="/admissions/batches" className="underline hover:text-ink">
                   the batch list
                 </Link>{' '}
                 rather than here, since it affects everyone on it.
@@ -1047,16 +1047,16 @@ export function RegistrationWizard() {
               <>
                 <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
-                    <dt className="text-xs text-muted-foreground">Student</dt>
+                    <dt className="text-xs text-ink-muted">Student</dt>
                     <dd className="font-medium">
                       {firstName || lastName ? `${firstName} ${lastName}`.trim() : 'Not named yet'}
-                      <span className="block text-sm font-normal text-muted-foreground">
+                      <span className="block text-sm font-normal text-ink-muted">
                         {email || 'No email yet'}
                       </span>
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">
+                    <dt className="text-xs text-ink-muted">
                       {background.kind === 'employer'
                         ? 'Working professional'
                         : background.kind === 'college'
@@ -1066,19 +1066,19 @@ export function RegistrationWizard() {
                     <dd className="font-medium">{describeBackground(background)}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">Referred by</dt>
+                    <dt className="text-xs text-ink-muted">Referred by</dt>
                     <dd className="font-medium">
                       {referrer ? `${referrer.full_name || referrer.email} (${referrer.student_id})` : 'Nobody'}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">Agreed fee</dt>
+                    <dt className="text-xs text-ink-muted">Agreed fee</dt>
                     <dd className="font-medium tabular-nums">
                       {feeAmount.trim() === '' ? 'Not decided yet' : formatCurrency(feeAmount)}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">Paid today</dt>
+                    <dt className="text-xs text-ink-muted">Paid today</dt>
                     <dd className="font-medium tabular-nums">
                       {feeAmount.trim() === '' || paidNow.trim() === '' || Number(paidNow) <= 0
                         ? 'Nothing'
@@ -1086,15 +1086,15 @@ export function RegistrationWizard() {
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">Course</dt>
+                    <dt className="text-xs text-ink-muted">Course</dt>
                     <dd className="font-medium">{course?.title ?? 'Not chosen yet'}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">Batch</dt>
+                    <dt className="text-xs text-ink-muted">Batch</dt>
                     <dd className="font-medium">{batchSummaryLabel}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-muted-foreground">Trainer</dt>
+                    <dt className="text-xs text-ink-muted">Trainer</dt>
                     <dd className="font-medium">
                       {batchHasTrainer ? (
                         pickedBatch?.trainer_name

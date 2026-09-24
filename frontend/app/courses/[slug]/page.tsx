@@ -30,11 +30,11 @@ const CONTENT_ICON: Record<LessonContentType, typeof FileText> = {
 function LessonRow({ lesson, courseSlug }: { lesson: LessonSummary; courseSlug: string }) {
   const Icon = CONTENT_ICON[lesson.content_type];
   return (
-    <li className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2.5 last:border-b-0">
-      <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+    <li className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0">
+      <Icon className="size-4 shrink-0 text-ink-muted" aria-hidden="true" />
       <Link
         href={`/courses/${courseSlug}/learn/${lesson.id}`}
-        className="min-w-0 flex-1 text-sm hover:text-primary"
+        className="min-w-0 flex-1 text-sm hover:text-action"
       >
         {lesson.title}
       </Link>
@@ -43,7 +43,7 @@ function LessonRow({ lesson, courseSlug }: { lesson: LessonSummary; courseSlug: 
       {lesson.status !== 'published' ? (
         <Badge variant={STATUS_VARIANT[lesson.status]}>{STATUS_LABEL[lesson.status]}</Badge>
       ) : null}
-      <span className="text-xs text-muted-foreground">
+      <span className="text-xs text-ink-muted">
         {CONTENT_TYPE_LABEL[lesson.content_type]}
         {lesson.duration_minutes ? ` · ${formatDuration(lesson.duration_minutes)}` : ''}
       </span>
@@ -113,15 +113,15 @@ function CourseDetailContent({ slug }: { slug: string }) {
           {course.status !== 'published' ? (
             <Badge variant={STATUS_VARIANT[course.status]}>{STATUS_LABEL[course.status]}</Badge>
           ) : null}
-          <span className="font-mono text-xs text-muted-foreground">{course.code}</span>
+          <span className="font-mono text-xs text-ink-muted">{course.code}</span>
         </div>
 
         <div className="space-y-2">
           <h1 className="text-3xl font-semibold tracking-tight">{course.title}</h1>
-          <p className="max-w-prose text-muted-foreground">{course.short_description}</p>
+          <p className="max-w-prose text-ink-muted">{course.short_description}</p>
         </div>
 
-        <dl className="flex flex-wrap gap-6 text-sm text-muted-foreground">
+        <dl className="flex flex-wrap gap-6 text-sm text-ink-muted">
           <div className="flex items-center gap-2">
             <Clock className="size-4" aria-hidden="true" />
             <dt className="sr-only">Duration</dt>
@@ -158,7 +158,7 @@ function CourseDetailContent({ slug }: { slug: string }) {
           {course.description ? (
             <section className="space-y-2">
               <h2 className="text-lg font-semibold tracking-tight">About this course</h2>
-              <p className="whitespace-pre-line text-sm text-muted-foreground">
+              <p className="whitespace-pre-line text-sm text-ink-muted">
                 {course.description}
               </p>
             </section>
@@ -185,12 +185,12 @@ function CourseDetailContent({ slug }: { slug: string }) {
                         ) : null}
                       </div>
                       {module.description ? (
-                        <p className="text-sm text-muted-foreground">{module.description}</p>
+                        <p className="text-sm text-ink-muted">{module.description}</p>
                       ) : null}
                     </CardHeader>
                     <CardContent className="px-0 pb-0">
                       {module.lessons.length === 0 ? (
-                        <p className="px-5 pb-4 text-sm text-muted-foreground">
+                        <p className="px-5 pb-4 text-sm text-ink-muted">
                           No lessons in this module yet.
                         </p>
                       ) : (
@@ -219,7 +219,7 @@ function CourseDetailContent({ slug }: { slug: string }) {
                   {course.learning_objectives.map((objective) => (
                     <li key={objective} className="flex gap-2">
                       <CheckCircle2
-                        className="mt-0.5 size-4 shrink-0 text-primary"
+                        className="mt-0.5 size-4 shrink-0 text-action"
                         aria-hidden="true"
                       />
                       <span>{objective}</span>
@@ -236,7 +236,7 @@ function CourseDetailContent({ slug }: { slug: string }) {
                 <CardTitle>Prerequisites</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
+                <ul className="list-inside list-disc space-y-1 text-sm text-ink-muted">
                   {course.prerequisites.map((item) => (
                     <li key={item}>{item}</li>
                   ))}

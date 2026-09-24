@@ -48,7 +48,7 @@ export function AttendanceHistory({ recordId }: { recordId: string }) {
         {isOpen ? 'Hide history' : 'View history'}
       </Button>
       {isOpen ? (
-        <div className="mt-1 rounded-card border border-border bg-muted/30 p-2 text-xs">
+        <div className="mt-1 rounded-card border border-line bg-sunken/30 p-2 text-xs">
           {isLoading ? <LoadingState label="Loading history…" rows={1} /> : null}
           {error ? (
             <ErrorState
@@ -60,7 +60,7 @@ export function AttendanceHistory({ recordId }: { recordId: string }) {
           ) : null}
           {!isLoading && !error && corrections ? (
             corrections.length === 0 ? (
-              <p className="text-muted-foreground">No corrections recorded.</p>
+              <p className="text-ink-muted">No corrections recorded.</p>
             ) : (
               <ul className="space-y-1.5">
                 {corrections.map((correction) => (
@@ -68,11 +68,11 @@ export function AttendanceHistory({ recordId }: { recordId: string }) {
                     <span className="font-medium">
                       {ATTENDANCE_STATUS_LABEL[correction.from_status]} → {ATTENDANCE_STATUS_LABEL[correction.to_status]}
                     </span>{' '}
-                    <span className="text-muted-foreground">
+                    <span className="text-ink-muted">
                       by {correction.corrected_by_name ?? 'Unknown'} · {formatDateTime(correction.created_at)}
                     </span>
                     {correction.reason ? (
-                      <p className="text-muted-foreground">{correction.reason}</p>
+                      <p className="text-ink-muted">{correction.reason}</p>
                     ) : null}
                   </li>
                 ))}

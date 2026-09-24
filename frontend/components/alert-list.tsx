@@ -33,9 +33,9 @@ const SEVERITY_ICON: Record<AlertSeverity, typeof Info> = {
 };
 
 const SEVERITY_TONE: Record<AlertSeverity, string> = {
-  info: 'text-muted-foreground',
+  info: 'text-ink-muted',
   warning: 'text-warning',
-  error: 'text-destructive',
+  error: 'text-danger',
 };
 
 export function AlertList({
@@ -64,10 +64,10 @@ export function AlertList({
 
   if (items.length === 0) {
     return (
-      <div className="flex items-center gap-2 rounded-card border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 rounded-card border border-dashed border-line px-4 py-6 text-sm text-ink-muted">
         <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
         <div>
-          <p className="font-medium text-foreground">{emptyTitle}</p>
+          <p className="font-medium text-ink">{emptyTitle}</p>
           <p>{emptyDescription}</p>
         </div>
       </div>
@@ -75,7 +75,7 @@ export function AlertList({
   }
 
   return (
-    <ul className="divide-y divide-border rounded-card border border-border">
+    <ul className="divide-y divide-line rounded-card border border-line">
       {items.map((item) => {
         const Icon = SEVERITY_ICON[item.severity];
         const body = (
@@ -84,11 +84,11 @@ export function AlertList({
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{fallback(item.title, 'Unknown')}</p>
               {item.description ? (
-                <p className="text-xs text-muted-foreground">{item.description}</p>
+                <p className="text-xs text-ink-muted">{item.description}</p>
               ) : null}
             </div>
             {typeof item.count === 'number' ? (
-              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums">
+              <span className="shrink-0 rounded-full bg-sunken px-2 py-0.5 text-xs font-medium tabular-nums">
                 {item.count}
               </span>
             ) : null}
@@ -98,7 +98,7 @@ export function AlertList({
         return (
           <li key={item.id}>
             {item.href ? (
-              <Link href={item.href} className="block transition-colors hover:bg-muted">
+              <Link href={item.href} className="block transition-colors hover:bg-sunken">
                 {body}
               </Link>
             ) : (

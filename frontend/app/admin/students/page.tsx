@@ -56,10 +56,10 @@ function StudentsTable() {
       sortable: true,
       width: '9rem',
       render: (row) => (
-        <span className="font-mono text-xs font-semibold text-foreground">
+        <span className="font-mono text-xs font-semibold text-ink">
           {row.student_id}
           {row.roll_number ? (
-            <span className="mt-0.5 block font-normal text-muted-foreground">
+            <span className="mt-0.5 block font-normal text-ink-muted">
               {row.roll_number}
             </span>
           ) : null}
@@ -74,16 +74,16 @@ function StudentsTable() {
       // the same thing twice.
       render: (row) => (
         <div className="flex items-center gap-3">
-          <Avatar size="sm" className="bg-accent">
-            <AvatarFallback className="text-primary">
+          <Avatar size="sm" className="bg-selected">
+            <AvatarFallback className="text-action">
               {(row.full_name || row.email).slice(0, 1)}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 leading-tight">
-            <p className="truncate font-semibold text-foreground">{row.full_name || '—'}</p>
-            <p className="truncate text-xs text-muted-foreground">{row.email}</p>
+            <p className="truncate font-semibold text-ink">{row.full_name || '—'}</p>
+            <p className="truncate text-xs text-ink-muted">{row.email}</p>
             {row.institution ? (
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="truncate text-xs text-ink-muted">
                 {row.institution_kind === 'employer' ? 'Works at' : 'Studies at'} {row.institution}
               </p>
             ) : null}
@@ -117,7 +117,7 @@ function StudentsTable() {
         ) : row.fee_amount !== null ? (
           <span className="font-medium">{formatCurrency(row.fee_amount)}</span>
         ) : (
-          <span className="text-xs text-muted-foreground">Not decided</span>
+          <span className="text-xs text-ink-muted">Not decided</span>
         ),
     },
     {
@@ -126,9 +126,9 @@ function StudentsTable() {
       align: 'right',
       render: (row) =>
         Number(row.fee_paid) > 0 ? (
-          <span className="text-emerald">{formatCurrency(row.fee_paid)}</span>
+          <span className="text-success">{formatCurrency(row.fee_paid)}</span>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-ink-muted">—</span>
         ),
     },
     {
@@ -138,15 +138,15 @@ function StudentsTable() {
       render: (row) =>
         Number(row.fee_balance) > 0 ? (
           <>
-            <span className="font-medium text-amber">{formatCurrency(row.fee_balance)}</span>
-            <span className="block text-xs text-muted-foreground">
+            <span className="font-medium text-warning">{formatCurrency(row.fee_balance)}</span>
+            <span className="block text-xs text-ink-muted">
               {row.fee_next_due_on ? `Expected ${formatDate(row.fee_next_due_on)}` : 'No date set'}
             </span>
           </>
         ) : Number(row.fee_payable) > 0 ? (
-          <span className="text-xs font-medium text-emerald">Settled</span>
+          <span className="text-xs font-medium text-success">Settled</span>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-ink-muted">—</span>
         ),
     },
     {
@@ -189,7 +189,7 @@ function StudentsTable() {
       sticky: 'end',
       render: (row) => (
         <Tooltip content="Open the student's record">
-          <Button asChild variant="ghost" size="sm" className="size-8 p-0 text-muted-foreground">
+          <Button asChild variant="ghost" size="sm" className="size-8 p-0 text-ink-muted">
             <Link
               href={`/admissions/${row.id}`}
               onClick={(event) => event.stopPropagation()}
@@ -208,7 +208,7 @@ function StudentsTable() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Students</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Student records, admissions detail and fee status.
           </p>
         </div>

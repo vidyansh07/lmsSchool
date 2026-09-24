@@ -58,9 +58,9 @@ function Review({ attemptId }: { attemptId: string }) {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <span className="font-mono text-xs text-muted-foreground">{attempt.exam_code}</span>
+        <span className="font-mono text-xs text-ink-muted">{attempt.exam_code}</span>
         <h1 className="text-2xl font-semibold tracking-tight">{attempt.exam_title}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Submitted {formatDateTime(attempt.submitted_at)} · attempt {attempt.attempt_number}
         </p>
       </div>
@@ -93,7 +93,7 @@ function Review({ attemptId }: { attemptId: string }) {
                   {question.is_correct ? 'Correct' : 'Incorrect'}
                 </Badge>
               )}
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-ink-muted">
                 {question.awarded ?? '—'} of {question.marks}
               </span>
             </div>
@@ -107,7 +107,7 @@ function Review({ attemptId }: { attemptId: string }) {
                 <p className="whitespace-pre-wrap">{question.explanation}</p>
               ) : null}
               {question.marker_feedback ? (
-                <p className="whitespace-pre-wrap text-muted-foreground">
+                <p className="whitespace-pre-wrap text-ink-muted">
                   {question.marker_feedback}
                 </p>
               ) : null}

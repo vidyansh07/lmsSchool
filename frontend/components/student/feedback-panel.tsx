@@ -33,7 +33,7 @@ export function FeedbackPanel({
 
   if (feedback.length === 0) {
     return (
-      <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-card border border-dashed border-line px-4 py-6 text-center text-sm text-ink-muted">
         No feedback has been shared with you yet.
       </p>
     );
@@ -42,12 +42,12 @@ export function FeedbackPanel({
   return (
     <ul className="space-y-3">
       {feedback.map((item) => (
-        <li key={item.id} className="rounded-card border border-border p-3">
+        <li key={item.id} className="rounded-card border border-line p-3">
           <div className="flex items-start gap-2.5">
-            <MessageSquareText className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <MessageSquareText className="mt-0.5 size-4 shrink-0 text-ink-muted" aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <p className="whitespace-pre-wrap text-sm">{item.body}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-ink-muted">
                 {fallback(item.author_name, 'Unknown')} · {formatDateTime(item.created_at)}
                 {item.batch_code ? ` · ${item.batch_code}` : ''}
               </p>

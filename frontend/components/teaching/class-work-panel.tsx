@@ -73,11 +73,11 @@ function AssignmentQuickCreate({
   }
 
   return (
-    <div className="space-y-2 border-t border-border pt-3">
+    <div className="space-y-2 border-t border-line pt-3">
       {created ? (
         <Alert variant="success" role="status">
           Assignment {created} created.{' '}
-          <button type="button" className="underline hover:text-foreground" onClick={() => setCreated(null)}>
+          <button type="button" className="underline hover:text-ink" onClick={() => setCreated(null)}>
             Create another
           </button>
         </Alert>
@@ -105,7 +105,7 @@ function AssignmentQuickCreate({
             </Button>
           </div>
           {!courseId ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-ink-muted">
               {isLoadingCourse
                 ? 'Loading the course this batch runs…'
                 : 'Course details are unavailable right now — the flag above still saves with the report.'}
@@ -145,11 +145,11 @@ function AssessmentQuickCreate({ batchId }: { batchId: string }) {
   }
 
   return (
-    <div className="space-y-2 border-t border-border pt-3">
+    <div className="space-y-2 border-t border-line pt-3">
       {created ? (
         <Alert variant="success" role="status">
           Assessment {created} created.{' '}
-          <button type="button" className="underline hover:text-foreground" onClick={() => setCreated(null)}>
+          <button type="button" className="underline hover:text-ink" onClick={() => setCreated(null)}>
             Create another
           </button>
         </Alert>
@@ -202,7 +202,7 @@ export function ClassWorkPanel({
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
-            className="size-4 rounded border-border accent-primary"
+            className="size-4 rounded border-line accent-action"
             checked={assignmentGiven}
             onChange={(event) => onToggleAssignmentGiven(event.target.checked)}
           />
@@ -215,7 +215,7 @@ export function ClassWorkPanel({
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
-            className="size-4 rounded border-border accent-primary"
+            className="size-4 rounded border-line accent-action"
             checked={assessmentConducted}
             onChange={(event) => onToggleAssessmentConducted(event.target.checked)}
           />

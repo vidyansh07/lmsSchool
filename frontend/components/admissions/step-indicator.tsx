@@ -58,19 +58,19 @@ export function StepIndicator({
               onClick={() => onJump(step.key)}
               className={cn(
                 'flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action',
                 'disabled:cursor-not-allowed disabled:opacity-50',
                 isCurrent
-                  ? 'border-primary bg-primary text-primary-foreground'
+                  ? 'border-action bg-action text-action-fg'
                   : isDone
-                    ? 'border-success/40 bg-success/10 text-foreground hover:bg-success/20'
-                    : 'border-border bg-muted text-muted-foreground',
+                    ? 'border-success/40 bg-success/10 text-ink hover:bg-success/20'
+                    : 'border-line bg-sunken text-ink-muted',
               )}
             >
               <span
                 className={cn(
                   'flex size-5 shrink-0 items-center justify-center rounded-full text-xs',
-                  isCurrent ? 'bg-primary-foreground/20' : 'bg-transparent',
+                  isCurrent ? 'bg-action-fg/20' : 'bg-transparent',
                 )}
                 aria-hidden="true"
               >
@@ -79,7 +79,7 @@ export function StepIndicator({
               {step.label}
             </button>
             {index < steps.length - 1 ? (
-              <span aria-hidden="true" className="text-muted-foreground">
+              <span aria-hidden="true" className="text-ink-muted">
                 →
               </span>
             ) : null}

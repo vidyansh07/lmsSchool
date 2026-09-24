@@ -254,9 +254,9 @@ export function TemplateBuilder({ templateKey }: { templateKey: string }) {
             <Badge variant={TEMPLATE_STATUS_VARIANT[template.status]}>
               {TEMPLATE_STATUS_LABEL[template.status]}
             </Badge>
-            <span className="font-mono text-xs text-muted-foreground">{template.key}</span>
+            <span className="font-mono text-xs text-ink-muted">{template.key}</span>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             {COMMUNICATION_CHANNEL_LABEL[template.channel]} · {template.kind}
             {published ? ` · v${published.number} published` : ' · never published'}
           </p>
@@ -279,7 +279,7 @@ export function TemplateBuilder({ templateKey }: { templateKey: string }) {
           </CardHeader>
           <CardContent className="space-y-4">
             {draft.approved_at ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-ink-muted">
                 Approved {formatDateTime(draft.approved_at)} — changing anything below clears
                 that approval and needs a fresh one.
               </p>
@@ -328,13 +328,13 @@ export function TemplateBuilder({ templateKey }: { templateKey: string }) {
               <label className="block text-sm font-medium" htmlFor="template-new-variable">
                 Variables allowlist
               </label>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-ink-muted">
                 Only these paths render in the body above; anything else is left blank and
                 flagged by Preview as a warning.
               </p>
               <div className="flex flex-wrap gap-2" data-testid="template-variables-list">
                 {variables.length === 0 ? (
-                  <span className="text-xs text-muted-foreground">No variables yet.</span>
+                  <span className="text-xs text-ink-muted">No variables yet.</span>
                 ) : (
                   variables.map((name) => (
                     <Badge key={name} variant="neutral" className="gap-1 font-mono">
@@ -344,7 +344,7 @@ export function TemplateBuilder({ templateKey }: { templateKey: string }) {
                           type="button"
                           aria-label={`Remove ${name}`}
                           onClick={() => removeVariable(name)}
-                          className="ml-0.5 rounded-full transition-colors hover:bg-border hover:text-foreground"
+                          className="ml-0.5 rounded-full transition-colors hover:bg-line hover:text-ink"
                         >
                           <X className="size-3" aria-hidden="true" />
                         </button>
@@ -387,7 +387,7 @@ export function TemplateBuilder({ templateKey }: { templateKey: string }) {
             <CardTitle>No draft in progress</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               v{published?.number} is published and immutable. Start a new version — cloned from
               it — to change anything.
             </p>
@@ -406,7 +406,7 @@ export function TemplateBuilder({ templateKey }: { templateKey: string }) {
             <CardTitle>Approve and publish</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               v{draft.number}
               {draft.approved_at ? ` · approved ${formatDateTime(draft.approved_at)}` : ' · not yet approved'}
               {isWhatsapp ? ' · WhatsApp approval needs a fresh step-up.' : ''}
@@ -438,10 +438,10 @@ export function TemplateBuilder({ templateKey }: { templateKey: string }) {
         </CardHeader>
         <CardContent className="space-y-4">
           {!activeVersion ? (
-            <p className="text-sm text-muted-foreground">Nothing to preview yet.</p>
+            <p className="text-sm text-ink-muted">Nothing to preview yet.</p>
           ) : (
             <>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-ink-muted">
                 Rendering v{activeVersion.number}
                 {draft ? ' (the version being edited)' : ' (the published version)'}.
               </p>
@@ -493,7 +493,7 @@ export function TemplateBuilder({ templateKey }: { templateKey: string }) {
                   </p>
                   <TemplateHtmlPreview html={preview.html} title={`${template.name} preview`} />
                   <details>
-                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">Plain text</summary>
+                    <summary className="cursor-pointer text-xs text-ink-muted hover:text-ink">Plain text</summary>
                     <pre className="mt-1 whitespace-pre-wrap text-xs">{preview.text}</pre>
                   </details>
                 </div>

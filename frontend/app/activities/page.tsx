@@ -311,7 +311,7 @@ function ActivitiesWorkspace() {
       render: (row) => (
         <>
           {row.student.name}
-          <span className="block text-xs text-muted-foreground">{row.student.student_id}</span>
+          <span className="block text-xs text-ink-muted">{row.student.student_id}</span>
         </>
       ),
     },
@@ -348,7 +348,7 @@ function ActivitiesWorkspace() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Activities</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Interviews, mentoring, reviews, placement calls and the rest of the work assigned
           across the institution.
         </p>
@@ -394,7 +394,7 @@ function ActivitiesWorkspace() {
             around it here would nest labels invalidly, so the visible text
             sits beside it as a sibling instead, and `aria-label` carries the
             accessible name. */}
-        <div className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm">
+        <div className="flex h-10 items-center gap-2 rounded-md border border-line px-3 text-sm">
           <Checkbox
             aria-label="Mine"
             checked={filters.mine}
@@ -402,7 +402,7 @@ function ActivitiesWorkspace() {
           />
           <span>Mine</span>
         </div>
-        <div className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm">
+        <div className="flex h-10 items-center gap-2 rounded-md border border-line px-3 text-sm">
           <Checkbox
             aria-label="Overdue"
             checked={filters.overdue}
@@ -417,7 +417,7 @@ function ActivitiesWorkspace() {
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+      <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">
         <Select
           aria-label="Saved filters"
           value={selectedSavedFilterId}

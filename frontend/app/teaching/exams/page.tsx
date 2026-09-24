@@ -103,7 +103,7 @@ function Exams() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Examinations</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Papers are drawn from the question bank when each candidate starts.
           </p>
         </div>
@@ -263,10 +263,10 @@ function Exams() {
           <Table>
             <thead>
               <tr>
-                <Th className="sticky top-0 z-10 bg-muted">Examination</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Batch</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Opens</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Status</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Examination</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Batch</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Opens</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Status</Th>
               </tr>
             </thead>
             <tbody className="">
@@ -274,18 +274,18 @@ function Exams() {
                 <tr
                   key={row.id}
                   onClick={() => router.push(`/teaching/exams/${row.id}`)}
-                  className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/60 active:bg-muted"
+                  className="animate-fade-in cursor-pointer transition-colors hover:bg-sunken/60 active:bg-sunken"
                 >
                   <Td>
                     <Link
                       href={`/teaching/exams/${row.id}`}
                       onClick={(event) => event.stopPropagation()}
-                      className="font-medium underline hover:text-foreground"
+                      className="font-medium underline hover:text-ink"
                     >
                       {row.title}
                     </Link>
-                    <div className="font-mono text-xs text-muted-foreground">{row.code}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="font-mono text-xs text-ink-muted">{row.code}</div>
+                    <div className="text-xs text-ink-muted">
                       {row.total_questions} questions · {row.duration_minutes} minutes
                     </div>
                   </Td>

@@ -175,7 +175,7 @@ function FormsList() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Forms</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             The dynamic schema behind activities, student profiles and
             registration. A published version is what the rest of the app
             renders; a draft is where you make the next change.
@@ -225,7 +225,7 @@ function FormsList() {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.slug} className="hover:bg-muted/40">
+                <tr key={row.slug} className="hover:bg-sunken/40">
                   <Td>
                     <Link
                       href={`/admin/forms/${row.slug}`}
@@ -233,7 +233,7 @@ function FormsList() {
                     >
                       {row.name}
                     </Link>
-                    <p className="text-xs text-muted-foreground">{row.slug}</p>
+                    <p className="text-xs text-ink-muted">{row.slug}</p>
                   </Td>
                   <Td className="capitalize">{row.entity}</Td>
                   <Td>
@@ -248,7 +248,7 @@ function FormsList() {
                         {row.published_version.field_count} fields
                       </Badge>
                     ) : (
-                      <span className="text-muted-foreground">None</span>
+                      <span className="text-ink-muted">None</span>
                     )}
                   </Td>
                   <Td>
@@ -258,7 +258,7 @@ function FormsList() {
                         {row.draft_version.field_count} fields
                       </Badge>
                     ) : (
-                      <span className="text-muted-foreground">None</span>
+                      <span className="text-ink-muted">None</span>
                     )}
                   </Td>
                 </tr>

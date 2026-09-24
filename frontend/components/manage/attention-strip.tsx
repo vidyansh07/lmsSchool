@@ -146,7 +146,7 @@ export function ManagerAttentionStrip() {
         emptyTitle="Nothing needs attention"
         emptyDescription="No batch, student or trainer is currently flagged."
       />
-      <p className="text-xs text-muted-foreground">As of {formatDate(data.as_of)}.</p>
+      <p className="text-xs text-ink-muted">As of {formatDate(data.as_of)}.</p>
     </div>
   );
 }

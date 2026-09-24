@@ -55,7 +55,7 @@ function TrainersTable() {
             ? '—'
             : row.skills.slice(0, 3).map((skill) => <Badge key={skill}>{skill}</Badge>)}
           {row.skills.length > 3 ? (
-            <span className="text-xs text-muted-foreground">+{row.skills.length - 3}</span>
+            <span className="text-xs text-ink-muted">+{row.skills.length - 3}</span>
           ) : null}
         </div>
       ),
@@ -100,7 +100,7 @@ function TrainersTable() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Trainers</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Trainer records, skills and availability for future assignments.
           </p>
         </div>

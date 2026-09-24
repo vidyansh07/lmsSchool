@@ -152,7 +152,7 @@ function AutomationRulesList() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Automation</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Rules that react to a trigger — an activity completing, a risk level changing, a
             deadline passing — with a testable condition and a set of actions. Nothing here
             runs code a person typed.
@@ -202,7 +202,7 @@ function AutomationRulesList() {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id} className="hover:bg-muted/40">
+                <tr key={row.id} className="hover:bg-sunken/40">
                   <Td>
                     <Link
                       href={`/admin/automation/${row.id}`}
@@ -211,7 +211,7 @@ function AutomationRulesList() {
                       {row.name}
                     </Link>
                     {row.is_system ? (
-                      <p className="text-xs text-muted-foreground">Seeded</p>
+                      <p className="text-xs text-ink-muted">Seeded</p>
                     ) : null}
                   </Td>
                   <Td>{AUTOMATION_TRIGGER_LABEL[row.trigger]}</Td>

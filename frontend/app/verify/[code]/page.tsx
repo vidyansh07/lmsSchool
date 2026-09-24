@@ -58,7 +58,7 @@ function Verify({ code }: { code: string }) {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Certificate verification</h1>
-        <p className="text-sm text-muted-foreground">{certificate.institution}</p>
+        <p className="text-sm text-ink-muted">{certificate.institution}</p>
       </div>
 
       <Card>
@@ -80,27 +80,27 @@ function Verify({ code }: { code: string }) {
         <CardContent>
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
-              <dt className="text-muted-foreground">Certificate number</dt>
+              <dt className="text-ink-muted">Certificate number</dt>
               <dd className="font-mono">{certificate.certificate_number}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Completed on</dt>
+              <dt className="text-ink-muted">Completed on</dt>
               <dd>{formatDate(certificate.completion_date)}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Issued on</dt>
+              <dt className="text-ink-muted">Issued on</dt>
               <dd>{formatDate(certificate.issued_on)}</dd>
             </div>
             {certificate.revoked_on ? (
               <div>
-                <dt className="text-muted-foreground">Revoked on</dt>
+                <dt className="text-ink-muted">Revoked on</dt>
                 <dd>{formatDate(certificate.revoked_on)}</dd>
               </div>
             ) : null}
           </dl>
 
           {!certificate.is_valid ? (
-            <p className="mt-4 text-sm text-muted-foreground">
+            <p className="mt-4 text-sm text-ink-muted">
               This certificate was issued by {certificate.institution} and has since been
               withdrawn. It is not a valid claim.
             </p>

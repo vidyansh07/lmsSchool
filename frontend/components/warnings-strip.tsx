@@ -30,9 +30,9 @@ const TONE: Record<
   WarningSeverity,
   { icon: typeof Info; row: string; badge: 'error' | 'warning' | 'neutral' }
 > = {
-  error: { icon: AlertOctagon, row: 'text-rose', badge: 'error' },
-  warning: { icon: AlertTriangle, row: 'text-amber', badge: 'warning' },
-  info: { icon: Info, row: 'text-sky', badge: 'neutral' },
+  error: { icon: AlertOctagon, row: 'text-danger', badge: 'error' },
+  warning: { icon: AlertTriangle, row: 'text-warning', badge: 'warning' },
+  info: { icon: Info, row: 'text-info', badge: 'neutral' },
 };
 
 function WarningRow({ warning }: { warning: StaffWarning }) {
@@ -46,18 +46,18 @@ function WarningRow({ warning }: { warning: StaffWarning }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             {warning.href ? (
-              <Link href={warning.href} className="font-medium text-foreground hover:text-primary">
+              <Link href={warning.href} className="font-medium text-ink hover:text-action">
                 {warning.label}
               </Link>
             ) : (
-              <span className="font-medium text-foreground">{warning.label}</span>
+              <span className="font-medium text-ink">{warning.label}</span>
             )}
             <Badge variant={tone.badge}>{warning.count}</Badge>
           </div>
           {warning.items.length > 0 ? (
             <button
               type="button"
-              className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              className="mt-1 inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink"
               onClick={() => setOpen((value) => !value)}
               aria-expanded={open}
             >
@@ -75,11 +75,11 @@ function WarningRow({ warning }: { warning: StaffWarning }) {
               {warning.items.map((item) => (
                 <li key={`${item.href}-${item.label}`}>
                   {item.href ? (
-                    <Link href={item.href} className="text-muted-foreground hover:text-primary">
+                    <Link href={item.href} className="text-ink-muted hover:text-action">
                       {item.label}
                     </Link>
                   ) : (
-                    <span className="text-muted-foreground">{item.label}</span>
+                    <span className="text-ink-muted">{item.label}</span>
                   )}
                 </li>
               ))}
@@ -101,9 +101,9 @@ export function WarningsStrip({ className }: { className?: string }) {
         <div className="space-y-1">
           <CardTitle className="flex items-center gap-2">
             {data && data.length === 0 ? (
-              <ShieldCheck className="size-5 text-emerald" aria-hidden="true" />
+              <ShieldCheck className="size-5 text-success" aria-hidden="true" />
             ) : (
-              <AlertTriangle className="size-5 text-amber" aria-hidden="true" />
+              <AlertTriangle className="size-5 text-warning" aria-hidden="true" />
             )}
             Needs attention
           </CardTitle>
@@ -130,7 +130,7 @@ export function WarningsStrip({ className }: { className?: string }) {
             <Skeleton className="h-4 w-1/2" />
           </div>
         ) : data.length === 0 ? null : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-line">
             {data.map((warning) => (
               <WarningRow key={warning.kind} warning={warning} />
             ))}

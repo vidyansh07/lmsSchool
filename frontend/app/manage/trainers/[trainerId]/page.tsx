@@ -119,13 +119,13 @@ export function TrainerDetail({ trainerId }: { trainerId: string }) {
 
   return (
     <div className="space-y-6">
-      <Link href="/manage/trainers" className="inline-block text-sm text-muted-foreground hover:text-foreground">
+      <Link href="/manage/trainers" className="inline-block text-sm text-ink-muted hover:text-ink">
         ← All trainers
       </Link>
 
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">{fallback(trainer.name, UNKNOWN)}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           <span className="font-mono text-xs">{fallback(trainer.trainer_id)}</span> · {fallback(trainer.email)}
         </p>
       </div>
@@ -235,15 +235,15 @@ export function TrainerDetail({ trainerId }: { trainerId: string }) {
                 {student_feedback.length === 0 ? (
                   <EmptyState title="No feedback yet" description="No student has left feedback for this trainer." />
                 ) : (
-                  <ul className="divide-y divide-border rounded-card border border-border">
+                  <ul className="divide-y divide-line rounded-card border border-line">
                     {student_feedback.map((item) => (
                       <li
                         key={item.id}
-                        className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-muted/40"
+                        className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-sunken/40"
                         data-testid="student-feedback"
                       >
                         <p className="text-sm">{fallback(item.body, NO_DATA)}</p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-ink-muted">
                           {fallback(item.batch_code)} · {formatDate(item.created_at)}
                         </p>
                       </li>

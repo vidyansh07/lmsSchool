@@ -186,7 +186,7 @@ function InstitutionSettings() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Institution settings</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Who this institution is to the people it writes to, and the operational limits an
           administrator changes without a deployment.
         </p>
@@ -292,7 +292,7 @@ function InstitutionSettings() {
                 once: on a fresh install nobody has changed anything, and a
                 line saying so would only invite the question. */}
             {row?.updated_at ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-ink-muted">
                 Last changed by {row.updated_by_name || UNKNOWN} on{' '}
                 {formatDateTime(row.updated_at)}.
               </p>

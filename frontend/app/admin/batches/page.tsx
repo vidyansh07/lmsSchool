@@ -47,7 +47,7 @@ function BatchList() {
       render: (batch) => (
         <Link
           href={`/admin/batches/${batch.id}`}
-          className="font-medium hover:text-primary hover:underline"
+          className="font-medium hover:text-action hover:underline"
         >
           {batch.name}
         </Link>
@@ -60,7 +60,7 @@ function BatchList() {
       header: 'Runs',
       sortable: true,
       render: (batch) => (
-        <span className="whitespace-nowrap text-muted-foreground">
+        <span className="whitespace-nowrap text-ink-muted">
           {formatDate(batch.start_date)} – {formatDate(batch.end_date)}
         </span>
       ),
@@ -97,7 +97,7 @@ function BatchList() {
           <h1 className="text-2xl font-semibold tracking-tight">
             {isAdmin ? 'Batches' : 'My batches'}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             {isAdmin
               ? 'Every cohort running a course, with its trainer and seats.'
               : 'The cohorts you have been assigned to teach.'}

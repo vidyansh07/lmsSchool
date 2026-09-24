@@ -9,7 +9,7 @@ export default function CalendarPage() {
       <div className="space-y-6">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Your classes and batch milestones. Only what you are part of appears here.
           </p>
         </div>

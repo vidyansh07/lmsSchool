@@ -290,7 +290,7 @@ export function FormDetail({ slug }: { slug: string }) {
         <h1 className="text-2xl font-semibold tracking-tight">
           {definition.name}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {definition.slug} · {definition.entity}
         </p>
       </div>
@@ -320,7 +320,7 @@ export function FormDetail({ slug }: { slug: string }) {
         </div>
 
         {definition.versions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             No versions yet. Open a draft to start adding fields.
           </p>
         ) : (
@@ -342,7 +342,7 @@ export function FormDetail({ slug }: { slug: string }) {
                   <tr
                     key={row.id}
                     className={
-                      row.number === selected ? "bg-muted/40" : "hover:bg-muted/40"
+                      row.number === selected ? "bg-sunken/40" : "hover:bg-sunken/40"
                     }
                   >
                     <Td>
@@ -409,7 +409,7 @@ export function FormDetail({ slug }: { slug: string }) {
             onRetry={reload}
           />
         ) : !version ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Select a version above, or open a new draft, to edit its fields.
           </p>
         ) : (

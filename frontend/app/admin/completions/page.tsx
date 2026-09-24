@@ -125,7 +125,7 @@ function Completions() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Course completions</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Students who have met the rules, waiting for a decision.
         </p>
       </div>
@@ -196,7 +196,7 @@ function Completions() {
                     <Badge variant={COMPLETION_STATUS_VARIANT[row.status]}>
                       {COMPLETION_STATUS_LABEL[row.status]}
                     </Badge>
-                    <span className="font-mono text-xs text-muted-foreground">
+                    <span className="font-mono text-xs text-ink-muted">
                       {studentCode} · {row.batch_code}
                     </span>
                   </div>

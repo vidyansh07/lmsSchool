@@ -177,7 +177,7 @@ export function DsrQueue() {
       render: (row) => (
         <Link
           href={`/manage/batches/${row.batch}`}
-          className="font-mono text-xs text-foreground hover:text-primary hover:underline"
+          className="font-mono text-xs text-ink hover:text-action hover:underline"
         >
           {fallback(row.batch_code, NO_DATA)}
         </Link>
@@ -315,7 +315,7 @@ export function DsrQueue() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Daily reports</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Opens on what is waiting for your review, newest first. Approve inline; rejecting or
             asking for a revision needs a word about why. Change the filters below to browse the
             rest as history.

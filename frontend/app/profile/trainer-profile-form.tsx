@@ -109,12 +109,12 @@ export function TrainerProfileForm() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Assignment availability:</span>
+          <span className="text-ink-muted">Assignment availability:</span>
           <Badge variant={profile.is_accepting_assignments ? 'success' : 'neutral'}>
             {profile.is_accepting_assignments ? 'Accepting assignments' : 'Not accepting'}
           </Badge>
           {/* Set by an administrator: trainers do not assign themselves work. */}
-          <span className="text-xs text-muted-foreground">Set by an administrator.</span>
+          <span className="text-xs text-ink-muted">Set by an administrator.</span>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4" noValidate>

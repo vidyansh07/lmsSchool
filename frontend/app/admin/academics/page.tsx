@@ -117,7 +117,7 @@ function AcademicRules() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Academic rules</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Institution-wide settings. Leave a field empty to fall back to the built-in default. A
           course can override any of these.
         </p>
@@ -202,7 +202,7 @@ function AcademicRules() {
             <dl className="grid gap-3 text-sm sm:grid-cols-3">
               {Object.entries(effective).map(([name, value]) => (
                 <div key={name}>
-                  <dt className="text-muted-foreground">{name.replace(/_/g, ' ')}</dt>
+                  <dt className="text-ink-muted">{name.replace(/_/g, ' ')}</dt>
                   <dd className="font-medium">{String(value)}</dd>
                 </div>
               ))}

@@ -376,11 +376,11 @@ export function AdmissionsDashboardContent() {
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <p className="text-sm font-medium text-muted-foreground">
+        <p className="text-sm font-medium text-ink-muted">
           {greeting(user?.full_name || user?.email)}
         </p>
         <h1 className="text-2xl font-semibold tracking-tight">Admissions dashboard</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Today&apos;s pipeline, and what needs chasing before you start the next one.
         </p>
       </div>
@@ -488,7 +488,7 @@ export function AdmissionsDashboardContent() {
         </CardHeader>
         <CardContent>
           {dashboard.error ? (
-            <p className="text-sm text-muted-foreground">Not available right now.</p>
+            <p className="text-sm text-ink-muted">Not available right now.</p>
           ) : (
             <BarChart
               data={pipelineBottlenecks(dashboard.data)}
@@ -510,7 +510,7 @@ export function AdmissionsDashboardContent() {
         </CardHeader>
         <CardContent>
           {recentEnrollments.error ? (
-            <p className="text-sm text-muted-foreground">Not available right now.</p>
+            <p className="text-sm text-ink-muted">Not available right now.</p>
           ) : (
             <DonutChart
               data={summarizeEnrollmentStatuses(recentEnrollments.data)}
@@ -549,7 +549,7 @@ export function AdmissionsDashboardContent() {
           <h2 id="fees-heading" className="text-lg font-semibold tracking-tight">
             Fees
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Collections and what is still owed. Record a payment from the student&apos;s record.
           </p>
         </div>
@@ -632,8 +632,8 @@ export function AdmissionsDashboardContent() {
         </Card>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        <Link href="/admissions" className="underline hover:text-foreground">
+      <p className="text-xs text-ink-muted">
+        <Link href="/admissions" className="underline hover:text-ink">
           Full admissions list
         </Link>
       </p>

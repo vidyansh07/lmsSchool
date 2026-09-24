@@ -11,7 +11,7 @@ export default function MatrixPage() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Permission matrix
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Every role by every permission. Change a role from{" "}
             <Link href="/admin/roles" className="underline underline-offset-2">
               Roles

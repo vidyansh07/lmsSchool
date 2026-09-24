@@ -294,18 +294,18 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
         ) : null}
 
         {batch.schedules.length > 0 ? (
-          <ul className="divide-y divide-border rounded-md border border-border">
+          <ul className="divide-y divide-line rounded-md border border-line">
             {batch.schedules.map((schedule) => (
               <li
                 key={schedule.id}
-                className="animate-fade-in flex flex-wrap items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-muted/40"
+                className="animate-fade-in flex flex-wrap items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-sunken/40"
               >
                 <span className="w-24 font-medium">{schedule.weekday_label}</span>
-                <span className="text-muted-foreground">
+                <span className="text-ink-muted">
                   {schedule.start_time.slice(0, 5)}–{schedule.end_time.slice(0, 5)}
                 </span>
                 {schedule.location ? (
-                  <span className="text-muted-foreground">{schedule.location}</span>
+                  <span className="text-ink-muted">{schedule.location}</span>
                 ) : null}
                 <Button
                   size="sm"
@@ -350,9 +350,9 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
           </Button>
         </form>
 
-        <div className="space-y-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+        <div className="space-y-2 rounded-md border border-action/30 bg-action/5 p-3">
           <p className="text-sm font-medium">Set this batch up for teaching</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Writes a Monday to Saturday timetable at the times above, turns it into dated classes,
             and puts the course&rsquo;s published lessons on them in order. Days already in the
             timetable are left as they are, and running it again creates nothing.
@@ -363,9 +363,9 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
           </Button>
         </div>
 
-        <div className="space-y-2 rounded-md border border-border p-3">
+        <div className="space-y-2 rounded-md border border-line p-3">
           <p className="text-sm font-medium">Classes from this timetable</p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Turns the weekly pattern above into dated classes across the batch, skipping any day
             marked as a holiday. Safe to run again — classes that already exist are left alone.
           </p>
@@ -385,7 +385,7 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
             {isGenerating ? 'Generating…' : 'Generate classes'}
           </Button>
           {batch.schedules.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Add a weekly class first.</p>
+            <p className="text-sm text-ink-muted">Add a weekly class first.</p>
           ) : null}
         </div>
       </CardContent>
@@ -496,17 +496,17 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
             <Table className="min-w-[36rem]">
               <thead>
                 <tr>
-                  <Th className="sticky top-0 z-10 bg-muted">Student ID</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Name</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Status</Th>
-                  {canManage ? <Th className="sticky top-0 z-10 bg-muted">Actions</Th> : null}
+                  <Th className="sticky top-0 z-10 bg-sunken">Student ID</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Name</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Status</Th>
+                  {canManage ? <Th className="sticky top-0 z-10 bg-sunken">Actions</Th> : null}
                 </tr>
               </thead>
               <tbody className="">
                 {roster.map((entry) => (
                   <tr
                     key={entry.id}
-                    className="animate-fade-in transition-colors hover:bg-muted/40"
+                    className="animate-fade-in transition-colors hover:bg-sunken/40"
                   >
                     <Td className="font-mono text-xs">{entry.student_code}</Td>
                     <Td className="font-medium">{entry.full_name || entry.email}</Td>
@@ -655,11 +655,11 @@ export function BatchDetailView({ batchId }: { batchId: string }) {
               {BATCH_STATUS_LABEL[batch.status]}
             </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             <span className="font-mono text-xs">{batch.code}</span> ·{' '}
             <Link
               href={`/courses/${batch.course_slug}`}
-              className="underline hover:text-foreground"
+              className="underline hover:text-ink"
             >
               {batch.course_title}
             </Link>{' '}
@@ -680,7 +680,7 @@ export function BatchDetailView({ batchId }: { batchId: string }) {
           </CardHeader>
           <CardContent>
             {transitionsFor(batch.status).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No status changes are available.</p>
+              <p className="text-sm text-ink-muted">No status changes are available.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {transitionsFor(batch.status).map((transition) => (

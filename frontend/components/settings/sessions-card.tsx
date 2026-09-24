@@ -174,7 +174,7 @@ export function SessionsCard() {
           </>
         )}
 
-        <div className="border-t border-border pt-3">
+        <div className="border-t border-line pt-3">
           {revokeAllMessage ? (
             <Alert variant="info" className="mb-3">
               {revokeAllMessage}
@@ -187,7 +187,7 @@ export function SessionsCard() {
           >
             {isRevokingAll ? "Signing out…" : "Sign out everywhere"}
           </Button>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-ink-muted">
             Ends every session, including this one. Use this if you think
             someone else has access to your account.
           </p>

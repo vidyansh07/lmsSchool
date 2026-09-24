@@ -140,7 +140,7 @@ export function DateRangePicker({
       {showCustom ? (
         <div className="flex flex-wrap items-end gap-2">
           <div>
-            <label htmlFor={startId} className="mb-1 block text-xs font-medium text-muted-foreground">
+            <label htmlFor={startId} className="mb-1 block text-xs font-medium text-ink-muted">
               From
             </label>
             <Input
@@ -152,7 +152,7 @@ export function DateRangePicker({
             />
           </div>
           <div>
-            <label htmlFor={endId} className="mb-1 block text-xs font-medium text-muted-foreground">
+            <label htmlFor={endId} className="mb-1 block text-xs font-medium text-ink-muted">
               To
             </label>
             <Input

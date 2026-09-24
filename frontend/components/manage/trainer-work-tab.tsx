@@ -137,7 +137,7 @@ export function TrainerWorkTab({ trainerId }: { trainerId: string }) {
       render: (row) => (
         <>
           {row.student.name}
-          <span className="block text-xs text-muted-foreground">{row.student.student_id}</span>
+          <span className="block text-xs text-ink-muted">{row.student.student_id}</span>
         </>
       ),
     },

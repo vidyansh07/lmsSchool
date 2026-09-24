@@ -16,7 +16,7 @@ function MyFees() {
     <div className="space-y-4">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My fees</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Every payment has a receipt number. Questions about a figure go to the admissions desk.
         </p>
       </div>

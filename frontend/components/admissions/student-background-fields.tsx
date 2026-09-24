@@ -121,10 +121,10 @@ export function StudentBackgroundFields({
               htmlFor={id}
               className={cn(
                 'flex cursor-pointer items-start gap-3 rounded-card border p-3 transition-colors duration-150',
-                'has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-primary',
+                'has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-action',
                 checked
-                  ? 'border-primary bg-accent'
-                  : 'border-border bg-surface hover:border-primary/40 hover:bg-muted',
+                  ? 'border-action bg-selected'
+                  : 'border-line bg-surface hover:border-action/40 hover:bg-sunken',
               )}
             >
               <input
@@ -139,16 +139,16 @@ export function StudentBackgroundFields({
               <span
                 className={cn(
                   'flex size-9 shrink-0 items-center justify-center rounded-xl',
-                  checked ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                  checked ? 'bg-action text-action-fg' : 'bg-sunken text-ink-muted',
                 )}
               >
                 <Icon className="size-[18px]" strokeWidth={1.75} aria-hidden="true" />
               </span>
               <span className="min-w-0 leading-tight">
-                <span className={cn('block text-sm font-semibold', checked ? 'text-primary' : 'text-foreground')}>
+                <span className={cn('block text-sm font-semibold', checked ? 'text-action' : 'text-ink')}>
                   {option.label}
                 </span>
-                <span className="block text-xs text-muted-foreground">{option.hint}</span>
+                <span className="block text-xs text-ink-muted">{option.hint}</span>
               </span>
             </label>
           );

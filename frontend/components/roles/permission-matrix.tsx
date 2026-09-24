@@ -50,11 +50,11 @@ const ICON: Record<
 };
 
 const TONE: Record<MatrixCell, string> = {
-  explicit: "text-emerald",
-  inherited: "text-foreground",
-  locked: "text-amber",
-  denied: "text-muted-foreground",
-  system: "text-muted-foreground",
+  explicit: "text-success",
+  inherited: "text-ink",
+  locked: "text-warning",
+  denied: "text-ink-muted",
+  system: "text-ink-muted",
 };
 
 // A cell can be locked or unlocked only when a grant actually exists.
@@ -138,7 +138,7 @@ export function PermissionMatrix() {
           </Select>
         </Field>
         <ul
-          className="flex flex-wrap gap-3 text-xs text-muted-foreground"
+          className="flex flex-wrap gap-3 text-xs text-ink-muted"
           aria-label="Legend"
         >
           {(Object.keys(MATRIX_CELL_LABEL) as MatrixCell[]).map((cell) => {
@@ -165,11 +165,11 @@ export function PermissionMatrix() {
         <Table>
           <thead>
             <tr>
-              <Th className="sticky left-0 top-0 z-30 bg-muted">Permission</Th>
+              <Th className="sticky left-0 top-0 z-30 bg-sunken">Permission</Th>
               {data.roles.map((role) => (
                 <Th
                   key={role.slug}
-                  className="sticky top-0 z-20 bg-muted text-center"
+                  className="sticky top-0 z-20 bg-sunken text-center"
                 >
                   {role.name}
                 </Th>
@@ -183,7 +183,7 @@ export function PermissionMatrix() {
                   <span className="block text-sm">
                     {permission.description || permission.code}
                   </span>
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <span className="font-mono text-xs text-ink-muted">
                     {permission.code}
                   </span>
                 </Td>
@@ -205,7 +205,7 @@ export function PermissionMatrix() {
                           onClick={() =>
                             apply(role.slug, permission.code, cell !== "locked")
                           }
-                          className={`inline-flex items-center gap-1 rounded p-1 hover:bg-muted ${TONE[cell]}`}
+                          className={`inline-flex items-center gap-1 rounded p-1 hover:bg-sunken ${TONE[cell]}`}
                           title={
                             cell === "locked"
                               ? "Unlock this grant"

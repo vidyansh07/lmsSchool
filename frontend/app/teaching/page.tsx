@@ -61,7 +61,7 @@ function Teaching() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Teaching today</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Your classes for today. Open a class to take its register.
         </p>
       </div>
@@ -93,7 +93,7 @@ function Teaching() {
             <Card
               key={session.id}
               data-testid="today-class"
-              className="animate-fade-in transition-colors hover:border-primary/40"
+              className="animate-fade-in transition-colors hover:border-action/40"
             >
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -103,7 +103,7 @@ function Teaching() {
                   {session.attendance_taken_at ? (
                     <Badge variant="success">Register taken</Badge>
                   ) : null}
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <span className="font-mono text-xs text-ink-muted">
                     {session.batch_code}
                   </span>
                 </div>
@@ -120,7 +120,7 @@ function Teaching() {
                   </Link>
                 </Button>
                 {!session.can_take_attendance ? (
-                  <p className="mt-2 text-sm text-muted-foreground">
+                  <p className="mt-2 text-sm text-ink-muted">
                     The register opens once the class has started.
                   </p>
                 ) : null}

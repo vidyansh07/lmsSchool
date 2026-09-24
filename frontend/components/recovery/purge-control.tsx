@@ -90,7 +90,7 @@ export function PurgeControl({ record, onPurged }: { record: DeletedRecord; onPu
   }
 
   return (
-    <div className="w-56 space-y-2 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+    <div className="w-56 space-y-2 rounded-md border border-danger/40 bg-danger/5 p-3">
       <label htmlFor={`purge-reason-${record.id}`} className="block text-xs font-medium">
         Why destroy this permanently?
       </label>

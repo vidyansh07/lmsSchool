@@ -82,11 +82,11 @@ export function ReviewsPanel({ subjectType, subjectId, canManage }: ReviewsPanel
       ) : reviews.length === 0 ? (
         <EmptyState title="No reviews yet" description="Nobody has recorded a performance review here." />
       ) : (
-        <ul className="divide-y divide-border rounded-card border border-border">
+        <ul className="divide-y divide-line rounded-card border border-line">
           {reviews.map((review) => (
             <li
               key={review.id}
-              className="animate-fade-in space-y-1.5 px-4 py-3 transition-colors hover:bg-muted/40"
+              className="animate-fade-in space-y-1.5 px-4 py-3 transition-colors hover:bg-sunken/40"
               data-testid="performance-review-row"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -110,11 +110,11 @@ export function ReviewsPanel({ subjectType, subjectId, canManage }: ReviewsPanel
               </div>
               <p className="text-sm">{fallback(review.summary, NO_DATA)}</p>
               {review.next_review_at ? (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-ink-muted">
                   Next review due {formatDate(review.next_review_at)}
                 </p>
               ) : null}
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-ink-muted">
                 By {fallback(review.reviewer_name, 'Unknown')} · {formatDate(review.created_at)}
               </p>
             </li>

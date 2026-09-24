@@ -158,7 +158,7 @@ function RoleCheckboxes({
         </div>
       </div>
       {error ? (
-        <p id={errorId} className="text-xs text-destructive">
+        <p id={errorId} className="text-xs text-danger">
           {error}
         </p>
       ) : null}
@@ -321,10 +321,10 @@ function ActivityTypeDialog({
           </Field>
 
           <details
-            className="space-y-4 rounded-card border border-border p-3"
+            className="space-y-4 rounded-card border border-line p-3"
             open={isEdit || assignmentHasError}
           >
-            <summary className="cursor-pointer select-none text-sm font-medium hover:text-foreground">
+            <summary className="cursor-pointer select-none text-sm font-medium hover:text-ink">
               Who can do this, and who sees it
             </summary>
             <div className="space-y-4 pt-3">
@@ -333,7 +333,7 @@ function ActivityTypeDialog({
                   file's own docstring names ("who may create and be assigned
                   it") — grouped under one shared heading rather than sitting
                   as two unrelated fields among the other ~13. */}
-              <fieldset className="space-y-4 rounded-card border border-border p-3">
+              <fieldset className="space-y-4 rounded-card border border-line p-3">
                 <legend className="px-1 text-sm font-medium">Roles</legend>
                 <RoleCheckboxes
                   legend="Who may create it"
@@ -355,10 +355,10 @@ function ActivityTypeDialog({
                 />
               </fieldset>
 
-              <div className="flex items-center justify-between rounded-md border border-border p-3">
+              <div className="flex items-center justify-between rounded-md border border-line p-3">
                 <div>
                   <p className="text-sm font-medium">Visible to the student</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-ink-muted">
                     An activity of this type may still be hidden on its own; it can never be
                     made visible when the type is not.
                   </p>
@@ -374,10 +374,10 @@ function ActivityTypeDialog({
           </details>
 
           <details
-            className="space-y-4 rounded-card border border-border p-3"
+            className="space-y-4 rounded-card border border-line p-3"
             open={isEdit || schedulingHasError}
           >
-            <summary className="cursor-pointer select-none text-sm font-medium hover:text-foreground">
+            <summary className="cursor-pointer select-none text-sm font-medium hover:text-ink">
               Scheduling and its form
             </summary>
             <div className="space-y-4 pt-3">
@@ -447,10 +447,10 @@ function ActivityTypeDialog({
                 </Select>
               </Field>
 
-              <div className="flex items-center justify-between rounded-md border border-border p-3">
+              <div className="flex items-center justify-between rounded-md border border-line p-3">
                 <div>
                   <p className="text-sm font-medium">Requires review</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-ink-muted">
                     Completion goes to Under review instead of Completed.
                   </p>
                 </div>
@@ -465,10 +465,10 @@ function ActivityTypeDialog({
           </details>
 
           <details
-            className="space-y-4 rounded-card border border-border p-3"
+            className="space-y-4 rounded-card border border-line p-3"
             open={isEdit || scoringHasError}
           >
-            <summary className="cursor-pointer select-none text-sm font-medium hover:text-foreground">
+            <summary className="cursor-pointer select-none text-sm font-medium hover:text-ink">
               Scoring{isEdit ? " and status" : ""}
             </summary>
             <div className="space-y-4 pt-3">
@@ -589,7 +589,7 @@ function ActivityTypesList() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Activity types</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             The catalog behind every piece of staff work — interviews, mentoring,
             reviews, placement calls and the rest — with who may create and be
             assigned each, its pinned form, and how it feeds performance and risk.
@@ -643,10 +643,10 @@ function ActivityTypesList() {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.slug} className="hover:bg-muted/40">
+                <tr key={row.slug} className="hover:bg-sunken/40">
                   <Td>
                     <p className="font-medium">{row.name}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-ink-muted">
                       {row.slug}
                       {row.is_system ? " · seeded" : ""}
                     </p>
@@ -660,7 +660,7 @@ function ActivityTypesList() {
                     {row.form ? (
                       row.form.slug
                     ) : (
-                      <span className="text-muted-foreground">None</span>
+                      <span className="text-ink-muted">None</span>
                     )}
                   </Td>
                   <Td>{row.requires_review ? "Yes" : "No"}</Td>

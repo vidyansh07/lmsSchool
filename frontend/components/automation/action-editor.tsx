@@ -410,7 +410,7 @@ function ActionRow({
   const uid = useId();
 
   return (
-    <div className="space-y-4 rounded-md border border-border p-3">
+    <div className="space-y-4 rounded-md border border-line p-3">
       <div className="flex items-start justify-between gap-3">
         <Field label="Action" htmlFor={`${uid}-action-type`} className="max-w-xs flex-1">
           <Select
@@ -508,7 +508,7 @@ export function ActionEditor({
   return (
     <div className="space-y-3">
       {actions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           No actions yet. A rule with no actions can be tested but never does anything when
           activated.
         </p>

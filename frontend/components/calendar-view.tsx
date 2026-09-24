@@ -90,7 +90,7 @@ export function CalendarView({ days = 28 }: { days?: number }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {formatEventDay(range.start)} – {formatEventDay(range.end)}
         </p>
         <div className="flex gap-2">
@@ -120,10 +120,10 @@ export function CalendarView({ days = 28 }: { days?: number }) {
           {[...byDay.entries()].map(([day, events]) => (
             <li key={day} className="space-y-2">
               <h3 className="flex items-center gap-2 text-sm font-medium">
-                <CalendarDays className="size-4 text-muted-foreground" aria-hidden="true" />
+                <CalendarDays className="size-4 text-ink-muted" aria-hidden="true" />
                 {formatEventDay(day)}
               </h3>
-              <ul className="divide-y divide-border rounded-card border border-border">
+              <ul className="divide-y divide-line rounded-card border border-line">
                 {events.map((event, index) => (
                   <li
                     key={`${event.kind}-${event.start}-${index}`}
@@ -134,22 +134,22 @@ export function CalendarView({ days = 28 }: { days?: number }) {
                     </Badge>
                     <span className="min-w-0 flex-1 truncate font-medium">{event.title}</span>
                     {event.all_day ? (
-                      <span className="text-xs text-muted-foreground">All day</span>
+                      <span className="text-xs text-ink-muted">All day</span>
                     ) : (
-                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5 text-xs text-ink-muted">
                         <Clock className="size-3.5" aria-hidden="true" />
                         {formatEventTime(event.start)}
                         {event.end ? `–${formatEventTime(event.end)}` : ''}
                       </span>
                     )}
                     {event.location ? (
-                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5 text-xs text-ink-muted">
                         <MapPin className="size-3.5" aria-hidden="true" />
                         {event.location}
                       </span>
                     ) : null}
                     {event.batch_code ? (
-                      <span className="font-mono text-xs text-muted-foreground">
+                      <span className="font-mono text-xs text-ink-muted">
                         {event.batch_code}
                       </span>
                     ) : null}

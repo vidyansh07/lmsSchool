@@ -110,7 +110,7 @@ function BrandingSettings() {
     <div className="max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl">Branding</h1>
-        <p className="text-muted-foreground">
+        <p className="text-ink-muted">
           How this institution&rsquo;s copy of the product looks, for everyone who signs in.
         </p>
       </div>
@@ -144,11 +144,11 @@ function BrandingSettings() {
                   aria-label="Choose a brand colour"
                   value={HEX.test(color) ? color : '#EF7220'}
                   onChange={(event) => setColor(event.target.value)}
-                  className="h-10 w-14 cursor-pointer rounded-md border border-border bg-surface p-1"
+                  className="h-10 w-14 cursor-pointer rounded-md border border-line bg-surface p-1"
                 />
               </label>
             </div>
-            <p id="brand-color-help" className="text-xs text-muted-foreground">
+            <p id="brand-color-help" className="text-xs text-ink-muted">
               Six-digit hex, for example <code>#EF7220</code>. Leave empty for the built-in palette.
             </p>
 
@@ -161,7 +161,7 @@ function BrandingSettings() {
                     type="button"
                     onClick={() => setColor(option.value)}
                     aria-pressed={color.toLowerCase() === option.value.toLowerCase()}
-                    className="flex items-center gap-2 rounded-full border border-border bg-surface py-1.5 pl-1.5 pr-3 text-xs font-medium hover:bg-muted aria-pressed:border-primary aria-pressed:ring-1 aria-pressed:ring-primary"
+                    className="flex items-center gap-2 rounded-full border border-line bg-surface py-1.5 pl-1.5 pr-3 text-xs font-medium hover:bg-sunken aria-pressed:border-action aria-pressed:ring-1 aria-pressed:ring-action"
                   >
                     <span
                       aria-hidden="true"
@@ -214,7 +214,7 @@ function BrandingSettings() {
           <Button type="button" variant="outline">
             Secondary
           </Button>
-          <span className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-primary">
+          <span className="rounded-full bg-selected px-3 py-1 text-xs font-medium text-action">
             Highlighted
           </span>
           <span
@@ -222,7 +222,7 @@ function BrandingSettings() {
             className="h-8 w-24 rounded-md"
             style={{ backgroundColor: 'var(--color-brand)' }}
           />
-          <a href="#preview" className="text-primary underline underline-offset-2">
+          <a href="#preview" className="text-action underline underline-offset-2">
             A link
           </a>
         </CardContent>

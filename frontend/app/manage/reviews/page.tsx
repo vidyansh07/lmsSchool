@@ -88,7 +88,7 @@ export function ReviewsDueWorkspace() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Reviews due</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Performance reviews needing your attention — overdue by their own next-review date, or
           still a draft with no date set.
         </p>
@@ -107,7 +107,7 @@ export function ReviewsDueWorkspace() {
           <option value="trainer">Trainers only</option>
           <option value="student">Students only</option>
         </Select>
-        <div className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm">
+        <div className="flex h-10 items-center gap-2 rounded-md border border-line px-3 text-sm">
           <Checkbox
             aria-label="Due only"
             checked={filters.dueOnly}
@@ -132,7 +132,7 @@ export function ReviewsDueWorkspace() {
           description="No performance review currently needs action under these filters."
         />
       ) : (
-        <ul className="divide-y divide-border rounded-card border border-border">
+        <ul className="divide-y divide-line rounded-card border border-line">
           {rows.map((review) => {
             const href = subjectHref(review);
             const due = isDue(review, today);
@@ -146,9 +146,9 @@ export function ReviewsDueWorkspace() {
                     <Badge variant={REVIEW_STATUS_VARIANT[review.status]}>{REVIEW_STATUS_LABEL[review.status]}</Badge>
                     {due ? <Badge variant="error">Due</Badge> : null}
                   </div>
-                  <p className="truncate text-sm text-muted-foreground">{fallback(review.summary, NO_DATA)}</p>
+                  <p className="truncate text-sm text-ink-muted">{fallback(review.summary, NO_DATA)}</p>
                 </div>
-                <p className="whitespace-nowrap text-xs text-muted-foreground">
+                <p className="whitespace-nowrap text-xs text-ink-muted">
                   {review.next_review_at
                     ? `Next review ${formatDate(review.next_review_at)}`
                     : `Recorded ${formatDate(review.created_at)}`}
@@ -158,7 +158,7 @@ export function ReviewsDueWorkspace() {
             return (
               <li
                 key={review.id}
-                className="animate-fade-in transition-colors hover:bg-muted/40"
+                className="animate-fade-in transition-colors hover:bg-sunken/40"
                 data-testid="review-due-row"
               >
                 {href ? (

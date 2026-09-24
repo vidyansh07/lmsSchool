@@ -151,7 +151,7 @@ function Announcements() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Announcements</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             {isStudent
               ? 'Notices for your courses and batches.'
               : 'What has been posted, and to whom.'}
@@ -334,17 +334,17 @@ function Announcements() {
                   </Badge>
                 ) : null}
                 {row.batch_code ? (
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <span className="font-mono text-xs text-ink-muted">
                     {row.batch_code}
                   </span>
                 ) : null}
                 {row.role_name ? (
-                  <span className="text-xs text-muted-foreground">{row.role_name}</span>
+                  <span className="text-xs text-ink-muted">{row.role_name}</span>
                 ) : null}
                 {row.branch_name ? (
-                  <span className="text-xs text-muted-foreground">{row.branch_name}</span>
+                  <span className="text-xs text-ink-muted">{row.branch_name}</span>
                 ) : null}
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-ink-muted">
                   {row.status === 'scheduled'
                     ? `Scheduled for ${formatDateTime(row.publish_at)}`
                     : formatDateTime(row.published_at)}

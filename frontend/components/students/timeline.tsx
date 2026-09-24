@@ -228,20 +228,20 @@ export function StudentTimeline({
           <ol className="space-y-6">
             {groups.map((group) => (
               <li key={group.label}>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
                   {group.label}
                 </p>
-                <ul className="space-y-3 border-l border-border pl-4">
+                <ul className="space-y-3 border-l border-line pl-4">
                   {group.entries.map((entry) => {
                     const meta = timelineKindMeta(entry.kind);
                     const Icon = meta.icon;
                     const title = fallback(entry.title, NOT_AVAILABLE);
                     return (
                       <li key={entry.id} className="relative" data-testid="timeline-entry">
-                        <span className="absolute -left-[1.4rem] top-1 flex size-6 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                        <span className="absolute -left-[1.4rem] top-1 flex size-6 items-center justify-center rounded-full bg-sunken text-ink-muted">
                           <Icon className="size-3.5" aria-hidden="true" />
                         </span>
-                        <div className="rounded-card border border-border p-3">
+                        <div className="rounded-card border border-line p-3">
                           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                             <p className="font-medium">
                               {entry.href ? (
@@ -253,7 +253,7 @@ export function StudentTimeline({
                               )}
                             </p>
                             <time
-                              className="whitespace-nowrap text-xs text-muted-foreground"
+                              className="whitespace-nowrap text-xs text-ink-muted"
                               dateTime={entry.occurred_at}
                               title={formatDate(entry.occurred_at)}
                             >
@@ -261,9 +261,9 @@ export function StudentTimeline({
                             </time>
                           </div>
                           {entry.summary ? (
-                            <p className="mt-1 text-sm text-muted-foreground">{entry.summary}</p>
+                            <p className="mt-1 text-sm text-ink-muted">{entry.summary}</p>
                           ) : null}
-                          <p className="mt-2 text-xs text-muted-foreground">
+                          <p className="mt-2 text-xs text-ink-muted">
                             {meta.label}
                             {entry.actor ? ` · ${entry.actor.name}` : ''}
                           </p>

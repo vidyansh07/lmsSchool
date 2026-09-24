@@ -90,7 +90,7 @@ function MyAssignments() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My assignments</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Work set on your courses, with what you have handed in.
         </p>
       </div>
@@ -122,7 +122,7 @@ function MyAssignments() {
             <Card key={assignment.id} data-testid="assignment-card" className="">
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <span className="font-mono text-xs text-ink-muted">
                     {assignment.code}
                   </span>
                   {mine ? (
@@ -149,7 +149,7 @@ function MyAssignments() {
                 ) : null}
 
                 {mine ? (
-                  <div className="rounded-md border border-border p-3 text-sm">
+                  <div className="rounded-md border border-line p-3 text-sm">
                     <p className="font-medium">
                       Attempt {mine.attempt} · submitted {formatDateTime(mine.submitted_at)}
                     </p>
@@ -158,12 +158,12 @@ function MyAssignments() {
                         {mine.files.map((file) => (
                           <li key={file.id}>
                             <a
-                              className="underline hover:text-foreground"
+                              className="underline hover:text-ink"
                               href={submissionFileUrl(file.id)}
                             >
                               {file.original_filename}
                             </a>
-                            <span className="ml-1 text-xs text-muted-foreground">
+                            <span className="ml-1 text-xs text-ink-muted">
                               {formatBytes(file.size_bytes)}
                             </span>
                           </li>
@@ -186,7 +186,7 @@ function MyAssignments() {
                       </p>
                     ) : null}
                     {mine.feedback ? (
-                      <p className="mt-2 whitespace-pre-wrap text-muted-foreground">
+                      <p className="mt-2 whitespace-pre-wrap text-ink-muted">
                         {mine.feedback}
                       </p>
                     ) : null}
@@ -240,7 +240,7 @@ function MyAssignments() {
                     </Button>
                   </form>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-ink-muted">
                     {!assignment.is_open
                       ? 'This assignment is closed.'
                       : mine?.status === 'graded'

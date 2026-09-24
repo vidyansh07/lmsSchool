@@ -63,7 +63,7 @@ export function TrainersHub() {
               <Badge key={skill}>{skill}</Badge>
             ))}
             {row.skills.length > 3 ? (
-              <span className="text-xs text-muted-foreground">+{row.skills.length - 3}</span>
+              <span className="text-xs text-ink-muted">+{row.skills.length - 3}</span>
             ) : null}
           </div>
         ),
@@ -90,7 +90,7 @@ export function TrainersHub() {
         row.at_risk_students === undefined || row.at_risk_students === null ? (
           fallback(null, NO_DATA)
         ) : (
-          <span className={row.at_risk_students > 0 ? 'font-medium text-destructive' : undefined}>
+          <span className={row.at_risk_students > 0 ? 'font-medium text-danger' : undefined}>
             {row.at_risk_students}
           </span>
         ),
@@ -115,7 +115,7 @@ export function TrainersHub() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Trainers</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Every trainer on staff. Open one for their performance, the reviews written about them and
           the feedback their students have left.
         </p>

@@ -83,10 +83,10 @@ function VideoPanel({ lessonId }: { lessonId: string }) {
 
   if (!playback?.playback_url) {
     return (
-      <div className="flex aspect-video items-center justify-center rounded-card border border-dashed border-border bg-muted text-center">
+      <div className="flex aspect-video items-center justify-center rounded-card border border-dashed border-line bg-sunken text-center">
         <div className="space-y-1 px-6">
           <p className="text-sm font-medium">Video player</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-ink-muted">
             {playback?.provider && playback.provider !== 'external_url'
               ? `Hosted on ${playback.provider}. Signed playback is not wired up yet.`
               : 'No playable source is configured for this lesson.'}
@@ -102,7 +102,7 @@ function VideoPanel({ lessonId }: { lessonId: string }) {
       controls
       preload="metadata"
       controlsList="nodownload"
-      className="aspect-video w-full rounded-card border border-border bg-black"
+      className="aspect-video w-full rounded-card border border-line bg-black"
     >
       <source src={playback.playback_url} />
       Your browser cannot play this video.
@@ -113,20 +113,20 @@ function VideoPanel({ lessonId }: { lessonId: string }) {
 function ResourceRow({ resource }: { resource: LessonResource }) {
   const isLink = resource.kind === 'link';
   return (
-    <li className="flex flex-wrap items-center gap-3 border-b border-border py-2.5 last:border-b-0">
+    <li className="flex flex-wrap items-center gap-3 border-b border-line py-2.5 last:border-b-0">
       {isLink ? (
-        <Link2 className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <Link2 className="size-4 shrink-0 text-ink-muted" aria-hidden="true" />
       ) : (
-        <FileText className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <FileText className="size-4 shrink-0 text-ink-muted" aria-hidden="true" />
       )}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{resource.title}</p>
         {resource.description ? (
-          <p className="truncate text-xs text-muted-foreground">{resource.description}</p>
+          <p className="truncate text-xs text-ink-muted">{resource.description}</p>
         ) : null}
       </div>
       {!isLink && resource.size_bytes ? (
-        <span className="text-xs text-muted-foreground">{formatBytes(resource.size_bytes)}</span>
+        <span className="text-xs text-ink-muted">{formatBytes(resource.size_bytes)}</span>
       ) : null}
       {isLink ? (
         <Button asChild variant="outline" size="sm">
@@ -186,7 +186,7 @@ export function LessonBody({ lesson }: { lesson: LessonContent }) {
       ) : null}
 
       {lesson.description ? (
-        <p className="max-w-prose text-sm text-muted-foreground">{lesson.description}</p>
+        <p className="max-w-prose text-sm text-ink-muted">{lesson.description}</p>
       ) : null}
 
       {lesson.resources.length > 0 ? (

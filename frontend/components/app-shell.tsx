@@ -608,7 +608,7 @@ function Shell({
   const active = useActiveHref(groups.flatMap((group) => group.items.map((item) => item.href)));
 
   return (
-    <div className="min-h-dvh bg-background lg:flex">
+    <div className="min-h-dvh bg-canvas lg:flex">
       {/* Wide screens: the sidebar is simply there, at 17rem or, collapsed,
           5rem (80px) — a plain `width` transition. `globals.css`'s own
           motion-utilities docstring says to animate only `transform` and

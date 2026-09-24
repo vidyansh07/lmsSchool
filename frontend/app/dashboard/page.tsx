@@ -114,23 +114,23 @@ export function summarizeBatchStatuses(batches: DashboardBatch[]): DonutDatum[] 
 }
 
 function ClassList({ events, empty }: { events: CalendarEvent[]; empty: string }) {
-  if (events.length === 0) return <p className="text-sm text-muted-foreground">{empty}</p>;
+  if (events.length === 0) return <p className="text-sm text-ink-muted">{empty}</p>;
   return (
-    <ul className="divide-y divide-border">
+    <ul className="divide-y divide-line">
       {events.map((event, index) => (
         <li
           key={`${event.start}-${index}`}
           className="flex flex-wrap items-center gap-3 py-2 text-sm"
         >
-          <span className="w-24 shrink-0 text-muted-foreground">{formatEventDay(event.start)}</span>
+          <span className="w-24 shrink-0 text-ink-muted">{formatEventDay(event.start)}</span>
           {!event.all_day ? (
-            <span className="w-16 shrink-0 text-muted-foreground">
+            <span className="w-16 shrink-0 text-ink-muted">
               {formatEventTime(event.start)}
             </span>
           ) : null}
           <span className="min-w-0 flex-1 truncate">{event.title}</span>
           {event.location ? (
-            <span className="text-xs text-muted-foreground">{event.location}</span>
+            <span className="text-xs text-ink-muted">{event.location}</span>
           ) : null}
         </li>
       ))}
@@ -298,7 +298,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
   return (
     <div className="space-y-6">
       {showStatusLine ? (
-        <p aria-live="polite" className="animate-fade-in text-sm text-muted-foreground">
+        <p aria-live="polite" className="animate-fade-in text-sm text-ink-muted">
           {buildStatusLine(pendingTotal, riskCount)}
         </p>
       ) : null}
@@ -307,7 +307,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
         <Card className="">
           <CardHeader>
             <CardTitle as="h2" className="flex items-center gap-2">
-              <PlayCircle className="size-5 text-primary" aria-hidden="true" />
+              <PlayCircle className="size-5 text-action" aria-hidden="true" />
               Continue learning
             </CardTitle>
             <CardDescription>{data.continue_learning.course_title}</CardDescription>
@@ -335,7 +335,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
           <Card className="min-w-0">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <ClipboardList className="size-5 text-primary" aria-hidden="true" />
+                <ClipboardList className="size-5 text-action" aria-hidden="true" />
                 Pending work
               </CardTitle>
               <CardDescription>Assignments and projects still needing you.</CardDescription>
@@ -357,7 +357,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
           <Card className="">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <CalendarClock className="size-5 text-primary" aria-hidden="true" />
+                <CalendarClock className="size-5 text-action" aria-hidden="true" />
                 Coming up
               </CardTitle>
               <CardDescription>Classes and deadlines over the next week.</CardDescription>
@@ -374,7 +374,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
 
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <TrendingUp className="size-5 text-primary" aria-hidden="true" />
+          <TrendingUp className="size-5 text-action" aria-hidden="true" />
           How you&apos;re doing
         </h2>
         <StandingPanel
@@ -403,7 +403,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
                 label={`of ${Math.round(avgAttendanceThreshold as number)}% required`}
               />
             ) : (
-              <p className="text-sm text-muted-foreground">Nothing measured yet.</p>
+              <p className="text-sm text-ink-muted">Nothing measured yet.</p>
             )}
           </CardContent>
         </Card>
@@ -442,7 +442,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
               <Card key={course.enrollment_id} className="">
                 <CardHeader className="gap-1">
                   <CardTitle>
-                    <Link href={`/courses/${course.course_slug}`} className="hover:text-primary">
+                    <Link href={`/courses/${course.course_slug}`} className="hover:text-action">
                       {course.course_title}
                     </Link>
                   </CardTitle>
@@ -479,15 +479,15 @@ export function StudentView({ data }: { data: StudentDashboard }) {
           <Card className="">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <GraduationCap className="size-5 text-primary" aria-hidden="true" />
+                <GraduationCap className="size-5 text-action" aria-hidden="true" />
                 My batches
               </CardTitle>
             </CardHeader>
             <CardContent>
               {data.batches.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No batches yet.</p>
+                <p className="text-sm text-ink-muted">No batches yet.</p>
               ) : (
-                <ul className="divide-y divide-border text-sm">
+                <ul className="divide-y divide-line text-sm">
                   {data.batches.map((batch) => (
                     <li key={batch.id} className="flex flex-wrap items-center gap-2 py-2">
                       <span className="min-w-0 flex-1 truncate">{batch.name}</span>
@@ -613,7 +613,7 @@ function TrainerView({ data }: { data: TrainerDashboard }) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <CalendarClock className="size-5 text-primary" aria-hidden="true" />
+              <CalendarClock className="size-5 text-action" aria-hidden="true" />
               Today
             </CardTitle>
           </CardHeader>
@@ -634,7 +634,7 @@ function TrainerView({ data }: { data: TrainerDashboard }) {
 
       <section className="space-y-3">
         <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <Users className="size-5 text-primary" aria-hidden="true" />
+          <Users className="size-5 text-action" aria-hidden="true" />
           My batches
         </h2>
         {data.batches.length === 0 ? (
@@ -651,16 +651,16 @@ function TrainerView({ data }: { data: TrainerDashboard }) {
                     <Badge variant={BATCH_STATUS_VARIANT[batch.status]}>
                       {BATCH_STATUS_LABEL[batch.status]}
                     </Badge>
-                    <span className="font-mono text-xs text-muted-foreground">{batch.code}</span>
+                    <span className="font-mono text-xs text-ink-muted">{batch.code}</span>
                   </div>
                   <CardTitle>
-                    <Link href={`/admin/batches/${batch.id}`} className="hover:text-primary">
+                    <Link href={`/admin/batches/${batch.id}`} className="hover:text-action">
                       {batch.name}
                     </Link>
                   </CardTitle>
                   <CardDescription>{batch.course_title}</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-1 text-sm text-muted-foreground">
+                <CardContent className="space-y-1 text-sm text-ink-muted">
                   <p>
                     {formatDate(batch.start_date)} – {formatDate(batch.end_date)}
                   </p>
@@ -749,13 +749,13 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       <div className="animate-fade-in space-y-1">
-        <p className="text-sm font-medium text-muted-foreground">
+        <p className="text-sm font-medium text-ink-muted">
           {greeting(user?.full_name || user?.email)}
         </p>
         <h1 className="text-2xl font-semibold tracking-tight">
           Welcome back, {user?.first_name || user?.email}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {isTrainer
             ? 'Your batches, classes and students.'
             : 'Your courses, classes and progress.'}
@@ -779,7 +779,7 @@ export function Dashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BookOpen className="size-5 text-primary" aria-hidden="true" />
+                <BookOpen className="size-5 text-action" aria-hidden="true" />
                 Nothing to show here
               </CardTitle>
               <CardDescription>

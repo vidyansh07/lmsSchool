@@ -69,7 +69,7 @@ export function ClassHeader({
               {SESSION_STATUS_LABEL[session.status]}
             </Badge>
             {attendanceTaken ? <Badge variant="success">Register taken</Badge> : null}
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-xs text-ink-muted">
               {fallback(session.batch_code)}
             </span>
           </div>
@@ -77,7 +77,7 @@ export function ClassHeader({
             <button
               type="button"
               onClick={onChangeClass}
-              className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+              className="text-xs font-medium text-action underline-offset-2 hover:underline"
             >
               Not this class?
             </button>
@@ -92,7 +92,7 @@ export function ClassHeader({
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm">
-          <span className="text-muted-foreground">Plan: </span>
+          <span className="text-ink-muted">Plan: </span>
           {fallback(session.planned_lesson_title, NO_DATA)}
         </p>
 

@@ -122,7 +122,7 @@ function QuestionBank() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Question bank</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Reusable questions. Examinations draw from here, and freeze what they drew.
           </p>
         </div>
@@ -325,22 +325,22 @@ function QuestionBank() {
           <Table>
             <thead>
               <tr>
-                <Th className="sticky top-0 z-10 bg-muted">Question</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Type</Th>
-                <Th className="sticky top-0 z-10 bg-muted text-right">Marks</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Tags</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Question</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Type</Th>
+                <Th className="sticky top-0 z-10 bg-sunken text-right">Marks</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Tags</Th>
               </tr>
             </thead>
             <tbody className="">
               {rows.map((row) => (
-                <tr key={row.id} className="animate-fade-in transition-colors hover:bg-muted/40">
+                <tr key={row.id} className="animate-fade-in transition-colors hover:bg-sunken/40">
                   <Td>
                     <div className="font-medium">{row.text}</div>
                     {row.is_active ? null : <Badge variant="neutral">Retired</Badge>}
                   </Td>
                   <Td>
                     {QUESTION_TYPE_LABEL[row.question_type]}
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-xs text-ink-muted">
                       {DIFFICULTY_LABEL[row.difficulty]}
                     </div>
                   </Td>

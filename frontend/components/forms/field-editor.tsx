@@ -610,7 +610,7 @@ export function FieldEditor({
 
       <div className="space-y-4">
         {fields.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             No fields yet. Add the first one below.
           </p>
         ) : (
@@ -646,7 +646,7 @@ export function FieldEditor({
           {previewFailure ? <Alert variant="error">{previewFailure}</Alert> : null}
           {previewNotice ? <Alert variant="success">{previewNotice}</Alert> : null}
           {fields.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               Add a field to try sample values against it.
             </p>
           ) : (

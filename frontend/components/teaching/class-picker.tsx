@@ -32,21 +32,21 @@ function SessionOption({
   onSelect: () => void;
 }) {
   return (
-    <li className="rounded-card border border-border bg-surface">
+    <li className="rounded-card border border-line bg-surface">
       <button
         type="button"
         onClick={onSelect}
-        className="w-full p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+        className="w-full p-4 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action"
       >
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={SESSION_STATUS_VARIANT[session.status]}>
             {SESSION_STATUS_LABEL[session.status]}
           </Badge>
           {session.attendance_taken_at ? <Badge variant="success">Register taken</Badge> : null}
-          <span className="font-mono text-xs text-muted-foreground">{fallback(session.batch_code)}</span>
+          <span className="font-mono text-xs text-ink-muted">{fallback(session.batch_code)}</span>
         </div>
         <p className="mt-1 font-medium">{fallback(session.topic || session.course_title, NO_DATA)}</p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {formatClassTime(session.start_time)}–{formatClassTime(session.end_time)} ·{' '}
           {fallback(session.batch_name)}
         </p>

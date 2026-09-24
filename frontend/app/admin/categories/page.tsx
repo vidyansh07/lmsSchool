@@ -52,14 +52,14 @@ function CategoryAdmin() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Course categories</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Categories group the catalogue. Retiring one hides it from filters but keeps its courses.
         </p>
       </div>
 
       <form
         onSubmit={onCreate}
-        className="flex flex-wrap items-end gap-3 rounded-card border border-border p-4"
+        className="flex flex-wrap items-end gap-3 rounded-card border border-line p-4"
       >
         <Field label="Name" htmlFor="category-name" error={errors.name} className="min-w-[14rem] flex-1">
           <Input value={name} onChange={(event) => setName(event.target.value)} />
@@ -101,16 +101,16 @@ function CategoryAdmin() {
             <Table>
               <thead>
                 <tr>
-                  <Th className="sticky top-0 z-10 bg-muted">Name</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Slug</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Published courses</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Status</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Actions</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Name</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Slug</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Published courses</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Status</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Actions</Th>
                 </tr>
               </thead>
               <tbody className="">
                 {list.data?.results.map((category) => (
-                  <tr key={category.id} className="animate-fade-in transition-colors hover:bg-muted/40">
+                  <tr key={category.id} className="animate-fade-in transition-colors hover:bg-sunken/40">
                     <Td className="font-medium">{category.name}</Td>
                     <Td className="font-mono text-xs">{category.slug}</Td>
                     <Td>{category.course_count}</Td>

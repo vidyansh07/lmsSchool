@@ -122,10 +122,10 @@ function ExamDetail({ examId }: { examId: string }) {
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={LIFECYCLE_VARIANT[exam.status]}>{LIFECYCLE_LABEL[exam.status]}</Badge>
           {exam.results_published ? <Badge variant="success">Results released</Badge> : null}
-          <span className="font-mono text-xs text-muted-foreground">{exam.code}</span>
+          <span className="font-mono text-xs text-ink-muted">{exam.code}</span>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">{exam.title}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {exam.batch_code} · {exam.duration_minutes} minutes · {exam.total_questions} questions ·{' '}
           {exam.max_attempts} attempt{exam.max_attempts === 1 ? '' : 's'}
         </p>
@@ -151,13 +151,13 @@ function ExamDetail({ examId }: { examId: string }) {
               <Badge variant={readiness.ready ? 'success' : 'error'}>
                 {readiness.ready ? 'Ready to publish' : 'Not ready'}
               </Badge>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="mt-2 text-sm text-ink-muted">
                 {readiness.sections} section{readiness.sections === 1 ? '' : 's'} ·{' '}
                 {readiness.questions} questions · about{' '}
                 {readiness.approximate_total_marks} marks
               </p>
               {readiness.problems.length > 0 ? (
-                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                <ul className="mt-2 space-y-1 text-sm text-ink-muted">
                   {readiness.problems.map((problem) => (
                     <li key={problem}>{problem}</li>
                   ))}
@@ -228,15 +228,15 @@ function ExamDetail({ examId }: { examId: string }) {
           ) : (
             <div className="space-y-4">
               {queue.map((row) => (
-                <div key={row.id} className="animate-fade-in rounded-md border border-border p-3">
+                <div key={row.id} className="animate-fade-in rounded-md border border-line p-3">
                   <div className="text-sm font-medium">
                     {row.student_name}{' '}
-                    <span className="font-mono text-xs text-muted-foreground">
+                    <span className="font-mono text-xs text-ink-muted">
                       {row.student_id}
                     </span>
                   </div>
                   <p className="mt-1 text-sm">{row.question_text}</p>
-                  <p className="mt-2 whitespace-pre-wrap rounded bg-muted p-2 text-sm">
+                  <p className="mt-2 whitespace-pre-wrap rounded bg-sunken p-2 text-sm">
                     {row.text_answer || row.answered_filename || '(nothing written)'}
                   </p>
 
@@ -298,18 +298,18 @@ function ExamDetail({ examId }: { examId: string }) {
               <Table>
                 <thead>
                   <tr>
-                    <Th className="sticky top-0 z-10 bg-muted">Candidate</Th>
-                    <Th className="sticky top-0 z-10 bg-muted">Submitted</Th>
-                    <Th className="sticky top-0 z-10 bg-muted text-right">Score</Th>
-                    <Th className="sticky top-0 z-10 bg-muted">Status</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken">Candidate</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken">Submitted</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken text-right">Score</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken">Status</Th>
                   </tr>
                 </thead>
                 <tbody className="">
                   {attempts.map((attempt) => (
-                    <tr key={attempt.id} className="animate-fade-in transition-colors hover:bg-muted/40">
+                    <tr key={attempt.id} className="animate-fade-in transition-colors hover:bg-sunken/40">
                       <Td>
                         <div className="font-medium">{attempt.student_name}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
+                        <div className="font-mono text-xs text-ink-muted">
                           {attempt.student_id}
                         </div>
                       </Td>
@@ -319,7 +319,7 @@ function ExamDetail({ examId }: { examId: string }) {
                           ? NO_DATA
                           : `${formatNumber(attempt.total_score)} / ${formatNumber(attempt.max_score)}`}
                         {attempt.needs_manual_marking ? (
-                          <div className="text-xs text-muted-foreground">awaiting marking</div>
+                          <div className="text-xs text-ink-muted">awaiting marking</div>
                         ) : null}
                       </Td>
                       <Td>

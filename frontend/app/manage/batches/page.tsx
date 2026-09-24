@@ -63,14 +63,14 @@ function StudentsCell({ row }: { row: ManageBatchRow }) {
 }
 
 function KindCell({ row }: { row: ManageBatchRow }) {
-  if (!row.kind) return <span className="text-muted-foreground">{fallback(null, NO_DATA)}</span>;
+  if (!row.kind) return <span className="text-ink-muted">{fallback(null, NO_DATA)}</span>;
   const label = row.kind.replace(/_/g, ' ');
   return <Badge>{label.charAt(0).toUpperCase() + label.slice(1)}</Badge>;
 }
 
 function PlanVarianceCell({ row }: { row: ManageBatchRow }) {
   if (!row.timeline_status)
-    return <span className="text-muted-foreground">{fallback(null, NO_DATA)}</span>;
+    return <span className="text-ink-muted">{fallback(null, NO_DATA)}</span>;
   return (
     <Badge variant={TIMELINE_STATUS_VARIANT[row.timeline_status]}>
       {TIMELINE_STATUS_LABEL[row.timeline_status]}
@@ -81,7 +81,7 @@ function PlanVarianceCell({ row }: { row: ManageBatchRow }) {
 function DsrStateCell({ row }: { row: ManageBatchRow }) {
   const known = row.dsr_state && row.dsr_state in DSR_STATUS_LABEL;
   if (!row.dsr_state)
-    return <span className="text-muted-foreground">{fallback(null, NO_DATA)}</span>;
+    return <span className="text-ink-muted">{fallback(null, NO_DATA)}</span>;
   if (known) {
     const status = row.dsr_state as DsrStatus;
     return <Badge variant={DSR_STATUS_VARIANT[status]}>{DSR_STATUS_LABEL[status]}</Badge>;
@@ -111,7 +111,7 @@ export function BatchesHub() {
       render: (row) => (
         <Link
           href={`/manage/batches/${row.id}`}
-          className="font-mono text-xs text-foreground hover:text-primary hover:underline"
+          className="font-mono text-xs text-ink hover:text-action hover:underline"
         >
           {row.code}
         </Link>
@@ -157,7 +157,7 @@ export function BatchesHub() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Batches</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Every cohort running a course. Behind-schedule, at-risk and overdue reports are visible in
           the row — open a batch for the full picture.
         </p>

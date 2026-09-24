@@ -79,7 +79,7 @@ function Discussions() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Discussions</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Questions on your batches, answered by your trainer and your classmates.
           </p>
         </div>
@@ -161,17 +161,17 @@ function Discussions() {
                   ) : (
                     <Badge variant="neutral">Unanswered</Badge>
                   )}
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <span className="font-mono text-xs text-ink-muted">
                     {row.batch_code}
                   </span>
                 </div>
                 <Link
                   href={`/discussions/${row.id}`}
-                  className="font-medium underline hover:text-foreground"
+                  className="font-medium underline hover:text-ink"
                 >
                   {row.title}
                 </Link>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-ink-muted">
                   {row.author_name} · {row.reply_count} repl
                   {row.reply_count === 1 ? 'y' : 'ies'} ·{' '}
                   {formatDateTime(row.last_reply_at ?? row.created_at)}

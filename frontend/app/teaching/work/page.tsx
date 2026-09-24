@@ -151,7 +151,7 @@ function MyWorkWorkspace() {
       render: (row) => (
         <>
           {row.student.name}
-          <span className="block text-xs text-muted-foreground">{row.student.student_id}</span>
+          <span className="block text-xs text-ink-muted">{row.student.student_id}</span>
         </>
       ),
     },
@@ -181,7 +181,7 @@ function MyWorkWorkspace() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My work</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Every activity assigned to you — interviews, mentoring, reviews and the rest.
         </p>
       </div>
@@ -200,7 +200,7 @@ function MyWorkWorkspace() {
             </option>
           ))}
         </Select>
-        <div className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm">
+        <div className="flex h-10 items-center gap-2 rounded-md border border-line px-3 text-sm">
           <Checkbox
             aria-label="Overdue"
             checked={filters.overdue}

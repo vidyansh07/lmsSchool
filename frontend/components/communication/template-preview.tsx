@@ -56,7 +56,7 @@ export function TemplateHtmlPreview({
       title={title}
       srcDoc={doc}
       sandbox=""
-      className="h-64 w-full rounded-md border border-border bg-white"
+      className="h-64 w-full rounded-md border border-line bg-white"
       data-testid="template-html-preview"
     />
   );

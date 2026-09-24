@@ -44,7 +44,7 @@ function ResetPasswordForm() {
     return (
       <Alert variant="error">
         <AlertTitle>This link is incomplete</AlertTitle>
-        <p className="text-muted-foreground">
+        <p className="text-ink-muted">
           Request a new password reset link and open it directly from your email.
         </p>
       </Alert>
@@ -56,7 +56,7 @@ function ResetPasswordForm() {
       <div className="space-y-4">
         <Alert variant="success">
           <AlertTitle>Password updated</AlertTitle>
-          <p className="text-muted-foreground">
+          <p className="text-ink-muted">
             You have been signed out everywhere. Sign in with your new password.
           </p>
         </Alert>
@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
     <AuthSplitShell heading="Choose a new password" tagline="Almost there — set a fresh password to continue.">
       <div className="mb-6 space-y-1.5">
         <h2 className="text-xl font-semibold tracking-tight">Choose a new password</h2>
-        <p className="text-sm text-muted-foreground">This link can be used once.</p>
+        <p className="text-sm text-ink-muted">This link can be used once.</p>
       </div>
       <Suspense fallback={<LoadingState label="Loading…" rows={3} />}>
         <ResetPasswordForm />

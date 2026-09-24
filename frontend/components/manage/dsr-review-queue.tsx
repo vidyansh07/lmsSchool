@@ -90,11 +90,11 @@ export function DsrReviewQueue({ batchId, onReviewed }: { batchId: string; onRev
   }
 
   return (
-    <ul className="divide-y divide-border rounded-card border border-border">
+    <ul className="divide-y divide-line rounded-card border border-line">
       {rows.map((row) => (
         <li
           key={row.id}
-          className="animate-fade-in space-y-1.5 px-4 py-3 transition-colors hover:bg-muted/40"
+          className="animate-fade-in space-y-1.5 px-4 py-3 transition-colors hover:bg-sunken/40"
           data-testid="dsr-queue-row"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -102,7 +102,7 @@ export function DsrReviewQueue({ batchId, onReviewed }: { batchId: string; onRev
               <p className="text-sm font-medium">
                 {row.trainer_name || 'Unknown trainer'} — {formatDate(row.report_date)}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
+              <p className="truncate text-xs text-ink-muted">
                 {row.actual_topic || 'No topic recorded'}
               </p>
             </div>

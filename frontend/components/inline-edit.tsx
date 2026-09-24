@@ -88,14 +88,14 @@ export function InlineEdit({
           if (event.key === 'Enter') startEditing();
         }}
         className={cn(
-          'group inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left hover:bg-muted',
+          'group inline-flex max-w-full items-center gap-1.5 rounded-md px-1.5 py-0.5 text-left hover:bg-sunken',
           className,
         )}
       >
         <span className="truncate">{formatValue(value)}</span>
         <Pencil
           aria-hidden="true"
-          className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100"
+          className="size-3 shrink-0 text-ink-muted opacity-0 group-hover:opacity-100"
         />
         <span className="sr-only">Edit {label}</span>
       </button>
@@ -125,7 +125,7 @@ export function InlineEdit({
           }}
           onBlur={() => void commit()}
         />
-        {isSaving ? <Check aria-hidden="true" className="size-4 animate-pulse text-muted-foreground" /> : null}
+        {isSaving ? <Check aria-hidden="true" className="size-4 animate-pulse text-ink-muted" /> : null}
         {!isSaving ? (
           <button
             type="button"
@@ -134,14 +134,14 @@ export function InlineEdit({
             onMouseDown={(event) => event.preventDefault()}
             onClick={cancel}
             aria-label={`Cancel editing ${label}`}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-ink-muted hover:text-ink"
           >
             <X className="size-4" aria-hidden="true" />
           </button>
         ) : null}
       </div>
       {error ? (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-xs text-danger">
           {error}
         </p>
       ) : null}

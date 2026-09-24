@@ -16,7 +16,7 @@ function ProfileContent() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My profile</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Update your contact details and the information your trainers and administrators can see.
         </p>
       </div>

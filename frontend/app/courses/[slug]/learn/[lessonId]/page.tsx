@@ -68,7 +68,7 @@ function LessonCompletion({ lessonId }: { lessonId: string }) {
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-border p-4">
+    <div className="space-y-2 rounded-md border border-line p-4">
       {message ? <Alert variant="error">{message}</Alert> : null}
       {completed === true ? (
         <Alert variant="success" role="status" className="">
@@ -194,10 +194,10 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
   return (
     <div className="animate-fade-in space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <Link href={`/courses/${course.slug}`} className="text-muted-foreground hover:text-primary">
+        <Link href={`/courses/${course.slug}`} className="text-ink-muted hover:text-action">
           {course.title}
         </Link>
-        <span className="text-muted-foreground" aria-hidden="true">
+        <span className="text-ink-muted" aria-hidden="true">
           /
         </span>
         <span className="font-medium">{lesson.title}</span>
@@ -207,7 +207,7 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
         <div className="min-w-0 space-y-6">
           <header className="space-y-2">
             <h1 className="text-2xl font-semibold tracking-tight">{lesson.title}</h1>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
               <Badge>{CONTENT_TYPE_LABEL[lesson.content_type]}</Badge>
               {lesson.duration_minutes ? (
                 <span>{formatDuration(lesson.duration_minutes)}</span>
@@ -223,7 +223,7 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
 
           <nav
             aria-label="Lesson navigation"
-            className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"
+            className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4"
           >
             {previous ? (
               <Button asChild variant="outline">
@@ -249,11 +249,11 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
         <aside className="lg:sticky lg:top-4 lg:self-start">
           <nav
             aria-label="Course outline"
-            className="max-h-[70vh] overflow-y-auto rounded-card border border-border"
+            className="max-h-[70vh] overflow-y-auto rounded-card border border-line"
           >
             {course.modules.map((module) => (
               <div key={module.id}>
-                <p className="border-b border-border bg-muted/60 px-3 py-2 text-xs font-medium">
+                <p className="border-b border-line bg-sunken/60 px-3 py-2 text-xs font-medium">
                   {module.title}
                 </p>
                 <ul>
@@ -265,10 +265,10 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
                           href={`/courses/${course.slug}/learn/${item.id}`}
                           aria-current={isCurrent ? 'page' : undefined}
                           className={cn(
-                            'block border-b border-border px-3 py-2 text-sm transition-colors last:border-b-0 hover:bg-muted',
+                            'block border-b border-line px-3 py-2 text-sm transition-colors last:border-b-0 hover:bg-sunken',
                             isCurrent
-                              ? 'bg-accent font-medium text-foreground'
-                              : 'text-muted-foreground',
+                              ? 'bg-selected font-medium text-ink'
+                              : 'text-ink-muted',
                           )}
                         >
                           {item.title}

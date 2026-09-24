@@ -86,7 +86,7 @@ function Reports() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Every report is scoped to what you can already see, and exports the same rows you are
           looking at.
         </p>
@@ -161,7 +161,7 @@ function Reports() {
                     <thead>
                       <tr>
                         {page.columns.map((column) => (
-                          <Th key={column.key} className="sticky top-0 z-10 bg-muted">
+                          <Th key={column.key} className="sticky top-0 z-10 bg-sunken">
                             {column.label}
                           </Th>
                         ))}
@@ -169,7 +169,7 @@ function Reports() {
                     </thead>
                     <tbody data-testid="report-body" className="">
                       {page.rows.map((row, index) => (
-                        <tr key={index} className="animate-fade-in hover:bg-muted/40">
+                        <tr key={index} className="animate-fade-in hover:bg-sunken/40">
                           {page.columns.map((column) => (
                             <Td key={column.key}>
                               {row[column.key] === null || row[column.key] === undefined

@@ -53,7 +53,7 @@ function UsersTable() {
       header: 'Joined',
       sortable: true,
       render: (row) => (
-        <span className="whitespace-nowrap text-muted-foreground">
+        <span className="whitespace-nowrap text-ink-muted">
           {new Date(row.date_joined).toLocaleDateString()}
         </span>
       ),
@@ -72,7 +72,7 @@ function UsersTable() {
         <Link
           href={`/admin/users/${row.id}`}
           onClick={(event) => event.stopPropagation()}
-          className="inline-flex items-center gap-0.5 text-sm font-medium text-muted-foreground hover:text-primary hover:underline"
+          className="inline-flex items-center gap-0.5 text-sm font-medium text-ink-muted hover:text-action hover:underline"
         >
           Manage
           <ChevronRight className="size-3.5" aria-hidden="true" />
@@ -86,7 +86,7 @@ function UsersTable() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Every account on the platform, across all roles.
           </p>
         </div>
@@ -158,13 +158,13 @@ function UsersTable() {
         />
       ) : null}
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-ink-muted">
         Students and trainers have richer records under{' '}
-        <Link href="/admin/students" className="underline hover:text-foreground">
+        <Link href="/admin/students" className="underline hover:text-ink">
           Students
         </Link>{' '}
         and{' '}
-        <Link href="/admin/trainers" className="underline hover:text-foreground">
+        <Link href="/admin/trainers" className="underline hover:text-ink">
           Trainers
         </Link>
         .

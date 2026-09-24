@@ -48,7 +48,7 @@ export function DuplicateMatch({
           <li key={match.id} className="flex flex-wrap items-center justify-between gap-2">
             <span>
               <span className="font-medium">{match.name}</span>{' '}
-              <span className="text-muted-foreground">
+              <span className="text-ink-muted">
                 · {match.student_id}
                 {match.batch_code ? ` · ${match.batch_code}` : ''} · registered{' '}
                 {formatDate(match.created_at)}

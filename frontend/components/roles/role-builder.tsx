@@ -271,7 +271,7 @@ export function RoleBuilder({ slug }: { slug?: string }) {
         <h1 className="text-2xl font-semibold tracking-tight">
           {isEdit ? `Edit role: ${existing?.name}` : "New role"}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Built-from decides what this role can never exceed and how far it
           sees. The permissions adjust the set; the review shows exactly what
           changes.
@@ -287,7 +287,7 @@ export function RoleBuilder({ slug }: { slug?: string }) {
                 type="button"
                 onClick={() => setStep(number)}
                 aria-current={step === number ? "step" : undefined}
-                className={`rounded-full px-3 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${step === number ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}
+                className={`rounded-full px-3 py-1 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action ${step === number ? "bg-action text-action-fg" : "bg-sunken text-ink-muted hover:bg-sunken/70"}`}
               >
                 {number}. {label}
               </button>
@@ -405,7 +405,7 @@ export function RoleBuilder({ slug }: { slug?: string }) {
                   <h2 className="text-sm font-semibold">
                     {PERMISSION_CATEGORY_LABEL[category]}
                   </h2>
-                  <ul className="divide-y divide-border rounded-md border border-border">
+                  <ul className="divide-y divide-line rounded-md border border-line">
                     {defs.map((def) => {
                       const grant = grants[def.code];
                       const on = grant?.on ?? false;
@@ -431,7 +431,7 @@ export function RoleBuilder({ slug }: { slug?: string }) {
                             <span className="font-medium">
                               {def.description || def.code}
                             </span>
-                            <span className="ml-2 font-mono text-xs text-muted-foreground">
+                            <span className="ml-2 font-mono text-xs text-ink-muted">
                               {def.code}
                             </span>
                           </label>
@@ -496,13 +496,13 @@ export function RoleBuilder({ slug }: { slug?: string }) {
           </CardHeader>
           <CardContent className="space-y-4">
             <dl className="grid gap-2 text-sm md:grid-cols-2">
-              <dt className="text-muted-foreground">Name</dt>
+              <dt className="text-ink-muted">Name</dt>
               <dd>{name}</dd>
-              <dt className="text-muted-foreground">Built from</dt>
+              <dt className="text-ink-muted">Built from</dt>
               <dd>{ROLE_LABEL[kind]}</dd>
-              <dt className="text-muted-foreground">Permissions</dt>
+              <dt className="text-ink-muted">Permissions</dt>
               <dd>{selected.length}</dd>
-              <dt className="text-muted-foreground">Affected people</dt>
+              <dt className="text-ink-muted">Affected people</dt>
               <dd>
                 {existing
                   ? `${existing.user_count} hold this role now`

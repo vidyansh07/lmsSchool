@@ -201,11 +201,11 @@ function ManagerOverview() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">
+          <p className="text-sm font-medium text-ink-muted">
             {greeting(user?.full_name || user?.email)}
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">Manager overview</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Every cohort, trainer and student under your review, before you drill into either hub.
           </p>
         </div>
@@ -272,7 +272,7 @@ function ManagerOverview() {
                 </p>
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">No active batches right now.</p>
+              <p className="text-sm text-ink-muted">No active batches right now.</p>
             )}
           </CardContent>
         </Card>
@@ -303,12 +303,12 @@ function ManagerOverview() {
 
       <ManagerAttentionStrip />
 
-      <p className="text-xs text-muted-foreground">
-        <Link href="/manage/batches" className="underline hover:text-foreground">
+      <p className="text-xs text-ink-muted">
+        <Link href="/manage/batches" className="underline hover:text-ink">
           Open the batches hub
         </Link>
         {' · '}
-        <Link href="/manage/trainers" className="underline hover:text-foreground">
+        <Link href="/manage/trainers" className="underline hover:text-ink">
           Open the trainers hub
         </Link>
       </p>

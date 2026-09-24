@@ -79,10 +79,10 @@ export function RadialProgress({
       : intent;
 
   const stroke = {
-    brand: 'var(--color-primary)',
+    brand: 'var(--color-action)',
     success: 'var(--color-success)',
     warning: 'var(--color-warning)',
-    destructive: 'var(--color-destructive)',
+    destructive: 'var(--color-danger)',
   }[resolvedIntent];
 
   const format = valueFormatter ?? ((n: number) => String(Math.round(n)));
@@ -96,7 +96,7 @@ export function RadialProgress({
         <path
           d={arcPath(cx, cy, radius)}
           fill="none"
-          stroke="var(--color-muted)"
+          stroke="var(--color-sunken)"
           strokeWidth={STROKE}
           strokeLinecap="round"
         />
@@ -118,7 +118,7 @@ export function RadialProgress({
           y1={tickInner.y}
           x2={tickOuter.x}
           y2={tickOuter.y}
-          stroke="var(--color-foreground)"
+          stroke="var(--color-ink)"
           strokeWidth={2}
           strokeLinecap="round"
         />

@@ -101,7 +101,7 @@ export function DeliveriesTab({ canAct }: { canAct: boolean }) {
       render: (row) => (
         <>
           <Badge variant={DELIVERY_STATE_VARIANT[row.state]}>{DELIVERY_STATE_LABEL[row.state]}</Badge>
-          {row.error ? <p className="mt-1 text-xs text-muted-foreground">{row.error}</p> : null}
+          {row.error ? <p className="mt-1 text-xs text-ink-muted">{row.error}</p> : null}
         </>
       ),
     },

@@ -105,7 +105,7 @@ function Projects() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Longer work, reviewed rather than simply marked. New projects start as drafts.
           </p>
         </div>
@@ -237,10 +237,10 @@ function Projects() {
           <Table>
             <thead>
               <tr>
-                <Th className="sticky top-0 z-10 bg-muted">Project</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Course</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Due</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Status</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Project</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Course</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Due</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Status</Th>
               </tr>
             </thead>
             <tbody className="">
@@ -248,18 +248,18 @@ function Projects() {
                 <tr
                   key={row.id}
                   onClick={() => router.push(`/teaching/projects/${row.id}`)}
-                  className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/60 active:bg-muted"
+                  className="animate-fade-in cursor-pointer transition-colors hover:bg-sunken/60 active:bg-sunken"
                 >
                   <Td>
                     <Link
                       href={`/teaching/projects/${row.id}`}
                       onClick={(event) => event.stopPropagation()}
-                      className="font-medium underline hover:text-foreground"
+                      className="font-medium underline hover:text-ink"
                     >
                       {row.title}
                     </Link>
-                    <div className="font-mono text-xs text-muted-foreground">{row.code}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="font-mono text-xs text-ink-muted">{row.code}</div>
+                    <div className="text-xs text-ink-muted">
                       {PROJECT_KIND_LABEL[row.kind]}
                       {row.is_required ? ' · required' : ' · optional'}
                     </div>

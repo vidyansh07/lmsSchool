@@ -109,7 +109,7 @@ function Certificates() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Certificates</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Issued from the completion queue once an administrator has approved the course.
           </p>
         </div>
@@ -224,10 +224,10 @@ function Certificates() {
           <Table>
             <thead>
               <tr>
-                <Th className="sticky top-0 z-10 bg-muted">Certificate</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Student</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Course</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Actions</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Certificate</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Student</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Course</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Actions</Th>
               </tr>
             </thead>
             <tbody className="">
@@ -235,26 +235,26 @@ function Certificates() {
                 <tr
                   key={row.id}
                   data-testid="certificate-row"
-                  className="animate-fade-in transition-colors hover:bg-muted/40"
+                  className="animate-fade-in transition-colors hover:bg-sunken/40"
                 >
                   <Td>
                     <div className="font-mono text-xs">{row.number}</div>
                     <Badge variant={CERTIFICATE_STATUS_VARIANT[row.status]} className="mt-1">
                       {CERTIFICATE_STATUS_LABEL[row.status]}
                     </Badge>
-                    <div className="mt-1 text-xs text-muted-foreground">
+                    <div className="mt-1 text-xs text-ink-muted">
                       Issued {formatDate(row.issued_at)}
                     </div>
                   </Td>
                   <Td>
                     {row.student_name}
-                    <div className="font-mono text-xs text-muted-foreground">
+                    <div className="font-mono text-xs text-ink-muted">
                       {row.student_code}
                     </div>
                   </Td>
                   <Td>
                     {row.course_title}
-                    <div className="text-xs text-muted-foreground">{row.batch_code}</div>
+                    <div className="text-xs text-ink-muted">{row.batch_code}</div>
                   </Td>
                   <Td className="min-w-64 space-y-2">
                     <Button asChild size="sm" variant="outline">

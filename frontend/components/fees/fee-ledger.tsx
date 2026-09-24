@@ -97,12 +97,15 @@ function isoToday(): string {
 // The summary strip
 // ---------------------------------------------------------------------------
 
+// Keyed by what the figure means, not by a colour name: a map from `green`
+// to a green class only ever restated itself, and left the call site saying
+// "this number is green" instead of "this number is settled".
 const FIGURE_TONES = {
-  neutral: 'bg-muted/60',
-  green: 'bg-emerald-tint',
-  amber: 'bg-amber-tint',
-  rose: 'bg-rose-tint',
-  blue: 'bg-sky-tint',
+  neutral: 'bg-sunken/60',
+  settled: 'bg-success-wash',
+  due: 'bg-warning-wash',
+  overdue: 'bg-danger-wash',
+  agreed: 'bg-info-wash',
 } as const;
 
 function Figure({
@@ -118,11 +121,11 @@ function Figure({
 }) {
   return (
     <div className={cn('rounded-lg px-3 py-2.5', FIGURE_TONES[tone])}>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-ink-muted">
         {label}
       </p>
-      <p className="mt-0.5 text-lg font-semibold tabular-nums text-foreground">{value}</p>
-      {sub ? <p className="text-xs text-muted-foreground">{sub}</p> : null}
+      <p className="mt-0.5 text-lg font-semibold tabular-nums text-ink">{value}</p>
+      {sub ? <p className="text-xs text-ink-muted">{sub}</p> : null}
     </div>
   );
 }
@@ -131,12 +134,12 @@ export function FeeSummaryStrip({ summary }: { summary: StudentFeeSummary }) {
   const balance = Number(summary.balance_total);
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <Figure label="Agreed" value={money(summary.payable_total)} tone="blue" />
-      <Figure label="Paid" value={money(summary.paid_total)} tone="green" />
+      <Figure label="Agreed" value={money(summary.payable_total)} tone="agreed" />
+      <Figure label="Paid" value={money(summary.paid_total)} tone="settled" />
       <Figure
         label="Balance"
         value={money(summary.balance_total)}
-        tone={balance > 0 ? (summary.is_overdue ? 'rose' : 'amber') : 'neutral'}
+        tone={balance > 0 ? (summary.is_overdue ? 'overdue' : 'due') : 'neutral'}
       />
       <Figure
         label="Next expected"
@@ -146,7 +149,7 @@ export function FeeSummaryStrip({ summary }: { summary: StudentFeeSummary }) {
             ? `${summary.is_overdue ? 'Was due' : 'By'} ${formatDate(summary.next_due_on)}`
             : undefined
         }
-        tone={summary.is_overdue ? 'rose' : 'neutral'}
+        tone={summary.is_overdue ? 'overdue' : 'neutral'}
       />
     </div>
   );
@@ -275,7 +278,7 @@ function SetFeeForm({ onOpenChange, enrollmentId, plan, onSaved }: SetFeeProps) 
             onChange={(event) => setNotes(event.target.value)}
           />
         </Field>
-        <p className="rounded-md bg-muted/60 px-3 py-2 text-sm">
+        <p className="rounded-md bg-sunken/60 px-3 py-2 text-sm">
           Payable after discount:{' '}
           <span className="font-semibold tabular-nums">{money(payable)}</span>
         </p>
@@ -624,19 +627,19 @@ function FeeHistory({ enrollmentId }: { enrollmentId: string }) {
   if (error) return <ErrorState title="Could not load the history" message={error.message} />;
   if (rows === null) return <LoadingState label="Loading history…" rows={2} />;
   if (rows.length === 0)
-    return <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>;
+    return <p className="text-sm text-ink-muted">Nothing recorded yet.</p>;
 
   return (
-    <ol className="relative space-y-3 border-l border-border pl-4" aria-label="Fee history">
+    <ol className="relative space-y-3 border-l border-line pl-4" aria-label="Fee history">
       {rows.map((entry) => (
         <li key={entry.id} className="relative text-sm">
           <span
             aria-hidden="true"
-            className="absolute -left-[21px] top-1.5 size-2.5 rounded-full border-2 border-surface bg-primary"
+            className="absolute -left-[21px] top-1.5 size-2.5 rounded-full border-2 border-surface bg-action"
           />
-          <p className="font-medium text-foreground">{entry.action_label}</p>
-          <p className="text-muted-foreground">{describeHistory(entry)}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="font-medium text-ink">{entry.action_label}</p>
+          <p className="text-ink-muted">{describeHistory(entry)}</p>
+          <p className="text-xs text-ink-muted">
             {formatDateTime(entry.created_at)} · {entry.actor_label}
           </p>
         </li>
@@ -679,7 +682,7 @@ function PaymentsTable({
   }
 
   if (payments.length === 0) {
-    return <p className="text-sm text-muted-foreground">No payments recorded yet.</p>;
+    return <p className="text-sm text-ink-muted">No payments recorded yet.</p>;
   }
 
   return (
@@ -701,12 +704,12 @@ function PaymentsTable({
             {payments.map((payment) => (
               <Tr
                 key={payment.id}
-                className={payment.is_voided ? 'text-muted-foreground' : undefined}
+                className={payment.is_voided ? 'text-ink-muted' : undefined}
               >
                 <Td className="font-mono text-xs">
                   <a
                     href={receiptUrl(payment.id)}
-                    className="hover:text-primary hover:underline"
+                    className="hover:text-action hover:underline"
                     title="Download the receipt (PDF)"
                   >
                     {payment.receipt_number}
@@ -729,7 +732,7 @@ function PaymentsTable({
                 <Td>
                   {PAYMENT_METHOD_LABEL[payment.method]}
                   {payment.reference ? (
-                    <span className="block font-mono text-xs text-muted-foreground">
+                    <span className="block font-mono text-xs text-ink-muted">
                       {payment.reference}
                     </span>
                   ) : null}
@@ -739,7 +742,7 @@ function PaymentsTable({
                       {payment.void_reason}
                     </span>
                   ) : payment.note ? (
-                    <span className="block text-xs text-muted-foreground">{payment.note}</span>
+                    <span className="block text-xs text-ink-muted">{payment.note}</span>
                   ) : null}
                 </Td>
                 <Td>{payment.recorded_by || 'Unknown'}</Td>
@@ -784,7 +787,7 @@ function PaymentsTable({
                         type="button"
                         size="sm"
                         variant="ghost"
-                        className="text-muted-foreground"
+                        className="text-ink-muted"
                         onClick={() => {
                           setVoidingId(payment.id);
                           setReason('');
@@ -821,13 +824,13 @@ export function FeePlanCard({
   const balance = Number(plan.balance);
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="rounded-xl border border-line bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-semibold text-foreground">
+          <p className="font-semibold text-ink">
             {plan.course_title || 'Course not available'}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             {plan.batch_name || 'Batch not available'}
             <span className="ml-1 font-mono text-xs">{plan.batch_code}</span>
           </p>
@@ -857,18 +860,18 @@ export function FeePlanCard({
               : undefined
           }
         />
-        <Figure label="Payable" value={money(plan.payable)} tone="blue" />
-        <Figure label="Paid" value={money(plan.paid)} tone="green" />
+        <Figure label="Payable" value={money(plan.payable)} tone="agreed" />
+        <Figure label="Paid" value={money(plan.paid)} tone="settled" />
         <Figure
           label="Balance"
           value={money(plan.balance)}
-          tone={balance > 0 ? (plan.is_overdue ? 'rose' : 'amber') : 'neutral'}
+          tone={balance > 0 ? (plan.is_overdue ? 'overdue' : 'due') : 'neutral'}
         />
       </div>
 
       <div className="mt-3">
         <div
-          className="h-2 w-full overflow-hidden rounded-full bg-muted"
+          className="h-2 w-full overflow-hidden rounded-full bg-sunken"
           role="progressbar"
           aria-valuemin={0}
           aria-valuemax={100}
@@ -878,13 +881,13 @@ export function FeePlanCard({
           <div
             className={cn(
               'h-full rounded-full transition-[width] duration-500',
-              percent >= 100 ? 'bg-emerald' : 'bg-primary',
+              percent >= 100 ? 'bg-success' : 'bg-action',
             )}
             style={{ width: `${percent}%` }}
           />
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-sm">
-          <p className="text-muted-foreground">
+          <p className="text-ink-muted">
             {percent}% paid
             {plan.updated_by
               ? ` · fee last changed ${formatDate(plan.updated_at)} by ${plan.updated_by}`
@@ -893,7 +896,7 @@ export function FeePlanCard({
           <p
             className={cn(
               'flex items-center gap-1.5',
-              plan.is_overdue ? 'text-rose' : 'text-muted-foreground',
+              plan.is_overdue ? 'text-danger' : 'text-ink-muted',
             )}
           >
             <CalendarClock className="size-4" aria-hidden="true" />
@@ -907,7 +910,7 @@ export function FeePlanCard({
       </div>
 
       {plan.notes ? (
-        <p className="mt-3 rounded-md bg-muted/60 px-3 py-2 text-sm">{plan.notes}</p>
+        <p className="mt-3 rounded-md bg-sunken/60 px-3 py-2 text-sm">{plan.notes}</p>
       ) : null}
 
       {mayManage ? (
@@ -933,7 +936,7 @@ export function FeePlanCard({
       ) : null}
 
       <div className="mt-4">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
           Payments
         </p>
         <PaymentsTable payments={plan.payments} mayManage={mayManage} onVoided={onChanged} />
@@ -942,7 +945,7 @@ export function FeePlanCard({
       <div className="mt-3">
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"
           onClick={() => setShowHistory((value) => !value)}
           aria-expanded={showHistory}
         >
@@ -1003,12 +1006,12 @@ function UnplannedEnrollment({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-border px-4 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-line px-4 py-3">
       <div>
-        <p className="font-medium text-foreground">
+        <p className="font-medium text-ink">
           {enrollment.course_title || 'Course not available'}
         </p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {enrollment.batch_name || 'Batch not available'} · No fee agreed yet
         </p>
       </div>
@@ -1065,7 +1068,7 @@ export function FeeLedger({
       <CardHeader className="flex-row items-start justify-between gap-3">
         <div className="space-y-1">
           <CardTitle as="h2" className="flex items-center gap-2">
-            <Wallet className="size-5 text-primary" aria-hidden="true" />
+            <Wallet className="size-5 text-action" aria-hidden="true" />
             {title}
           </CardTitle>
           <CardDescription>{description}</CardDescription>

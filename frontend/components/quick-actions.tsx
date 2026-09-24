@@ -34,13 +34,13 @@ export function QuickActions({ actions, className }: { actions: QuickAction[]; c
         const content = (
           <>
             {action.icon ? (
-              <span aria-hidden="true" className="text-muted-foreground">
+              <span aria-hidden="true" className="text-ink-muted">
                 {action.icon}
               </span>
             ) : null}
             <span className="flex-1 text-left">{action.label}</span>
             {action.shortcut ? (
-              <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[0.65rem] text-muted-foreground">
+              <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 text-[0.65rem] text-ink-muted">
                 {formatShortcutLabel(action.shortcut)}
               </kbd>
             ) : null}

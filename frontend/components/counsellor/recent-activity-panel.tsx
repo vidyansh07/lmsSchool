@@ -72,21 +72,21 @@ export function RecentActivityPanel({
 
   if (feed.length === 0) {
     return (
-      <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-card border border-dashed border-line px-4 py-6 text-center text-sm text-ink-muted">
         Nothing has happened yet — registrations and enrolments will show up here.
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-border">
+    <ul className="divide-y divide-line">
       {feed.map((row) => (
         <li key={row.id} className="flex items-start gap-2.5 py-2 text-sm">
-          <row.Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <Link href={row.href} className="min-w-0 flex-1 hover:text-primary">
+          <row.Icon className="mt-0.5 size-4 shrink-0 text-ink-muted" aria-hidden="true" />
+          <Link href={row.href} className="min-w-0 flex-1 hover:text-action">
             <span className="block truncate">{row.label}</span>
           </Link>
-          <span className="shrink-0 text-xs text-muted-foreground">{formatRelative(row.at)}</span>
+          <span className="shrink-0 text-xs text-ink-muted">{formatRelative(row.at)}</span>
         </li>
       ))}
     </ul>

@@ -72,7 +72,7 @@ function MyBatches() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My batches</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Every batch you have been enrolled on, including finished ones.
         </p>
       </div>
@@ -102,7 +102,7 @@ function MyBatches() {
                     <Badge variant={BATCH_STATUS_VARIANT[enrollment.batch_status]}>
                       {BATCH_STATUS_LABEL[enrollment.batch_status]}
                     </Badge>
-                    <span className="font-mono text-xs text-muted-foreground">
+                    <span className="font-mono text-xs text-ink-muted">
                       {enrollment.batch_code}
                     </span>
                   </div>
@@ -110,7 +110,7 @@ function MyBatches() {
                   <CardDescription>
                     <Link
                       href={`/courses/${enrollment.course_slug}`}
-                      className="underline hover:text-foreground"
+                      className="underline hover:text-ink"
                     >
                       {enrollment.course_title}
                     </Link>
@@ -120,7 +120,7 @@ function MyBatches() {
 
                 <CardContent className="space-y-3">
                   {!enrollment.grants_access ? (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-ink-muted">
                       {enrollment.status === 'suspended'
                         ? 'Your access is paused. Contact the administration office.'
                         : enrollment.status === 'cancelled'
@@ -131,7 +131,7 @@ function MyBatches() {
 
                   {batch ? (
                     <>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-ink-muted">
                         {formatDate(batch.start_date)} – {formatDate(batch.end_date)}
                       </p>
                       <ScheduleList schedules={batch.schedules} />

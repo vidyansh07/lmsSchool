@@ -196,7 +196,7 @@ export function StepUpDialog({
             {mode === "password" ? (
               <button
                 type="button"
-                className="text-primary underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                className="text-action underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={useCodeInstead}
                 disabled={isSendingCode}
               >
@@ -206,7 +206,7 @@ export function StepUpDialog({
               <div className="flex items-center gap-4">
                 <button
                   type="button"
-                  className="text-primary underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                  className="text-action underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={useCodeInstead}
                   disabled={isSendingCode}
                 >
@@ -214,7 +214,7 @@ export function StepUpDialog({
                 </button>
                 <button
                   type="button"
-                  className="text-muted-foreground underline-offset-4 hover:underline"
+                  className="text-ink-muted underline-offset-4 hover:underline"
                   onClick={usePasswordInstead}
                 >
                   Use your password instead

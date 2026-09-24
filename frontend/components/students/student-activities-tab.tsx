@@ -194,7 +194,7 @@ export function StudentActivitiesTab({ studentId }: { studentId: string }) {
             </option>
           ))}
         </Select>
-        <div className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm">
+        <div className="flex h-10 items-center gap-2 rounded-md border border-line px-3 text-sm">
           <Checkbox
             aria-label="Overdue"
             checked={filters.overdue}

@@ -47,7 +47,7 @@ export function PendingConfirmationsPanel({
 
   return (
     <div className="space-y-2">
-      <p aria-live="polite" className="text-sm text-muted-foreground">
+      <p aria-live="polite" className="text-sm text-ink-muted">
         {totalCount} awaiting confirmation.
       </p>
       <AlertList

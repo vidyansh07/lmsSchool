@@ -37,8 +37,8 @@ export function AuthSplitShell({
 }) {
   return (
     <div className="mx-auto w-full max-w-4xl animate-fade-in">
-      <div className="overflow-hidden rounded-card border border-border bg-surface shadow-sm lg:grid lg:grid-cols-2">
-        <div className="relative overflow-hidden bg-primary px-6 py-8 text-primary-foreground sm:px-10 sm:py-10 lg:flex lg:min-h-full lg:flex-col lg:justify-center lg:py-12">
+      <div className="overflow-hidden rounded-card border border-line bg-surface shadow-sm lg:grid lg:grid-cols-2">
+        <div className="relative overflow-hidden bg-action px-6 py-8 text-action-fg sm:px-10 sm:py-10 lg:flex lg:min-h-full lg:flex-col lg:justify-center lg:py-12">
           {/* Decorative only — the brand hue as a large fill, never carrying
               text. Blurred and kept away from the copy below so it can never
               become the background a reader has to see the words against. */}
@@ -51,14 +51,14 @@ export function AuthSplitShell({
             className="pointer-events-none absolute -bottom-20 -left-12 size-56 rounded-full bg-brand/25 blur-3xl lg:size-64"
           />
           <div className="relative space-y-3">
-            <p className="flex items-center gap-2 text-sm font-semibold tracking-wide text-primary-foreground">
+            <p className="flex items-center gap-2 text-sm font-semibold tracking-wide text-action-fg">
               <GraduationCap className="size-5" aria-hidden="true" />
               Grras LMS
             </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-primary-foreground sm:text-3xl">
+            <h1 className="text-2xl font-semibold tracking-tight text-action-fg sm:text-3xl">
               {heading}
             </h1>
-            <p className="max-w-sm text-sm text-primary-foreground">{tagline}</p>
+            <p className="max-w-sm text-sm text-action-fg">{tagline}</p>
           </div>
         </div>
 

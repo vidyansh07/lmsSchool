@@ -63,7 +63,7 @@ export function ProfileImageField() {
 
   return (
     <div className="flex flex-wrap items-center gap-4">
-      <div className="flex size-16 items-center justify-center overflow-hidden rounded-full border border-border bg-muted">
+      <div className="flex size-16 items-center justify-center overflow-hidden rounded-full border border-line bg-sunken">
         {user?.profile_image_url ? (
           /* The image is served by an authenticated API route, so Next's image
              optimiser cannot fetch it; a plain <img> is correct here. */
@@ -76,7 +76,7 @@ export function ProfileImageField() {
             height={64}
           />
         ) : (
-          <span aria-hidden="true" className="text-xl font-medium text-muted-foreground">
+          <span aria-hidden="true" className="text-xl font-medium text-ink-muted">
             {initials}
           </span>
         )}
@@ -99,8 +99,8 @@ export function ProfileImageField() {
             </Button>
           ) : null}
         </div>
-        <p className="text-xs text-muted-foreground">JPEG, PNG or WEBP. Up to 2 MB.</p>
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        <p className="text-xs text-ink-muted">JPEG, PNG or WEBP. Up to 2 MB.</p>
+        {error ? <p className="text-xs text-danger">{error}</p> : null}
       </div>
 
       <input

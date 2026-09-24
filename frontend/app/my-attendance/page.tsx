@@ -60,7 +60,7 @@ function MyAttendancePage_() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My attendance</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Every class you were on a register for, and how you stand against the requirement.
         </p>
       </div>
@@ -79,7 +79,7 @@ function MyAttendancePage_() {
             <Card key={row.enrollment_id} className="">
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">{row.batch_code}</span>
+                  <span className="font-mono text-xs text-ink-muted">{row.batch_code}</span>
                   {summary.met === null ? null : (
                     <Badge variant={summary.met ? 'success' : 'error'}>
                       {summary.met ? 'Requirement met' : 'Below requirement'}
@@ -109,7 +109,7 @@ function MyAttendancePage_() {
                     ] as const
                   ).map(([label, value]) => (
                     <div key={label}>
-                      <dt className="text-muted-foreground">{label}</dt>
+                      <dt className="text-ink-muted">{label}</dt>
                       <dd className="text-lg font-semibold">{value}</dd>
                     </div>
                   ))}
@@ -142,7 +142,7 @@ function MyAttendancePage_() {
                                 </Badge>
                               ) : null}
                               {record.note ? (
-                                <span className="ml-2 text-xs text-muted-foreground">
+                                <span className="ml-2 text-xs text-ink-muted">
                                   {record.note}
                                 </span>
                               ) : null}

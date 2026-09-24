@@ -86,7 +86,7 @@ export function RequirementsBoard() {
           <h1 className="text-2xl font-semibold tracking-tight">
             Trainer requirements
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             {canManage
               ? "Ask the trainers of your centre for something. Every trainer is told, they answer here, and you close it naming who took it."
               : "What your centre needs from its trainers. Answer on one if you can take it."}
@@ -247,7 +247,7 @@ function RequirementCard({
             type="button"
             onClick={onToggle}
             aria-expanded={isExpanded}
-            className="text-left hover:text-primary"
+            className="text-left hover:text-action"
           >
             <CardTitle className="text-base">{row.title}</CardTitle>
           </button>
@@ -265,7 +265,7 @@ function RequirementCard({
             ) : null}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-ink-muted">
           Raised by {fallback(row.raised_by_name)} on{" "}
           {formatDateTime(row.created_at)} ·{" "}
           {row.reply_count === 1 ? "1 reply" : `${row.reply_count} replies`}
@@ -281,10 +281,10 @@ function RequirementCard({
           {row.details ? (
             <p className="whitespace-pre-line text-sm">{row.details}</p>
           ) : (
-            <p className="text-sm text-muted-foreground">No further details.</p>
+            <p className="text-sm text-ink-muted">No further details.</p>
           )}
           {row.batch_name ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               About the batch {row.batch_name}.
             </p>
           ) : null}
@@ -294,10 +294,10 @@ function RequirementCard({
               {row.replies.map((reply) => (
                 <li
                   key={reply.id}
-                  className="rounded-md border border-border bg-muted/40 p-3 text-sm"
+                  className="rounded-md border border-line bg-sunken/40 p-3 text-sm"
                 >
-                  <p className="text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">
+                  <p className="text-xs text-ink-muted">
+                    <span className="font-medium text-ink">
                       {reply.author_name}
                     </span>
                     {reply.author === currentUserId ? " (you)" : null} ·{" "}
@@ -308,7 +308,7 @@ function RequirementCard({
               ))}
             </ol>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               Nobody has answered yet.
             </p>
           )}
@@ -385,7 +385,7 @@ function RequirementCard({
 
           {isRemoving ? (
             <form
-              className="flex flex-wrap items-end gap-2 rounded-md border border-border p-3"
+              className="flex flex-wrap items-end gap-2 rounded-md border border-line p-3"
               onSubmit={(event) => {
                 event.preventDefault();
                 void run(

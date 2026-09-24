@@ -124,7 +124,7 @@ export function MfaVerifyForm({
         <h2 className="text-xl font-semibold tracking-tight">
           Verify it&apos;s you
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Your account needs a second step to finish signing in.
         </p>
       </div>
@@ -175,7 +175,7 @@ export function MfaVerifyForm({
             {method === "email" ? (
               <button
                 type="button"
-                className="text-sm text-primary underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                className="text-sm text-action underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                 onClick={() => void sendCode()}
                 disabled={isSendingCode}
               >
@@ -188,7 +188,7 @@ export function MfaVerifyForm({
         <div className="flex items-center justify-between gap-3 pt-1">
           <button
             type="button"
-            className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+            className="text-sm text-ink-muted underline-offset-4 hover:underline"
             onClick={onBack}
           >
             Back to sign in

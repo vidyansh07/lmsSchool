@@ -71,7 +71,7 @@ function MyProgress() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My progress</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           How far you are on each course, and what is still required to complete it.
         </p>
       </div>
@@ -91,7 +91,7 @@ function MyProgress() {
             <Card key={progress.enrollment_id} data-testid="progress-card" className="">
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <span className="font-mono text-xs text-ink-muted">
                     {progress.batch_code}
                   </span>
                   {completion ? (
@@ -116,7 +116,7 @@ function MyProgress() {
                 <div>
                   <div className="flex items-center justify-between text-sm">
                     <span>Course content</span>
-                    <span className="text-muted-foreground">
+                    <span className="text-ink-muted">
                       {progress.lessons.completed} of {progress.lessons.total} lessons
                     </span>
                   </div>
@@ -139,7 +139,7 @@ function MyProgress() {
                     ] as const
                   ).map(([label, value]) => (
                     <div key={label}>
-                      <dt className="text-muted-foreground">{label}</dt>
+                      <dt className="text-ink-muted">{label}</dt>
                       <dd className="text-lg font-semibold">{value}</dd>
                     </div>
                   ))}
@@ -151,19 +151,19 @@ function MyProgress() {
                 </div>
 
                 {certificate ? (
-                  <div className="rounded-md border border-border p-3">
+                  <div className="rounded-md border border-line p-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={CERTIFICATE_STATUS_VARIANT[certificate.status]}>
                         {CERTIFICATE_STATUS_LABEL[certificate.status]}
                       </Badge>
-                      <span className="font-mono text-xs text-muted-foreground">
+                      <span className="font-mono text-xs text-ink-muted">
                         {certificate.number}
                       </span>
                     </div>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="mt-2 text-sm text-ink-muted">
                       Issued {formatDate(certificate.issued_at)}. Anyone can check it at{' '}
                       <Link
-                        className="underline hover:text-foreground"
+                        className="underline hover:text-ink"
                         href={`/verify/${certificate.verification_code}`}
                       >
                         this address

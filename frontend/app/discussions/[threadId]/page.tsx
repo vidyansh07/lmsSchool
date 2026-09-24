@@ -78,10 +78,10 @@ function ThreadView({ threadId }: { threadId: string }) {
         <div className="flex flex-wrap items-center gap-2">
           {thread.is_pinned ? <Badge variant="warning">Pinned</Badge> : null}
           {thread.is_closed ? <Badge variant="neutral">Closed</Badge> : null}
-          <span className="font-mono text-xs text-muted-foreground">{thread.batch_code}</span>
+          <span className="font-mono text-xs text-ink-muted">{thread.batch_code}</span>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">{thread.title}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {thread.author_name} · {formatDateTime(thread.created_at)} · {thread.course_title}
         </p>
       </div>
@@ -134,20 +134,20 @@ function ThreadView({ threadId }: { threadId: string }) {
               key={item.id}
               data-testid="reply"
               className={`rounded-md border p-3 ${
- item.is_hidden ? 'border-dashed border-border opacity-70' : 'border-border'
+ item.is_hidden ? 'border-dashed border-line opacity-70' : 'border-line'
  }`}
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">{item.author_name}</span>
                 {item.is_trainer_response ? <Badge variant="success">Trainer</Badge> : null}
                 {item.is_hidden ? <Badge variant="error">Hidden</Badge> : null}
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-ink-muted">
                   {formatDateTime(item.created_at)}
                 </span>
               </div>
               <p className="mt-1 whitespace-pre-wrap text-sm">{item.body}</p>
               {item.is_hidden && item.hidden_reason ? (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-ink-muted">
                   Hidden: {item.hidden_reason}
                 </p>
               ) : null}
@@ -204,7 +204,7 @@ function ThreadView({ threadId }: { threadId: string }) {
               </Button>
             </form>
           ) : (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               {thread.is_closed
                 ? 'This thread is closed.'
                 : 'You are not on this batch.'}

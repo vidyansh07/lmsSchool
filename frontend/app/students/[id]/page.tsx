@@ -101,12 +101,12 @@ function ScorePopover({ performance }: { performance: Student360Response['perfor
   const hasComponents = performance.components.length > 0;
   return (
     <Popover>
-      <PopoverTrigger className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-sm hover:bg-muted">
-        <span className="text-xs text-muted-foreground">Score</span>
+      <PopoverTrigger className="flex items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 py-1 text-sm hover:bg-sunken">
+        <span className="text-xs text-ink-muted">Score</span>
         <span className="font-semibold tabular-nums">
           {performance.overall_score === null ? 'Not yet computed' : formatPercent(performance.overall_score)}
         </span>
-        <Info className="size-3.5 text-muted-foreground" aria-hidden="true" />
+        <Info className="size-3.5 text-ink-muted" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverContent>
         <PopoverHeading>How this score is built</PopoverHeading>
@@ -115,10 +115,10 @@ function ScorePopover({ performance }: { performance: Student360Response['perfor
             {performance.components.map((component) => (
               <li key={component.key}>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="text-muted-foreground">{component.label}</span>
+                  <span className="text-ink-muted">{component.label}</span>
                   <span className="tabular-nums">
                     {component.value === null ? NOT_AVAILABLE : formatPercent(component.value)}
-                    <span className="ml-1 text-xs text-muted-foreground">
+                    <span className="ml-1 text-xs text-ink-muted">
                       {/* `weight` is a relative multiplier (`performance.weights`
                           policy), not a fraction of a whole — components do not
                           sum to any total, so this is never `formatPercent`. */}
@@ -127,11 +127,11 @@ function ScorePopover({ performance }: { performance: Student360Response['perfor
                   </span>
                 </div>
                 {component.sources.length > 0 ? (
-                  <ul className="mt-1.5 space-y-1 border-l border-border pl-3">
+                  <ul className="mt-1.5 space-y-1 border-l border-line pl-3">
                     {component.sources.map((source, index) => (
                       // A source carries no id (ADR-10 does not require one),
                       // so the array position is the only stable key here.
-                      <li key={index} className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                      <li key={index} className="flex items-center justify-between gap-3 text-xs text-ink-muted">
                         <span className="truncate">
                           {source.type}
                           {source.trainer ? ` · ${source.trainer}` : ''}
@@ -149,7 +149,7 @@ function ScorePopover({ performance }: { performance: Student360Response['perfor
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Not yet computed. The performance engine (Phase 12) will populate this once it lands.
           </p>
         )}
@@ -178,14 +178,14 @@ function RiskPopover({ risk, onOpenTab }: { risk: Student360Response['risk']; on
                 <p className="font-medium">{trigger.label}</p>
                 <Badge variant={RISK_SEVERITY_VARIANT[trigger.severity]}>{RISK_SEVERITY_LABEL[trigger.severity]}</Badge>
               </div>
-              <p className="text-muted-foreground">{trigger.detail}</p>
+              <p className="text-ink-muted">{trigger.detail}</p>
             </li>
           ))}
         </ul>
         <button
           type="button"
           onClick={onOpenTab}
-          className="mt-2 text-sm text-primary underline-offset-2 hover:underline"
+          className="mt-2 text-sm text-action underline-offset-2 hover:underline"
         >
           Open the Risk tab for full details
         </button>
@@ -203,15 +203,15 @@ function FeedList({
   emptyLabel: string;
   dateField: 'occurred_at' | 'due_at';
 }) {
-  if (items.length === 0) return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
+  if (items.length === 0) return <p className="text-sm text-ink-muted">{emptyLabel}</p>;
   return (
-    <ul className="divide-y divide-border">
+    <ul className="divide-y divide-line">
       {items.map((item) => {
         const when = dateField === 'occurred_at' ? item.occurred_at : item.due_at;
         const row = (
           <div className="flex items-center justify-between gap-3 py-2 text-sm">
-            <span className="truncate font-medium text-foreground">{item.title}</span>
-            <span className="shrink-0 text-xs text-muted-foreground">
+            <span className="truncate font-medium text-ink">{item.title}</span>
+            <span className="shrink-0 text-xs text-ink-muted">
               {when ? formatRelative(when) : NOT_AVAILABLE}
             </span>
           </div>
@@ -235,7 +235,7 @@ function Header({ data, onOpenRiskTab }: { data: Student360Response; onOpenRiskT
         </Avatar>
         <div className="min-w-0 space-y-0.5">
           <h1 className="truncate text-2xl font-semibold tracking-tight">{name}</h1>
-          <p className="truncate text-sm text-muted-foreground">
+          <p className="truncate text-sm text-ink-muted">
             <span className="font-mono text-xs">{data.profile.student_id}</span>
             {' · '}
             {data.batch ? data.batch.name : 'No batch assigned'}
@@ -260,8 +260,8 @@ function OverviewTab({ data }: { data: Student360Response }) {
       <Card>
         <CardContent className="space-y-4 pt-5">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium text-foreground">Course progress</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm font-medium text-ink">Course progress</p>
+            <p className="text-sm text-ink-muted">
               {data.progress
                 ? `${formatCount(data.progress.completed_lessons, 'lesson')} of ${formatCount(data.progress.total_lessons, 'lesson')}`
                 : NO_DATA}
@@ -270,11 +270,11 @@ function OverviewTab({ data }: { data: Student360Response }) {
           {data.progress ? (
             <Progress label="Course progress" value={data.progress.percent} max={100} />
           ) : (
-            <p className="text-sm text-muted-foreground">No progress data yet.</p>
+            <p className="text-sm text-ink-muted">No progress data yet.</p>
           )}
-          <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
-            <p className="text-sm font-medium text-foreground">Attendance</p>
-            <p className="text-sm text-muted-foreground">
+          <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
+            <p className="text-sm font-medium text-ink">Attendance</p>
+            <p className="text-sm text-ink-muted">
               {data.attendance_summary.has_records
                 ? `${formatPercent(data.attendance_summary.percent)} · ${formatCount(
                     data.attendance_summary.attended,
@@ -283,8 +283,8 @@ function OverviewTab({ data }: { data: Student360Response }) {
                 : 'No attendance recorded yet'}
             </p>
           </div>
-          <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
-            <p className="text-sm font-medium text-foreground">Fee status</p>
+          <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
+            <p className="text-sm font-medium text-ink">Fee status</p>
             <Badge variant={FEE_STATUS_VARIANT[data.fee_status]}>{FEE_STATUS_LABEL[data.fee_status]}</Badge>
           </div>
         </CardContent>
@@ -292,7 +292,7 @@ function OverviewTab({ data }: { data: Student360Response }) {
 
       <Card>
         <CardContent className="pt-5">
-          <p className="mb-3 text-sm font-medium text-foreground">Work in progress</p>
+          <p className="mb-3 text-sm font-medium text-ink">Work in progress</p>
           <StatGrid>
             <Stat label="Open activities" value={formatNumberOrDash(data.counts.activities_open)} />
             <Stat
@@ -310,13 +310,13 @@ function OverviewTab({ data }: { data: Student360Response }) {
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardContent className="pt-5">
-            <p className="mb-2 text-sm font-medium text-foreground">Recent activity</p>
+            <p className="mb-2 text-sm font-medium text-ink">Recent activity</p>
             <FeedList items={data.recent_activities} emptyLabel="No recent activity." dateField="occurred_at" />
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-5">
-            <p className="mb-2 text-sm font-medium text-foreground">Next actions</p>
+            <p className="mb-2 text-sm font-medium text-ink">Next actions</p>
             <FeedList
               items={data.next_actions}
               emptyLabel="Nothing suggested yet. Automation (Phase 14) will populate this."
@@ -359,20 +359,20 @@ function EnrollmentTab({ data }: { data: Student360Response }) {
 function RiskOutcomeRow({ trigger }: { trigger: Student360RiskTrigger }) {
   const numberEntries = trigger.numbers ? Object.entries(trigger.numbers) : [];
   return (
-    <li className="space-y-1.5 border-b border-border py-3 last:border-b-0">
+    <li className="space-y-1.5 border-b border-line py-3 last:border-b-0">
       <div className="flex items-center gap-2">
-        <p className="font-medium text-foreground">{trigger.label}</p>
+        <p className="font-medium text-ink">{trigger.label}</p>
         <Badge variant={RISK_SEVERITY_VARIANT[trigger.severity]}>{RISK_SEVERITY_LABEL[trigger.severity]}</Badge>
       </div>
-      <p className="text-sm text-muted-foreground">{trigger.detail}</p>
+      <p className="text-sm text-ink-muted">{trigger.detail}</p>
       {numberEntries.length > 0 ? (
-        <details className="text-xs text-muted-foreground">
-          <summary className="cursor-pointer select-none hover:text-foreground">Numbers</summary>
-          <dl className="mt-1.5 space-y-1 border-l border-border pl-3">
+        <details className="text-xs text-ink-muted">
+          <summary className="cursor-pointer select-none hover:text-ink">Numbers</summary>
+          <dl className="mt-1.5 space-y-1 border-l border-line pl-3">
             {numberEntries.map(([key, value]) => (
               <div key={key} className="flex items-center justify-between gap-3">
                 <dt className="capitalize">{key.replace(/_/g, ' ')}</dt>
-                <dd className="tabular-nums text-foreground">{value === null ? NOT_AVAILABLE : String(value)}</dd>
+                <dd className="tabular-nums text-ink">{value === null ? NOT_AVAILABLE : String(value)}</dd>
               </div>
             ))}
           </dl>
@@ -388,16 +388,16 @@ function RiskTab({ data }: { data: Student360Response }) {
     <Card>
       <CardContent className="space-y-4 pt-5">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium text-foreground">Current risk level</p>
+          <p className="text-sm font-medium text-ink">Current risk level</p>
           <Badge variant={RISK_LEVEL_VARIANT[level]}>{RISK_LEVEL_LABEL[level]}</Badge>
         </div>
         {triggered.length === 0 ? (
-          <p className="border-t border-border pt-4 text-sm text-muted-foreground">
+          <p className="border-t border-line pt-4 text-sm text-ink-muted">
             No risk signals. None of the risk rules (attendance, assessment average, missed assignments, course
             progress) are currently triggered for this student.
           </p>
         ) : (
-          <ul className="border-t border-border">
+          <ul className="border-t border-line">
             {triggered.map((trigger) => (
               <RiskOutcomeRow key={trigger.key} trigger={trigger} />
             ))}
@@ -500,11 +500,11 @@ export function Student360Content({ studentId }: { studentId: string }) {
   return (
     <div className="space-y-6">
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
-        <Link href="/admin/students" className="text-muted-foreground transition-colors hover:text-foreground">
+        <Link href="/admin/students" className="text-ink-muted transition-colors hover:text-ink">
           Students
         </Link>
-        <ChevronRight className="size-3.5 text-muted-foreground/60" aria-hidden="true" />
-        <span aria-current="page" className="truncate font-medium text-foreground">
+        <ChevronRight className="size-3.5 text-ink-muted/60" aria-hidden="true" />
+        <span aria-current="page" className="truncate font-medium text-ink">
           {name}
         </span>
       </nav>

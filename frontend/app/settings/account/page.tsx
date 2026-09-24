@@ -36,7 +36,7 @@ function AccountSettings() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Account</h1>
-        <p className="text-sm text-muted-foreground">Your sign-in details and account status.</p>
+        <p className="text-sm text-ink-muted">Your sign-in details and account status.</p>
       </div>
 
       <Card className="">
@@ -47,19 +47,19 @@ function AccountSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <dl className="divide-y divide-border text-sm">
+          <dl className="divide-y divide-line text-sm">
             <div className="flex items-center justify-between gap-4 py-2">
-              <dt className="text-muted-foreground">Email</dt>
+              <dt className="text-ink-muted">Email</dt>
               <dd className="font-medium">{user?.email}</dd>
             </div>
             <div className="flex items-center justify-between gap-4 py-2">
-              <dt className="text-muted-foreground">Role</dt>
+              <dt className="text-ink-muted">Role</dt>
               <dd>
                 <Badge>{user ? ROLE_LABEL[user.role] : ''}</Badge>
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4 py-2">
-              <dt className="text-muted-foreground">Account status</dt>
+              <dt className="text-ink-muted">Account status</dt>
               <dd>
                 <Badge variant={user?.is_active ? 'success' : 'error'}>
                   {user?.is_active ? 'Active' : 'Inactive'}
@@ -67,7 +67,7 @@ function AccountSettings() {
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4 py-2">
-              <dt className="text-muted-foreground">Email verified</dt>
+              <dt className="text-ink-muted">Email verified</dt>
               <dd>
                 <Badge variant={user?.is_email_verified ? 'success' : 'warning'}>
                   {user?.is_email_verified ? 'Verified' : 'Not verified'}

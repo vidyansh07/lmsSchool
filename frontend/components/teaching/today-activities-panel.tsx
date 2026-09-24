@@ -96,20 +96,20 @@ export function TodayActivitiesPanel({
             description="None of your activities are due before the day ends."
           />
         ) : (
-          <ul className="divide-y divide-border">
+          <ul className="divide-y divide-line">
             {state.data.map((row) => (
               <li key={row.id}>
                 <button
                   type="button"
-                  className="flex w-full flex-wrap items-center gap-3 py-2 text-left text-sm hover:text-primary"
+                  className="flex w-full flex-wrap items-center gap-3 py-2 text-left text-sm hover:text-action"
                   onClick={() => onSelect(row.id)}
                 >
                   <span className="min-w-0 flex-1 truncate font-medium">{row.title}</span>
                   <Badge variant={ACTIVITY_STATUS_VARIANT[row.status]}>
                     {ACTIVITY_STATUS_LABEL[row.status]}
                   </Badge>
-                  <span className="text-xs text-muted-foreground">{row.student.name}</span>
-                  <span className="whitespace-nowrap text-xs text-muted-foreground">
+                  <span className="text-xs text-ink-muted">{row.student.name}</span>
+                  <span className="whitespace-nowrap text-xs text-ink-muted">
                     {formatDateTime(row.due_at)}
                   </span>
                 </button>

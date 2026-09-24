@@ -123,7 +123,7 @@ export function ModulePanel({
           </Button>
         </div>
         {module.description ? (
-          <p className="text-sm text-muted-foreground">{module.description}</p>
+          <p className="text-sm text-ink-muted">{module.description}</p>
         ) : null}
       </CardHeader>
 
@@ -131,11 +131,11 @@ export function ModulePanel({
         {message ? <Alert variant="error">{message}</Alert> : null}
 
         {module.lessons.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No lessons in this module yet.</p>
+          <p className="text-sm text-ink-muted">No lessons in this module yet.</p>
         ) : (
-          <ul className="divide-y divide-border rounded-md border border-border">
+          <ul className="divide-y divide-line rounded-md border border-line">
             {module.lessons.map((lesson, lessonIndex) => (
-              <li key={lesson.id} className="space-y-3 px-3 py-2 transition-colors hover:bg-muted/40">
+              <li key={lesson.id} className="space-y-3 px-3 py-2 transition-colors hover:bg-sunken/40">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="min-w-0 flex-1 truncate font-medium">{lesson.title}</span>
                   <Badge>{CONTENT_TYPE_LABEL[lesson.content_type]}</Badge>
@@ -309,7 +309,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
             <h1 className="text-2xl font-semibold tracking-tight">{course.title}</h1>
             <Badge variant={STATUS_VARIANT[course.status]}>{STATUS_LABEL[course.status]}</Badge>
           </div>
-          <p className="font-mono text-xs text-muted-foreground">{course.code}</p>
+          <p className="font-mono text-xs text-ink-muted">{course.code}</p>
         </div>
         <Button asChild variant="outline">
           <Link href={`/courses/${course.slug}`}>View as a student</Link>

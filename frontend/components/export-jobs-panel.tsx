@@ -126,7 +126,7 @@ export function ExportJobsPanel() {
                     <Tr key={job.id}>
                       <Td className="font-medium">{job.report_key.replaceAll('_', ' ')}</Td>
                       <Td className="uppercase">{job.format}</Td>
-                      <Td className="whitespace-nowrap text-muted-foreground">
+                      <Td className="whitespace-nowrap text-ink-muted">
                         {formatDateTime(job.queued_at)}
                       </Td>
                       <Td>
@@ -134,7 +134,7 @@ export function ExportJobsPanel() {
                           {STATUS_LABEL[job.status]}
                         </Badge>
                         {job.status === 'failed' && job.error ? (
-                          <span className="block text-xs text-muted-foreground">{job.error}</span>
+                          <span className="block text-xs text-ink-muted">{job.error}</span>
                         ) : null}
                       </Td>
                       <Td className="text-right tabular-nums">

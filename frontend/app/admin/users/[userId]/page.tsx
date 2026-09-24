@@ -117,9 +117,9 @@ function History({ userId }: { userId: string }) {
             <Table>
               <thead>
                 <tr>
-                  <Th className="sticky top-0 z-10 bg-muted">When</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">What</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">By</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">When</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">What</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">By</Th>
                 </tr>
               </thead>
               <tbody className="">
@@ -127,9 +127,9 @@ function History({ userId }: { userId: string }) {
                   <tr
                     key={entry.id}
                     data-testid="audit-entry"
-                    className="animate-fade-in transition-colors hover:bg-muted/40"
+                    className="animate-fade-in transition-colors hover:bg-sunken/40"
                   >
-                    <Td className="whitespace-nowrap text-muted-foreground">
+                    <Td className="whitespace-nowrap text-ink-muted">
                       {formatWhen(entry.created_at)}
                     </Td>
                     <Td>
@@ -140,7 +140,7 @@ function History({ userId }: { userId: string }) {
                         </Badge>
                       ) : null}
                     </Td>
-                    <Td className="text-muted-foreground">
+                    <Td className="text-ink-muted">
                       {entry.actor_label || "—"}
                     </Td>
                   </tr>
@@ -236,7 +236,7 @@ function UserAdministration({ userId }: { userId: string }) {
     <div className="space-y-4">
       <Link
         href="/admin/users"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
         All users
@@ -456,14 +456,14 @@ function UserAdministration({ userId }: { userId: string }) {
                 Resend the verification link
               </Button>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               Nobody here sets somebody else&rsquo;s password. A link goes to
               the account holder, and they choose it — so only one person ever
               knows it, and the record says they set it.
             </p>
 
             {can(Capability.userSetActive) && mayAdminister && !isSelf ? (
-              <div className="border-t border-border pt-3">
+              <div className="border-t border-line pt-3">
                 <Button
                   type="button"
                   variant={user.is_active ? "destructive" : "primary"}
@@ -482,7 +482,7 @@ function UserAdministration({ userId }: { userId: string }) {
                     ? "Deactivate this account"
                     : "Activate this account"}
                 </Button>
-                <p className="mt-2 text-sm text-muted-foreground">
+                <p className="mt-2 text-sm text-ink-muted">
                   {user.is_active
                     ? "Deactivating takes effect immediately and ends every session they have open."
                     : "They will be able to sign in again straight away."}
@@ -657,13 +657,13 @@ function ScopeGrantsCard({ userId }: { userId: string }) {
       <CardContent className="space-y-3">
         {error ? <Alert variant="error">{error}</Alert> : null}
         {grants.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No direct grants.</p>
+          <p className="text-sm text-ink-muted">No direct grants.</p>
         ) : (
           <ul className="space-y-2">
             {grants.map((grant) => (
               <li
                 key={grant.id}
-                className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-md border border-line px-3 py-2 text-sm"
               >
                 <span>
                   {grant.batch_code

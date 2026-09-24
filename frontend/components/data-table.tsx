@@ -28,7 +28,7 @@
  *   `sticky top-0`, so a long roster scrolls under its own header instead of
  *   carrying it off the top of the viewport — the header needs an opaque
  *   background for this to read correctly, which is why it is forced to a
- *   solid `bg-muted` here rather than the primitive's own translucent default.
+ *   solid `bg-sunken` here rather than the primitive's own translucent default.
  *   Data rows fade in on mount (opacity only — a
  *   transform on a `<tr>` is the one animation this app avoids, since
  *   `translate`/`scale` on table-row boxes is inconsistently supported); the
@@ -115,7 +115,7 @@ function HeaderCheckbox({
       aria-label={label}
       checked={state === 'all'}
       onChange={onToggle}
-      className="size-4 rounded border-border accent-primary"
+      className="size-4 rounded border-line accent-action"
     />
   );
 }
@@ -232,8 +232,8 @@ export function DataTable<Row>({
   }
 
   // Positioning only — the background colour is applied separately by the
-  // header (opaque `bg-muted`, matching the rest of the header row) and body
-  // cells (`bg-surface`, or `bg-accent` once selected), because a sticky cell
+  // header (opaque `bg-sunken`, matching the rest of the header row) and body
+  // cells (`bg-surface`, or `bg-selected` once selected), because a sticky cell
   // needs an opaque background to hide the content scrolling underneath it,
   // and that background differs between the two.
   //
@@ -254,7 +254,7 @@ export function DataTable<Row>({
           size="sm"
           aria-pressed={density === 'compact'}
           onClick={toggleDensity}
-          className="gap-1.5 text-xs text-muted-foreground"
+          className="gap-1.5 text-xs text-ink-muted"
         >
           {density === 'compact' ? (
             <Rows4 className="size-3.5" aria-hidden="true" />
@@ -286,7 +286,7 @@ export function DataTable<Row>({
             <thead>
               <tr>
                 {selection ? (
-                  <Th className={cn('sticky left-0 top-0 z-20 w-10 bg-muted', cellPadding)}>
+                  <Th className={cn('sticky left-0 top-0 z-20 w-10 bg-sunken', cellPadding)}>
                     <HeaderCheckbox
                       state={selection.pageSelectionState(rowIds)}
                       onToggle={() => selection.toggleAll(rowIds)}
@@ -313,7 +313,7 @@ export function DataTable<Row>({
                         // over `stickyPositionClass`'s own `z-10`, so it stacks
                         // above a horizontally-sticky *body* column rather than
                         // being scrolled under it.
-                        'sticky top-0 z-20 bg-muted',
+                        'sticky top-0 z-20 bg-sunken',
                       )}
                     >
                       {column.header}
@@ -354,14 +354,14 @@ export function DataTable<Row>({
                         onClick={() => onRowActivate?.(row)}
                         className={cn(
                           'animate-fade-in outline-none transition-colors',
-                          onRowActivate && 'cursor-pointer hover:bg-muted/60 active:bg-muted',
-                          isSelected && 'bg-accent',
-                          focusedIndex === index && 'ring-1 ring-inset ring-primary',
+                          onRowActivate && 'cursor-pointer hover:bg-sunken/60 active:bg-sunken',
+                          isSelected && 'bg-selected',
+                          focusedIndex === index && 'ring-1 ring-inset ring-action',
                         )}
                       >
                         {selection ? (
                           <Td
-                            className={cn('sticky left-0 z-10 bg-surface', isSelected && 'bg-accent', cellPadding)}
+                            className={cn('sticky left-0 z-10 bg-surface', isSelected && 'bg-selected', cellPadding)}
                             onClick={(event) => event.stopPropagation()}
                           >
                             <input
@@ -374,7 +374,7 @@ export function DataTable<Row>({
                               // guaranteed across browsers, and shift-click
                               // range selection depends on it.
                               onClick={(event) => selection.toggle(rowId, index, rowIds, event.shiftKey)}
-                              className="size-4 rounded border-border accent-primary"
+                              className="size-4 rounded border-line accent-action"
                             />
                           </Td>
                         ) : null}
@@ -384,7 +384,7 @@ export function DataTable<Row>({
                             className={cn(
                               ALIGN_CLASS[column.align ?? 'left'],
                               cellPadding,
-                              column.sticky && (isSelected ? 'bg-accent' : 'bg-surface'),
+                              column.sticky && (isSelected ? 'bg-selected' : 'bg-surface'),
                               stickyPositionClass(column),
                             )}
                           >

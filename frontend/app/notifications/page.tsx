@@ -103,7 +103,7 @@ function Notifications() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             {unread === 0 ? 'Nothing unread.' : `${unread} unread.`}
           </p>
         </div>
@@ -133,19 +133,19 @@ function Notifications() {
               key={row.id}
               data-testid="notification-row"
               className={`rounded-md border p-3 ${
- row.is_read ? 'border-border' : 'border-primary/40 bg-primary/5'
+ row.is_read ? 'border-line' : 'border-action/40 bg-action/5'
  }`}
             >
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="neutral">{CATEGORY_LABEL[row.category] ?? row.category}</Badge>
                 {row.is_read ? null : <Badge variant="warning">Unread</Badge>}
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-ink-muted">
                   {formatDateTime(row.created_at)}
                 </span>
               </div>
               <p className="mt-1 font-medium">{row.title}</p>
               {row.body ? (
-                <p className="text-sm text-muted-foreground">{row.body}</p>
+                <p className="text-sm text-ink-muted">{row.body}</p>
               ) : null}
               <div className="mt-2 flex flex-wrap gap-2">
                 {row.link_path ? (

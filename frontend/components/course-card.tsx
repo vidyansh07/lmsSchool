@@ -20,7 +20,7 @@ export function CourseCard({
   showStatus?: boolean;
 }) {
   return (
-    <Card className="flex h-full flex-col transition-colors hover:border-primary">
+    <Card className="flex h-full flex-col transition-colors hover:border-action">
       <CardHeader className="gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Badge>{course.category_name}</Badge>
@@ -30,17 +30,17 @@ export function CourseCard({
           ) : null}
         </div>
         <CardTitle>
-          <Link href={href} className="hover:text-primary">
+          <Link href={href} className="hover:text-action">
             {course.title}
           </Link>
         </CardTitle>
-        <p className="font-mono text-xs text-muted-foreground">{course.code}</p>
+        <p className="font-mono text-xs text-ink-muted">{course.code}</p>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {course.short_description || 'No description yet.'}
         </p>
-        <dl className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+        <dl className="flex flex-wrap gap-4 text-xs text-ink-muted">
           <div className="flex items-center gap-1.5">
             <Layers className="size-3.5" aria-hidden="true" />
             <dt className="sr-only">Modules</dt>

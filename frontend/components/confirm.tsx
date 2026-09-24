@@ -115,7 +115,7 @@ export function Confirm({
     >
       <div
         aria-hidden="true"
-        className={cn('absolute inset-0 bg-foreground/40', open ? 'animate-fade-in' : undefined)}
+        className={cn('absolute inset-0 bg-ink/40', open ? 'animate-fade-in' : undefined)}
         style={!open ? { animation: 'fade-in 150ms var(--ease-out) reverse both' } : undefined}
       />
       <div
@@ -125,7 +125,7 @@ export function Confirm({
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}
         className={cn(
-          'relative w-full max-w-sm rounded-card border border-border bg-surface p-5 shadow-lg',
+          'relative w-full max-w-sm rounded-card border border-line bg-surface p-5 shadow-lg',
           open ? '' : undefined,
         )}
         style={
@@ -138,7 +138,7 @@ export function Confirm({
           {title}
         </h2>
         {description ? (
-          <p id={descriptionId} className="mt-2 text-sm text-muted-foreground">
+          <p id={descriptionId} className="mt-2 text-sm text-ink-muted">
             {description}
           </p>
         ) : null}

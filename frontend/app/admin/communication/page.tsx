@@ -24,7 +24,7 @@ function CommunicationCenter() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Communication</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Templates for what the platform says on your behalf, what has actually gone out, and a
           way to reach a batch, a role or specific students directly.
         </p>

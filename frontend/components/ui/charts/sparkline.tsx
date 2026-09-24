@@ -69,10 +69,10 @@ export function Sparkline({
   const direction = (points.at(-1) as number) - (points[0] as number);
   const stroke =
     intent === 'brand'
-      ? 'var(--color-primary)'
+      ? 'var(--color-action)'
       : (intent === 'positive-up' ? direction >= 0 : direction <= 0)
         ? 'var(--color-success)'
-        : 'var(--color-destructive)';
+        : 'var(--color-danger)';
 
   return (
     <svg

@@ -9,7 +9,7 @@ export default function StatusPage() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">System status</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Live readiness of the backend and its dependencies, read from the API by your browser.
           This proves the frontend and backend can talk to each other.
         </p>

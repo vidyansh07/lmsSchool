@@ -25,7 +25,7 @@ export function RiskFlags({ flags }: { flags: string[] }) {
       {flags.map((flag) => (
         <li
           key={flag}
-          className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-medium text-foreground"
+          className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-medium text-ink"
         >
           <AlertTriangle className="size-3 shrink-0 text-warning" aria-hidden="true" />
           {describeRiskFlag(flag)}

@@ -86,7 +86,7 @@ function MyLearning() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My learning</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Where you left off, what is coming, and everything you have saved.
         </p>
       </div>
@@ -102,13 +102,13 @@ function MyLearning() {
         {home.map((row) => (
           <Card key={row.enrollment_id} data-testid="learning-card" className="">
             <CardHeader className="gap-1">
-              <span className="font-mono text-xs text-muted-foreground">{row.batch_code}</span>
+              <span className="font-mono text-xs text-ink-muted">{row.batch_code}</span>
               <CardTitle>{row.course_title}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {row.continue_learning ? (
                 <div>
-                  <p className="text-sm text-muted-foreground">Continue where you left off</p>
+                  <p className="text-sm text-ink-muted">Continue where you left off</p>
                   <Button asChild size="sm" className="mt-1" data-testid="continue-learning">
                     <Link
                       href={`/courses/${row.continue_learning.course_slug}/learn/${row.continue_learning.lesson_id}`}
@@ -118,7 +118,7 @@ function MyLearning() {
                   </Button>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-ink-muted">
                   Nothing left to continue on this course.
                 </p>
               )}
@@ -130,12 +130,12 @@ function MyLearning() {
                     {row.recent.map((lesson) => (
                       <li key={lesson.lesson_id}>
                         <Link
-                          className="underline hover:text-foreground"
+                          className="underline hover:text-ink"
                           href={`/courses/${lesson.course_slug}/learn/${lesson.lesson_id}`}
                         >
                           {lesson.lesson_title}
                         </Link>
-                        <span className="ml-2 text-xs text-muted-foreground">
+                        <span className="ml-2 text-xs text-ink-muted">
                           {formatDateTime(lesson.last_accessed_at)}
                         </span>
                       </li>
@@ -173,14 +173,14 @@ function MyLearning() {
         </CardHeader>
         <CardContent>
           {upcoming.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nothing due in the next two weeks.</p>
+            <p className="text-sm text-ink-muted">Nothing due in the next two weeks.</p>
           ) : (
             <ul className="space-y-2" data-testid="upcoming">
               {upcoming.map((item) => (
                 <li key={`${item.kind}-${item.title}-${item.start}`} className="text-sm">
                   <Badge variant="neutral">{KIND_LABEL[item.kind] ?? item.kind}</Badge>
                   <span className="ml-2 font-medium">{item.title}</span>
-                  <span className="ml-2 text-muted-foreground">
+                  <span className="ml-2 text-ink-muted">
                     {formatDateTime(item.start)}
                   </span>
                 </li>
@@ -197,7 +197,7 @@ function MyLearning() {
           </CardHeader>
           <CardContent>
             {bookmarks.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-ink-muted">
                 Bookmark a lesson from the course player to find it here.
               </p>
             ) : (
@@ -205,13 +205,13 @@ function MyLearning() {
                 {bookmarks.map((item) => (
                   <li key={item.id}>
                     <Link
-                      className="underline hover:text-foreground"
+                      className="underline hover:text-ink"
                       href={`/courses/${item.course_slug}/learn/${item.lesson}`}
                     >
                       {item.lesson_title}
                     </Link>
                     {item.note ? (
-                      <p className="text-xs text-muted-foreground">{item.note}</p>
+                      <p className="text-xs text-ink-muted">{item.note}</p>
                     ) : null}
                   </li>
                 ))}
@@ -226,7 +226,7 @@ function MyLearning() {
           </CardHeader>
           <CardContent>
             {notes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-ink-muted">
                 Notes you write on a lesson appear here.
               </p>
             ) : (
@@ -234,12 +234,12 @@ function MyLearning() {
                 {notes.map((item) => (
                   <li key={item.id}>
                     <Link
-                      className="underline hover:text-foreground"
+                      className="underline hover:text-ink"
                       href={`/courses/${item.course_slug}/learn/${item.lesson}`}
                     >
                       {item.lesson_title}
                     </Link>
-                    <p className="whitespace-pre-wrap text-xs text-muted-foreground">
+                    <p className="whitespace-pre-wrap text-xs text-ink-muted">
                       {item.body}
                     </p>
                   </li>

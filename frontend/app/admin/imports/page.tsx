@@ -80,7 +80,7 @@ function Imports() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Bulk import</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Upload a .csv or .xlsx of students. Nothing is created until you confirm the
           preview.
         </p>
@@ -147,7 +147,7 @@ function Imports() {
           </form>
 
           {preview ? (
-            <div className="space-y-3 rounded-md border border-border p-3" data-testid="import-preview">
+            <div className="space-y-3 rounded-md border border-line p-3" data-testid="import-preview">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge
                   variant={
@@ -160,7 +160,7 @@ function Imports() {
                 >
                   {preview.status}
                 </Badge>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm text-ink-muted">
                   {preview.original_filename}
                 </span>
               </div>
@@ -176,7 +176,7 @@ function Imports() {
               {preview.report.errors?.length ? (
                 <div>
                   <p className="text-sm font-medium">Problems</p>
-                  <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
+                  <ul className="mt-1 space-y-1 text-sm text-ink-muted">
                     {preview.report.errors.map((problem) => (
                       <li key={`${problem.line}-${problem.problem}`}>
                         Line {problem.line}
@@ -199,7 +199,7 @@ function Imports() {
                     </thead>
                     <tbody className="">
                       {preview.report.rows.slice(0, 20).map((row, index) => (
-                        <tr key={index} className="animate-fade-in hover:bg-muted/40">
+                        <tr key={index} className="animate-fade-in hover:bg-sunken/40">
                           <Td>{String(row.line)}</Td>
                           <Td>{String(row.email)}</Td>
                           <Td>

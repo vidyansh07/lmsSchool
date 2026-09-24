@@ -116,7 +116,7 @@ export function BranchesContent() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Centres</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Where the institution teaches. A centre bounds people and classes; courses and academic
             rules are shared by all of them.
           </p>
@@ -203,7 +203,7 @@ export function BranchesContent() {
                   <Td className="font-mono text-xs font-semibold">{branch.code}</Td>
                   <Td className="font-medium">
                     <span className="inline-flex items-center gap-2">
-                      <Building2 className="size-4 text-muted-foreground" aria-hidden="true" />
+                      <Building2 className="size-4 text-ink-muted" aria-hidden="true" />
                       {branch.name}
                     </span>
                   </Td>
@@ -213,7 +213,7 @@ export function BranchesContent() {
                       {branch.is_active ? 'Open' : 'Closed'}
                     </Badge>
                   </Td>
-                  <Td className="whitespace-nowrap text-muted-foreground">
+                  <Td className="whitespace-nowrap text-ink-muted">
                     {formatDate(branch.created_at)}
                   </Td>
                   {mayManage ? (

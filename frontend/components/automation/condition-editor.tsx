@@ -56,7 +56,7 @@ function ConditionRow({
   const isList = operatorTakesList(condition.op);
 
   return (
-    <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 sm:grid-cols-[1fr_auto]">
+    <div className="grid grid-cols-1 gap-2 rounded-md border border-line p-3 sm:grid-cols-[1fr_auto]">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <Field label="Path" htmlFor={`${uid}-path`}>
           {isFormPath ? (
@@ -190,7 +190,7 @@ export function ConditionEditor({
   return (
     <div className="space-y-3">
       {conditions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           No conditions — this rule fires on every occurrence of &ldquo;
           {triggerLabel}&rdquo;.
         </p>

@@ -122,10 +122,10 @@ function ProjectDetail({ projectId }: { projectId: string }) {
             {LIFECYCLE_LABEL[project.status]}
           </Badge>
           {project.is_required ? <Badge variant="warning">Required</Badge> : null}
-          <span className="font-mono text-xs text-muted-foreground">{project.code}</span>
+          <span className="font-mono text-xs text-ink-muted">{project.code}</span>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">{project.title}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {project.course_title}
           {project.batch_code ? ` · ${project.batch_code}` : ' · every batch'} ·{' '}
           {PROJECT_KIND_LABEL[project.kind]} · out of {project.max_marks}
@@ -221,7 +221,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
             ) : null}
           </div>
           {project.status === 'archived' ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               Archived. Students no longer see this brief, and the work already handed in is
               unchanged \u2014 archiving retires the brief, it does not undo anybody\u2019s
               submission.
@@ -261,7 +261,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                     <tr key={row.id}>
                       <Td>
                         <div className="font-medium">{row.student_name}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
+                        <div className="font-mono text-xs text-ink-muted">
                           {row.student_id}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-1">
@@ -274,7 +274,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                       <Td>
                         {formatDateTime(row.submitted_at)}
                         {row.submission_count > 1 ? (
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-xs text-ink-muted">
                             {row.submission_count} submissions
                           </div>
                         ) : null}
@@ -285,7 +285,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                             {row.files.map((file) => (
                               <li key={file.id}>
                                 <a
-                                  className="underline hover:text-foreground"
+                                  className="underline hover:text-ink"
                                   href={projectFileUrl(file.id)}
                                 >
                                   {file.original_filename}
@@ -307,7 +307,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                       </Td>
                       <Td className="min-w-64 space-y-2">
                         {!REVIEWABLE.has(row.status) ? (
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-ink-muted">
                             {row.status === 'rework'
                               ? 'Sent back. Waiting for the student to resubmit.'
                               : row.status === 'approved' || row.status === 'completed'

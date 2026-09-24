@@ -39,11 +39,11 @@ export function StatusPanel() {
           </Badge>
         </CardHeader>
         <CardContent className="space-y-3">
-          <dl className="divide-y divide-border">
+          <dl className="divide-y divide-line">
             {checks.map(([name, check]) => (
               <div key={name} className="flex items-center justify-between gap-4 py-2">
                 <dt className="text-sm font-medium capitalize">{name}</dt>
-                <dd className="flex items-center gap-3 text-sm text-muted-foreground">
+                <dd className="flex items-center gap-3 text-sm text-ink-muted">
                   <span>{check.duration_ms} ms</span>
                   <Badge variant={check.status === 'ok' ? 'success' : 'error'}>{check.detail}</Badge>
                 </dd>
@@ -51,7 +51,7 @@ export function StatusPanel() {
             ))}
           </dl>
           <div className="flex items-center justify-between gap-3 pt-1">
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-ink-muted">
               API: <code className="font-mono">{env.publicApiBaseUrl}</code>
             </p>
             <Button variant="outline" size="sm" onClick={reload}>

@@ -289,14 +289,14 @@ export function ManualSend() {
                   onChange={(event) => void runStudentSearch(event.target.value)}
                 />
               </Field>
-              {isSearchingStudents ? <p className="text-xs text-muted-foreground">Searching…</p> : null}
+              {isSearchingStudents ? <p className="text-xs text-ink-muted">Searching…</p> : null}
               {studentOptions.length > 0 ? (
-                <ul className="rounded-md border border-border">
+                <ul className="rounded-md border border-line">
                   {studentOptions.map((option) => (
                     <li key={option.id}>
                       <button
                         type="button"
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-sunken"
                         onClick={() => addStudent(option)}
                       >
                         {option.title}
@@ -309,7 +309,7 @@ export function ManualSend() {
                 {selectedStudents.map((entry) => (
                   <span
                     key={entry.id}
-                    className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-xs"
+                    className="inline-flex items-center gap-1 rounded-full bg-sunken px-2.5 py-0.5 text-xs"
                   >
                     {entry.title}
                     {phase === 'idle' ? (
@@ -317,7 +317,7 @@ export function ManualSend() {
                         type="button"
                         aria-label={`Remove ${entry.title}`}
                         onClick={() => removeStudent(entry.id)}
-                        className="rounded-full transition-colors hover:bg-border hover:text-foreground"
+                        className="rounded-full transition-colors hover:bg-line hover:text-ink"
                       >
                         ×
                       </button>

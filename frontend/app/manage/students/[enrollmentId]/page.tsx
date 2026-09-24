@@ -125,15 +125,15 @@ function StudentFeedbackSection({ studentCode }: { studentCode: string | null })
     return <EmptyState title="No feedback yet" description="Nothing has been left for this student." />;
   }
   return (
-    <ul className="divide-y divide-border rounded-card border border-border">
+    <ul className="divide-y divide-line rounded-card border border-line">
       {items.map((item) => (
         <li
           key={item.id}
-          className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-muted/40"
+          className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-sunken/40"
           data-testid="student-feedback-item"
         >
           <p className="text-sm">{fallback(item.body, NO_DATA)}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-ink-muted">
             {fallback(item.author_name, UNKNOWN)} · {fallback(item.batch_code)} · {formatDate(item.created_at)}
           </p>
         </li>
@@ -219,7 +219,7 @@ export function StudentPerformance({
         <>
           <Link
             href={`/manage/batches/${enrollment.batch_id}/students`}
-            className="inline-block text-sm text-muted-foreground hover:text-foreground"
+            className="inline-block text-sm text-ink-muted hover:text-ink"
           >
             ← Back to roster
           </Link>
@@ -231,9 +231,9 @@ export function StudentPerformance({
                 {ENROLLMENT_STATUS_LABEL[enrollment.status]}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               <span className="font-mono text-xs">{fallback(studentCode)}</span> · {fallback(enrollment.course_title)} on{' '}
-              <Link href={`/manage/batches/${enrollment.batch_id}`} className="text-foreground hover:text-primary hover:underline">
+              <Link href={`/manage/batches/${enrollment.batch_id}`} className="text-ink hover:text-action hover:underline">
                 {fallback(enrollment.batch_name)}
               </Link>
             </p>
@@ -262,7 +262,7 @@ export function StudentPerformance({
                   <Stat label="Classes held" value={formatNumber(performance.attendance.total_sessions)} />
                 </StatGrid>
               ) : (
-                <p className="text-sm text-muted-foreground">No classes have been registered yet.</p>
+                <p className="text-sm text-ink-muted">No classes have been registered yet.</p>
               )}
             </CardContent>
           </Card>

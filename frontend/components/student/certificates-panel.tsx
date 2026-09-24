@@ -49,7 +49,7 @@ export function CertificatesPanel({
 
   if (certificates.length === 0) {
     return (
-      <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-card border border-dashed border-line px-4 py-6 text-center text-sm text-ink-muted">
         No certificates yet. One appears here as soon as a course is complete and it is issued.
       </p>
     );
@@ -64,13 +64,13 @@ export function CertificatesPanel({
         {shown.map((certificate) => (
           <li
             key={certificate.id}
-            className="flex flex-wrap items-start justify-between gap-3 rounded-card border border-border p-3"
+            className="flex flex-wrap items-start justify-between gap-3 rounded-card border border-line p-3"
           >
             <div className="flex min-w-0 items-start gap-2.5">
-              <Award className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+              <Award className="mt-0.5 size-4 shrink-0 text-action" aria-hidden="true" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{certificate.course_title}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-ink-muted">
                   <Badge variant={CERTIFICATE_STATUS_VARIANT[certificate.status]}>
                     {CERTIFICATE_STATUS_LABEL[certificate.status]}
                   </Badge>

@@ -76,7 +76,7 @@ export function RecoveryBin() {
 
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight capitalize">{selected.verbose_name}</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             {selected.deleted_count === 1 ? '1 deleted record.' : `${selected.deleted_count} deleted records.`} Restore
             brings one back exactly as it was; purge does not exist as an option unless your role permits it, and does
             not undo.
@@ -92,7 +92,7 @@ export function RecoveryBin() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Deleted records</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Everything currently removed, grouped by kind. A kind with nothing deleted in it is not listed.
         </p>
       </div>

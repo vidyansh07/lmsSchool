@@ -24,14 +24,14 @@ export function ProgressBar({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label={label ?? 'Course progress'}
-        className="h-2 w-full overflow-hidden rounded-full bg-muted"
+        className="h-2 w-full overflow-hidden rounded-full bg-sunken"
       >
         <div
-          className="h-full rounded-full bg-primary transition-[width]"
+          className="h-full rounded-full bg-action transition-[width]"
           style={{ width: `${clamped}%` }}
         />
       </div>
-      {label ? <p className="text-xs text-muted-foreground">{label}</p> : null}
+      {label ? <p className="text-xs text-ink-muted">{label}</p> : null}
     </div>
   );
 }

@@ -222,7 +222,7 @@ export function RuleBuilder({ id }: { id: string }) {
             </Badge>
             {rule.is_system ? <Badge variant="neutral">Seeded</Badge> : null}
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             v{rule.version} · updated {formatDateTime(rule.updated_at)}
           </p>
         </div>
@@ -366,7 +366,7 @@ export function RuleBuilder({ id }: { id: string }) {
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             A dry run against this trigger&rsquo;s most recent occurrences. Nothing here is
             executed — no activity created, no notification sent.
           </p>
@@ -423,7 +423,7 @@ function DryRunResults({
 
   if (result.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-ink-muted">
         No recent occurrences of this trigger to test against yet.
       </p>
     );
@@ -437,22 +437,22 @@ function DryRunResults({
       </p>
       <ul className="space-y-2">
         {result.map((event) => (
-          <li key={event.object_id} className="rounded-md border border-border p-3 text-sm">
+          <li key={event.object_id} className="rounded-md border border-line p-3 text-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-mono text-xs text-muted-foreground">{event.object_id}</span>
+              <span className="font-mono text-xs text-ink-muted">{event.object_id}</span>
               <Badge variant={event.would_fire ? "success" : "neutral"}>
                 {event.would_fire ? "Would fire" : "Would not fire"}
               </Badge>
             </div>
             <details className="mt-2">
-              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+              <summary className="cursor-pointer text-xs text-ink-muted hover:text-ink">
                 Occurrence data
               </summary>
               <ul className="mt-1 space-y-1 pl-4 text-xs">
                 {flattenContext(event.context).map(([path, value]) => (
                   <li
                     key={path}
-                    className={conditionPaths.includes(path) ? "font-medium" : "text-muted-foreground"}
+                    className={conditionPaths.includes(path) ? "font-medium" : "text-ink-muted"}
                   >
                     {path}: {JSON.stringify(value)}
                   </li>

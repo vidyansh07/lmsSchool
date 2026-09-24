@@ -174,19 +174,19 @@ export function RegisterEditor({
         <Button type="button" variant="outline" size="sm" onClick={onMarkAllPresent} disabled={!canMark}>
           Mark all present
         </Button>
-        <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
           <span>Focused row:</span>
-          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[0.65rem]">P</kbd>
-          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[0.65rem]">A</kbd>
-          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[0.65rem]">L</kbd>
-          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[0.65rem]">E</kbd>
+          <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[0.65rem]">P</kbd>
+          <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[0.65rem]">A</kbd>
+          <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[0.65rem]">L</kbd>
+          <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[0.65rem]">E</kbd>
         </div>
       </div>
 
       <div
         aria-live="polite"
         aria-atomic="true"
-        className="flex flex-wrap gap-x-4 gap-y-1 rounded-card border border-border bg-muted/50 px-4 py-2.5 text-sm"
+        className="flex flex-wrap gap-x-4 gap-y-1 rounded-card border border-line bg-sunken/50 px-4 py-2.5 text-sm"
       >
         <span>
           <strong className="tabular-nums">{formatNumber(counts.present)}</strong> present
@@ -205,13 +205,13 @@ export function RegisterEditor({
             <strong className="tabular-nums">{formatNumber(counts.unmarked)}</strong> unmarked
           </span>
         ) : null}
-        <span className="text-muted-foreground" title="Not reported by the API this screen can reach — see the DSR section below.">
+        <span className="text-ink-muted" title="Not reported by the API this screen can reach — see the DSR section below.">
           Online: {fallback(undefined)} · Offline: {fallback(undefined)}
         </span>
       </div>
 
       {!canMark ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           This class cannot be marked right now — it may be cancelled, or it may not have started.
         </p>
       ) : null}
@@ -221,8 +221,8 @@ export function RegisterEditor({
           <caption className="sr-only">Class register, one row per student</caption>
           <thead>
             <tr>
-              <Th className="sticky top-0 z-10 bg-muted">Student</Th>
-              <Th className="sticky top-0 z-10 bg-muted">Attendance</Th>
+              <Th className="sticky top-0 z-10 bg-sunken">Student</Th>
+              <Th className="sticky top-0 z-10 bg-sunken">Attendance</Th>
             </tr>
           </thead>
           <tbody className="">
@@ -242,13 +242,13 @@ export function RegisterEditor({
                   onFocus={() => setFocusedIndex(index)}
                   onKeyDown={(event) => handleRowKeyDown(event, index, entry.enrollment_id)}
                   className={cn(
-                    'animate-fade-in cursor-default outline-none transition-colors hover:bg-muted/40',
-                    isFocused && 'bg-accent/40 ring-2 ring-inset ring-primary',
+                    'animate-fade-in cursor-default outline-none transition-colors hover:bg-sunken/40',
+                    isFocused && 'bg-selected/40 ring-2 ring-inset ring-action',
                   )}
                 >
                   <Td>
                     <div className="font-medium">{studentLabel(entry)}</div>
-                    <div className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5 font-mono text-xs text-ink-muted">
                       {fallback(entry.student_code)}
                       {entry.was_corrected ? <Badge variant="warning">Corrected</Badge> : null}
                       {entry.enrollment_status && entry.enrollment_status !== 'active' ? (

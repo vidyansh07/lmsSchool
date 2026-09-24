@@ -217,8 +217,8 @@ export function CommandPalette({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="lg" className="p-0" hideCloseButton>
-        <div className="flex items-center gap-2 border-b border-border px-4">
-          <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="flex items-center gap-2 border-b border-line px-4">
+          <Search className="size-4 shrink-0 text-ink-muted" aria-hidden="true" />
           <Input
             autoFocus
             value={query}
@@ -238,7 +238,7 @@ export function CommandPalette({
         <ul id="command-palette-list" role="listbox" aria-label="Results" className="max-h-96 overflow-y-auto p-2">
           {localItems.length > 0 ? (
             <li role="presentation">
-              <p className="px-2 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="px-2 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wide text-ink-muted">
                 Go to
               </p>
               <ul>
@@ -256,22 +256,22 @@ export function CommandPalette({
           ) : null}
 
           {canSearch && trimmedQuery.length > 0 && trimmedQuery.length < SEARCH_MIN_LENGTH ? (
-            <p className="px-3 py-2 text-xs text-muted-foreground">Keep typing to search records…</p>
+            <p className="px-3 py-2 text-xs text-ink-muted">Keep typing to search records…</p>
           ) : null}
 
           {searchEnabled && searchState.isLoading ? (
-            <p className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+            <p className="flex items-center gap-2 px-3 py-2 text-xs text-ink-muted">
               <Spinner size="sm" /> Searching…
             </p>
           ) : null}
 
           {searchEnabled && searchState.error ? (
-            <p className="px-3 py-2 text-xs text-destructive">Could not search records right now.</p>
+            <p className="px-3 py-2 text-xs text-danger">Could not search records right now.</p>
           ) : null}
 
           {searchGroups.map((group) => (
             <li key={group.label} role="presentation">
-              <p className="px-2 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="px-2 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wide text-ink-muted">
                 {group.label}
               </p>
               <ul>
@@ -289,7 +289,7 @@ export function CommandPalette({
           ))}
 
           {flatItems.length === 0 && !(searchEnabled && searchState.isLoading) ? (
-            <p className="px-3 py-6 text-center text-sm text-muted-foreground">No matches.</p>
+            <p className="px-3 py-6 text-center text-sm text-ink-muted">No matches.</p>
           ) : null}
         </ul>
       </DialogContent>
@@ -319,11 +319,11 @@ function PaletteRow({
         onClick={() => onSelect(item)}
         className={cn(
           'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm',
-          active ? 'bg-accent text-primary' : 'text-foreground hover:bg-muted',
+          active ? 'bg-selected text-action' : 'text-ink hover:bg-sunken',
         )}
       >
         <span className="truncate font-medium">{item.title}</span>
-        {item.subtitle ? <span className="ml-3 shrink-0 truncate text-xs text-muted-foreground">{item.subtitle}</span> : null}
+        {item.subtitle ? <span className="ml-3 shrink-0 truncate text-xs text-ink-muted">{item.subtitle}</span> : null}
       </button>
     </li>
   );

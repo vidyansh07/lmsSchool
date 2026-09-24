@@ -119,7 +119,7 @@ function PolicyRow({
             <span className="font-medium">
               {entry.description || entry.key}
             </span>
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-xs text-ink-muted">
               {entry.category}.{entry.key}
             </span>
             {entry.critical ? (
@@ -138,13 +138,13 @@ function PolicyRow({
               {formatPolicyValue(entry.value)}
             </span>
             {!entry.is_default ? (
-              <span className="text-muted-foreground">
+              <span className="text-ink-muted">
                 {" "}
                 · Default: {formatPolicyValue(entry.default)}
               </span>
             ) : null}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-ink-muted">
             {entry.is_default
               ? "Never changed."
               : `Changed by ${entry.updated_by_name ?? UNKNOWN} · ${formatDateTime(entry.updated_at)}`}
@@ -350,7 +350,7 @@ function EditDialog({
                 <span className="text-sm">{formBool ? "Yes" : "No"}</span>
               </div>
               {errors.value ? (
-                <p className="text-xs text-destructive">{errors.value}</p>
+                <p className="text-xs text-danger">{errors.value}</p>
               ) : null}
             </div>
           ) : null}
@@ -378,7 +378,7 @@ function EditDialog({
                 </Field>
               ))}
               {errors.value ? (
-                <p className="text-xs text-destructive">{errors.value}</p>
+                <p className="text-xs text-danger">{errors.value}</p>
               ) : null}
             </div>
           ) : null}
@@ -612,7 +612,7 @@ function HistoryDialog({
                 >
                   Previous
                 </Button>
-                <span className="text-muted-foreground">
+                <span className="text-ink-muted">
                   Page {data.page} of {data.total_pages}
                 </span>
                 <Button
@@ -702,7 +702,7 @@ export function PoliciesScreen() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Policies</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Institution-wide settings outside academic rules. A critical key needs
           a fresh step-up and typing its name to change.
         </p>
@@ -728,8 +728,8 @@ export function PoliciesScreen() {
                 aria-current={category === cat ? "page" : undefined}
                 className={`flex shrink-0 items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm whitespace-nowrap ${
                   category === cat
-                    ? "bg-primary text-primary-foreground"
-                    : "hover:bg-muted"
+                    ? "bg-action text-action-fg"
+                    : "hover:bg-sunken"
                 }`}
               >
                 <span>{POLICY_CATEGORY_LABEL[cat]}</span>

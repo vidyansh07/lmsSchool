@@ -80,14 +80,14 @@ function Scorecard({
       className={cn(
         'w-full rounded-xl border bg-surface p-4 text-left transition-colors',
         selected
-          ? 'border-primary ring-2 ring-primary/20'
-          : 'border-border hover:border-primary/50',
+          ? 'border-action ring-2 ring-action/20'
+          : 'border-line hover:border-action/50',
       )}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate font-semibold text-foreground">{card.name}</p>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="truncate font-semibold text-ink">{card.name}</p>
+          <p className="truncate text-xs text-ink-muted">
             {ROLE_LABEL[card.role]}
             {card.branch_name ? ` · ${card.branch_name}` : ''}
           </p>
@@ -97,7 +97,7 @@ function Scorecard({
       <dl className="mt-3 grid gap-x-3 gap-y-2 sm:grid-cols-2">
         {card.figures.slice(0, 4).map((figure) => (
           <div key={figure.key}>
-            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            <dt className="text-[11px] uppercase tracking-wide text-ink-muted">
               {figure.label}
             </dt>
             <dd className="text-lg font-semibold tabular-nums">{figure.value}</dd>
@@ -105,12 +105,12 @@ function Scorecard({
         ))}
       </dl>
       {collected > 0 ? (
-        <p className="mt-3 flex items-center gap-1.5 text-sm text-emerald">
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-success">
           <IndianRupee className="size-4" aria-hidden="true" />
           {formatCurrency(card.fees_collected)} collected
         </p>
       ) : null}
-      <p className="mt-2 text-xs text-muted-foreground">
+      <p className="mt-2 text-xs text-ink-muted">
         Last active {card.last_active_at ? formatRelative(card.last_active_at) : 'never'}
       </p>
     </button>
@@ -218,7 +218,7 @@ export function ActivityReview() {
       key: 'created_at',
       header: 'When',
       render: (row) => (
-        <span className="whitespace-nowrap text-muted-foreground">
+        <span className="whitespace-nowrap text-ink-muted">
           <span title={formatDateTime(row.created_at)}>{formatRelative(row.created_at)}</span>
           <span className="block text-xs">{formatDateTime(row.created_at)}</span>
         </span>
@@ -231,7 +231,7 @@ export function ActivityReview() {
         <>
           <button
             type="button"
-            className="text-left font-medium hover:text-primary"
+            className="text-left font-medium hover:text-action"
             onClick={() => {
               if (row.actor_id) {
                 setActor(row.actor_id);
@@ -241,7 +241,7 @@ export function ActivityReview() {
           >
             {row.actor_label}
           </button>
-          <span className="block text-xs text-muted-foreground">
+          <span className="block text-xs text-ink-muted">
             {row.actor_role ? ROLE_LABEL[row.actor_role] : 'System'}
             {row.actor_branch ? ` · ${row.actor_branch}` : ''}
           </span>
@@ -254,7 +254,7 @@ export function ActivityReview() {
       render: (row) => (
         <>
           <span className="font-medium">{row.action_label}</span>
-          <span className="block text-sm text-muted-foreground">{row.summary}</span>
+          <span className="block text-sm text-ink-muted">{row.summary}</span>
         </>
       ),
     },
@@ -271,7 +271,7 @@ export function ActivityReview() {
       align: 'right',
       render: (row) =>
         row.href ? (
-          <Button asChild size="sm" variant="ghost" className="text-muted-foreground">
+          <Button asChild size="sm" variant="ghost" className="text-ink-muted">
             <Link href={row.href} aria-label={`Open ${row.resource_type}`}>
               <ArrowUpRight className="size-4" aria-hidden="true" />
             </Link>
@@ -285,7 +285,7 @@ export function ActivityReview() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Activity review</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Who did what, and when. Scorecards for the period, and the record underneath.
           </p>
         </div>
@@ -293,7 +293,7 @@ export function ActivityReview() {
           <div
             role="group"
             aria-label="Period"
-            className="flex rounded-lg border border-border p-0.5"
+            className="flex rounded-lg border border-line p-0.5"
           >
             {PERIODS.map((option) => (
               <Button
@@ -355,11 +355,11 @@ export function ActivityReview() {
       <section aria-labelledby="scorecards-heading" className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 id="scorecards-heading" className="flex items-center gap-2 text-lg font-semibold">
-            <Users className="size-5 text-primary" aria-hidden="true" />
+            <Users className="size-5 text-action" aria-hidden="true" />
             People
           </h2>
           {cards ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               {cards.since === cards.until ? cards.since : `${cards.since} to ${cards.until}`} ·{' '}
               {cards.cards.length} active
             </p>
@@ -400,7 +400,7 @@ export function ActivityReview() {
         <CardHeader className="gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
             <CardTitle className="flex items-center gap-2">
-              <Activity className="size-5 text-primary" aria-hidden="true" />
+              <Activity className="size-5 text-action" aria-hidden="true" />
               The record
               {selectedCard ? <Badge dot={false}>{selectedCard.name}</Badge> : null}
             </CardTitle>

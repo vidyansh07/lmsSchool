@@ -79,7 +79,7 @@ export default function LoginPage() {
     >
       <div className="mb-6 space-y-1.5">
         <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Use the email address your account was created with.
         </p>
       </div>
@@ -117,10 +117,10 @@ export default function LoginPage() {
           {isSubmitting ? "Signing in…" : "Sign in"}
         </Button>
 
-        <p className="text-center text-sm text-muted-foreground">
+        <p className="text-center text-sm text-ink-muted">
           <Link
             href="/forgot-password"
-            className="underline hover:text-foreground"
+            className="underline hover:text-ink"
           >
             Forgot your password?
           </Link>

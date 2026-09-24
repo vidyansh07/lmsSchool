@@ -123,14 +123,14 @@ export function BatchRoster({ batchId }: { batchId: string }) {
     <div className="space-y-6">
       <Link
         href={`/manage/batches/${batchId}`}
-        className="inline-block text-sm text-muted-foreground hover:text-foreground"
+        className="inline-block text-sm text-ink-muted hover:text-ink"
       >
         ← Back to batch
       </Link>
 
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Roster</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Every student on this batch, with their attendance, assessments, assignments, projects and
           progress. Open a student for the complete picture.
         </p>

@@ -220,7 +220,7 @@ export function TemplatesTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           A template with a published version overrides the code fallback for that key and
           channel. Everything here is rendered by substituting an explicit variable allowlist —
           never evaluated as code.

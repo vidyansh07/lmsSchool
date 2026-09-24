@@ -117,11 +117,11 @@ function ClassCompleteSummary({
         </Alert>
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
           <span>
-            <span className="text-muted-foreground">Present: </span>
+            <span className="text-ink-muted">Present: </span>
             <strong className="tabular-nums">{formatNumber(present)}</strong>
           </span>
           <span>
-            <span className="text-muted-foreground">Absent: </span>
+            <span className="text-ink-muted">Absent: </span>
             <strong className="tabular-nums">{formatNumber(absent)}</strong>
           </span>
         </div>
@@ -563,14 +563,14 @@ export function ClassWorkspace({
       />
 
       {dsr.is_editable ? (
-        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-4">
-          <span className="text-xs text-muted-foreground">Tip: Ctrl/Cmd + Enter finishes the class.</span>
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4">
+          <span className="text-xs text-ink-muted">Tip: Ctrl/Cmd + Enter finishes the class.</span>
           <Button type="button" size="lg" onClick={() => void finishClass()} disabled={isFinishing}>
             {isFinishing ? 'Finishing…' : 'Finish class'}
           </Button>
         </div>
       ) : (
-        <p className="border-t border-border pt-4 text-sm text-muted-foreground">
+        <p className="border-t border-line pt-4 text-sm text-ink-muted">
           This report has moved to review — the register above can still be corrected, but the report
           itself is closed to further edits here.
         </p>
@@ -673,7 +673,7 @@ export function TodayWorkspace() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Today&rsquo;s class</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Choose a class to take its register and file the day&rsquo;s report.
         </p>
       </div>

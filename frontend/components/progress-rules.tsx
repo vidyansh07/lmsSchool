@@ -16,7 +16,7 @@ export function ProgressRules({ rules }: { rules: RuleOutcome[] }) {
       {rules.map((rule) => (
         <li
           key={rule.key}
-          className="flex flex-wrap items-start gap-2 rounded-md border border-border p-3"
+          className="flex flex-wrap items-start gap-2 rounded-md border border-line p-3"
           data-testid={`rule-${rule.key}`}
         >
           <Badge
@@ -26,7 +26,7 @@ export function ProgressRules({ rules }: { rules: RuleOutcome[] }) {
           </Badge>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">{rule.label}</p>
-            <p className="text-sm text-muted-foreground">{rule.detail}</p>
+            <p className="text-sm text-ink-muted">{rule.detail}</p>
           </div>
         </li>
       ))}

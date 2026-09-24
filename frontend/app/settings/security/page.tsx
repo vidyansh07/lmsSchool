@@ -53,7 +53,7 @@ function SecuritySettings() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Security</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Manage your password and active sessions.
         </p>
       </div>

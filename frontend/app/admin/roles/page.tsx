@@ -78,7 +78,7 @@ function RolesList() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Roles</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             System roles are built in. A custom role is built from one of them
             and holds a different set of permissions, never a wider reach.
           </p>
@@ -136,7 +136,7 @@ function RolesList() {
             </thead>
             <tbody>
               {data.map((role) => (
-                <tr key={role.slug} className="hover:bg-muted/40">
+                <tr key={role.slug} className="hover:bg-sunken/40">
                   <Td>
                     <Link
                       href={`/admin/roles/${role.slug}`}
@@ -151,7 +151,7 @@ function RolesList() {
                       </Badge>
                     ) : null}
                     {role.description ? (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-ink-muted">
                         {role.description}
                       </p>
                     ) : null}

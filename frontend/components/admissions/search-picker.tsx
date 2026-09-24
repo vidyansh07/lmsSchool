@@ -100,9 +100,9 @@ export function SearchPicker({
       <p aria-live="polite" className="sr-only">
         {isLoading ? 'Searching…' : `${options.length} result${options.length === 1 ? '' : 's'}.`}
       </p>
-      {isLoading ? <p className="text-xs text-muted-foreground">Searching…</p> : null}
+      {isLoading ? <p className="text-xs text-ink-muted">Searching…</p> : null}
       {!isLoading && options.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{emptyMessage}</p>
+        <p className="text-xs text-ink-muted">{emptyMessage}</p>
       ) : null}
       {options.length > 0 ? (
         <select
@@ -113,8 +113,8 @@ export function SearchPicker({
           value={selected}
           onChange={onListChange}
           className={cn(
-            'w-full rounded-md border border-border bg-surface text-sm',
-            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+            'w-full rounded-md border border-line bg-surface text-sm',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action',
           )}
         >
           {options.map((option) => (

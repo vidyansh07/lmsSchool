@@ -134,10 +134,10 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
           <Badge variant={LIFECYCLE_VARIANT[assessment.status]}>
             {LIFECYCLE_LABEL[assessment.status]}
           </Badge>
-          <span className="font-mono text-xs text-muted-foreground">{assessment.code}</span>
+          <span className="font-mono text-xs text-ink-muted">{assessment.code}</span>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">{assessment.title}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {assessment.batch_code} · {ASSESSMENT_DELIVERY_LABEL[assessment.delivery]} · out of{' '}
           {assessment.max_marks} · {formatDateTime(assessment.scheduled_for)}
         </p>
@@ -191,12 +191,12 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
           </form>
 
           {preview ? (
-            <div className="space-y-3 rounded-md border border-border p-3" data-testid="import-preview">
+            <div className="space-y-3 rounded-md border border-line p-3" data-testid="import-preview">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant={IMPORT_STATUS_VARIANT[preview.status]}>
                   {IMPORT_STATUS_LABEL[preview.status]}
                 </Badge>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm text-ink-muted">
                   {preview.original_filename}
                 </span>
               </div>
@@ -211,7 +211,7 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
               {preview.report.errors.length > 0 ? (
                 <div>
                   <p className="text-sm font-medium">Problems</p>
-                  <ul className="mt-1 space-y-1 text-sm text-muted-foreground">
+                  <ul className="mt-1 space-y-1 text-sm text-ink-muted">
                     {preview.report.errors.map((problem) => (
                       <li key={`${problem.line}-${problem.student_id}`}>
                         Line {problem.line}
@@ -223,7 +223,7 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
               ) : null}
 
               {preview.report.not_in_file.length > 0 ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-ink-muted">
                   Not in the file:{' '}
                   {preview.report.not_in_file.map((row) => row.student_id).join(', ')}
                 </p>
@@ -283,18 +283,18 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
             <Table>
               <thead>
                 <tr>
-                  <Th className="sticky top-0 z-10 bg-muted">Student</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Marks</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Source</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Action</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Student</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Marks</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Source</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Action</Th>
                 </tr>
               </thead>
               <tbody className="">
                 {sheet.entries.map((entry) => (
-                  <tr key={entry.enrollment_id} className="animate-fade-in transition-colors hover:bg-muted/40">
+                  <tr key={entry.enrollment_id} className="animate-fade-in transition-colors hover:bg-sunken/40">
                     <Td>
                       <div className="font-medium">{entry.student_name}</div>
-                      <div className="font-mono text-xs text-muted-foreground">
+                      <div className="font-mono text-xs text-ink-muted">
                         {entry.student_code}
                       </div>
                     </Td>

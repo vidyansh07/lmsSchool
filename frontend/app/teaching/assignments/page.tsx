@@ -116,7 +116,7 @@ function Assignments() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Assignments</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Work you have set. New work starts as a draft until you publish it.
           </p>
         </div>
@@ -231,10 +231,10 @@ function Assignments() {
           <Table>
             <thead>
               <tr>
-                <Th className="sticky top-0 z-10 bg-muted">Assignment</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Course</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Due</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Status</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Assignment</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Course</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Due</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Status</Th>
               </tr>
             </thead>
             <tbody className="">
@@ -242,17 +242,17 @@ function Assignments() {
                 <tr
                   key={row.id}
                   onClick={() => router.push(`/teaching/assignments/${row.id}`)}
-                  className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/60 active:bg-muted"
+                  className="animate-fade-in cursor-pointer transition-colors hover:bg-sunken/60 active:bg-sunken"
                 >
                   <Td>
                     <Link
                       href={`/teaching/assignments/${row.id}`}
                       onClick={(event) => event.stopPropagation()}
-                      className="font-medium underline hover:text-foreground"
+                      className="font-medium underline hover:text-ink"
                     >
                       {row.title}
                     </Link>
-                    <div className="font-mono text-xs text-muted-foreground">{row.code}</div>
+                    <div className="font-mono text-xs text-ink-muted">{row.code}</div>
                   </Td>
                   <Td>
                     {row.course_title}

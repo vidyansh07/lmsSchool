@@ -128,21 +128,21 @@ function ExamPlayer({ examId }: { examId: string }) {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="font-mono text-xs text-ink-muted">
             {paper.attempt.exam_code}
           </span>
           <h1 className="text-2xl font-semibold tracking-tight">{paper.attempt.exam_title}</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Attempt {paper.attempt.attempt_number} · {paper.questions.length} questions
           </p>
         </div>
         <div className="text-right">
-          <div className="text-xs text-muted-foreground">Time remaining</div>
+          <div className="text-xs text-ink-muted">Time remaining</div>
           <div className="font-mono text-2xl" data-testid="exam-countdown">
             {finished ? '—' : formatCountdown(remaining)}
           </div>
           {savedAt ? (
-            <div className="text-xs text-muted-foreground" data-testid="autosave-marker">
+            <div className="text-xs text-ink-muted" data-testid="autosave-marker">
               Saved at {savedAt}
             </div>
           ) : null}
@@ -166,7 +166,7 @@ function ExamPlayer({ examId }: { examId: string }) {
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="neutral">Question {question.position + 1}</Badge>
                 {question.section ? <Badge variant="neutral">{question.section}</Badge> : null}
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-ink-muted">
                   {question.marks} marks
                   {Number(question.negative_marks) > 0
                     ? ` · −${question.negative_marks} if wrong`

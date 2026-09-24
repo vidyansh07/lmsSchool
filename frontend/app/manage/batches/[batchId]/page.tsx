@@ -141,7 +141,7 @@ export function BatchDetail({ batchId }: { batchId: string }) {
     <div className="space-y-6">
       <Link
         href="/manage/batches"
-        className="inline-block text-sm text-muted-foreground hover:text-foreground"
+        className="inline-block text-sm text-ink-muted hover:text-ink"
       >
         ← All batches
       </Link>
@@ -153,15 +153,15 @@ export function BatchDetail({ batchId }: { batchId: string }) {
           {batch.kind ? <Badge>{batch.kind.replace(/_/g, ' ')}</Badge> : null}
           {batch.delivery_mode ? <Badge variant="neutral">{batch.delivery_mode.replace(/_/g, ' ')}</Badge> : null}
         </div>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           <span className="font-mono text-xs">{fallback(batch.code)}</span> ·{' '}
           {fallback(course?.title)} ({fallback(course?.code)}) · {formatDate(batch.start_date)} –{' '}
           {formatDate(batch.end_date)}
         </p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Trainer:{' '}
           {trainer ? (
-            <Link href={`/manage/trainers/${trainer.id}`} className="text-foreground hover:text-primary hover:underline">
+            <Link href={`/manage/trainers/${trainer.id}`} className="text-ink hover:text-action hover:underline">
               {fallback(trainer.name)}
             </Link>
           ) : (
@@ -189,7 +189,7 @@ export function BatchDetail({ batchId }: { batchId: string }) {
           </StatGrid>
           <Link
             href={`/manage/batches/${batchId}/students`}
-            className="inline-block text-sm text-primary hover:underline"
+            className="inline-block text-sm text-action hover:underline"
           >
             View the roster →
           </Link>
@@ -303,7 +303,7 @@ export function BatchDetail({ batchId }: { batchId: string }) {
           </StatGrid>
           <Link
             href={`/manage/batches/${batchId}/students`}
-            className="inline-block text-sm text-primary hover:underline"
+            className="inline-block text-sm text-action hover:underline"
           >
             View the roster →
           </Link>

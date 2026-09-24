@@ -84,14 +84,14 @@ export function AdmissionsList() {
         <>
           <span className="font-medium">
             {row.student_id ? (
-              <Link href={`/admissions/${row.student_id}`} className="hover:text-primary">
+              <Link href={`/admissions/${row.student_id}`} className="hover:text-action">
                 {row.student_name || row.student_email || 'Unnamed student'}
               </Link>
             ) : (
               row.student_name || row.student_email || 'Unnamed student'
             )}
           </span>
-          <span className="block font-mono text-xs text-muted-foreground">
+          <span className="block font-mono text-xs text-ink-muted">
             {row.student_code || 'No student code'}
           </span>
         </>
@@ -104,7 +104,7 @@ export function AdmissionsList() {
       render: (row) => (
         <>
           {row.batch_name || 'Not available'}
-          <span className="block font-mono text-xs text-muted-foreground">
+          <span className="block font-mono text-xs text-ink-muted">
             {row.batch_code || ''}
           </span>
         </>
@@ -126,19 +126,19 @@ export function AdmissionsList() {
       align: 'right',
       render: (row) =>
         row.fee_payable === null || row.fee_payable === undefined ? (
-          <span className="text-xs text-muted-foreground">Not set</span>
+          <span className="text-xs text-ink-muted">Not set</span>
         ) : Number(row.fee_balance) > 0 ? (
           <>
-            <span className="font-medium text-amber">{money(row.fee_balance)} due</span>
-            <span className="block text-xs text-muted-foreground">
+            <span className="font-medium text-warning">{money(row.fee_balance)} due</span>
+            <span className="block text-xs text-ink-muted">
               {money(row.fee_paid)} of {money(row.fee_payable)}
               {row.fee_next_due_on ? ` · by ${formatDate(row.fee_next_due_on)}` : ''}
             </span>
           </>
         ) : (
           <>
-            <span className="font-medium text-emerald">Paid</span>
-            <span className="block text-xs text-muted-foreground">{money(row.fee_payable)}</span>
+            <span className="font-medium text-success">Paid</span>
+            <span className="block text-xs text-ink-muted">{money(row.fee_payable)}</span>
           </>
         ),
     },
@@ -147,7 +147,7 @@ export function AdmissionsList() {
       header: 'Registered',
       sortable: true,
       render: (row) => (
-        <span className="whitespace-nowrap text-muted-foreground">
+        <span className="whitespace-nowrap text-ink-muted">
           {formatDate(row.enrolled_at)}
         </span>
       ),
@@ -169,7 +169,7 @@ export function AdmissionsList() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Admissions</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Recent registrations and where each one stands. Open a row to transfer, withdraw or
             re-enrol.
           </p>
@@ -286,7 +286,7 @@ export function AdmissionsList() {
       ) : (
         <>
           {!list.isLoading && !list.error && list.data ? (
-            <p aria-live="polite" className="text-sm text-muted-foreground">
+            <p aria-live="polite" className="text-sm text-ink-muted">
               {visibleRows.length} of {list.data.count} shown
               {dateFilterActive ? ' — narrowed to this page by registration date' : ''}.
             </p>

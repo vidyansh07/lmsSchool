@@ -31,7 +31,7 @@ export function Pagination({
       aria-label="Pagination"
       className="flex flex-wrap items-center justify-between gap-3 text-sm"
     >
-      <p className="text-muted-foreground" aria-live="polite">
+      <p className="text-ink-muted" aria-live="polite">
         Showing {first}–{last} of {count}
       </p>
       <div className="flex items-center gap-2">
@@ -43,7 +43,7 @@ export function Pagination({
         >
           Previous
         </Button>
-        <span className="text-muted-foreground">
+        <span className="text-ink-muted">
           Page {page} of {totalPages || 1}
         </span>
         <Button

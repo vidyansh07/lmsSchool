@@ -161,11 +161,11 @@ function RosterRow({ batch }: { batch: BatchListRow }) {
 
   return (
     <tr className="animate-fade-in">
-      <Td colSpan={7} className="bg-muted/40">
+      <Td colSpan={7} className="bg-sunken/40">
         {failed ? <Alert variant="error">Could not load this roster.</Alert> : null}
         {roster === null && !failed ? <LoadingState label="Loading roster…" rows={2} /> : null}
         {roster?.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nobody enrolled on this batch yet.</p>
+          <p className="text-sm text-ink-muted">Nobody enrolled on this batch yet.</p>
         ) : null}
         {roster && roster.length > 0 ? (
           <ul className="space-y-1 text-sm">
@@ -173,11 +173,11 @@ function RosterRow({ batch }: { batch: BatchListRow }) {
               <li key={entry.id} className="flex flex-wrap items-center gap-2">
                 <Link
                   href={`/admissions/${entry.student_id}`}
-                  className="font-medium hover:text-primary"
+                  className="font-medium hover:text-action"
                 >
                   {entry.full_name || entry.email}
                 </Link>
-                <span className="font-mono text-xs text-muted-foreground">
+                <span className="font-mono text-xs text-ink-muted">
                   {entry.student_code}
                 </span>
                 <Badge variant={ENROLLMENT_STATUS_VARIANT[entry.status]}>
@@ -189,7 +189,7 @@ function RosterRow({ batch }: { batch: BatchListRow }) {
         ) : null}
         <Link
           href={`/admin/batches/${batch.id}`}
-          className="mt-2 inline-block text-sm underline hover:text-foreground"
+          className="mt-2 inline-block text-sm underline hover:text-ink"
         >
           Open the full batch record →
         </Link>
@@ -217,7 +217,7 @@ export function BatchBrowser() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Batches</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Open cohorts, their seats, and their rosters.
           </p>
         </div>
@@ -313,7 +313,7 @@ export function BatchBrowser() {
                       <Td className="font-medium">
                         <button
                           type="button"
-                          className="text-left hover:text-primary"
+                          className="text-left hover:text-action"
                           onClick={() =>
                             setExpanded((current) => (current === batch.id ? '' : batch.id))
                           }
@@ -330,7 +330,7 @@ export function BatchBrowser() {
                           </Badge>
                         )}
                       </Td>
-                      <Td className="whitespace-nowrap text-muted-foreground">
+                      <Td className="whitespace-nowrap text-ink-muted">
                         {formatDate(batch.start_date)} – {formatDate(batch.end_date)}
                       </Td>
                       <Td>

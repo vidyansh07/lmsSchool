@@ -42,12 +42,12 @@ export function SavedFilters<Filters>({
       {savedFilters.map((preset) => (
         <span
           key={preset.id}
-          className="inline-flex items-center gap-1 rounded-full border border-border bg-muted py-0.5 pl-2.5 pr-1 text-xs"
+          className="inline-flex items-center gap-1 rounded-full border border-line bg-sunken py-0.5 pl-2.5 pr-1 text-xs"
         >
           <button
             type="button"
             onClick={() => onApply(preset.filters)}
-            className="inline-flex items-center gap-1 font-medium hover:text-primary"
+            className="inline-flex items-center gap-1 font-medium hover:text-action"
           >
             <Bookmark className="size-3" aria-hidden="true" />
             {preset.name}
@@ -56,7 +56,7 @@ export function SavedFilters<Filters>({
             type="button"
             onClick={() => remove(preset.id)}
             aria-label={`Remove saved filter ${preset.name}`}
-            className="rounded-full p-0.5 text-muted-foreground hover:bg-border hover:text-foreground"
+            className="rounded-full p-0.5 text-ink-muted hover:bg-line hover:text-ink"
           >
             <X className="size-3" aria-hidden="true" />
           </button>
@@ -89,7 +89,7 @@ export function SavedFilters<Filters>({
           type="button"
           size="sm"
           variant="ghost"
-          className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+          className="h-7 gap-1 px-2 text-xs text-ink-muted"
           onClick={() => setIsNaming(true)}
         >
           <Plus className="size-3" aria-hidden="true" />

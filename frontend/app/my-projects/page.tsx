@@ -128,7 +128,7 @@ function MyProjects() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My projects</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Project work set on your courses, and where each one stands.
         </p>
       </div>
@@ -172,7 +172,7 @@ function MyProjects() {
             <Card key={project.id} data-testid="project-card" className="">
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">{project.code}</span>
+                  <span className="font-mono text-xs text-ink-muted">{project.code}</span>
                   {mine ? (
                     <Badge variant={PROJECT_WORK_VARIANT[mine.status]}>
                       {PROJECT_WORK_LABEL[mine.status]}
@@ -199,7 +199,7 @@ function MyProjects() {
                 ) : null}
 
                 {mine && mine.submission_count > 0 ? (
-                  <div className="rounded-md border border-border p-3 text-sm">
+                  <div className="rounded-md border border-line p-3 text-sm">
                     <p className="font-medium">
                       Handed in {formatDateTime(mine.submitted_at)}
                       {mine.submission_count > 1 ? ` (${mine.submission_count} times)` : ''}
@@ -209,12 +209,12 @@ function MyProjects() {
                         {mine.files.map((file) => (
                           <li key={file.id}>
                             <a
-                              className="underline hover:text-foreground"
+                              className="underline hover:text-ink"
                               href={projectFileUrl(file.id)}
                             >
                               {file.original_filename}
                             </a>
-                            <span className="ml-1 text-xs text-muted-foreground">
+                            <span className="ml-1 text-xs text-ink-muted">
                               {formatBytes(file.size_bytes)}
                             </span>
                           </li>
@@ -238,7 +238,7 @@ function MyProjects() {
                     ) : null}
                     {mine.feedback ? (
                       <p
-                        className="mt-2 whitespace-pre-wrap text-muted-foreground"
+                        className="mt-2 whitespace-pre-wrap text-ink-muted"
                         data-testid="project-feedback"
                       >
                         {mine.feedback}
@@ -305,7 +305,7 @@ function MyProjects() {
                     </Button>
                   </form>
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-ink-muted">
                     {!project.is_open
                       ? 'This project is closed.'
                       : 'Your work is with your reviewer.'}

@@ -58,7 +58,7 @@ function MyResults() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">My tests and results</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Weekly tests set on your batch, and the marks recorded for them.
         </p>
       </div>
@@ -90,7 +90,7 @@ function MyResults() {
                     <tr key={result.id} data-testid="result-row">
                       <Td>
                         <div className="font-medium">{result.assessment_title}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
+                        <div className="font-mono text-xs text-ink-muted">
                           {result.assessment_code}
                         </div>
                       </Td>
@@ -100,9 +100,9 @@ function MyResults() {
                         ) : (
                           <>
                             <span className="font-semibold">{result.marks_obtained}</span>
-                            <span className="text-muted-foreground"> / {result.max_marks}</span>
+                            <span className="text-ink-muted"> / {result.max_marks}</span>
                             {result.percentage === null ? null : (
-                              <span className="ml-2 text-xs text-muted-foreground">
+                              <span className="ml-2 text-xs text-ink-muted">
                                 {result.percentage}%
                               </span>
                             )}
@@ -111,7 +111,7 @@ function MyResults() {
                       </Td>
                       <Td>
                         {result.is_passing === null ? (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-ink-muted">—</span>
                         ) : (
                           <Badge variant={result.is_passing ? 'success' : 'error'}>
                             {result.is_passing ? 'Pass' : 'Below the pass mark'}
@@ -137,15 +137,15 @@ function MyResults() {
             <EmptyState title="Nothing scheduled" description="No tests are set on your batch." />
           ) : (
             tests.map((test) => (
-              <div key={test.id} className="rounded-md border border-border p-3">
+              <div key={test.id} className="rounded-md border border-line p-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">{test.code}</span>
+                  <span className="font-mono text-xs text-ink-muted">{test.code}</span>
                   <Badge variant={test.is_open ? 'success' : 'neutral'}>
                     {test.is_open ? 'Open' : 'Not open'}
                   </Badge>
                 </div>
                 <p className="mt-1 font-medium">{test.title}</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-ink-muted">
                   {ASSESSMENT_CATEGORY_LABEL[test.category]} ·{' '}
                   {ASSESSMENT_DELIVERY_LABEL[test.delivery]} ·{' '}
                   {formatDateTime(test.scheduled_for)} · out of {test.max_marks}

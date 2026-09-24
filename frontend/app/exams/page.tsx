@@ -61,7 +61,7 @@ function MyExams() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Examinations</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Final examinations set for your batch. Your time starts when you open one.
         </p>
       </div>
@@ -80,7 +80,7 @@ function MyExams() {
             <Card key={exam.id} data-testid="exam-card" className="">
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">{exam.code}</span>
+                  <span className="font-mono text-xs text-ink-muted">{exam.code}</span>
                   {mine ? (
                     <Badge variant={ATTEMPT_STATUS_VARIANT[mine.status]}>
                       {ATTEMPT_STATUS_LABEL[mine.status]}
@@ -105,14 +105,14 @@ function MyExams() {
                 ) : null}
 
                 {mine && mine.status !== 'in_progress' ? (
-                  <div className="rounded-md border border-border p-3 text-sm">
+                  <div className="rounded-md border border-line p-3 text-sm">
                     {mine.results_published && mine.total_score !== null ? (
                       <p data-testid="exam-score">
                         <span className="font-semibold">
                           {mine.total_score} / {mine.max_score}
                         </span>
                         {mine.percentage === null ? null : (
-                          <span className="ml-2 text-muted-foreground">{mine.percentage}%</span>
+                          <span className="ml-2 text-ink-muted">{mine.percentage}%</span>
                         )}
                         {mine.is_passing === null ? null : (
                           <Badge
@@ -124,7 +124,7 @@ function MyExams() {
                         )}
                       </p>
                     ) : (
-                      <p className="text-muted-foreground">
+                      <p className="text-ink-muted">
                         Submitted {formatDateTime(mine.submitted_at)}. Results have not been
                         released yet.
                       </p>
@@ -166,7 +166,7 @@ function MyExams() {
                     <tr key={attempt.id}>
                       <Td>
                         {attempt.exam_title}
-                        <div className="font-mono text-xs text-muted-foreground">
+                        <div className="font-mono text-xs text-ink-muted">
                           {attempt.exam_code}
                         </div>
                       </Td>
@@ -174,13 +174,13 @@ function MyExams() {
                       <Td>
                         {attempt.results_published && attempt.total_score !== null ? (
                           <Link
-                            className="underline hover:text-foreground"
+                            className="underline hover:text-ink"
                             href={`/attempts/${attempt.id}`}
                           >
                             {attempt.total_score} / {attempt.max_score}
                           </Link>
                         ) : (
-                          <span className="text-muted-foreground">Not released</span>
+                          <span className="text-ink-muted">Not released</span>
                         )}
                       </Td>
                     </tr>

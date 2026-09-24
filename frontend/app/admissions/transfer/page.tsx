@@ -196,10 +196,10 @@ function StudentTransfer({
           autoFocus
         />
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line p-3">
           <div>
             <p className="font-medium">{student.user.full_name || student.user.email}</p>
-            <p className="text-sm text-muted-foreground">{student.student_id}</p>
+            <p className="text-sm text-ink-muted">{student.student_id}</p>
           </div>
           <Button
             size="sm"
@@ -226,7 +226,7 @@ function StudentTransfer({
           </label>
           <select
             id="transfer-source"
-            className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm"
+            className="h-10 w-full rounded-md border border-line bg-surface px-3 text-sm"
             value={sourceEnrollment?.id ?? ''}
             onChange={(event) =>
               setSourceEnrollment(enrollments.find((row) => row.id === event.target.value) ?? null)
@@ -432,7 +432,7 @@ function BatchTransfer() {
                     <tr key={entry.id}>
                       <Td className="font-medium">
                         {entry.full_name || entry.email}
-                        <span className="block font-mono text-xs text-muted-foreground">
+                        <span className="block font-mono text-xs text-ink-muted">
                           {entry.student_code}
                         </span>
                       </Td>
@@ -448,7 +448,7 @@ function BatchTransfer() {
                           ) : outcome.status === 'moved' ? (
                             <Badge variant="success">Moved</Badge>
                           ) : (
-                            <span className="text-destructive">{outcome.message}</span>
+                            <span className="text-danger">{outcome.message}</span>
                           )}
                         </Td>
                       ) : null}
@@ -479,7 +479,7 @@ export function TransferContent() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Transfer</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Move a student, or a whole batch, without losing their seat along the way.
           </p>
         </div>

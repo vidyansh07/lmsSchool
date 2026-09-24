@@ -55,10 +55,10 @@ export function PendingActions({
 
   if (withWork.length === 0) {
     return (
-      <div className="flex items-center gap-2 rounded-card border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 rounded-card border border-dashed border-line px-4 py-6 text-sm text-ink-muted">
         <PartyPopper className="size-4 shrink-0 text-success" aria-hidden="true" />
         <div>
-          <p className="font-medium text-foreground">{emptyTitle}</p>
+          <p className="font-medium text-ink">{emptyTitle}</p>
           <p>{emptyDescription}</p>
         </div>
       </div>
@@ -66,7 +66,7 @@ export function PendingActions({
   }
 
   return (
-    <ul className="divide-y divide-border rounded-card border border-border">
+    <ul className="divide-y divide-line rounded-card border border-line">
       {withWork.map((item) => (
         <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">

@@ -110,7 +110,7 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Register</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {register.batch_code} · {register.session_date}
         </p>
       </div>
@@ -167,17 +167,17 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
             <Table>
               <thead>
                 <tr>
-                  <Th className="sticky top-0 z-10 bg-muted">Student</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Attendance</Th>
-                  <Th className="sticky top-0 z-10 bg-muted">Note</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Student</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Attendance</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Note</Th>
                 </tr>
               </thead>
               <tbody className="">
                 {register.entries.map((entry) => (
-                  <tr key={entry.enrollment_id} className="animate-fade-in transition-colors hover:bg-muted/40">
+                  <tr key={entry.enrollment_id} className="animate-fade-in transition-colors hover:bg-sunken/40">
                     <Td>
                       <div className="font-medium">{entry.full_name}</div>
-                      <div className="font-mono text-xs text-muted-foreground">
+                      <div className="font-mono text-xs text-ink-muted">
                         {entry.student_code}
                       </div>
                       {entry.was_corrected ? (

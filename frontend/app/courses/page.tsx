@@ -36,7 +36,7 @@ function Catalog() {
     <div className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight">Course catalogue</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Browse the courses available to you. Unpublished courses are not listed.
         </p>
       </div>

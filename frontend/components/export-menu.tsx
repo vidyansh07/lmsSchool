@@ -230,7 +230,7 @@ export function ExportMenu({
           </DialogHeader>
 
           {isCounting ? (
-            <p role="status" aria-live="polite" className="text-sm text-muted-foreground">
+            <p role="status" aria-live="polite" className="text-sm text-ink-muted">
               Counting rows…
             </p>
           ) : countError ? (

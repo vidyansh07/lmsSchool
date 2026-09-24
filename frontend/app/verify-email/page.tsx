@@ -55,7 +55,7 @@ function VerifyEmail() {
         <AlertTitle>
           {state === 'verified' ? 'Email address verified' : 'Could not verify this link'}
         </AlertTitle>
-        <p className="text-muted-foreground">
+        <p className="text-ink-muted">
           {state === 'verified'
             ? 'Thank you. Your email address is confirmed.'
             : message}

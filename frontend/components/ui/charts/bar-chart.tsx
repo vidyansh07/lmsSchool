@@ -100,7 +100,7 @@ export function BarChart({
           />
           <Tooltip
             content={(tooltipProps) => <ChartTooltipContent {...tooltipProps} valueFormatter={format} />}
-            cursor={{ fill: 'var(--color-muted)' }}
+            cursor={{ fill: 'var(--color-sunken)' }}
           />
           {series.length > 1 ? (
             <Legend content={(legendProps) => <ChartLegendContent {...legendProps} markShape="rect" />} />

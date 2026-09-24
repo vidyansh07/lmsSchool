@@ -152,7 +152,7 @@ function EnrolPanel({ student, onEnrolled }: { student: StudentProfile; onEnroll
             emptyMessage="No open batch for this course."
           />
         ) : null}
-        {isBusy ? <p className="text-sm text-muted-foreground">Enrolling…</p> : null}
+        {isBusy ? <p className="text-sm text-ink-muted">Enrolling…</p> : null}
       </CardContent>
     </Card>
   );
@@ -229,11 +229,11 @@ function EnrolmentHistory({
                     <Td className="font-medium">{entry.course_title || 'Not available'}</Td>
                     <Td>
                       {entry.batch_name || 'Not available'}
-                      <span className="block font-mono text-xs text-muted-foreground">
+                      <span className="block font-mono text-xs text-ink-muted">
                         {entry.batch_code}
                       </span>
                     </Td>
-                    <Td className="whitespace-nowrap text-muted-foreground">
+                    <Td className="whitespace-nowrap text-ink-muted">
                       {formatDate(entry.enrolled_at)}
                     </Td>
                     <Td>
@@ -361,7 +361,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
     <div className="space-y-4">
       <Link
         href="/admissions"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
         All admissions
@@ -412,25 +412,25 @@ export function StudentDetail({ studentId }: { studentId: string }) {
         <CardContent>
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
-              <dt className="text-xs text-muted-foreground">Email</dt>
+              <dt className="text-xs text-ink-muted">Email</dt>
               <dd>{student.user.email}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Phone</dt>
+              <dt className="text-xs text-ink-muted">Phone</dt>
               <dd>{student.user.phone || 'Not provided'}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">City</dt>
+              <dt className="text-xs text-ink-muted">City</dt>
               <dd>{student.city || 'Not provided'}</dd>
             </div>
             {student.roll_number ? (
               <div>
-                <dt className="text-xs text-muted-foreground">Roll number</dt>
+                <dt className="text-xs text-ink-muted">Roll number</dt>
                 <dd className="font-mono">{student.roll_number}</dd>
               </div>
             ) : null}
             <div>
-              <dt className="text-xs text-muted-foreground">Qualification</dt>
+              <dt className="text-xs text-ink-muted">Qualification</dt>
               <dd>
                 {student.qualification
                   ? QUALIFICATION_LABEL[student.qualification]
@@ -438,7 +438,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">
+              <dt className="text-xs text-ink-muted">
                 {student.institution_kind
                   ? INSTITUTION_KIND_LABEL[student.institution_kind]
                   : 'College or employer'}
@@ -446,12 +446,12 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               <dd>{student.institution || 'Not provided'}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Referred by</dt>
+              <dt className="text-xs text-ink-muted">Referred by</dt>
               <dd>
                 {student.referred_by && student.referred_by_label ? (
                   <Link
                     href={`/admissions/${student.referred_by}`}
-                    className="text-primary hover:underline"
+                    className="text-action hover:underline"
                   >
                     {student.referred_by_label}
                   </Link>
@@ -462,11 +462,11 @@ export function StudentDetail({ studentId }: { studentId: string }) {
             </div>
             {typeof student.referrals_count === 'number' && student.referrals_count > 0 ? (
               <div>
-                <dt className="text-xs text-muted-foreground">Has referred</dt>
+                <dt className="text-xs text-ink-muted">Has referred</dt>
                 <dd>
                   <Link
                     href={`/admin/students?referred_by=${student.id}`}
-                    className="text-primary hover:underline"
+                    className="text-action hover:underline"
                   >
                     {student.referrals_count === 1
                       ? '1 student'
@@ -476,7 +476,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               </div>
             ) : null}
             <div>
-              <dt className="text-xs text-muted-foreground">Guardian</dt>
+              <dt className="text-xs text-ink-muted">Guardian</dt>
               <dd>
                 {student.guardian_name
                   ? `${student.guardian_name}${student.guardian_phone ? ` · ${student.guardian_phone}` : ''}`
@@ -484,7 +484,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Emergency contact</dt>
+              <dt className="text-xs text-ink-muted">Emergency contact</dt>
               <dd>
                 {student.emergency_contact_name
                   ? `${student.emergency_contact_name}${
@@ -494,7 +494,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">Registered</dt>
+              <dt className="text-xs text-ink-muted">Registered</dt>
               <dd>{formatDate(student.created_at)}</dd>
             </div>
           </dl>

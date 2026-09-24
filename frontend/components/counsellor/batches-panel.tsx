@@ -45,14 +45,14 @@ function BatchRow({ batch, detail }: { batch: BatchListRow; detail: string }) {
   return (
     <li className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
       <div className="min-w-0">
-        <Link href="/admissions/batches" className="truncate font-medium hover:text-primary">
+        <Link href="/admissions/batches" className="truncate font-medium hover:text-action">
           {batch.name}
         </Link>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="truncate text-xs text-ink-muted">
           {batch.course_title} · {batch.code}
         </p>
       </div>
-      <span className="shrink-0 text-xs text-muted-foreground">{detail}</span>
+      <span className="shrink-0 text-xs text-ink-muted">{detail}</span>
     </li>
   );
 }
@@ -82,7 +82,7 @@ export function BatchWatchlist({
 
   if (visible.length === 0) {
     return (
-      <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-card border border-dashed border-line px-4 py-6 text-center text-sm text-ink-muted">
         {kind === 'starting-soon'
           ? 'No upcoming batch is scheduled yet.'
           : 'No batch is close to full right now.'}
@@ -92,7 +92,7 @@ export function BatchWatchlist({
 
   return (
     <div className="space-y-1">
-      <ul className="divide-y divide-border">
+      <ul className="divide-y divide-line">
         {visible.map((batch) => (
           <BatchRow
             key={batch.id}
@@ -106,7 +106,7 @@ export function BatchWatchlist({
         ))}
       </ul>
       {full.length > visible.length ? (
-        <p className="text-xs text-muted-foreground">and {full.length - visible.length} more</p>
+        <p className="text-xs text-ink-muted">and {full.length - visible.length} more</p>
       ) : null}
     </div>
   );

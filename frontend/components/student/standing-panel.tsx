@@ -127,7 +127,7 @@ export function StandingPanel({
         ))}
       </Grid>
 
-      <div className="animate-fade-in rounded-card border border-border p-4">
+      <div className="animate-fade-in rounded-card border border-line p-4">
         <p className="mb-2 text-sm font-medium">Side by side</p>
         <BarChart
           data={standingChartData}
@@ -143,7 +143,7 @@ export function StandingPanel({
       </div>
 
       {riskItems.length === 0 ? (
-        <div className="animate-fade-in flex items-center gap-2 rounded-card border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
+        <div className="animate-fade-in flex items-center gap-2 rounded-card border border-dashed border-line px-4 py-4 text-sm text-ink-muted">
           <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
           <p>
             {performance.length === 0

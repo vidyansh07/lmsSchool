@@ -153,7 +153,7 @@ export function ImportFlow() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Import students</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             A .csv or .xlsx file, up to 2&nbsp;MB and 2,000 rows. Preview it before anything is created.
           </p>
         </div>
@@ -191,11 +191,11 @@ export function ImportFlow() {
                 hint="Leave this empty to only create accounts."
               />
               {targetBatch ? (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-ink-muted">
                   Chosen: {targetBatch.name} ({targetBatch.code}).{' '}
                   <button
                     type="button"
-                    className="underline hover:text-foreground"
+                    className="underline hover:text-ink"
                     onClick={() => setTargetBatch(null)}
                   >
                     Clear
@@ -236,19 +236,19 @@ export function ImportFlow() {
             <CardContent className="space-y-4">
               <dl className="grid grid-cols-2 gap-4 sm:grid-cols-5">
                 <div>
-                  <dt className="text-xs text-muted-foreground">Read</dt>
+                  <dt className="text-xs text-ink-muted">Read</dt>
                   <dd className="text-lg font-semibold">{run.report.summary.read}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted-foreground">Valid</dt>
+                  <dt className="text-xs text-ink-muted">Valid</dt>
                   <dd className="text-lg font-semibold">{run.report.summary.valid}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted-foreground">Errors</dt>
-                  <dd className="text-lg font-semibold text-destructive">{run.report.summary.errors}</dd>
+                  <dt className="text-xs text-ink-muted">Errors</dt>
+                  <dd className="text-lg font-semibold text-danger">{run.report.summary.errors}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted-foreground">
+                  <dt className="text-xs text-ink-muted">
                     {isConfirmed ? 'Created' : 'Will create'}
                   </dt>
                   <dd className="text-lg font-semibold">
@@ -256,7 +256,7 @@ export function ImportFlow() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted-foreground">Batch</dt>
+                  <dt className="text-xs text-ink-muted">Batch</dt>
                   <dd>{targetBatch ? targetBatch.code : 'None chosen'}</dd>
                 </div>
               </dl>
@@ -323,7 +323,7 @@ export function ImportFlow() {
                     ))}
                     {rows.length === 0 ? (
                       <tr>
-                        <Td colSpan={7} className="text-center text-muted-foreground">
+                        <Td colSpan={7} className="text-center text-ink-muted">
                           Nothing to show.
                         </Td>
                       </tr>

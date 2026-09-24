@@ -119,12 +119,12 @@ export function StudentProfileForm() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Fee status:</span>
+          <span className="text-ink-muted">Fee status:</span>
           <Badge variant={FEE_STATUS_VARIANT[profile.fee_status]}>
             {FEE_STATUS_LABEL[profile.fee_status]}
           </Badge>
           {/* Read-only by design: only an administrator may change it. */}
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-ink-muted">
             Maintained by the administration office.
           </span>
         </div>

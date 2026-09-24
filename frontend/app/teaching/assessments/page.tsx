@@ -106,7 +106,7 @@ function Assessments() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Weekly tests</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             Tests you have scheduled, however they are taken.
           </p>
         </div>
@@ -251,10 +251,10 @@ function Assessments() {
           <Table>
             <thead>
               <tr>
-                <Th className="sticky top-0 z-10 bg-muted">Test</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Batch</Th>
-                <Th className="sticky top-0 z-10 bg-muted">When</Th>
-                <Th className="sticky top-0 z-10 bg-muted">Status</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Test</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Batch</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">When</Th>
+                <Th className="sticky top-0 z-10 bg-sunken">Status</Th>
               </tr>
             </thead>
             <tbody className="">
@@ -262,18 +262,18 @@ function Assessments() {
                 <tr
                   key={row.id}
                   onClick={() => router.push(`/teaching/assessments/${row.id}`)}
-                  className="animate-fade-in cursor-pointer transition-colors hover:bg-muted/60 active:bg-muted"
+                  className="animate-fade-in cursor-pointer transition-colors hover:bg-sunken/60 active:bg-sunken"
                 >
                   <Td>
                     <Link
                       href={`/teaching/assessments/${row.id}`}
                       onClick={(event) => event.stopPropagation()}
-                      className="font-medium underline hover:text-foreground"
+                      className="font-medium underline hover:text-ink"
                     >
                       {row.title}
                     </Link>
-                    <div className="font-mono text-xs text-muted-foreground">{row.code}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="font-mono text-xs text-ink-muted">{row.code}</div>
+                    <div className="text-xs text-ink-muted">
                       {ASSESSMENT_DELIVERY_LABEL[row.delivery]}
                     </div>
                   </Td>

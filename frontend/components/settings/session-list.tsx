@@ -35,7 +35,7 @@ export function SessionList({
           <li
             key={session.id}
             data-testid="session-row"
-            className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-2 rounded-md border border-line p-3 sm:flex-row sm:items-center sm:justify-between"
           >
             <div>
               <p className="flex items-center gap-2 font-medium">
@@ -44,14 +44,14 @@ export function SessionList({
                   <Badge variant="success">This device</Badge>
                 ) : null}
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-ink-muted">
                 {session.ip ?? "Unknown location"} · First seen{" "}
                 {formatDateTime(session.created_at)} · Last active{" "}
                 {formatRelative(session.last_seen_at)}
               </p>
             </div>
             {isCurrent ? (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-ink-muted">
                 Sign out instead to end this one.
               </span>
             ) : onRevoke ? (

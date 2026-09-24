@@ -32,17 +32,17 @@ export function Stat({
 }) {
   return (
     <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-xs text-ink-muted">{label}</p>
       <p
         className={cn(
           'text-lg font-semibold tabular-nums',
           tone === 'warning' && 'text-warning',
-          tone === 'error' && 'text-destructive',
+          tone === 'error' && 'text-danger',
         )}
       >
         {value}
       </p>
-      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className="text-xs text-ink-muted">{hint}</p> : null}
     </div>
   );
 }

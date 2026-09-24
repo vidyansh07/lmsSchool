@@ -117,7 +117,7 @@ export function PublishPanel({
         {blockers.length > 0 ? (
           <Alert variant="warning" className="space-y-2">
             <AlertTitle>Not ready to publish</AlertTitle>
-            <ul className="list-inside list-disc text-muted-foreground">
+            <ul className="list-inside list-disc text-ink-muted">
               {blockers.map((blocker) => (
                 <li key={blocker}>{blocker}</li>
               ))}
@@ -126,7 +126,7 @@ export function PublishPanel({
         ) : checklist && !checklist.ready && course.status !== 'published' ? (
           <Alert variant="info" className="space-y-2">
             <AlertTitle>Before this course can be published</AlertTitle>
-            <ul className="list-inside list-disc text-muted-foreground">
+            <ul className="list-inside list-disc text-ink-muted">
               {checklist.blockers.map((blocker) => (
                 <li key={blocker}>{blocker}</li>
               ))}
@@ -135,7 +135,7 @@ export function PublishPanel({
         ) : null}
 
         {transitions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             No status changes are available to you for this course.
           </p>
         ) : (

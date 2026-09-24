@@ -41,7 +41,7 @@ export default function HomePage() {
       <div className="space-y-8">
         <section className="space-y-4">
           <h1 className="text-3xl font-semibold tracking-tight">Grras LMS</h1>
-          <p className="max-w-prose text-muted-foreground">
+          <p className="max-w-prose text-ink-muted">
             Identity and people management for students, trainers and administrators. Sign in to
             continue.
           </p>
@@ -55,7 +55,7 @@ export default function HomePage() {
           {foundations.map(({ icon: Icon, title, description }) => (
             <Card key={title}>
               <CardHeader>
-                <Icon className="size-5 text-primary" aria-hidden="true" />
+                <Icon className="size-5 text-action" aria-hidden="true" />
                 <CardTitle>{title}</CardTitle>
               </CardHeader>
               <CardContent>
@@ -74,7 +74,7 @@ export default function HomePage() {
         <h1 className="text-2xl font-semibold tracking-tight">
           Welcome back, {user.first_name || user.email}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Signed in as {user.role}. Learning features arrive in a later phase.
         </p>
       </div>
@@ -82,7 +82,7 @@ export default function HomePage() {
       {!user.is_email_verified ? (
         <Alert variant="warning" className="space-y-2">
           <AlertTitle>Your email address is not verified</AlertTitle>
-          <p className="text-muted-foreground">
+          <p className="text-ink-muted">
             Verify it so password resets and notifications reach you.
           </p>
           <Button asChild size="sm" variant="outline">
@@ -96,7 +96,7 @@ export default function HomePage() {
         {user.role !== 'admin' ? (
           <Card>
             <CardHeader>
-              <GraduationCap className="size-5 text-primary" aria-hidden="true" />
+              <GraduationCap className="size-5 text-action" aria-hidden="true" />
               <CardTitle>My dashboard</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -112,7 +112,7 @@ export default function HomePage() {
 
         <Card>
           <CardHeader>
-            <UserCog className="size-5 text-primary" aria-hidden="true" />
+            <UserCog className="size-5 text-action" aria-hidden="true" />
             <CardTitle>My profile</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -128,7 +128,7 @@ export default function HomePage() {
         {can(Capability.userViewAny) ? (
           <Card>
             <CardHeader>
-              <Users className="size-5 text-primary" aria-hidden="true" />
+              <Users className="size-5 text-action" aria-hidden="true" />
               <CardTitle>People management</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -155,7 +155,7 @@ export default function HomePage() {
 
         <Card>
           <CardHeader>
-            <KeyRound className="size-5 text-primary" aria-hidden="true" />
+            <KeyRound className="size-5 text-action" aria-hidden="true" />
             <CardTitle>Security</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">

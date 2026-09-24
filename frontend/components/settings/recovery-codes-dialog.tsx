@@ -73,7 +73,7 @@ export function RecoveryCodesDialog({
         </DialogHeader>
         {codes ? (
           <div className="space-y-3">
-            <ul className="grid sm:grid-cols-2 gap-x-4 gap-y-2 rounded-md border border-border bg-muted p-3 font-mono text-sm">
+            <ul className="grid sm:grid-cols-2 gap-x-4 gap-y-2 rounded-md border border-line bg-sunken p-3 font-mono text-sm">
               {codes.map((code) => (
                 <li key={code}>{code}</li>
               ))}

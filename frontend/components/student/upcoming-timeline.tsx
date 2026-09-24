@@ -67,23 +67,23 @@ export function UpcomingTimeline({
 
   if (events.length === 0) {
     return (
-      <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-card border border-dashed border-line px-4 py-6 text-center text-sm text-ink-muted">
         Nothing on your calendar for the next week.
       </p>
     );
   }
 
   return (
-    <ul className="divide-y divide-border">
+    <ul className="divide-y divide-line">
       {events.map((event, index) => {
         const meta = KIND_META[event.kind] ?? DEFAULT_KIND_META;
         const Icon = meta.Icon;
         return (
           <li key={`${event.kind}-${event.start}-${index}`} className="flex items-start gap-3 py-2.5">
-            <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <Icon className="mt-0.5 size-4 shrink-0 text-ink-muted" aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{event.title || meta.label}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-ink-muted">
                 {meta.label} · {formatEventDay(event.start)}
                 {!event.all_day ? ` · ${formatEventTime(event.start)}` : ''}
                 {event.location ? ` · ${event.location}` : ''}

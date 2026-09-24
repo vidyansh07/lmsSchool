@@ -35,7 +35,7 @@ export default function ForgotPasswordPage() {
     <AuthSplitShell heading="Forgot your password?" tagline="No problem — we'll get you back in.">
       <div className="mb-6 space-y-1.5">
         <h2 className="text-xl font-semibold tracking-tight">Reset your password</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           Enter your email address and we will send a link to set a new password.
         </p>
       </div>
@@ -46,7 +46,7 @@ export default function ForgotPasswordPage() {
                 the API answers identically either way. */}
             <Alert variant="success">
               <AlertTitle>Check your inbox</AlertTitle>
-              <p className="text-muted-foreground">
+              <p className="text-ink-muted">
                 If an account exists for that address, a password reset link has been sent. The
                 link can be used once and expires shortly.
               </p>
@@ -69,8 +69,8 @@ export default function ForgotPasswordPage() {
             <Button type="submit" disabled={isSubmitting} className="w-full">
               {isSubmitting ? 'Sending…' : 'Send reset link'}
             </Button>
-            <p className="text-center text-sm text-muted-foreground">
-              <Link href="/login" className="underline hover:text-foreground">
+            <p className="text-center text-sm text-ink-muted">
+              <Link href="/login" className="underline hover:text-ink">
                 Back to sign in
               </Link>
             </p>

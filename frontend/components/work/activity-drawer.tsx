@@ -74,7 +74,7 @@ function PersonLine({
 }) {
   return (
     <div>
-      <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
+      <dt className="text-xs uppercase tracking-wide text-ink-muted">{label}</dt>
       <dd className="text-sm">{person ? person.name : NOT_ASSIGNED}</dd>
     </div>
   );
@@ -83,13 +83,13 @@ function PersonLine({
 /** History rows, oldest first — the order a timeline reads naturally. */
 function HistoryTimeline({ history }: { history: ActivityDetail["history"] }) {
   if (history.length === 0) {
-    return <p className="text-sm text-muted-foreground">No status changes yet.</p>;
+    return <p className="text-sm text-ink-muted">No status changes yet.</p>;
   }
   return (
-    <ol className="space-y-3 border-l border-border pl-4">
+    <ol className="space-y-3 border-l border-line pl-4">
       {history.map((entry) => (
         <li key={entry.id} className="relative">
-          <span className="absolute -left-[1.1rem] top-1.5 size-2 rounded-full bg-primary" />
+          <span className="absolute -left-[1.1rem] top-1.5 size-2 rounded-full bg-action" />
           <p className="text-sm font-medium">
             {entry.from_status ? (
               <>
@@ -100,7 +100,7 @@ function HistoryTimeline({ history }: { history: ActivityDetail["history"] }) {
               ACTIVITY_STATUS_LABEL[entry.to_status]
             )}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-ink-muted">
             {formatDateTime(entry.created_at)}
             {entry.actor ? ` · ${entry.actor.name}` : ""}
           </p>
@@ -400,7 +400,7 @@ export function ActivityDrawer({
 
             <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
               <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                <dt className="text-xs uppercase tracking-wide text-ink-muted">
                   Student
                 </dt>
                 <dd className="text-sm">
@@ -408,7 +408,7 @@ export function ActivityDrawer({
                 </dd>
               </div>
               <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Type</dt>
+                <dt className="text-xs uppercase tracking-wide text-ink-muted">Type</dt>
                 <dd className="text-sm">{detail.type.name}</dd>
               </div>
               <PersonLine label="Assigned to" person={detail.assigned_to} />
@@ -416,23 +416,23 @@ export function ActivityDrawer({
               <PersonLine label="Performed by" person={detail.performed_by} />
               <PersonLine label="Reviewed by" person={detail.reviewed_by} />
               <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                <dt className="text-xs uppercase tracking-wide text-ink-muted">
                   Planned
                 </dt>
                 <dd className="text-sm">{formatDateTime(detail.planned_at)}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">Due</dt>
+                <dt className="text-xs uppercase tracking-wide text-ink-muted">Due</dt>
                 <dd className="text-sm">{formatDateTime(detail.due_at)}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                <dt className="text-xs uppercase tracking-wide text-ink-muted">
                   Completed
                 </dt>
                 <dd className="text-sm">{formatDateTime(detail.completed_at)}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase tracking-wide text-muted-foreground">
+                <dt className="text-xs uppercase tracking-wide text-ink-muted">
                   Duration
                 </dt>
                 <dd className="text-sm">
@@ -446,7 +446,7 @@ export function ActivityDrawer({
             {detail.summary ? (
               <div>
                 <h3 className="text-sm font-semibold">Summary</h3>
-                <p className="text-sm text-muted-foreground">{detail.summary}</p>
+                <p className="text-sm text-ink-muted">{detail.summary}</p>
               </div>
             ) : null}
 
@@ -482,7 +482,7 @@ export function ActivityDrawer({
             ) : null}
 
             {canEdit ? (
-              <div className="space-y-3 rounded-md border border-border p-3">
+              <div className="space-y-3 rounded-md border border-line p-3">
                 <h3 className="text-sm font-semibold">Details</h3>
                 {editValues ? (
                   <>
@@ -570,10 +570,10 @@ export function ActivityDrawer({
                       </Field>
                     ) : null}
                     {detail.student_visible ? (
-                      <div className="flex items-center justify-between rounded-md border border-border p-3">
+                      <div className="flex items-center justify-between rounded-md border border-line p-3">
                         <div>
                           <p className="text-sm font-medium">Visible to the student</p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-ink-muted">
                             Can only be turned off here, never back on.
                           </p>
                         </div>
@@ -601,7 +601,7 @@ export function ActivityDrawer({
             ) : null}
 
             {canComplete ? (
-              <div className="space-y-3 rounded-md border border-border p-3">
+              <div className="space-y-3 rounded-md border border-line p-3">
                 <h3 className="text-sm font-semibold">Complete this activity</h3>
                 {completeErrors.__all__ ? (
                   <Alert variant="error">{completeErrors.__all__}</Alert>
@@ -616,7 +616,7 @@ export function ActivityDrawer({
                     }
                   />
                 ) : (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-ink-muted">
                     This type has no form — record a summary below.
                   </p>
                 )}
@@ -654,13 +654,13 @@ export function ActivityDrawer({
                 {Object.keys(detail.form_values).length > 0 ? (
                   <FieldRenderer fields={detail.form.fields} values={detail.form_values} readOnly />
                 ) : (
-                  <p className="text-sm text-muted-foreground">Not filled in yet.</p>
+                  <p className="text-sm text-ink-muted">Not filled in yet.</p>
                 )}
               </div>
             ) : null}
 
             {canReview ? (
-              <div className="space-y-3 rounded-md border border-border p-3">
+              <div className="space-y-3 rounded-md border border-line p-3">
                 <h3 className="text-sm font-semibold">Review</h3>
                 {reviewError ? <Alert variant="error">{reviewError}</Alert> : null}
                 <Field label="Note" htmlFor="ad-review-note" hint="Required when sending it back for action.">
@@ -698,7 +698,7 @@ export function ActivityDrawer({
             </div>
 
             {canDelete ? (
-              <div className="border-t border-border pt-4">
+              <div className="border-t border-line pt-4">
                 <Button
                   type="button"
                   variant="destructive"

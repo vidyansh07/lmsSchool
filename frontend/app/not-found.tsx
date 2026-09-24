@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button';
 export default function NotFound() {
   return (
     <div className="flex flex-col items-start gap-4 py-16">
-      <p className="text-sm font-medium text-muted-foreground">404</p>
+      <p className="text-sm font-medium text-ink-muted">404</p>
       <h1 className="text-2xl font-semibold tracking-tight">Page not found</h1>
-      <p className="max-w-prose text-sm text-muted-foreground">
+      <p className="max-w-prose text-sm text-ink-muted">
         The page you requested does not exist or has moved.
       </p>
       <Button asChild variant="outline">

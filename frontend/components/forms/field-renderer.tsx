@@ -292,7 +292,7 @@ export function FieldRenderer({
 
   if (visible.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-ink-muted">
         This form has no fields to show.
       </p>
     );
@@ -311,7 +311,7 @@ export function FieldRenderer({
       {Array.from(groups.entries()).map(([group, groupFields]) => (
         <div key={group || "__default"} className="space-y-4">
           {group ? (
-            <h3 className="text-sm font-semibold text-muted-foreground">
+            <h3 className="text-sm font-semibold text-ink-muted">
               {group}
             </h3>
           ) : null}

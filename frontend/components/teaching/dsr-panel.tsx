@@ -63,11 +63,11 @@ function DraftStatus({
   isSaving: boolean;
   lastSavedAt: string | null;
 }) {
-  if (isSaving) return <span className="text-xs text-muted-foreground">Saving draft…</span>;
+  if (isSaving) return <span className="text-xs text-ink-muted">Saving draft…</span>;
   if (isDirty) return <span className="text-xs text-warning">Unsaved changes</span>;
   if (lastSavedAt) {
     return (
-      <span className="text-xs text-muted-foreground">Draft saved {formatDateTime(lastSavedAt)}</span>
+      <span className="text-xs text-ink-muted">Draft saved {formatDateTime(lastSavedAt)}</span>
     );
   }
   return null;
@@ -84,7 +84,7 @@ function DraftStatus({
 function DsrFollowUp({ dsrId, batchId }: { dsrId: string | null; batchId: string }) {
   if (!dsrId) return null;
   return (
-    <div className="space-y-3 border-t border-border pt-3">
+    <div className="space-y-3 border-t border-line pt-3">
       <DsrCreateActivity dsrId={dsrId} batchId={batchId} />
       <DsrHistory dsrId={dsrId} />
     </div>
@@ -131,7 +131,7 @@ export function DsrPanel({
           <Badge variant={DSR_STATUS_VARIANT[dsr.status]}>{DSR_STATUS_LABEL[dsr.status]}</Badge>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
-          <p className="text-muted-foreground">
+          <p className="text-ink-muted">
             This report has moved on to review and can no longer be edited here.
           </p>
           {dsr.manager_comments ? (
@@ -161,15 +161,15 @@ export function DsrPanel({
 
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
           <span>
-            <span className="text-muted-foreground">On roster: </span>
+            <span className="text-ink-muted">On roster: </span>
             <strong className="tabular-nums">{formatNumber(studentCount)}</strong>
           </span>
           <span>
-            <span className="text-muted-foreground">Present: </span>
+            <span className="text-ink-muted">Present: </span>
             <strong className="tabular-nums">{formatNumber(presentCount)}</strong>
           </span>
           <span>
-            <span className="text-muted-foreground">Absent: </span>
+            <span className="text-ink-muted">Absent: </span>
             <strong className="tabular-nums">{formatNumber(absentCount)}</strong>
           </span>
         </div>
@@ -224,7 +224,7 @@ export function DsrPanel({
               />
             </Field>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-ink-muted">
             Not tracked automatically yet — confirm the split for this class.
           </p>
         </div>

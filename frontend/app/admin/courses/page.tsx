@@ -41,7 +41,7 @@ function CourseAdminList() {
           <h1 className="text-2xl font-semibold tracking-tight">
             {isAdmin ? 'Courses' : 'My courses'}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             {isAdmin
               ? 'Every course on the platform, including drafts.'
               : 'Courses you have been assigned to author.'}

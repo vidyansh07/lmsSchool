@@ -115,10 +115,10 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
           <Badge variant={LIFECYCLE_VARIANT[assignment.status]}>
             {LIFECYCLE_LABEL[assignment.status]}
           </Badge>
-          <span className="font-mono text-xs text-muted-foreground">{assignment.code}</span>
+          <span className="font-mono text-xs text-ink-muted">{assignment.code}</span>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">{assignment.title}</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-ink-muted">
           {assignment.course_title}
           {assignment.batch_code ? ` · ${assignment.batch_code}` : ' · every batch'} ·{' '}
           {SUBMISSION_KIND_LABEL[assignment.submission_kind]} · out of {assignment.max_marks}
@@ -144,7 +144,7 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
           {assignment.instructions ? (
             <p className="whitespace-pre-wrap text-sm">{assignment.instructions}</p>
           ) : (
-            <p className="text-sm text-muted-foreground">No instructions were given.</p>
+            <p className="text-sm text-ink-muted">No instructions were given.</p>
           )}
 
           <div className="flex flex-wrap gap-2">
@@ -200,7 +200,7 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
             ) : null}
           </div>
           {assignment.status === 'archived' ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-ink-muted">
               Archived. Students no longer see this brief, and everything already handed in is
               unchanged \u2014 archiving retires the task, it does not undo anybody\u2019s work.
             </p>
@@ -223,19 +223,19 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
               <Table>
                 <thead>
                   <tr>
-                    <Th className="sticky top-0 z-10 bg-muted">Student</Th>
-                    <Th className="sticky top-0 z-10 bg-muted">Submitted</Th>
-                    <Th className="sticky top-0 z-10 bg-muted">Files</Th>
-                    <Th className="sticky top-0 z-10 bg-muted">Mark</Th>
-                    <Th className="sticky top-0 z-10 bg-muted">Action</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken">Student</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken">Submitted</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken">Files</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken">Mark</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken">Action</Th>
                   </tr>
                 </thead>
                 <tbody className="">
                   {submissions.map((row) => (
-                    <tr key={row.id} className="animate-fade-in transition-colors hover:bg-muted/40">
+                    <tr key={row.id} className="animate-fade-in transition-colors hover:bg-sunken/40">
                       <Td>
                         <div className="font-medium">{row.student_name}</div>
-                        <div className="font-mono text-xs text-muted-foreground">
+                        <div className="font-mono text-xs text-ink-muted">
                           {row.student_id}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-1">
@@ -249,18 +249,18 @@ function AssignmentDetail({ assignmentId }: { assignmentId: string }) {
                       <Td>{formatDateTime(row.submitted_at)}</Td>
                       <Td>
                         {row.files.length === 0 ? (
-                          <span className="text-muted-foreground">{NO_DATA}</span>
+                          <span className="text-ink-muted">{NO_DATA}</span>
                         ) : (
                           <ul className="space-y-1">
                             {row.files.map((file) => (
                               <li key={file.id}>
                                 <a
-                                  className="underline hover:text-foreground"
+                                  className="underline hover:text-ink"
                                   href={submissionFileUrl(file.id)}
                                 >
                                   {file.original_filename}
                                 </a>
-                                <span className="ml-1 text-xs text-muted-foreground">
+                                <span className="ml-1 text-xs text-ink-muted">
                                   {formatBytes(file.size_bytes)}
                                 </span>
                               </li>

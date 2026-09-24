@@ -71,7 +71,7 @@ export function NotYetEnrolledPanel({
 
   return (
     <div className="space-y-2">
-      <p aria-live="polite" className="text-sm text-muted-foreground">
+      <p aria-live="polite" className="text-sm text-ink-muted">
         {outstanding.length} of the last {recentStudents.length} registrations{' '}
         {outstanding.length === 1 ? 'has' : 'have'} no enrolment yet.
       </p>
@@ -82,7 +82,7 @@ export function NotYetEnrolledPanel({
         emptyDescription="Nobody from the recent intake is waiting on a batch."
       />
       {outstanding.length > 0 ? (
-        <Link href="/admissions" className="inline-block text-sm underline hover:text-foreground">
+        <Link href="/admissions" className="inline-block text-sm underline hover:text-ink">
           See all admissions
         </Link>
       ) : null}

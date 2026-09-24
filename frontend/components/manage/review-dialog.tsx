@@ -219,7 +219,7 @@ function ReviewForm({ subjectType, subjectId, review, onOpenChange, onSaved }: R
 
         <fieldset>
           <legend className="mb-1.5 text-sm font-medium">
-            Rating<span className="ml-1 text-destructive" aria-hidden="true">*</span>
+            Rating<span className="ml-1 text-danger" aria-hidden="true">*</span>
           </legend>
           <div role="radiogroup" aria-label="Rating, 1 to 5" className="flex gap-1.5">
             {RATING_VALUES.map((value) => (
@@ -232,15 +232,15 @@ function ReviewForm({ subjectType, subjectId, review, onOpenChange, onSaved }: R
                 className={cn(
                   'flex size-9 items-center justify-center rounded-md border text-sm font-medium',
                   form.rating === value
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border hover:bg-muted',
+                    ? 'border-action bg-action text-action-fg'
+                    : 'border-line hover:bg-sunken',
                 )}
               >
                 {value}
               </button>
             ))}
           </div>
-          {errors.rating ? <p className="mt-1 text-xs text-destructive">{errors.rating}</p> : null}
+          {errors.rating ? <p className="mt-1 text-xs text-danger">{errors.rating}</p> : null}
         </fieldset>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

@@ -76,7 +76,7 @@ function HistoryEntryContext({ context }: { context: Record<string, unknown> }) 
   if (!changes && otherEntries.length === 0) return null;
 
   return (
-    <ul className="mt-1 space-y-0.5 text-muted-foreground">
+    <ul className="mt-1 space-y-0.5 text-ink-muted">
       {changes
         ? Object.entries(changes).map(([field, change]) => (
             <li key={field}>
@@ -126,7 +126,7 @@ export function DsrHistory({ dsrId }: { dsrId: string }) {
         {isOpen ? 'Hide history' : 'View history'}
       </Button>
       {isOpen ? (
-        <div className="rounded-card border border-border bg-muted/30 p-2 text-xs">
+        <div className="rounded-card border border-line bg-sunken/30 p-2 text-xs">
           {isLoading ? <LoadingState label="Loading history…" rows={2} /> : null}
           {error ? (
             <ErrorState
@@ -138,13 +138,13 @@ export function DsrHistory({ dsrId }: { dsrId: string }) {
           ) : null}
           {!isLoading && !error && entries ? (
             entries.length === 0 ? (
-              <p className="text-muted-foreground">No changes recorded yet.</p>
+              <p className="text-ink-muted">No changes recorded yet.</p>
             ) : (
               <ul className="space-y-2">
                 {entries.map((entry) => (
                   <li key={entry.id}>
                     <span className="font-medium">{actionLabel(entry.action)}</span>{' '}
-                    <span className="text-muted-foreground">
+                    <span className="text-ink-muted">
                       by {entry.actor?.name ?? 'System'} · {formatDateTime(entry.created_at)}
                     </span>
                     <HistoryEntryContext context={entry.context} />

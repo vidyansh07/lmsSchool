@@ -202,11 +202,11 @@ function Overview() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
-          <p className="text-sm font-medium text-muted-foreground">
+          <p className="text-sm font-medium text-ink-muted">
             {greeting(user?.full_name || user?.email)}
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">Overview</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-ink-muted">
             The institution at a glance. Every figure is the one the reports use.
           </p>
         </div>
@@ -251,7 +251,7 @@ function Overview() {
           {data.metrics.map((metric) => (
             <div
               key={metric.key}
-              className="rounded-md border border-border p-3"
+              className="rounded-md border border-line p-3"
               data-testid="metric"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -262,11 +262,11 @@ function Overview() {
                     : formatNumber(metric.value, { fallbackLabel: NO_DATA })}
                 </span>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground" data-testid="metric-definition">
+              <p className="mt-1 text-sm text-ink-muted" data-testid="metric-definition">
                 {metric.definition}
               </p>
               {metric.denominator ? (
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-ink-muted">
                   {metric.numerator} of {metric.denominator}
                 </p>
               ) : null}
@@ -300,7 +300,7 @@ function Overview() {
             <div className="grid gap-4 sm:grid-cols-2">
               {attendanceRateMetric && attendanceRateMetric.value !== null ? (
                 <div
-                  className="flex flex-col items-center justify-center gap-2 rounded-md border border-border p-4"
+                  className="flex flex-col items-center justify-center gap-2 rounded-md border border-line p-4"
                   data-testid="attendance-rate-gauge"
                 >
                   <RadialProgress
@@ -309,7 +309,7 @@ function Overview() {
                     label={`of ${ATTENDANCE_TARGET}% target`}
                     valueFormatter={(value) => `${Math.round(value)}%`}
                   />
-                  <p className="text-center text-xs text-muted-foreground">
+                  <p className="text-center text-xs text-ink-muted">
                     Attendance rate against the {ATTENDANCE_TARGET}% target
                     {attendanceRateMetric.numerator != null && attendanceRateMetric.denominator != null
                       ? ` — ${formatNumber(attendanceRateMetric.numerator)} of ${formatNumber(attendanceRateMetric.denominator)}`
@@ -323,7 +323,7 @@ function Overview() {
                   </p>
                 </div>
               ) : null}
-              <div className="rounded-md border border-border p-4">
+              <div className="rounded-md border border-line p-4">
                 <DonutChart
                   data={[
                     { label: 'Attended', value: attendedSum },
@@ -352,21 +352,21 @@ function Overview() {
               <Table>
                 <thead>
                   <tr>
-                    <Th className="sticky top-0 z-10 bg-muted">Week</Th>
-                    <Th className="sticky top-0 z-10 bg-muted text-right">Counted</Th>
-                    <Th className="sticky top-0 z-10 bg-muted text-right">Attended</Th>
-                    <Th className="sticky top-0 z-10 bg-muted text-right">Rate</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken">Week</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken text-right">Counted</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken text-right">Attended</Th>
+                    <Th className="sticky top-0 z-10 bg-sunken text-right">Rate</Th>
                   </tr>
                 </thead>
                 <tbody className="">
                   {trend.map((point) => (
-                    <tr key={point.week} className="animate-fade-in hover:bg-muted/40">
+                    <tr key={point.week} className="animate-fade-in hover:bg-sunken/40">
                       <Td>{point.week}</Td>
                       <Td className="text-right tabular-nums">{formatNumber(point.counted)}</Td>
                       <Td className="text-right tabular-nums">{formatNumber(point.attended)}</Td>
                       <Td className="text-right">
                         {point.percent === null ? (
-                          <span className="text-muted-foreground">{NO_DATA}</span>
+                          <span className="text-ink-muted">{NO_DATA}</span>
                         ) : (
                           <Badge variant={point.percent >= 75 ? 'success' : 'warning'}>
                             {formatPercent(point.percent)}
