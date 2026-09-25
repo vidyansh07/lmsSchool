@@ -22,15 +22,15 @@ import {
   YAxis,
 } from 'recharts';
 
-import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { cn } from '@/lib/utils';
 
-import { CHART_ANIMATION_MS, CHART_AXIS_TEXT_COLOR, CHART_GRID_COLOR, CHART_PALETTE, paletteColor } from './chart-colors';
+import { CHART_AXIS_TEXT_COLOR, CHART_GRID_COLOR, CHART_PALETTE, paletteColor } from './chart-colors';
 import { ChartDataTable } from './chart-data-table';
 import { ChartEmpty } from './chart-empty';
 import { ChartLegendContent } from './chart-legend';
 import { ChartSkeleton } from './chart-skeleton';
 import { ChartTooltipContent } from './chart-tooltip';
+import { useChartAnimation } from './use-chart-animation';
 import type { ChartBaseProps, ChartSeriesDef, TrendDatum } from './types';
 
 export interface LineChartProps extends ChartBaseProps {
@@ -61,7 +61,7 @@ export function LineChart({
   ariaLabel,
   className,
 }: LineChartProps) {
-  const reduced = useReducedMotion();
+  const animation = useChartAnimation();
 
   if (loading) return <ChartSkeleton height={height} />;
 
@@ -108,9 +108,7 @@ export function LineChart({
                 strokeWidth={2}
                 dot={{ r: 3, strokeWidth: 0, fill: color }}
                 activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
-                isAnimationActive={!reduced}
-                animationDuration={CHART_ANIMATION_MS}
-                animationEasing="ease-out"
+                {...animation}
                 connectNulls
               />
             );

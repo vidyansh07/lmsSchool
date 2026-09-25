@@ -13,15 +13,15 @@
 import { useEffect, useRef } from 'react';
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
-import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { cn } from '@/lib/utils';
 
-import { CHART_ANIMATION_MS, CHART_PALETTE, DONUT_CATEGORY_WARNING_THRESHOLD, paletteColor } from './chart-colors';
+import { CHART_PALETTE, DONUT_CATEGORY_WARNING_THRESHOLD, paletteColor } from './chart-colors';
 import { ChartDataTable } from './chart-data-table';
 import { ChartEmpty } from './chart-empty';
 import { ChartLegendContent } from './chart-legend';
 import { ChartSkeleton } from './chart-skeleton';
 import { ChartTooltipContent } from './chart-tooltip';
+import { useChartAnimation } from './use-chart-animation';
 import type { ChartBaseProps } from './types';
 
 export interface DonutDatum {
@@ -48,7 +48,7 @@ export function DonutChart({
   ariaLabel,
   className,
 }: DonutChartProps) {
-  const reduced = useReducedMotion();
+  const animation = useChartAnimation();
   const warned = useRef(false);
 
   useEffect(() => {
@@ -87,9 +87,7 @@ export function DonutChart({
             outerRadius="85%"
             paddingAngle={usable.length > 1 ? 2 : 0}
             stroke="none"
-            isAnimationActive={!reduced}
-            animationDuration={CHART_ANIMATION_MS}
-            animationEasing="ease-out"
+            {...animation}
           >
             {usable.map((slice, index) => (
               <Cell key={slice.label} fill={slice.color ?? paletteColor(index, CHART_PALETTE)} />

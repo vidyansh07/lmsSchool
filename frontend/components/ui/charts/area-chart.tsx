@@ -8,6 +8,8 @@
  * dataviz guidance (~10% fill opacity — a wash, never a saturated block).
  */
 
+import { useId } from 'react';
+
 import {
   Area,
   AreaChart as RechartsAreaChart,
@@ -19,15 +21,15 @@ import {
   YAxis,
 } from 'recharts';
 
-import { useReducedMotion } from '@/hooks/use-reduced-motion';
 import { cn } from '@/lib/utils';
 
-import { CHART_ANIMATION_MS, CHART_AXIS_TEXT_COLOR, CHART_GRID_COLOR, CHART_PALETTE, paletteColor } from './chart-colors';
+import { CHART_AXIS_TEXT_COLOR, CHART_GRID_COLOR, CHART_PALETTE, paletteColor } from './chart-colors';
 import { ChartDataTable } from './chart-data-table';
 import { ChartEmpty } from './chart-empty';
 import { ChartLegendContent } from './chart-legend';
 import { ChartSkeleton } from './chart-skeleton';
 import { ChartTooltipContent } from './chart-tooltip';
+import { useChartAnimation } from './use-chart-animation';
 import type { ChartBaseProps, ChartSeriesDef, TrendDatum } from './types';
 
 export interface AreaChartProps extends ChartBaseProps {
@@ -36,8 +38,19 @@ export interface AreaChartProps extends ChartBaseProps {
   series?: ChartSeriesDef[];
   xLabel?: string;
   /** Stack series on top of each other (composition over time) instead of
-   *  overlaying them. Only meaningful with more than one series. */
+   *  overlaying them. Only meaningful with more than one series.
+   *
+   *  Never stack a percentage series. A stacked area draws `null` as 0, and
+   *  `_percent()` in the backend returns `null` rather than 0 for an empty
+   *  denominator on purpose -- so a week with no register taken would render
+   *  as "zero attendance" rather than "no data". `connectNulls` handles that
+   *  correctly for the unstacked case, and cannot for this one. */
   stacked?: boolean;
+  /** Fill each area with a vertical gradient fading to nothing instead of a
+   *  flat wash. For the wide, one-or-two-series plots where the fill is
+   *  carrying the shape; a flat 12% wash is still right for a small
+   *  multiple. */
+  gradient?: boolean;
 }
 
 const DEFAULT_SERIES: ChartSeriesDef[] = [{ key: 'value', label: 'Value' }];
@@ -53,6 +66,7 @@ export function AreaChart({
   series = DEFAULT_SERIES,
   xLabel = 'Date',
   stacked = false,
+  gradient = false,
   height = 240,
   loading = false,
   emptyMessage,
@@ -60,7 +74,11 @@ export function AreaChart({
   ariaLabel,
   className,
 }: AreaChartProps) {
-  const reduced = useReducedMotion();
+  const animation = useChartAnimation();
+  // Two gradient charts on one page sharing a hardcoded id would make the
+  // second one repaint the first, which looks like a data bug. `useId()` can
+  // contain characters an SVG id and a `url(#...)` reference cannot carry.
+  const gradientPrefix = `area-gradient-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
   if (loading) return <ChartSkeleton height={height} />;
 
@@ -74,6 +92,23 @@ export function AreaChart({
     <div className={cn('w-full', className)}>
       <ResponsiveContainer width="100%" height={height}>
         <RechartsAreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+          {gradient ? (
+            <defs>
+              {series.map((area, index) => (
+                <linearGradient
+                  key={area.key}
+                  id={`${gradientPrefix}-${index}`}
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop offset="0%" stopColor={area.color ?? paletteColor(index, CHART_PALETTE)} stopOpacity={0.28} />
+                  <stop offset="100%" stopColor={area.color ?? paletteColor(index, CHART_PALETTE)} stopOpacity={0.02} />
+                </linearGradient>
+              ))}
+            </defs>
+          ) : null}
           <CartesianGrid stroke={CHART_GRID_COLOR} vertical={false} />
           <XAxis
             dataKey="date"
@@ -106,13 +141,11 @@ export function AreaChart({
                 stackId={stacked ? 'stack' : undefined}
                 stroke={color}
                 strokeWidth={2}
-                fill={color}
-                fillOpacity={0.12}
+                fill={gradient ? `url(#${gradientPrefix}-${index})` : color}
+                fillOpacity={gradient ? 1 : 0.12}
                 dot={false}
                 activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
-                isAnimationActive={!reduced}
-                animationDuration={CHART_ANIMATION_MS}
-                animationEasing="ease-out"
+                {...animation}
                 connectNulls
               />
             );

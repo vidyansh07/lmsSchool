@@ -89,14 +89,40 @@ const SPANS = {
   12: 'md:col-span-12',
 } as const;
 
+/**
+ * The same widths again at `lg`, for items that want a different share of
+ * the row on a laptop than on a tablet.
+ *
+ * Charts are why this exists. `Grid` is one column below `md` and twelve at
+ * `md`, so two `span={6}` panels sit side by side at 768px with about 360px
+ * each -- too narrow for a seven-tick axis without rotating and clipping the
+ * labels. `span={12} lgSpan={6}` gives them the full width on a tablet and
+ * half on a laptop, which is what every chart row on `/analytics` uses.
+ */
+const LG_SPANS = {
+  3: 'lg:col-span-3',
+  4: 'lg:col-span-4',
+  6: 'lg:col-span-6',
+  8: 'lg:col-span-8',
+  9: 'lg:col-span-9',
+  12: 'lg:col-span-12',
+} as const;
+
 export function GridItem({
   children,
   span = 3,
+  lgSpan,
   className,
 }: {
   children: ReactNode;
   span?: keyof typeof SPANS;
+  /** Overrides `span` from `lg` up. Omitted, `span` holds at every width. */
+  lgSpan?: keyof typeof LG_SPANS;
   className?: string;
 }) {
-  return <div className={cn(SPANS[span], className)}>{children}</div>;
+  return (
+    <div className={cn(SPANS[span], lgSpan ? LG_SPANS[lgSpan] : undefined, className)}>
+      {children}
+    </div>
+  );
 }

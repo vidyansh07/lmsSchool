@@ -1,22 +1,26 @@
 'use client';
 
 /**
- * Category comparison. One series is a plain comparison bar chart; more than
- * one is the grouped-bar variant (period-over-period, or one bar per
- * category per series) side by side — pass `stacked` for composition-within-
- * category instead.
+ * A comparison between named things, read down the page instead of across it.
  *
- * Mark spec per this session's own dataviz guidance: bars capped at 24px so
- * they never fill their slot, a 4px rounded cap with a square baseline, and
- * a 2px surface-color gap between touching bars (`barGap`/`barCategoryGap`
- * below) rather than a stroke drawn around each one.
+ * A separate component rather than a `layout` prop on `BarChart`, because
+ * Recharts' `layout="vertical"` swaps the role of every axis: the category
+ * axis becomes the Y, the value axis becomes the X, the corner radius moves
+ * to the trailing edge, the gridline flips from `vertical={false}` to
+ * `horizontal={false}`, and the category axis needs an explicit pixel width
+ * to leave room for its labels. Two mutually exclusive halves inside one
+ * component would be harder to read and harder to test than two components.
+ *
+ * Prefer it over a vertical bar whenever the category labels are words
+ * rather than dates: "Networking Basics" fits on one line here and is
+ * rotated 30 degrees and clipped there.
  */
 
 import {
   Bar,
-  Cell,
   BarChart as RechartsBarChart,
   CartesianGrid,
+  Cell,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -35,25 +39,25 @@ import { ChartTooltipContent } from './chart-tooltip';
 import { useChartAnimation } from './use-chart-animation';
 import type { CategoryDatum, ChartBaseProps, ChartSeriesDef } from './types';
 
-export interface BarChartProps extends ChartBaseProps {
+export interface HorizontalBarChartProps extends ChartBaseProps {
   data: CategoryDatum[];
   /** One entry per bar series. Defaults to a single series read from `value`. */
   series?: ChartSeriesDef[];
-  /** With more than one series: side-by-side bars (`false`, the grouped-bar
-   *  variant) or stacked within each category (`true`). Ignored for a single
-   *  series. */
+  /** Stack series within each category instead of grouping them. */
   stacked?: boolean;
-  /** Give each bar its own palette step instead of one colour for the whole
-   *  series. For a comparison *between* categories, where the bar's colour
-   *  is its identity rather than decoration. Single-series only: with more
-   *  than one series the colour already means "which series", and a second
-   *  meaning for the same channel is how a chart stops being readable. */
+  /** Give each bar its own palette step. Single-series only, as in
+   *  `BarChart` -- with more than one series the colour already means
+   *  "which series". */
   colorPerBar?: boolean;
+  /** Pixels reserved for the left-hand category labels. Raise it for long
+   *  names; the labels are clipped rather than wrapped if it is too small. */
+  categoryWidth?: number;
 }
 
 const DEFAULT_SERIES: ChartSeriesDef[] = [{ key: 'value', label: 'Value' }];
-const BAR_MAX_SIZE = 24;
-const BAR_RADIUS: [number, number, number, number] = [4, 4, 0, 0];
+const BAR_MAX_SIZE = 20;
+/** Rounded on the trailing edge only -- a bar grows to the right. */
+const BAR_RADIUS: [number, number, number, number] = [0, 4, 4, 0];
 
 function cellText(value: CategoryDatum[string], format: (value: number) => string): string {
   if (typeof value === 'number') return Number.isFinite(value) ? format(value) : '—';
@@ -61,18 +65,19 @@ function cellText(value: CategoryDatum[string], format: (value: number) => strin
   return String(value);
 }
 
-export function BarChart({
+export function HorizontalBarChart({
   data,
   series = DEFAULT_SERIES,
   stacked = false,
   colorPerBar = false,
+  categoryWidth = 120,
   height = 240,
   loading = false,
   emptyMessage,
   valueFormatter,
   ariaLabel,
   className,
-}: BarChartProps) {
+}: HorizontalBarChartProps) {
   const animation = useChartAnimation();
 
   if (loading) return <ChartSkeleton height={height} />;
@@ -80,10 +85,9 @@ export function BarChart({
   const hasData = data.some((row) => series.some((bar) => Number.isFinite(row[bar.key] as number)));
   if (!hasData) return <ChartEmpty message={emptyMessage} height={height} />;
 
-  // Single series only, and say so rather than silently doing nothing.
   if (process.env.NODE_ENV !== 'production' && colorPerBar && series.length > 1) {
     console.warn(
-      `BarChart: colorPerBar is ignored for ${series.length} series. With more than one series a bar's colour already means "which series".`,
+      `HorizontalBarChart: colorPerBar is ignored for ${series.length} series. With more than one series a bar's colour already means "which series".`,
     );
   }
 
@@ -96,27 +100,30 @@ export function BarChart({
       <ResponsiveContainer width="100%" height={height}>
         <RechartsBarChart
           data={data}
-          margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
-          barGap={2}
-          barCategoryGap="24%"
+          layout="vertical"
+          margin={{ top: 8, right: 16, left: 0, bottom: 0 }}
         >
-          <CartesianGrid stroke={CHART_GRID_COLOR} vertical={false} />
+          {/* Flipped: the value axis runs across, so the helpful gridlines
+              are the vertical ones. */}
+          <CartesianGrid stroke={CHART_GRID_COLOR} horizontal={false} />
           <XAxis
-            dataKey="label"
+            type="number"
             tick={{ fill: CHART_AXIS_TEXT_COLOR, fontSize: 11 }}
             tickLine={false}
             axisLine={{ stroke: CHART_GRID_COLOR }}
+            tickFormatter={(value: number) => format(value)}
           />
           <YAxis
+            type="category"
+            dataKey="label"
             tick={{ fill: CHART_AXIS_TEXT_COLOR, fontSize: 11 }}
             tickLine={false}
             axisLine={false}
-            width={40}
-            tickFormatter={(value: number) => format(value)}
+            width={categoryWidth}
           />
           <Tooltip
             content={(tooltipProps) => <ChartTooltipContent {...tooltipProps} valueFormatter={format} />}
-            cursor={{ fill: 'var(--color-sunken)' }}
+            cursor={{ fill: CHART_GRID_COLOR, fillOpacity: 0.4 }}
           />
           {series.length > 1 ? (
             <Legend content={(legendProps) => <ChartLegendContent {...legendProps} markShape="rect" />} />
