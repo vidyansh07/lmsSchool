@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -39,6 +39,15 @@ vi.mock('@/lib/courses', () => ({ listModules }));
 
 const listMyActivities = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/work', () => ({ listMyActivities }));
+
+// The three charts under the summary tiles read four reporting endpoints.
+// Resolved to empty by default so every existing case renders the empty
+// states; the chart case below hands them real rows.
+const attendanceTrend = vi.hoisted(() => vi.fn());
+const deliveryTrend = vi.hoisted(() => vi.fn());
+const batchSummaries = vi.hoisted(() => vi.fn());
+const trainerWorkload = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/reporting', () => ({ attendanceTrend, deliveryTrend, batchSummaries, trainerWorkload }));
 
 // The drawer has its own dedicated tests (`activity-drawer.test.tsx`); here
 // a stand-in that surfaces the id it was opened with is enough to prove the
@@ -219,6 +228,10 @@ function wireHappyPath(state: ReturnType<typeof fixtures>) {
 }
 
 beforeEach(() => {
+  attendanceTrend.mockResolvedValue([]);
+  deliveryTrend.mockResolvedValue([]);
+  batchSummaries.mockResolvedValue([]);
+  trainerWorkload.mockResolvedValue(null);
   vi.restoreAllMocks();
   window.localStorage.clear();
   getRegister.mockReset();
@@ -526,6 +539,53 @@ describe('TodayWorkspace', () => {
       ...overrides,
     };
   }
+
+  it('draws the trainer\'s own recent teaching under the summary', async () => {
+    listTodaySessions.mockResolvedValue([]);
+    deliveryTrend.mockResolvedValue([
+      { week: '2026-08-31', scheduled: 5, held: 4, cancelled: 1, registers_outstanding: 2 },
+    ]);
+    attendanceTrend.mockResolvedValue([
+      { week: '2026-08-31', counted: 40, attended: 34, percent: 85 },
+    ]);
+    batchSummaries.mockResolvedValue([
+      { id: 'b1', code: 'GRS-B-001', name: 'Morning', course_title: 'Linux', status: 'active', students: 9, attendance_percent: 91 },
+      { id: 'b2', code: 'GRS-B-002', name: 'Evening', course_title: 'Linux', status: 'active', students: 7, attendance_percent: 62 },
+    ]);
+    trainerWorkload.mockResolvedValue({
+      batches: 2,
+      sessions_today: 0,
+      registers_outstanding: 3,
+      submissions_to_mark: 5,
+      exam_answers_to_mark: 0,
+      projects_to_review: 1,
+      upcoming_tests: 0,
+      upcoming_exams: 0,
+    });
+    render(<TodayWorkspace />);
+
+    // Every chart card states what it plots.
+    const delivery = await screen.findByTestId('trainer-delivery-card');
+    const byBatch = screen.getByTestId('trainer-attendance-by-batch-card');
+    const queue = screen.getByTestId('trainer-workload-card');
+    for (const card of [delivery, byBatch, queue]) {
+      expect(within(card).getByTestId('chart-definition')).not.toHaveTextContent('');
+    }
+
+    // Scoped queries, so the next chart added here does not break this one.
+    await waitFor(() =>
+      expect(delivery.querySelectorAll('.recharts-bar-rectangle').length).toBeGreaterThan(0),
+    );
+    // The lowest batch is listed first, and the queue names every kind of work.
+    await waitFor(() =>
+      expect(byBatch.querySelectorAll('.recharts-bar-rectangle')).toHaveLength(2),
+    );
+    // Each label is on the axis and again in the chart's hidden data table --
+    // the table is what a screen reader gets -- so it is found twice.
+    const queueTable = within(within(queue).getByRole('table', { hidden: true }));
+    expect(queueTable.getByText('Registers to take')).toBeInTheDocument();
+    expect(queueTable.getByText('Work to mark')).toBeInTheDocument();
+  });
 
   it('opens straight into the class when there is exactly one today', async () => {
     listTodaySessions.mockResolvedValue([todaySession()]);

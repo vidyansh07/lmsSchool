@@ -41,7 +41,7 @@
  * the screen, and a step that fails stops the sequence rather than
  * submitting a report describing an unsaved register.
  */
-import { CalendarDays, ClipboardCheck, ClipboardList } from 'lucide-react';
+import { Activity, CalendarCheck, CalendarDays, ClipboardCheck, ClipboardList } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -61,8 +61,17 @@ import { ActivityDrawer } from '@/components/work/activity-drawer';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Grid, GridItem } from '@/components/ui/layout';
+import { Grid, GridItem, Section } from '@/components/ui/layout';
 import { StatCard } from '@/components/ui/stat';
+import { ChartCard, ComboChart, HorizontalBarChart } from '@/components/ui/charts';
+import { useSection } from '@/hooks/use-section';
+import { heldAgainstAttendance } from '@/lib/analytics';
+import {
+  attendanceTrend,
+  batchSummaries,
+  deliveryTrend,
+  trainerWorkload,
+} from '@/lib/reporting';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { getRegister, listTodaySessions, markAttendance } from '@/lib/academics';
@@ -83,8 +92,18 @@ import {
   type DSRWritePayload,
   type SessionWithTopic,
 } from '@/lib/dsr';
-import { fallback, formatDate, formatNumber } from '@/lib/format';
-import type { AttendanceStatus, BatchDetail, ClassSession, Module, Register } from '@/types/api';
+import { fallback, formatDate, formatNumber, formatPercent } from '@/lib/format';
+import type {
+  AttendanceStatus,
+  BatchDetail,
+  BatchSummary,
+  ClassSession,
+  DeliveryTrendPoint,
+  Module,
+  Register,
+  TrainerWorkload,
+  TrendPoint,
+} from '@/types/api';
 
 const TODAY_PATH = '/teaching/today';
 
@@ -579,6 +598,16 @@ export function ClassWorkspace({
   );
 }
 
+/** The same 75% the rest of the product colours an attendance figure with. */
+const ATTENDANCE_TARGET = 75;
+
+/** A week's Monday, short enough for a twelve-tick axis. */
+function formatWeekLabel(iso: string): string {
+  const [, month, day] = iso.split('-');
+  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${day} ${months[Number(month)]}`;
+}
+
 /** Picks which class `ClassWorkspace` shows — see the module docstring. */
 export function TodayWorkspace() {
   const router = useRouter();
@@ -591,6 +620,15 @@ export function TodayWorkspace() {
   const [todayError, setTodayError] = useState<ApiError | null>(null);
   const [todayAttempt, setTodayAttempt] = useState(0);
   const autoOpenedRef = useRef(false);
+
+  // The three charts below read endpoints a trainer may already call: the
+  // reporting layer's `can_read_reports` passes them through their trainer
+  // profile, and `restrict_to_batches` narrows every figure to their own
+  // batches -- so none of this needed a new endpoint or a new permission.
+  const attendance = useSection(() => attendanceTrend({ weeks: 12 }), [] as TrendPoint[]);
+  const delivery = useSection(() => deliveryTrend({ weeks: 12 }), [] as DeliveryTrendPoint[]);
+  const batches = useSection(batchSummaries, [] as BatchSummary[]);
+  const workload = useSection(trainerWorkload, null as TrainerWorkload | null);
 
   useEffect(() => {
     // A session id already in the URL means the picker below never renders
@@ -641,6 +679,36 @@ export function TodayWorkspace() {
   // no second request, and nothing here can disagree with the list it
   // summarises. While that list is loading these read "No data" rather than a
   // confident zero, which would be a different and wrong claim.
+  const deliverySeries = heldAgainstAttendance(delivery.data, attendance.data).map((row) => ({
+    ...row,
+    date: formatWeekLabel(String(row.date)),
+  }));
+
+  const attendanceByBatch = [...batches.data]
+    .filter((batch) => batch.attendance_percent !== null)
+    .sort((a, b) => (a.attendance_percent ?? 0) - (b.attendance_percent ?? 0))
+    .map((batch) => ({
+      label: batch.code,
+      value: batch.attendance_percent ?? 0,
+      colour:
+        (batch.attendance_percent ?? 0) >= ATTENDANCE_TARGET
+          ? 'var(--color-success)'
+          : 'var(--color-warning)',
+    }));
+
+  // Every field `TrainerWorkload` actually carries, so the chart is the
+  // whole queue rather than a selection of it.
+  const workloadBars = workload.data
+    ? [
+        { label: 'Registers to take', value: workload.data.registers_outstanding },
+        { label: 'Work to mark', value: workload.data.submissions_to_mark },
+        { label: 'Exam answers', value: workload.data.exam_answers_to_mark },
+        { label: 'Projects to review', value: workload.data.projects_to_review },
+        { label: 'Tests coming up', value: workload.data.upcoming_tests },
+        { label: 'Exams coming up', value: workload.data.upcoming_exams },
+      ]
+    : [];
+
   const registersTaken = todaySessions.filter((session) => session.attendance_taken_at).length;
   const summary = isLoadingToday || todayError
     ? [
@@ -691,6 +759,81 @@ export function TodayWorkspace() {
           </GridItem>
         ))}
       </Grid>
+
+      <Section
+        title="Your teaching, recently"
+        meta="Scoped to your own batches"
+        className="pt-2"
+      >
+        <Grid>
+          <GridItem span={12} lgSpan={6}>
+            <ChartCard
+              title="Classes held and attendance rate"
+              subtitle="Volume against rate — a busy week and a well-attended one are not the same week"
+              icon={Activity}
+              as="h3"
+              testId="trainer-delivery-card"
+            >
+              <ComboChart
+                data={deliverySeries}
+                bars={[{ key: 'held', label: 'Classes held' }]}
+                lines={[{ key: 'percent', label: 'Attendance rate' }]}
+                rightAxisKeys={['percent']}
+                leftLabel="Classes"
+                rightLabel="Attendance %"
+                xLabel="Week"
+                height={240}
+                loading={delivery.isLoading || attendance.isLoading}
+                emptyMessage="No classes in the last twelve weeks"
+                valueFormatter={(value) => formatNumber(value)}
+                rightValueFormatter={(value) => formatPercent(value)}
+              />
+            </ChartCard>
+          </GridItem>
+
+          <GridItem span={12} lgSpan={6}>
+            <ChartCard
+              title="Attendance by batch"
+              subtitle={`Your batches, lowest first. Amber is below the ${ATTENDANCE_TARGET}% target.`}
+              icon={CalendarCheck}
+              as="h3"
+              testId="trainer-attendance-by-batch-card"
+            >
+              <HorizontalBarChart
+                data={attendanceByBatch}
+                series={[{ key: 'value', label: 'Attendance' }]}
+                colorKey="colour"
+                categoryWidth={110}
+                height={Math.max(180, attendanceByBatch.length * 32)}
+                loading={batches.isLoading}
+                emptyMessage="No register taken on your batches yet"
+                valueFormatter={(value) => formatPercent(value)}
+              />
+            </ChartCard>
+          </GridItem>
+
+          <GridItem span={12}>
+            <ChartCard
+              title="What is waiting on you"
+              subtitle="Open work across your batches, so the largest queue is obvious"
+              icon={ClipboardList}
+              as="h3"
+              testId="trainer-workload-card"
+            >
+              <HorizontalBarChart
+                data={workloadBars}
+                series={[{ key: 'value', label: 'Outstanding' }]}
+                colorPerBar
+                categoryWidth={150}
+                height={Math.max(160, workloadBars.length * 32)}
+                loading={workload.isLoading}
+                emptyMessage="Nothing is waiting on you"
+                valueFormatter={(value) => formatNumber(value)}
+              />
+            </ChartCard>
+          </GridItem>
+        </Grid>
+      </Section>
 
       <ClassPicker
         todayIso={today}
