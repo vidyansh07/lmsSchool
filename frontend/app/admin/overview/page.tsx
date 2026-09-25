@@ -1,6 +1,6 @@
 'use client';
 
-import { Award, BookOpen, ClipboardCheck, GraduationCap, Layers, Users } from 'lucide-react';
+import { Activity, Award, BookOpen, CalendarCheck, ClipboardCheck, GraduationCap, Layers, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
@@ -10,7 +10,15 @@ import { ErrorState, LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AreaChart, DonutChart, RadialProgress } from '@/components/ui/charts';
+import {
+  AreaChart,
+  ChartCard,
+  ComboChart,
+  DonutChart,
+  HorizontalBarChart,
+  RadialProgress,
+  paletteColor,
+} from '@/components/ui/charts';
 import { Grid, GridItem } from '@/components/ui/layout';
 import { StatCard } from '@/components/ui/stat';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
@@ -18,14 +26,35 @@ import { WarningsStrip } from '@/components/warnings-strip';
 import { ApiError } from '@/lib/api';
 import { formatNumber, formatPercent, NO_DATA } from '@/lib/format';
 import { greeting } from '@/lib/greeting';
-import { adminDashboard, attendanceTrend } from '@/lib/reporting';
-import type { AdminDashboard, TrendPoint } from '@/types/api';
+import { useSection } from '@/hooks/use-section';
+import { heldAgainstAttendance, mergeByWeek } from '@/lib/analytics';
+import {
+  adminDashboard,
+  attendanceTrend,
+  batchSummaries,
+  deliveryTrend,
+  enrolmentTrend,
+} from '@/lib/reporting';
+import type {
+  AdminDashboard,
+  BatchSummary,
+  DeliveryTrendPoint,
+  EnrolmentTrendPoint,
+  TrendPoint,
+} from '@/types/api';
 
 /** The exact threshold this file already colors the weekly rate badge with
  *  (`point.percent >= 75 ? 'success' : 'warning'`, below) — reused as the
  *  attendance gauge's target so the gauge and the badge never disagree
  *  about what "on target" means. */
 const ATTENDANCE_TARGET = 75;
+
+/** A week's Monday, short enough for a twelve-tick axis. */
+function formatWeekLabel(iso: string): string {
+  const [, month, day] = iso.split('-');
+  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${day} ${months[Number(month)]}`;
+}
 
 /**
  * The administrator's overview — §8.4.
@@ -74,6 +103,31 @@ function Overview() {
   // figures someone reconciling a register actually needs, so they stay
   // available rather than disappearing when the table became a chart.
   const [showTrendTable, setShowTrendTable] = useState(false);
+
+  // Three more sections, each loading and failing on its own.
+  const delivery = useSection(() => deliveryTrend({ weeks: 12 }), [] as DeliveryTrendPoint[]);
+  const enrolments = useSection(() => enrolmentTrend({ weeks: 12 }), [] as EnrolmentTrendPoint[]);
+  const batches = useSection(batchSummaries, [] as BatchSummary[]);
+
+  const deliverySeries = heldAgainstAttendance(delivery.data, trend).map((row) => ({
+    ...row,
+    date: formatWeekLabel(String(row.date)),
+  }));
+  const enrolmentSeries = mergeByWeek([
+    { rows: enrolments.data, keys: ['started', 'completed'] },
+  ]).map((row) => ({ ...row, date: formatWeekLabel(String(row.date)) }));
+  const attendanceByBatch = [...batches.data]
+    .filter((batch) => batch.attendance_percent !== null)
+    .sort((a, b) => (a.attendance_percent ?? 0) - (b.attendance_percent ?? 0))
+    .slice(0, 10)
+    .map((batch) => ({
+      label: batch.code,
+      value: batch.attendance_percent ?? 0,
+      colour:
+        (batch.attendance_percent ?? 0) >= ATTENDANCE_TARGET
+          ? 'var(--color-success)'
+          : 'var(--color-warning)',
+    }));
 
   useEffect(() => {
     let cancelled = false;
@@ -275,7 +329,11 @@ function Overview() {
         </CardContent>
       </Card>
 
-      <Card>
+      {/* `data-testid` so its test can scope Recharts queries to this card
+          rather than counting `.recharts-area` across the page -- the three
+          chart cards below would otherwise break every one of those
+          assertions. */}
+      <Card data-testid="attendance-trend-card">
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle>Attendance by week</CardTitle>
@@ -391,6 +449,87 @@ function Overview() {
           )}
         </CardContent>
       </Card>
+
+      <Grid>
+        <GridItem span={12} lgSpan={6}>
+          <ChartCard
+            title="Classes held and attendance rate"
+            subtitle="Volume against rate — a busy week and a well-attended one are not the same week"
+            icon={Activity}
+            testId="delivery-combo-card"
+            footer={
+              <Link href="/analytics" className="font-medium text-action hover:underline">
+                See the full analytics →
+              </Link>
+            }
+          >
+            <ComboChart
+              data={deliverySeries}
+              bars={[{ key: 'held', label: 'Classes held' }]}
+              lines={[{ key: 'percent', label: 'Attendance rate' }]}
+              rightAxisKeys={['percent']}
+              leftLabel="Classes"
+              rightLabel="Attendance %"
+              xLabel="Week"
+              height={240}
+              loading={delivery.isLoading || isTrendLoading}
+              emptyMessage="No classes in the last twelve weeks"
+              valueFormatter={(value) => formatNumber(value)}
+              rightValueFormatter={(value) => formatPercent(value)}
+            />
+          </ChartCard>
+        </GridItem>
+
+        <GridItem span={12} lgSpan={6}>
+          <ChartCard
+            title="Enrolments over time"
+            subtitle="Enrolments started each week, and how many of them completed"
+            icon={GraduationCap}
+            iconTone="info"
+            testId="enrolment-trend-card"
+            legend={[
+              { label: 'Started', color: paletteColor(0) },
+              { label: 'Completed', color: paletteColor(1) },
+            ]}
+          >
+            <AreaChart
+              data={enrolmentSeries}
+              series={[
+                { key: 'started', label: 'Started' },
+                { key: 'completed', label: 'Completed' },
+              ]}
+              gradient
+              hideLegend
+              xLabel="Week"
+              height={240}
+              loading={enrolments.isLoading}
+              emptyMessage="No enrolments in the last twelve weeks"
+              valueFormatter={(value) => formatNumber(value)}
+            />
+          </ChartCard>
+        </GridItem>
+
+        <GridItem span={12}>
+          <ChartCard
+            title="Attendance by batch"
+            subtitle={`The ten lowest of the batches you can see. Amber is below the ${ATTENDANCE_TARGET}% target.`}
+            icon={CalendarCheck}
+            iconTone="success"
+            testId="attendance-by-batch-card"
+          >
+            <HorizontalBarChart
+              data={attendanceByBatch}
+              series={[{ key: 'value', label: 'Attendance' }]}
+              colorKey="colour"
+              categoryWidth={120}
+              height={Math.max(180, attendanceByBatch.length * 32)}
+              loading={batches.isLoading}
+              emptyMessage="No batch has a register yet"
+              valueFormatter={(value) => formatPercent(value)}
+            />
+          </ChartCard>
+        </GridItem>
+      </Grid>
     </div>
   );
 }

@@ -15,9 +15,20 @@ import type { AdminDashboard, TrendPoint } from '@/types/api';
 
 const adminDashboard = vi.hoisted(() => vi.fn());
 const attendanceTrend = vi.hoisted(() => vi.fn());
+// The three chart cards under the attendance card. Empty by default so every
+// existing case sees their empty states and nothing else changes.
+const deliveryTrend = vi.hoisted(() => vi.fn());
+const enrolmentTrend = vi.hoisted(() => vi.fn());
+const batchSummaries = vi.hoisted(() => vi.fn());
 const useApi = vi.hoisted(() => vi.fn());
 
-vi.mock('@/lib/reporting', () => ({ adminDashboard, attendanceTrend }));
+vi.mock('@/lib/reporting', () => ({
+  adminDashboard,
+  attendanceTrend,
+  deliveryTrend,
+  enrolmentTrend,
+  batchSummaries,
+}));
 vi.mock('@/hooks/use-api', () => ({ useApi }));
 vi.mock('@/components/auth-provider', () => ({
   useAuth: () => ({
@@ -66,6 +77,9 @@ function dataTable(): HTMLElement {
 }
 
 beforeEach(() => {
+  deliveryTrend.mockResolvedValue([]);
+  enrolmentTrend.mockResolvedValue([]);
+  batchSummaries.mockResolvedValue([]);
   useApi.mockReturnValue({ data: [], error: null, isLoading: false, reload: vi.fn() });
   // Deterministic chart render — see `tests/unit/charts.test.tsx` for why:
   // Recharts reveals a chart's shapes progressively across animation frames,
@@ -90,7 +104,7 @@ describe('OverviewPage — attendance trend', () => {
     adminDashboard.mockResolvedValue(dashboard());
     attendanceTrend.mockResolvedValue(realTrend);
 
-    const { container } = render(<OverviewPage />);
+    render(<OverviewPage />);
 
     await screen.findByText('Attendance by week');
 
@@ -102,7 +116,7 @@ describe('OverviewPage — attendance trend', () => {
     // React commit after the heading above (its own `ResizeObserver` effect
     // resolves the plot's size asynchronously), so this waits rather than
     // asserting the instant the heading appears.
-    await waitFor(() => expect(container.querySelector('.recharts-area')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('attendance-trend-card').querySelector('.recharts-area')).toBeInTheDocument());
 
     // Every real fetched value still exists as text — the chart's own
     // visually-hidden data table, not a mock/placeholder series.
@@ -117,27 +131,27 @@ describe('OverviewPage — attendance trend', () => {
     adminDashboard.mockResolvedValue(dashboard());
     attendanceTrend.mockResolvedValue([]);
 
-    const { container } = render(<OverviewPage />);
+    render(<OverviewPage />);
 
     await screen.findByText('Attendance by week');
     expect(screen.getByText('No registers taken yet.')).toBeInTheDocument();
-    expect(container.querySelector('.recharts-area')).not.toBeInTheDocument();
+    expect(screen.getByTestId('attendance-trend-card').querySelector('.recharts-area')).not.toBeInTheDocument();
   });
 
   it('lets an admin switch to the exact counted/attended figures the chart does not plot', async () => {
     adminDashboard.mockResolvedValue(dashboard());
     attendanceTrend.mockResolvedValue(realTrend);
 
-    const { container } = render(<OverviewPage />);
+    render(<OverviewPage />);
 
     await screen.findByText('Attendance by week');
-    await waitFor(() => expect(container.querySelector('.recharts-area')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('attendance-trend-card').querySelector('.recharts-area')).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Show exact figures' }));
 
     // The chart is gone, replaced by the real table with the counted/attended
     // columns the chart itself never plots.
-    expect(container.querySelector('.recharts-area')).not.toBeInTheDocument();
+    expect(screen.getByTestId('attendance-trend-card').querySelector('.recharts-area')).not.toBeInTheDocument();
     // The donut's own sr-only data table (design-pivot addition, R13) also
     // matches `getByRole('table')`, so the real visible table is found by
     // its own "Counted" column header instead of assuming there is only one.
@@ -148,7 +162,7 @@ describe('OverviewPage — attendance trend', () => {
     expect(table.getByText('32')).toBeInTheDocument(); // attended, week 1
 
     fireEvent.click(screen.getByRole('button', { name: 'Show chart' }));
-    await waitFor(() => expect(container.querySelector('.recharts-area')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('attendance-trend-card').querySelector('.recharts-area')).toBeInTheDocument());
   });
 
   it('still shows the page-level error state when the fetch itself fails — untouched by this phase', async () => {
@@ -246,6 +260,44 @@ describe('OverviewPage — design pivot additions', () => {
     expect(screen.queryByTestId('attendance-rate-gauge')).not.toBeInTheDocument();
   });
 
+  it('adds three chart cards below the attendance card, each stating what it plots', async () => {
+    adminDashboard.mockResolvedValue(dashboard);
+    attendanceTrend.mockResolvedValue(realTrend);
+    deliveryTrend.mockResolvedValue([
+      { week: '2026-W01', scheduled: 12, held: 10, cancelled: 1, registers_outstanding: 2 },
+      { week: '2026-W02', scheduled: 11, held: 11, cancelled: 0, registers_outstanding: 0 },
+    ]);
+    enrolmentTrend.mockResolvedValue([
+      { week: '2026-W01', started: 30, active: 28, completed: 2, cancelled: 0 },
+      { week: '2026-W02', started: 18, active: 18, completed: 0, cancelled: 0 },
+    ]);
+    batchSummaries.mockResolvedValue([
+      { id: 'b1', code: 'B-1', name: 'One', course_title: 'Linux', status: 'active', students: 9, attendance_percent: 91 },
+      { id: 'b2', code: 'B-2', name: 'Two', course_title: 'Linux', status: 'active', students: 7, attendance_percent: 62 },
+    ]);
+    render(<OverviewPage />);
+
+    const combo = await screen.findByTestId('delivery-combo-card');
+    const enrol = screen.getByTestId('enrolment-trend-card');
+    const byBatch = screen.getByTestId('attendance-by-batch-card');
+    for (const card of [combo, enrol, byBatch]) {
+      expect(within(card).getByTestId('chart-definition')).not.toHaveTextContent('');
+    }
+
+    // Each draws -- scoped to its own card, so a chart added elsewhere on
+    // this page cannot break these.
+    await waitFor(() => expect(combo.querySelector('.recharts-line')).toBeInTheDocument());
+    await waitFor(() => expect(enrol.querySelector('.recharts-area')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(byBatch.querySelectorAll('.recharts-bar-rectangle')).toHaveLength(2),
+    );
+
+    // And the attendance card's own chart is untouched by their presence.
+    expect(
+      screen.getByTestId('attendance-trend-card').querySelector('.recharts-area'),
+    ).toBeInTheDocument();
+  });
+
   it('renders a DonutChart of attended vs. not-attended sessions, summed from the already-fetched trend weeks', async () => {
     adminDashboard.mockResolvedValue(dashboard());
     attendanceTrend.mockResolvedValue(realTrend);
@@ -253,7 +305,7 @@ describe('OverviewPage — design pivot additions', () => {
     render(<OverviewPage />);
 
     await screen.findByText('Attendance by week');
-    await waitFor(() => expect(document.querySelector('.recharts-pie')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('attendance-trend-card').querySelector('.recharts-pie')).toBeInTheDocument());
 
     // attended: 32 + 33 + 34 = 99; counted: 40 + 44 + 38 = 122; not attended: 23
     const tables = screen.getAllByRole('table', { hidden: true });
