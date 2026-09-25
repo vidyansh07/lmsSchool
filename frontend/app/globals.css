@@ -110,15 +110,34 @@
   --color-danger-wash: oklch(93.6% 0.031 17.7); /* #FEE2E2 */
 
   /* ---- Chart series -----------------------------------------------------
-     Anchored on the action orange and walked around the wheel for
-     perceptual separation at roughly equal lightness, so a five-series chart
-     does not need its legend to tell the lines apart. Names unchanged:
-     `chart-colors.ts` and five `var()` sites read them. */
-  --color-chart-1: oklch(55.3% 0.174 38.4);
-  --color-chart-2: oklch(50% 0.119 242.7);
-  --color-chart-3: oklch(50.8% 0.105 165.6);
-  --color-chart-4: oklch(55.5% 0.146 49);
-  --color-chart-5: oklch(47.9% 0.043 257.4);
+     Eight steps. This is the one place colour is categorical rather than
+     semantic: a series' colour is its identity, and identity is
+     information. The exception stops at the plot -- a tile, a badge and an
+     icon chip still tint only by state.
+
+     The hues are copied from the reference product; the lightness is not.
+     Five of its ten series colours fail WCAG 1.4.11 against a white card,
+     which a 2px stroke has to clear: amber-500 #F59E0B at 2.15:1,
+     cyan-500 #06B6D4 2.43, teal-500 #14B8A6 2.49, emerald-500 #10B981 2.54,
+     sky-500 #0EA5E9 2.77. The 600/700 family clears 3:1 at the same hue, so
+     that is what is here. Measured, not estimated -- if you reach for a
+     brighter green because this looks dull, the number is the reason.
+
+     Steps 1-5 are unchanged from the rebuild, so nothing already plotted
+     repaints. Hue order across all eight is 17, 38, 49, 166, 223, 243, 257,
+     293; the smallest gap is 10.6 degrees between chart-1 and chart-4, which
+     is a pre-existing weakness deliberately left alone -- renumbering would
+     repaint every chart in the product for a cosmetic gain. It is also why
+     `chart-colors.ts` warns past five series on one plot: the fix for a
+     seven-series chart is small multiples, not a ninth colour. */
+  --color-chart-1: oklch(55.3% 0.174 38.4); /* #C2410B - 5.19:1 */
+  --color-chart-2: oklch(50% 0.119 242.7); /* #0469A1 - 5.93:1 */
+  --color-chart-3: oklch(50.8% 0.105 165.6); /* #047857 - 5.49:1 */
+  --color-chart-4: oklch(55.5% 0.146 49); /* #B45307 - 5.03:1 */
+  --color-chart-5: oklch(47.9% 0.043 257.4); /* #4E5E76 - 6.56:1 */
+  --color-chart-6: oklch(54.1% 0.247 293); /* #7C3AED - 5.71:1 */
+  --color-chart-7: oklch(52% 0.094 223.1); /* #0D7490 - 5.35:1 */
+  --color-chart-8: oklch(51.4% 0.198 16.9); /* #BE113C - 6.29:1 */
 
   /* ---- Type -------------------------------------------------------------
      Sora for headings and figures, Inter for everything read at length.
@@ -152,12 +171,25 @@
      everything within it to match. */
   --radius-control: 0.5rem;
   --radius-card: 0.75rem;
+  /* A chart panel, and only a chart panel. Larger than a card because it is
+     a 300px-tall object with whitespace inside it rather than a row in a
+     dense list. */
+  --radius-panel: 1rem;
   --radius-pill: 999px;
 
-  /* One shadow, for overlays only -- a dialog, popover, sheet, dropdown,
-     tooltip. Anything that is *on* the page rather than *above* it separates
-     with a border. */
+  /* Two shadows.
+
+     `--shadow-overlay` is for things *above* the page -- a dialog, popover,
+     sheet, dropdown, tooltip.
+
+     `--shadow-panel` is for `ChartCard` and nothing else. The rebuild's rule
+     was that a shadow and a border draw the same edge twice, which is true
+     of a 12px card in a list. It stops being true for a tall chart panel,
+     which a hairline alone does not separate from the identically-white
+     panel 16px below it. `Card` is unchanged -- 12px, hairline, no shadow --
+     and stays the default for anything that is not a plot. */
   --shadow-overlay: 0 4px 12px rgb(15 23 42 / 0.08), 0 24px 48px -16px rgb(15 23 42 / 0.22);
+  --shadow-panel: 0 2px 10px -3px oklch(20.8% 0.04 265.8 / 0.06);
 
   /* ---- Motion -----------------------------------------------------------
      One curve. Durations are literals at the call site (`duration-150`),

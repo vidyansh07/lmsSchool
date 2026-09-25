@@ -102,7 +102,13 @@ const PAIRS: [string, string, number, string][] = [
 
   // A chart series is a line or a bar against the card it is drawn on: 3:1,
   // the threshold for a graphical object rather than for text.
-  ...([1, 2, 3, 4, 5] as const).map(
+  //
+  // Eight steps, and the reason they are the 600/700 family rather than the
+  // brighter 500s the reference product uses: five of its ten series colours
+  // fail this very row. amber-500 #F59E0B is 2.15:1, cyan-500 #06B6D4 2.43,
+  // teal-500 #14B8A6 2.49, emerald-500 #10B981 2.54, sky-500 #0EA5E9 2.77.
+  // The hues here are copied from it; the lightness is not.
+  ...([1, 2, 3, 4, 5, 6, 7, 8] as const).map(
     (n): [string, string, number, string] => [
       `chart-${n}`,
       'surface',

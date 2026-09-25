@@ -26,9 +26,20 @@ it:
    nothing else. There are no decorative colours and no per-metric hues, so
    anything tinted on screen is saying something. This is the rule that
    removed two whole category palettes (see §4).
-2. **Separation is a hairline and space, not elevation.** Exactly one shadow
-   exists and only overlays use it. A card is `--color-surface` with a
-   `--color-line` border on a `--color-canvas` page.
+   **One bounded exception, added when the charts landed:** a chart series'
+   colour is its *identity*, and identity is information, so
+   `--color-chart-1..8` is categorical rather than semantic. The exception
+   stops at the plot — a stat tile, a badge and an icon chip still tint only
+   by state, and there are still no per-metric hues.
+2. **Separation is a hairline and space, not elevation.** A card is
+   `--color-surface` with a `--color-line` border on a `--color-canvas` page.
+   **Two shadows exist:** `--shadow-overlay` for things above the page, and
+   `--shadow-panel` for `ChartCard` and nothing else. The original rule — a
+   shadow and a border draw the same edge twice — holds for a 12px card in a
+   dense list, and stops holding for a 300px-tall chart panel, which a
+   hairline alone does not separate from the identically-white panel 16px
+   below it. `Card` is unchanged and stays the default for anything that is
+   not a plot.
 3. **The brand is a fill, never an action.** Grras orange is 2.96:1 on white.
    It cannot carry a white button label, so `--color-brand` paints the logo
    and `--color-action` — a darker relative of it, 5.18:1 — carries every
@@ -119,9 +130,38 @@ page.
 
 ### Charts
 
-`--color-chart-1..5`, anchored on the action orange and walked around the
-wheel for perceptual separation at roughly equal lightness. Read through
-`components/ui/charts/chart-colors.ts`; never a hex in a caller.
+Eight categorical steps, read through `components/ui/charts/chart-colors.ts`;
+never a hex in a caller.
+
+| Step | Hex | On a card | Hue |
+|---|---|---|---|
+| `chart-1` | `#C2410B` | 5.19:1 | 38 |
+| `chart-2` | `#0469A1` | 5.93:1 | 243 |
+| `chart-3` | `#047857` | 5.49:1 | 166 |
+| `chart-4` | `#B45307` | 5.03:1 | 49 |
+| `chart-5` | `#4E5E76` | 6.56:1 | 257 |
+| `chart-6` | `#7C3AED` | 5.71:1 | 293 |
+| `chart-7` | `#0D7490` | 5.35:1 | 223 |
+| `chart-8` | `#BE113C` | 6.29:1 | 17 |
+
+**The hues are the reference product's; the lightness is not.** Five of its
+ten series colours fail WCAG 1.4.11's 3:1 threshold against a white card,
+which a 2px stroke has to clear: amber-500 `#F59E0B` **2.15:1**, cyan-500
+`#06B6D4` **2.43**, teal-500 `#14B8A6` **2.49**, emerald-500 `#10B981`
+**2.54**, sky-500 `#0EA5E9` **2.77**. The 600/700 family clears it at the same
+hue. If one of these looks dull next to the reference, that gap is the reason.
+
+Steps 1–5 have not moved since the rebuild, so nothing already plotted
+repaints. The smallest hue gap is 10.6° between `chart-1` and `chart-4` — a
+pre-existing weakness left alone deliberately, because renumbering repaints
+every chart in the product for a cosmetic gain.
+
+**Five series is the cap.** Past that, colour stops distinguishing them and
+the fix is small multiples, not a ninth step. `chart-colors.ts` warns in
+development via `SERIES_COUNT_WARNING_THRESHOLD`, the same soft-warning shape
+as `DONUT_CATEGORY_WARNING_THRESHOLD`. Seven dots in the overview strip are
+fine only because each is paired with its own text label — colour is never the
+identifier there.
 
 ### Type
 
@@ -140,8 +180,9 @@ voice, not a bigger one.
 
 ### Geometry and motion
 
-`--radius-control` 8px · `--radius-card` 12px · `--radius-pill` 999px ·
-`--shadow-overlay` (the only shadow) · `--ease-out` (the only curve).
+`--radius-control` 8px · `--radius-card` 12px · `--radius-panel` 16px
+(`ChartCard` only) · `--radius-pill` 999px · `--shadow-overlay` (overlays) ·
+`--shadow-panel` (`ChartCard` only) · `--ease-out` (the only curve).
 
 Durations are **literals** at the call site (`duration-150`). There is no
 `--duration-*` namespace in Tailwind v4 — it reads `--transition-duration-*` —
@@ -258,6 +299,14 @@ change that caused it.
    `components/ui/{tooltip,switch,progress}.tsx`, `components/progress-bar.tsx`,
    `components/fees/fee-ledger.tsx`, `components/app-shell.tsx`,
    `app/admin/branding/page.tsx`.
+8. **A colour token must be written as `oklch(L% C H)`.**
+   `theme-contrast.test.ts` finds tokens with a regex that matches only that
+   form, so a new colour written as a hex, with an alpha slash, or via
+   `color-mix()` makes the test **throw** (`no --color-chart-9 in
+   globals.css`) instead of failing a contrast row. It reads as a broken test
+   rather than an unmeasured colour, which is how an unmeasured colour gets
+   committed. `--shadow-panel` may use an alpha channel because it is not a
+   `--color-*` token and nothing parses it.
 
 ---
 
@@ -289,3 +338,12 @@ overlay, per-child staggers, a cursor-tracking spotlight gradient, a sparkline
 drawing itself, and a press dip. That was motion decorating screens whose job
 is to show a number, and the `motion` package that drove half of it is no
 longer a dependency.
+
+**Charts.** A chart's entrance is Recharts' own tween at `CHART_ANIMATION_MS`,
+and every chart primitive reads it through `useChartAnimation()` — a hook
+rather than a per-chart prop, so a new chart cannot forget
+`prefers-reduced-motion`. `ChartCard` uses the existing `fade-in`.
+Deliberately **not** a rise-in and deliberately **not** staggered, for the
+same reason both were removed: a dashboard that assembles itself over a third
+of a second is a third of a second in which the numbers cannot be read.
+Hover on a panel is a ring change, not a lift.
