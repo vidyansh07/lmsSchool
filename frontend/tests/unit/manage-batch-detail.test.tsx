@@ -148,6 +148,19 @@ describe('BatchDetail', () => {
     expect(screen.getByText(/Not assigned/)).toBeInTheDocument();
   });
 
+  it('renders a timeline status outside the four it knows as itself, on a neutral badge', async () => {
+    const base = overview();
+    getBatchOverview.mockResolvedValue({
+      ...base,
+      timeline: { ...base.timeline, status: 'paused' as BatchOverview['timeline']['status'] },
+    });
+    render(<BatchDetail batchId="batch-1" />);
+    await waitFor(() => expect(screen.getByText('Morning Linux batch')).toBeInTheDocument());
+    expect(screen.getByText('Paused')).toBeInTheDocument();
+    expect(screen.getByText(/recorded as "Paused"/)).toBeInTheDocument();
+    expect(screen.queryByText('Running on track with the plan.')).not.toBeInTheDocument();
+  });
+
   it('shows a not-found state for a batch that does not exist or is not visible', async () => {
     getBatchOverview.mockRejectedValue(new ApiError(404, 'not_found', 'Not found.', 'req-1'));
     render(<BatchDetail batchId="missing" />);

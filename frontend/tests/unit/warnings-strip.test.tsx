@@ -48,6 +48,19 @@ describe('WarningsStrip', () => {
     );
   });
 
+  it('renders a warning whose severity it does not know, on the informational tone, rather than throwing', () => {
+    // One bad row must not take down the five dashboards that mount the strip.
+    const odd: StaffWarning = {
+      ...warnings[1]!,
+      kind: 'imported_oddity',
+      severity: 'urgent' as StaffWarning['severity'],
+      label: '3 imported rows need a look',
+    };
+    useApi.mockReturnValue({ data: [odd], error: null, isLoading: false, reload: vi.fn() });
+    render(<WarningsStrip />);
+    expect(screen.getByText('3 imported rows need a look')).toBeInTheDocument();
+  });
+
   it('says so when nothing is waiting', () => {
     useApi.mockReturnValue({ data: [], error: null, isLoading: false, reload: vi.fn() });
     render(<WarningsStrip />);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { describeRiskFlag, describeTimelineVariance } from '@/lib/manage';
+import { describeRiskFlag, describeTimelineVariance, type TimelineStatus } from '@/lib/manage';
 
 describe('describeTimelineVariance', () => {
   it('says a batch has not started, regardless of the variance figure', () => {
@@ -32,6 +32,12 @@ describe('describeTimelineVariance', () => {
 
   it('rounds a fractional variance to a whole number of points', () => {
     expect(describeTimelineVariance('behind', -4.6)).toBe('5 percentage points behind the plan.');
+  });
+
+  it('states an unrecognised status as itself rather than passing it off as on track', () => {
+    expect(describeTimelineVariance('paused_by_import' as TimelineStatus, 3)).toBe(
+      'Plan-versus-actual status is recorded as "Paused by import".',
+    );
   });
 });
 

@@ -64,7 +64,9 @@ function progressSentence(variance: number | null): string {
 }
 
 function RiskBanner({ performance }: { performance: StudentPerformanceRow }) {
-  const triggered = performance.risk.outcomes.filter((outcome) => outcome.triggered);
+  // `risk` is null for an enrolment the engine has not evaluated yet — no
+  // banner, rather than a crash on the 360's Enrolment tab.
+  const triggered = (performance.risk?.outcomes ?? []).filter((outcome) => outcome.triggered);
   if (triggered.length === 0) return null;
   return (
     <Alert variant="warning" data-testid="student-risk-banner">

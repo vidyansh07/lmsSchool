@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiError } from '@/lib/api';
 import { QUESTION_TYPE_LABEL, formatDateTime } from '@/lib/academic-labels';
+import { NOT_AVAILABLE } from '@/lib/format';
 import { getAttemptReview } from '@/lib/exams';
 import type { AttemptReview } from '@/types/api';
 
@@ -68,7 +69,11 @@ function Review({ attemptId }: { attemptId: string }) {
       <Card className="">
         <CardHeader>
           <CardTitle as="h2" data-testid="review-score">
-            {attempt.total_score} / {attempt.max_score}
+            {/* Both are null while a paper waits for manual marking — the
+                headline is then "Not available", never a bare " / ". */}
+            {attempt.total_score === null || attempt.max_score === null
+              ? NOT_AVAILABLE
+              : `${attempt.total_score} / ${attempt.max_score}`}
           </CardTitle>
           <CardDescription>
             {attempt.percentage === null ? null : `${attempt.percentage}% · `}

@@ -52,7 +52,7 @@ import { Select } from '@/components/ui/input';
 import { StatStrip } from '@/components/ui/stat-strip';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { useSection } from '@/hooks/use-section';
-import { heldAgainstAttendance, mergeByWeek } from '@/lib/analytics';
+import { formatWeekLabel, heldAgainstAttendance, mergeByWeek } from '@/lib/analytics';
 import { formatNumber, formatPercent } from '@/lib/format';
 import {
   adminDashboard,
@@ -73,13 +73,6 @@ const ATTENDANCE_TARGET = 75;
 const PERIODS = [4, 12, 26, 52] as const;
 
 const EMPTY_DASHBOARD: AdminDashboard | null = null;
-
-function formatWeek(iso: string): string {
-  // The API sends the Monday of each week. Rendered short, because a
-  // twelve-tick axis has no room for a year on every label.
-  const [, month, day] = iso.split('-');
-  return `${day} ${['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(month)]}`;
-}
 
 /** A chart card's link to the rows behind the shape. */
 function RowsLink({ report, children }: { report: string; children: string }) {
@@ -110,19 +103,19 @@ function Analytics() {
 
   const enrolmentSeries = mergeByWeek([
     { rows: enrolments.data, keys: ['started', 'active', 'completed', 'cancelled'] },
-  ]).map((row) => ({ ...row, date: formatWeek(String(row.date)) }));
+  ]).map((row) => ({ ...row, date: formatWeekLabel(row.date) }));
 
   const deliverySeries = heldAgainstAttendance(delivery.data, attendance.data).map((row) => ({
     ...row,
-    date: formatWeek(String(row.date)),
+    date: formatWeekLabel(row.date),
   }));
 
   const dsrSeries = mergeByWeek([
     { rows: dsr.data, keys: ['submitted', 'approved', 'rejected'] },
-  ]).map((row) => ({ ...row, date: formatWeek(String(row.date)) }));
+  ]).map((row) => ({ ...row, date: formatWeekLabel(row.date) }));
 
   const outstandingByWeek = delivery.data.map((point) => ({
-    label: formatWeek(point.week),
+    label: formatWeekLabel(point.week),
     value: point.registers_outstanding,
   }));
 

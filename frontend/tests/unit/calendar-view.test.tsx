@@ -57,6 +57,19 @@ describe('CalendarView', () => {
     await waitFor(() => expect(screen.getByText(/nothing scheduled/i)).toBeInTheDocument());
   });
 
+  it('leaves out an event with no start rather than blanking the calendar', async () => {
+    getCalendar.mockResolvedValue({
+      start: '2026-03-01',
+      end: '2026-03-28',
+      count: 2,
+      events: [event({ title: 'Undated import', start: null as unknown as string, end: null }), event()],
+    });
+    render(<CalendarView />);
+    await waitFor(() => expect(screen.getByText('Linux Essentials — Morning')).toBeInTheDocument());
+    expect(screen.queryByText('Undated import')).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/Invalid Date/);
+  });
+
   it('renders an unknown event kind rather than breaking', async () => {
     // A source registered in a later phase must not blank the calendar.
     getCalendar.mockResolvedValue({

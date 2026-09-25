@@ -55,7 +55,7 @@ import { Capability } from '@/lib/capabilities';
 import { formatNumber } from '@/lib/format';
 import { greeting } from '@/lib/greeting';
 import { useSection } from '@/hooks/use-section';
-import { mergeByWeek } from '@/lib/analytics';
+import { formatWeekLabel, mergeByWeek } from '@/lib/analytics';
 import { getManagerDashboard, type ManagerDashboard } from '@/lib/manage';
 import { dsrComplianceTrend } from '@/lib/reporting';
 import type { DsrTrendPoint } from '@/types/api';
@@ -82,13 +82,6 @@ function activitiesQueue(data: ManagerDashboard): (CategoryDatum & { colour: str
     { label: 'Overdue', value: data.activities.overdue, colour: 'var(--color-danger)' },
     { label: 'Under review', value: data.activities.under_review, colour: 'var(--color-warning)' },
   ];
-}
-
-/** A week's Monday, short enough for a twelve-tick axis. */
-function formatWeekLabel(iso: string): string {
-  const [, month, day] = iso.split('-');
-  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${day} ${months[Number(month)]}`;
 }
 
 function attentionBreakdown(data: ManagerDashboard): CategoryDatum[] {

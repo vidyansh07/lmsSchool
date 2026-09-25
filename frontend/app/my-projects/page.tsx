@@ -146,7 +146,9 @@ function MyProjects() {
             <CardTitle>{row.course_title}</CardTitle>
             <CardDescription>
               {row.finished} of {row.required} required projects finished
-              {row.met ? '' : ` · outstanding: ${row.outstanding.map((p) => p.title).join(', ')}`}
+              {row.met || !row.outstanding?.length
+                ? ''
+                : ` · outstanding: ${row.outstanding.map((p) => p.title).join(', ')}`}
             </CardDescription>
           </CardHeader>
         </Card>

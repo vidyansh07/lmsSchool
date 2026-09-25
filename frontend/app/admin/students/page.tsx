@@ -25,6 +25,7 @@ import {
   FEE_STATUS_OPTIONS,
   FEE_STATUS_VARIANT,
   QUALIFICATION_LABEL,
+  labelFor,
 } from '@/lib/labels';
 import { listStudents, setFeeStatus } from '@/lib/people';
 import type { FeeStatus, StudentListRow } from '@/types/api';
@@ -76,7 +77,8 @@ function StudentsTable() {
         <div className="flex items-center gap-3">
           <Avatar size="sm" className="bg-selected">
             <AvatarFallback className="text-action">
-              {(row.full_name || row.email).slice(0, 1)}
+              {/* A placeholder account can have neither a name nor an email. */}
+              {(row.full_name || row.email || '').trim().slice(0, 1) || '?'}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 leading-tight">
@@ -98,7 +100,7 @@ function StudentsTable() {
       render: (row) =>
         row.qualification ? (
           <Badge>
-            {QUALIFICATION_LABEL[row.qualification]}
+            {labelFor(QUALIFICATION_LABEL, row.qualification)}
           </Badge>
         ) : (
           '—'

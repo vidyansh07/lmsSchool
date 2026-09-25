@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiError } from '@/lib/api';
+import { formatPercent } from '@/lib/format';
 import {
   CERTIFICATE_STATUS_LABEL,
   CERTIFICATE_STATUS_VARIANT,
@@ -126,7 +127,9 @@ function MyProgress() {
                 <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                   {(
                     [
-                      ['Attendance', `${progress.attendance.percent}%`],
+                      // Null until a register exists for the batch: "Not
+                      // available", never the literal "null%".
+                      ['Attendance', formatPercent(progress.attendance.percent)],
                       [
                         'Assignments',
                         `${progress.assignments.submitted}/${progress.assignments.total}`,

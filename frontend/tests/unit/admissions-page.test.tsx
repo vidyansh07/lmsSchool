@@ -125,6 +125,23 @@ describe('AdmissionsPage', () => {
     expect(listEnrollments.mock.calls.length).toBe(callsBefore);
   });
 
+  it('keeps an enrolment with no registration date out of a date-filtered view instead of throwing', async () => {
+    listEnrollments.mockResolvedValue(
+      page([
+        enrollmentRow({ id: 'e-undated', enrolled_at: null as unknown as string, student_name: 'Imported Student' }),
+        enrollmentRow({ id: 'e-new', enrolled_at: '2026-09-10T00:00:00Z', student_name: 'Asha Rao' }),
+      ]),
+    );
+    render(<AdmissionsPage />);
+    await waitFor(() => expect(screen.getByText('Imported Student')).toBeInTheDocument());
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Registered from'), '2026-09-01');
+
+    await waitFor(() => expect(screen.queryByText('Imported Student')).not.toBeInTheDocument());
+    expect(screen.getByText('Asha Rao')).toBeInTheDocument();
+  });
+
   it('shows an error with retry on failure', async () => {
     listEnrollments.mockRejectedValue(new ApiError(500, 'server_error', 'Could not load.', 'req-1'));
     render(<AdmissionsPage />);

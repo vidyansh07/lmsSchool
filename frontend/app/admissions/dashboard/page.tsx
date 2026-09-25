@@ -91,7 +91,7 @@ import { ApiError } from '@/lib/api';
 import { listBatches, listEnrollments } from '@/lib/batches';
 import { ENROLLMENT_STATUS_LABEL } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
-import { ageingBuckets, mergeByWeek, money, withCumulative } from '@/lib/analytics';
+import { ageingBuckets, formatWeekLabel, mergeByWeek, money, withCumulative } from '@/lib/analytics';
 import { getCounsellorDashboard, getCounsellorPipeline } from '@/lib/dashboards';
 import { feeCollectionsTrend, getFeesOverview } from '@/lib/fees';
 import { formatCurrency, formatNumber } from '@/lib/format';
@@ -255,13 +255,6 @@ function KpiTileSection({
  * worth comparing side by side. `new_students_today` is deliberately left
  * out — good news, not a bottleneck, and already its own KPI tile above.
  */
-/** A week's Monday, short enough for a twelve-tick axis. */
-function formatWeekLabel(iso: string): string {
-  const [, month, day] = iso.split('-');
-  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${day} ${months[Number(month)]}`;
-}
-
 function pipelineBottlenecks(dashboard: CounsellorDashboard | null): CategoryDatum[] {
   if (!dashboard) return [];
   return [

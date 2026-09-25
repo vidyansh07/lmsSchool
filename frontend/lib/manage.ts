@@ -367,7 +367,8 @@ export interface StudentPerformanceRow {
   projects: { percent: number | null; required: number; finished: number };
   progress: { percent: number | null; expected_percent: number | null; variance: number | null };
   overall_score: number | null;
-  risk: { at_risk: boolean; outcomes: StudentRiskOutcome[]; triggered: string[]; triggered_count: number };
+  /** `null` until the risk engine has evaluated this enrolment at least once. */
+  risk: { at_risk: boolean; outcomes: StudentRiskOutcome[]; triggered: string[]; triggered_count: number } | null;
 }
 
 /** Every enrolment on one batch, from the performance engine — see the module docstring. */
@@ -428,7 +429,10 @@ export function describeTimelineVariance(
   const points = Math.abs(Math.round(variancePercent));
   if (status === 'ahead') return `${points} percentage point${points === 1 ? '' : 's'} ahead of the plan.`;
   if (status === 'behind') return `${points} percentage point${points === 1 ? '' : 's'} behind the plan.`;
-  return 'Running on track with the plan.';
+  if (status === 'on_track') return 'Running on track with the plan.';
+  // A status this file has not seen (an import, a newer backend) is stated
+  // as what it is; reading it as "on track" would be a quiet lie.
+  return `Plan-versus-actual status is recorded as "${describeRiskFlag(status)}".`;
 }
 
 export const DSR_STATUS_LABEL: Record<DsrStatus, string> = {

@@ -75,6 +75,7 @@ import {
   FEE_STATUS_VARIANT,
   RISK_LEVEL_LABEL,
   RISK_LEVEL_VARIANT,
+  labelFor,
   RISK_SEVERITY_LABEL,
   RISK_SEVERITY_VARIANT,
 } from '@/lib/labels';
@@ -98,13 +99,16 @@ function initials(name: string): string {
 }
 
 function ScorePopover({ performance }: { performance: Student360Response['performance'] }) {
-  const hasComponents = performance.components.length > 0;
+  // A null block (engine never run) reads exactly like an empty one.
+  const components = performance?.components ?? [];
+  const overallScore = performance?.overall_score ?? null;
+  const hasComponents = components.length > 0;
   return (
     <Popover>
       <PopoverTrigger className="flex items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 py-1 text-sm hover:bg-sunken">
         <span className="text-xs text-ink-muted">Score</span>
         <span className="font-semibold tabular-nums">
-          {performance.overall_score === null ? 'Not yet computed' : formatPercent(performance.overall_score)}
+          {overallScore === null ? 'Not yet computed' : formatPercent(overallScore)}
         </span>
         <Info className="size-3.5 text-ink-muted" aria-hidden="true" />
       </PopoverTrigger>
@@ -112,7 +116,7 @@ function ScorePopover({ performance }: { performance: Student360Response['perfor
         <PopoverHeading>How this score is built</PopoverHeading>
         {hasComponents ? (
           <ul className="space-y-3 text-sm">
-            {performance.components.map((component) => (
+            {components.map((component) => (
               <li key={component.key}>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-ink-muted">{component.label}</span>
@@ -159,10 +163,14 @@ function ScorePopover({ performance }: { performance: Student360Response['perfor
 }
 
 function RiskPopover({ risk, onOpenTab }: { risk: Student360Response['risk']; onOpenTab: () => void }) {
-  const hasTriggers = risk.triggered.length > 0;
+  // A null block (engine never run) is "no risk signals"; a level outside the
+  // engine's three still shows what the record says, on a neutral badge.
+  const level = risk?.level ?? 'none';
+  const triggered = risk?.triggered ?? [];
+  const hasTriggers = triggered.length > 0;
   const badge = (
-    <Badge variant={RISK_LEVEL_VARIANT[risk.level]} className="cursor-pointer transition-colors hover:opacity-80">
-      {RISK_LEVEL_LABEL[risk.level]}
+    <Badge variant={RISK_LEVEL_VARIANT[level] ?? 'neutral'} className="cursor-pointer transition-colors hover:opacity-80">
+      {labelFor(RISK_LEVEL_LABEL, level)}
     </Badge>
   );
   if (!hasTriggers) return badge;
@@ -172,7 +180,7 @@ function RiskPopover({ risk, onOpenTab }: { risk: Student360Response['risk']; on
       <PopoverContent>
         <PopoverHeading>Triggered rules</PopoverHeading>
         <ul className="space-y-2 text-sm">
-          {risk.triggered.map((trigger) => (
+          {triggered.map((trigger) => (
             <li key={trigger.key} className="space-y-0.5">
               <div className="flex items-center gap-2">
                 <p className="font-medium">{trigger.label}</p>
@@ -275,7 +283,7 @@ function OverviewTab({ data }: { data: Student360Response }) {
           <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
             <p className="text-sm font-medium text-ink">Attendance</p>
             <p className="text-sm text-ink-muted">
-              {data.attendance_summary.has_records
+              {data.attendance_summary?.has_records
                 ? `${formatPercent(data.attendance_summary.percent)} · ${formatCount(
                     data.attendance_summary.attended,
                     'session',
@@ -383,13 +391,15 @@ function RiskOutcomeRow({ trigger }: { trigger: Student360RiskTrigger }) {
 }
 
 function RiskTab({ data }: { data: Student360Response }) {
-  const { level, triggered } = data.risk;
+  // Same null/unknown handling as `RiskPopover` in the header above.
+  const level = data.risk?.level ?? 'none';
+  const triggered = data.risk?.triggered ?? [];
   return (
     <Card>
       <CardContent className="space-y-4 pt-5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium text-ink">Current risk level</p>
-          <Badge variant={RISK_LEVEL_VARIANT[level]}>{RISK_LEVEL_LABEL[level]}</Badge>
+          <Badge variant={RISK_LEVEL_VARIANT[level] ?? 'neutral'}>{labelFor(RISK_LEVEL_LABEL, level)}</Badge>
         </div>
         {triggered.length === 0 ? (
           <p className="border-t border-line pt-4 text-sm text-ink-muted">

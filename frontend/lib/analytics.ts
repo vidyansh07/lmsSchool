@@ -15,6 +15,27 @@
 
 import type { DeliveryTrendPoint, FeePlanBrief, TrendPoint } from '@/types/api';
 
+import { NOT_AVAILABLE } from '@/lib/format';
+
+/**
+ * A week's Monday as an axis tick: `"2026-03-02"` -> `"2 Mar"`. Short, because
+ * a twelve-tick axis has no room for a year on every label.
+ *
+ * Only the leading `YYYY-MM-DD` is read, so a datetime (`2026-03-02T00:00Z`)
+ * labels the same as its date. Anything else -- an ISO week key like
+ * `2026-W09`, or nothing at all -- is shown as itself, or as the fallback,
+ * rather than as the `undefined undefined` a blind split would produce.
+ */
+export function formatWeekLabel(week: unknown): string {
+  if (typeof week !== 'string') return NOT_AVAILABLE;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(week);
+  if (!match) return week.trim() || NOT_AVAILABLE;
+  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[Number(match[2])];
+  if (!month) return week;
+  return `${Number(match[3])} ${month}`;
+}
+
 /** The shape every chart in `components/ui/charts` wants for a time series. */
 export interface WeeklyDatum {
   date: string;

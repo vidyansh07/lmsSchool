@@ -26,7 +26,8 @@ export function startingSoonBatches(batches: BatchListRow[]): BatchListRow[] {
   return batches
     .filter((batch) => batch.status === 'upcoming')
     .slice()
-    .sort((a, b) => a.start_date.localeCompare(b.start_date));
+    // An upcoming batch without a start date yet sorts last, not throws.
+    .sort((a, b) => (a.start_date ?? '￿').localeCompare(b.start_date ?? '￿'));
 }
 
 export function fillingUpBatches(batches: BatchListRow[]): BatchListRow[] {

@@ -47,7 +47,9 @@ const RISK_HREF: Record<string, string> = {
 export function collectRiskItems(entries: StudentPerformanceEntry[]): AlertItem[] {
   const items: AlertItem[] = [];
   for (const entry of entries) {
-    for (const outcome of entry.risk.outcomes) {
+    // An enrolment the risk engine has never evaluated arrives with `risk`
+    // null, or with no `outcomes` list; it simply has nothing to flag.
+    for (const outcome of entry.risk?.outcomes ?? []) {
       if (!outcome.triggered) continue;
       items.push({
         id: `${entry.enrollment_id}-${outcome.key}`,

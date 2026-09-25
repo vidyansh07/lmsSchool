@@ -65,7 +65,7 @@ import { Grid, GridItem, Section } from '@/components/ui/layout';
 import { StatCard } from '@/components/ui/stat';
 import { ChartCard, ComboChart, HorizontalBarChart } from '@/components/ui/charts';
 import { useSection } from '@/hooks/use-section';
-import { heldAgainstAttendance } from '@/lib/analytics';
+import { formatWeekLabel, heldAgainstAttendance } from '@/lib/analytics';
 import {
   attendanceTrend,
   batchSummaries,
@@ -75,7 +75,7 @@ import {
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { getRegister, listTodaySessions, markAttendance } from '@/lib/academics';
-import { ApiError, fieldErrors } from '@/lib/api';
+import { ApiError, errorMessage, fieldErrors } from '@/lib/api';
 import { getBatch } from '@/lib/batches';
 import { listModules } from '@/lib/courses';
 import {
@@ -177,6 +177,11 @@ export function ClassWorkspace({
   const [coreError, setCoreError] = useState<ApiError | null>(null);
   const [isLoadingCore, setIsLoadingCore] = useState(true);
   const [coreAttempt, setCoreAttempt] = useState(0);
+  // The register and the report each fail on their own (a 4xx for a class
+  // not yet started, cancelled, or without a roster) without taking the
+  // session — and the rest of the workspace — down with them.
+  const [registerLoadError, setRegisterLoadError] = useState<string | null>(null);
+  const [dsrLoadError, setDsrLoadError] = useState<string | null>(null);
 
   const [batch, setBatch] = useState<BatchDetail | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
@@ -208,27 +213,54 @@ export function ClassWorkspace({
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getSessionWithTopic(sessionId), getRegister(sessionId), getSessionDsr(sessionId)])
-      .then(([sessionData, registerData, dsrData]) => {
+    // Settled, not raced: only the session itself is load-bearing. The
+    // register and the report each carry their own failure into their own
+    // panel below, so a class the backend will not hand a register for
+    // (not started, cancelled, no roster) still opens.
+    Promise.allSettled([getSessionWithTopic(sessionId), getRegister(sessionId), getSessionDsr(sessionId)])
+      .then(([sessionResult, registerResult, dsrResult]) => {
         if (cancelled) return;
+        if (sessionResult.status === 'rejected') {
+          const cause: unknown = sessionResult.reason;
+          setCoreError(cause instanceof ApiError ? cause : null);
+          return;
+        }
+        const sessionData = sessionResult.value;
         setSession(sessionData);
-        setRegister(registerData);
-        setDsr(dsrData);
         setTopicSelection(localDraft?.topicSelection ?? initialTopicSelection(sessionData));
-        setMarks(
-          Object.fromEntries(
-            registerData.entries
-              .map((entry): [string, AttendanceStatus | null] => [
-                entry.enrollment_id,
-                localDraft?.marks[entry.enrollment_id] ?? entry.status,
-              ])
-              .filter((pair): pair is [string, AttendanceStatus] => pair[1] !== null),
-          ),
-        );
-        setDraft(localDraft?.fields ?? toWritePayload(dsrData));
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) setCoreError(cause instanceof ApiError ? cause : null);
+
+        if (registerResult.status === 'fulfilled') {
+          const registerData = registerResult.value;
+          setRegister(registerData);
+          setRegisterLoadError(null);
+          setMarks(
+            Object.fromEntries(
+              registerData.entries
+                .map((entry): [string, AttendanceStatus | null] => [
+                  entry.enrollment_id,
+                  localDraft?.marks[entry.enrollment_id] ?? entry.status,
+                ])
+                .filter((pair): pair is [string, AttendanceStatus] => pair[1] !== null),
+            ),
+          );
+        } else {
+          setRegister(null);
+          setRegisterLoadError(
+            errorMessage(registerResult.reason, 'The register for this class could not be loaded.'),
+          );
+        }
+
+        if (dsrResult.status === 'fulfilled') {
+          const dsrData = dsrResult.value;
+          setDsr(dsrData);
+          setDsrLoadError(null);
+          setDraft(localDraft?.fields ?? toWritePayload(dsrData));
+        } else {
+          setDsr(null);
+          setDsrLoadError(
+            errorMessage(dsrResult.reason, "The day's report for this class could not be loaded."),
+          );
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoadingCore(false);
@@ -485,7 +517,7 @@ export function ClassWorkspace({
       />
     );
   }
-  if (!session || !register || !dsr) return null;
+  if (!session) return null;
 
   if (finished) {
     return (
@@ -502,7 +534,7 @@ export function ClassWorkspace({
     <div className="space-y-6">
       <ClassHeader
         session={session}
-        attendanceTaken={Boolean(register.attendance_taken_at)}
+        attendanceTaken={Boolean(register?.attendance_taken_at)}
         topicSelection={topicSelection}
         onTopicSelectionChange={changeTopicSelection}
         modules={modules}
@@ -515,51 +547,79 @@ export function ClassWorkspace({
         </Alert>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle as="h2">Register</CardTitle>
-          <CardDescription>
-            {formatNumber(register.entries.length)} student{register.entries.length === 1 ? '' : 's'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {registerError ? (
-            <Alert variant="error" role="alert">
-              {registerError}
-            </Alert>
-          ) : null}
-          {registerSaved ? (
-            <Alert variant="success" role="status">
-              {registerSaved}
-            </Alert>
-          ) : null}
-          <RegisterEditor
-            entries={register.entries}
-            marks={marks}
-            onMark={markStudent}
-            onMarkAllPresent={markAllPresent}
-            canMark={register.can_mark}
-          />
-          {register.can_mark ? (
-            <Button type="button" variant="outline" size="sm" onClick={() => void saveRegisterOnly()} disabled={isSavingRegister}>
-              {isSavingRegister ? 'Saving…' : 'Save register'}
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
+      {register ? (
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2">Register</CardTitle>
+            <CardDescription>
+              {formatNumber(register.entries.length)} student{register.entries.length === 1 ? '' : 's'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {registerError ? (
+              <Alert variant="error" role="alert">
+                {registerError}
+              </Alert>
+            ) : null}
+            {registerSaved ? (
+              <Alert variant="success" role="status">
+                {registerSaved}
+              </Alert>
+            ) : null}
+            <RegisterEditor
+              entries={register.entries}
+              marks={marks}
+              onMark={markStudent}
+              onMarkAllPresent={markAllPresent}
+              canMark={register.can_mark}
+            />
+            {register.can_mark ? (
+              <Button type="button" variant="outline" size="sm" onClick={() => void saveRegisterOnly()} disabled={isSavingRegister}>
+                {isSavingRegister ? 'Saving…' : 'Save register'}
+              </Button>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2">Register</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ErrorState
+              title="The register is not available"
+              message={registerLoadError ?? 'The register for this class could not be loaded.'}
+            />
+          </CardContent>
+        </Card>
+      )}
 
-      <DsrPanel
-        dsr={dsr}
-        draft={draft}
-        onChange={updateDraft}
-        presentCount={liveCounts.present}
-        absentCount={liveCounts.absent}
-        studentCount={liveCounts.student}
-        fieldErrors={dsrFieldErrors}
-        isDirty={isDirty}
-        isSavingDraft={isSavingDraft}
-        lastSavedAt={lastSavedAt}
-      />
+      {dsr ? (
+        <DsrPanel
+          dsr={dsr}
+          draft={draft}
+          onChange={updateDraft}
+          presentCount={liveCounts.present}
+          absentCount={liveCounts.absent}
+          studentCount={liveCounts.student}
+          fieldErrors={dsrFieldErrors}
+          isDirty={isDirty}
+          isSavingDraft={isSavingDraft}
+          lastSavedAt={lastSavedAt}
+        />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2">Daily report</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ErrorState
+              title="The day's report is not available"
+              message={dsrLoadError ?? "The day's report for this class could not be loaded."}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <ClassWorkPanel
         batchId={session.batch_id}
@@ -581,7 +641,7 @@ export function ClassWorkspace({
         onChanged={() => setActivitiesReloadToken((value) => value + 1)}
       />
 
-      {dsr.is_editable ? (
+      {!dsr || !register ? null : dsr.is_editable ? (
         <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4">
           <span className="text-xs text-ink-muted">Tip: Ctrl/Cmd + Enter finishes the class.</span>
           <Button type="button" size="lg" onClick={() => void finishClass()} disabled={isFinishing}>
@@ -600,13 +660,6 @@ export function ClassWorkspace({
 
 /** The same 75% the rest of the product colours an attendance figure with. */
 const ATTENDANCE_TARGET = 75;
-
-/** A week's Monday, short enough for a twelve-tick axis. */
-function formatWeekLabel(iso: string): string {
-  const [, month, day] = iso.split('-');
-  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${day} ${months[Number(month)]}`;
-}
 
 /** Picks which class `ClassWorkspace` shows — see the module docstring. */
 export function TodayWorkspace() {

@@ -36,6 +36,7 @@ import { ApiError } from '@/lib/api';
 import { BATCH_STATUS_LABEL, BATCH_STATUS_VARIANT } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
 import { fallback, formatDate, formatNumber, formatPercent, NOT_ASSIGNED, NO_DATA } from '@/lib/format';
+import { labelFor } from '@/lib/labels';
 import {
   describeTimelineVariance,
   getBatchOverview,
@@ -205,8 +206,8 @@ export function BatchDetail({ batchId }: { batchId: string }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={TIMELINE_STATUS_VARIANT[timeline.status]}>
-              {TIMELINE_STATUS_LABEL[timeline.status]}
+            <Badge variant={TIMELINE_STATUS_VARIANT[timeline.status] ?? 'neutral'}>
+              {labelFor(TIMELINE_STATUS_LABEL, timeline.status)}
             </Badge>
           </div>
           <StatGrid>

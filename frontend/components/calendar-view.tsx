@@ -83,6 +83,9 @@ export function CalendarView({ days = 28 }: { days?: number }) {
   // Grouped by day so the list reads as a diary rather than a flat feed.
   const byDay = new Map<string, CalendarEvent[]>();
   for (const event of state.events) {
+    // An event with no start at all cannot be placed on a day, and a diary
+    // cannot show it — but one bad row must not blank the whole calendar.
+    if (typeof event.start !== 'string' || !event.start) continue;
     const day = event.start.slice(0, 10);
     byDay.set(day, [...(byDay.get(day) ?? []), event]);
   }

@@ -23,7 +23,8 @@ import { Input, Select } from "@/components/ui/input";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { ApiError, fieldErrors } from "@/lib/api";
 import { Capability } from "@/lib/capabilities";
-import { ROLE_LABEL, ROLE_OPTIONS } from "@/lib/labels";
+import { formatDateTime } from "@/lib/format";
+import { ROLE_LABEL, ROLE_OPTIONS, labelFor } from "@/lib/labels";
 import {
   listRoles,
   listScopeGrants,
@@ -60,8 +61,9 @@ import type {
  * the person using it, never the thing that enforces the rule.
  */
 
-function formatWhen(value: string): string {
-  return new Date(value).toLocaleString();
+/** An audit entry's moment, or the fallback — never "Invalid Date". */
+function formatWhen(value: string | null | undefined): string {
+  return formatDateTime(value);
 }
 
 /** The account's own history, on the same screen as the fields it explains. */
@@ -246,7 +248,7 @@ function UserAdministration({ userId }: { userId: string }) {
         <h1 className="text-2xl font-semibold tracking-tight">
           {user.full_name || user.email}
         </h1>
-        <Badge>{ROLE_LABEL[user.role]}</Badge>
+        <Badge>{labelFor(ROLE_LABEL, user.role)}</Badge>
         <Badge variant={user.is_active ? "success" : "error"}>
           {user.is_active ? "Active" : "Inactive"}
         </Badge>
@@ -753,7 +755,7 @@ function CustomRoleField({
       label="Custom role"
       htmlFor="user-custom-role"
       error={error}
-      hint={`A configured ${ROLE_LABEL[kind].toLowerCase()} role replaces the default set of permissions.`}
+      hint={`A configured ${labelFor(ROLE_LABEL, kind).toLowerCase()} role replaces the default set of permissions.`}
     >
       <Select
         id="user-custom-role"
@@ -761,7 +763,7 @@ function CustomRoleField({
         onChange={(event) => onChange(event.target.value)}
       >
         <option value="">
-          Default {ROLE_LABEL[kind].toLowerCase()} permissions
+          Default {labelFor(ROLE_LABEL, kind).toLowerCase()} permissions
         </option>
         {options.map((row) => (
           <option key={row.slug} value={row.slug}>

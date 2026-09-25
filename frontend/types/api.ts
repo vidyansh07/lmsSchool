@@ -1304,7 +1304,8 @@ export interface ModuleProgress {
 export interface AttendanceProgress {
   total: number;
   attended: number;
-  percent: number;
+  /** `null` until a register exists — "0% of nothing" would read as a failure. */
+  percent: number | null;
   has_records: boolean;
   present: number;
   late: number;
@@ -2826,9 +2827,12 @@ export interface Student360Response {
   trainer: ActivityPersonBrief | null;
   counsellor: ActivityPersonBrief | null;
   progress: CourseProgress | null;
-  attendance_summary: Student360AttendanceSummary;
-  performance: Student360Performance;
-  risk: Student360Risk;
+  /** Each of these three is `null` for a student whose engines have never
+   *  run — a placeholder account, or an import the nightly jobs have not
+   *  reached yet — so every reader falls back rather than indexing into it. */
+  attendance_summary: Student360AttendanceSummary | null;
+  performance: Student360Performance | null;
+  risk: Student360Risk | null;
   counts: Student360Counts;
   fee_status: FeeStatus;
   recent_activities: Student360FeedItem[];

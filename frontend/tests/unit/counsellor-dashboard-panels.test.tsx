@@ -123,6 +123,12 @@ describe('startingSoonBatches / fillingUpBatches', () => {
     expect(result.map((b) => b.id)).toEqual(['b', 'a']);
   });
 
+  it('sorts an upcoming batch with no start date last rather than throwing', () => {
+    const dated = batch({ id: 'a', status: 'upcoming', start_date: '2026-05-01' });
+    const undated = batch({ id: 'b', status: 'upcoming', start_date: null as unknown as string });
+    expect(startingSoonBatches([undated, dated]).map((b) => b.id)).toEqual(['a', 'b']);
+  });
+
   it('excludes completed, cancelled and archived batches from "filling up"', () => {
     const result = fillingUpBatches([
       batch({ id: 'x', status: 'completed', seats_available: 1, capacity: 20 }),

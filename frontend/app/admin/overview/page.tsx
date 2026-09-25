@@ -27,7 +27,7 @@ import { ApiError } from '@/lib/api';
 import { formatNumber, formatPercent, NO_DATA } from '@/lib/format';
 import { greeting } from '@/lib/greeting';
 import { useSection } from '@/hooks/use-section';
-import { heldAgainstAttendance, mergeByWeek } from '@/lib/analytics';
+import { formatWeekLabel, heldAgainstAttendance, mergeByWeek } from '@/lib/analytics';
 import {
   adminDashboard,
   attendanceTrend,
@@ -48,13 +48,6 @@ import type {
  *  attendance gauge's target so the gauge and the badge never disagree
  *  about what "on target" means. */
 const ATTENDANCE_TARGET = 75;
-
-/** A week's Monday, short enough for a twelve-tick axis. */
-function formatWeekLabel(iso: string): string {
-  const [, month, day] = iso.split('-');
-  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${day} ${months[Number(month)]}`;
-}
 
 /**
  * The administrator's overview — §8.4.

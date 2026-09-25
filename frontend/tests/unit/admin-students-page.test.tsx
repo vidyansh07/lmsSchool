@@ -81,6 +81,23 @@ describe('AdminStudentsPage', () => {
     expect(screen.getByText('₹20,000')).toBeInTheDocument();
   });
 
+  it('renders a placeholder account — blank name and email, a qualification outside the enum — without throwing', async () => {
+    listStudents.mockResolvedValue(
+      page([
+        studentRow({
+          full_name: '',
+          email: '',
+          qualification: 'b_tech_2019' as StudentListRow['qualification'],
+        }),
+      ]),
+    );
+    render(<AdminStudentsPage />);
+    await waitFor(() => expect(screen.getByText('GRS-S-001')).toBeInTheDocument());
+    expect(screen.getByText('?')).toBeInTheDocument();
+    expect(screen.getByText('B Tech 2019')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/undefined/);
+  });
+
   it('sends the same sort field on the same server request', async () => {
     listStudents.mockResolvedValue(page([studentRow()]));
     render(<AdminStudentsPage />);

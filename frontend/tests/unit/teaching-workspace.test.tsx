@@ -288,6 +288,38 @@ describe('ClassWorkspace', () => {
     await waitFor(() => expect(screen.getByText('Server exploded.')).toBeInTheDocument());
   });
 
+  it('keeps the class open when only the register refuses to load, with that panel carrying the reason', async () => {
+    const state = fixtures();
+    wireHappyPath(state);
+    getRegister.mockRejectedValue(
+      new ApiError(400, 'validation_error', 'This class has not started yet.', 'req-reg', {
+        __all__: 'This class has not started yet.',
+      }),
+    );
+    render(<ClassWorkspace sessionId="session-1" />);
+
+    // The session itself loaded, so the class header is on screen...
+    await waitFor(() => expect(screen.getByText('The register is not available')).toBeInTheDocument());
+    expect(screen.getByText('This class has not started yet.')).toBeInTheDocument();
+    expect(screen.queryByText('Could not load this class')).not.toBeInTheDocument();
+    // ...and the report, which loaded fine, is still editable beside it.
+    expect(screen.getByLabelText('Teaching notes')).toBeInTheDocument();
+  });
+
+  it('keeps the register when only the day\'s report refuses to load', async () => {
+    const state = fixtures();
+    wireHappyPath(state);
+    getSessionDsr.mockRejectedValue(
+      new ApiError(404, 'not_found', 'No report exists for a cancelled class.', 'req-dsr'),
+    );
+    render(<ClassWorkspace sessionId="session-1" />);
+
+    await waitFor(() => expect(screen.getByText("The day's report is not available")).toBeInTheDocument());
+    expect(screen.getByText('No report exists for a cancelled class.')).toBeInTheDocument();
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /finish class/i })).not.toBeInTheDocument();
+  });
+
   it('renders a class with no students on the register cleanly', async () => {
     const state = fixtures({ entries: [] });
     wireHappyPath(state);

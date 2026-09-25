@@ -106,8 +106,15 @@ function Completions() {
       setDetail(({ [row.id]: _removed, ...rest }) => rest);
       return;
     }
-    const evaluation = await getEnrollmentProgress(row.enrollment);
-    setDetail((current) => ({ ...current, [row.id]: evaluation }));
+    // The same banner the approve/reject actions report through: a 404 or
+    // 403 from the progress read is a message, not a silent no-op button.
+    setFormError(null);
+    try {
+      const evaluation = await getEnrollmentProgress(row.enrollment);
+      setDetail((current) => ({ ...current, [row.id]: evaluation }));
+    } catch (cause) {
+      setFormError(errorMessage(cause, 'The rules for this completion could not be loaded.'));
+    }
   }
 
   if (isLoading) return <LoadingState label="Loading completions…" rows={5} />;

@@ -58,6 +58,12 @@ describe('ExportJobsPanel', () => {
     expect(screen.getByText('More than 2,000 rows for a PDF.')).toBeInTheDocument();
   });
 
+  it('renders a job with no report key as "Not available" rather than throwing', async () => {
+    listExportJobs.mockResolvedValue([{ ...jobs[1]!, id: 'j3', report_key: null as unknown as string }]);
+    render(<ExportJobsPanel />);
+    expect(await screen.findByText('Not available')).toBeInTheDocument();
+  });
+
   it('shows an empty state when nothing has been exported yet', async () => {
     listExportJobs.mockResolvedValue([]);
     render(<ExportJobsPanel />);

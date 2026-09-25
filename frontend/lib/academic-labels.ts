@@ -117,8 +117,10 @@ export function formatDateTime(value: string | null | undefined): string {
   });
 }
 
-/** `09:00` from `09:00:00`. */
-export function formatTime(value: string): string {
+/** `09:00` from `09:00:00`, or an em dash when there is no time — a session
+ *  imported from a spreadsheet can carry a date and no start time. */
+export function formatTime(value: string | null | undefined): string {
+  if (!value) return '—';
   return value.slice(0, 5);
 }
 
