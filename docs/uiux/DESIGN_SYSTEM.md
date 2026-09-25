@@ -226,12 +226,14 @@ separate stat cards and two sparklines are how the previous system got here.
 Controls · `button` `input` `select` `checkbox` `radio-group` `switch`
 `field` `toolbar`
 Surfaces · `card` `table` `layout` (`PageHeader` / `Section` / `Grid` /
-`GridItem`) `tabs` `skeleton`
+`GridItem`, with `lgSpan`) `tabs` `skeleton`
 Feedback · `alert` `badge` `toast` `progress` `spinner` `empty` `stat`
+`stat-strip` `icon-chip`
 Overlays · `dialog` `sheet` `popover` `dropdown-menu` `tooltip`
 Identity · `avatar`
-Data · `components/ui/charts/` — area, bar, line, donut, radial-progress,
-sparkline
+Data · `components/ui/charts/` — `ChartCard` (the panel), area, bar,
+horizontal bar, combo (dual axis), line, donut, radar, stage funnel,
+radial-progress, sparkline, and `useChartAnimation()`
 
 Notable contracts:
 
@@ -249,7 +251,34 @@ Notable contracts:
   the base layer turns into tabular figures.
 - **`Grid` / `GridItem`** — twelve columns at `md`, one below. `span` is a
   closed set (3, 4, 6, 8, 9, 12): the widths that divide twelve cleanly are
-  the ones that tile without leaving a gap.
+  the ones that tile without leaving a gap. `lgSpan` overrides it from `lg`
+  up; chart rows use `span={12} lgSpan={6}` so two charts sit side by side on
+  a laptop but never at ~360px each on a tablet.
+- **`ChartCard`** — the only surface a plot sits in: 16px, hairline ring,
+  `--shadow-panel`. `subtitle` is **required**, because a plot is a metric
+  with more ink and every metric carries its definition; it renders as
+  `data-testid="chart-definition"`. `testId` lets a page's test scope its
+  Recharts queries to one card, which is what stops the next chart added to
+  that page breaking the last one's test.
+- **`StatStrip`** — the headline figures as one card divided by hairlines,
+  not N tiles. Its dots are the one place seven palette hues sit in a row,
+  and only because each is paired with its own text label.
+- **`IconChip`** — a 32px tinted square for a card heading. Tone is one of
+  the four states; there is no per-metric hue.
+- **`ComboChart`** — two scales on one plot. `leftLabel` and `rightLabel`
+  are required with no default, because two unlabelled axes is the classic
+  false-correlation chart.
+- **`HorizontalBarChart`** — for categories that are words rather than
+  dates. `colorPerBar` cycles the palette to say "different things";
+  `colorKey` reads a colour off each datum to say *what* each thing is
+  (above or below a target). Use the second whenever the bars are one metric.
+- **`RadarChart`** — `max` fixed at 100, never inferred, so two radars are
+  comparable. Refuses fewer than three spokes.
+- **`StageFunnel`** — horizontal bars plus a conversion column, not a
+  Recharts trapezoid: a width is only honest when every stage strictly
+  nests, and the number a counsellor wants is the drop-off between stages.
+- **`hideLegend`** on the multi-series charts, for when the card carries the
+  legend — two legends for one plot is the same information twice.
 
 ---
 

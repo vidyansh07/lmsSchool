@@ -265,6 +265,8 @@ Audit `search.performed` (counts only). Cache: none.
 ### `GET /dashboards/trainer/` (existing, extended) — adds `today.activities[]` and `work: {pending, overdue}`.
 
 ### `GET /dashboards/admin/` (existing, extended) — adds `system: {failed_deliveries, failed_exports, automation_failures, backup: {last_dump_at, last_verified_at}}`.
+### `GET /dashboards/counsellor/pipeline/?weeks=12` — `{stages: [{key, label, count}], weekly: [{week, registered, enrolled}]}`. `student.create` (declared, so the authorization matrix sweeps it), scoped through `visible_students`. Stages are a nested chain — each a subset of the one above — computed as `Count(distinct)` annotations over one queryset, not five. Uncached: it takes `weeks`, and a per-caller key without `weeks` would serve the 52-week payload to a 4-week request.
+### `GET /fees/collections-trend/?weeks=12` — `[{week, amount, receipts}]`, `amount` a decimal string. `fee.view_any` (declared), scoped through `visible_enrollments`. `Sum` over `FeePayment` with `voided_at IS NULL` — never over `FeePlan`, whose `paid`/`balance`/`status` are Python properties, not columns. Uncached for the same reason as the pipeline, and because a collections chart that does not move after a payment is recorded is a support ticket.
 
 ---
 
@@ -272,6 +274,10 @@ Audit `search.performed` (counts only). Cache: none.
 
 ### `GET /reports/{key}/count/?filters` → `{rows}` — the preflight for the confirmation dialog; same scoping.
 ### `GET /reports/{key}/export/?as=csv|xlsx|pdf|print` — `print` returns HTML with a print stylesheet.
+### `GET /reports/metrics/enrolment-trend/?weeks=12&batch=&course=` — `[{week, started, active, completed, cancelled}]`. Staff-facing via `access.can_read_reports` (`report.view_any` **or** a trainer profile — a counsellor holds `report.view_any`, so they are a report audience); scope through `access.scope_for` → `metrics._enrollments`, which applies `restrict_to_batches`. `enrolled_at` is a datetime, so `TruncWeek` is pinned to a date or the week boundary drifts with the timezone.
+### `GET /reports/metrics/delivery-trend/?weeks=12&batch=&course=` — `[{week, scheduled, held, cancelled, registers_outstanding}]`. Same gate; scope through `metrics._sessions`, the choke point sessions needed because they carry no per-row permission. Bounded at **both** ends — batches are scheduled months ahead. `registers_outstanding` counts only finished, completed classes: a class later today is pending, not outstanding.
+### `GET /reports/metrics/dsr-compliance-trend/?weeks=12&batch=&course=` — `[{week, draft, submitted, approved, rejected}]`. Same gate; scope through `metrics._dsr` (default manager, so soft-deleted reports stay out). Submission compliance **only** — deliberately not the DSR's stored attendance counts, which are trainer-editable and would contradict the register-derived `attendance_rate`.
+### All three `metrics/*-trend/` routes are declared **above** `reports/urls.py`'s `<slug:key>/` catch-all; below it `ReportView` swallows them and answers for a report key that does not exist. `weeks` is clamped 1..52. None is cached (matching `metrics/` and `attendance-trend/`); an in-body gate is invisible to `test_authorization_matrix.py`, so each has explicit per-role tests in `tests/test_reporting_trends.py`.
 ### Beat `reporting.expire_exports` nightly: files past `export_retention_days` deleted, jobs marked expired. (Closes a gap the inventory found.)
 
 ---
