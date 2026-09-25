@@ -7,6 +7,9 @@ import type {
   AdminDashboard,
   BatchSummary,
   BulkImport,
+  DeliveryTrendPoint,
+  DsrTrendPoint,
+  EnrolmentTrendPoint,
   ExportFormat,
   ExportJob,
   LmsMetric,
@@ -104,6 +107,30 @@ export async function attendanceTrend(
   filters: ReportFilters & { weeks?: number } = {},
 ): Promise<TrendPoint[]> {
   return apiFetch<TrendPoint[]>(`/api/v1/reports/metrics/attendance-trend/${queryString(filters)}`);
+}
+
+export async function enrolmentTrend(
+  filters: ReportFilters & { weeks?: number } = {},
+): Promise<EnrolmentTrendPoint[]> {
+  return apiFetch<EnrolmentTrendPoint[]>(
+    `/api/v1/reports/metrics/enrolment-trend/${queryString(filters)}`,
+  );
+}
+
+export async function deliveryTrend(
+  filters: ReportFilters & { weeks?: number } = {},
+): Promise<DeliveryTrendPoint[]> {
+  return apiFetch<DeliveryTrendPoint[]>(
+    `/api/v1/reports/metrics/delivery-trend/${queryString(filters)}`,
+  );
+}
+
+export async function dsrComplianceTrend(
+  filters: ReportFilters & { weeks?: number } = {},
+): Promise<DsrTrendPoint[]> {
+  return apiFetch<DsrTrendPoint[]>(
+    `/api/v1/reports/metrics/dsr-compliance-trend/${queryString(filters)}`,
+  );
 }
 
 // --- Dashboards ------------------------------------------------------------

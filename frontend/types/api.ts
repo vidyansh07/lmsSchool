@@ -1642,6 +1642,67 @@ export interface LmsMetric {
   denominator?: number | null;
 }
 
+/** One week of enrolment movement (`/reports/metrics/enrolment-trend/`). */
+export interface EnrolmentTrendPoint {
+  week: string;
+  started: number;
+  active: number;
+  completed: number;
+  cancelled: number;
+}
+
+/** One week of class delivery (`/reports/metrics/delivery-trend/`).
+ *  `registers_outstanding` counts classes that finished and were marked
+ *  completed with no register taken -- a class later today is pending, not
+ *  outstanding. */
+export interface DeliveryTrendPoint {
+  week: string;
+  scheduled: number;
+  held: number;
+  cancelled: number;
+  registers_outstanding: number;
+}
+
+/** One week of daily-report submission (`/reports/metrics/dsr-compliance-trend/`).
+ *  Submission compliance only -- deliberately not the attendance figures the
+ *  DSR also stores, which are trainer-editable and would contradict the
+ *  register-derived attendance rate. */
+export interface DsrTrendPoint {
+  week: string;
+  draft: number;
+  submitted: number;
+  approved: number;
+  rejected: number;
+}
+
+/** One week of fee collections (`/fees/collections-trend/`). `amount` is a
+ *  decimal string, like every other money field in this API. */
+export interface FeeCollectionsTrendPoint {
+  week: string;
+  amount: string;
+  receipts: number;
+}
+
+/** One rung of the admissions funnel. Each stage is a subset of the one
+ *  above it, which is what makes a conversion between them meaningful. */
+export interface PipelineStage {
+  key: string;
+  label: string;
+  count: number;
+}
+
+export interface PipelineWeek {
+  week: string;
+  registered: number;
+  enrolled: number;
+}
+
+/** `/dashboards/counsellor/pipeline/` */
+export interface CounsellorPipeline {
+  stages: PipelineStage[];
+  weekly: PipelineWeek[];
+}
+
 export interface TrendPoint {
   week: string;
   counted: number;

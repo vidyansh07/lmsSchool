@@ -6,10 +6,17 @@
  */
 
 import { apiFetch } from './api';
-import type { CounsellorDashboard } from '@/types/api';
+import type { CounsellorDashboard, CounsellorPipeline } from '@/types/api';
 
 /** `GET /api/v1/dashboards/counsellor/` — `student.create`, §6 of
  *  `docs/erp/USER_JOURNEYS.md` ("Dashboards — loading contract"). */
 export async function getCounsellorDashboard(): Promise<CounsellorDashboard> {
   return apiFetch<CounsellorDashboard>('/api/v1/dashboards/counsellor/');
+}
+
+export async function getCounsellorPipeline(
+  params: { weeks?: number } = {},
+): Promise<CounsellorPipeline> {
+  const query = params.weeks ? `?weeks=${params.weeks}` : '';
+  return apiFetch<CounsellorPipeline>(`/api/v1/dashboards/counsellor/pipeline/${query}`);
 }

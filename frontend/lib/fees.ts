@@ -12,6 +12,7 @@ import type {
   FeeHistoryEntry,
   FeePayment,
   FeePlan,
+  FeeCollectionsTrendPoint,
   FeesOverview,
   PaymentMethod,
   StudentFeeSummary,
@@ -88,4 +89,11 @@ export async function getMyFees(): Promise<StudentFeeSummary> {
 
 export async function getFeesOverview(): Promise<FeesOverview> {
   return apiFetch<FeesOverview>(`${BASE}/overview/`);
+}
+
+export async function feeCollectionsTrend(
+  params: { weeks?: number } = {},
+): Promise<FeeCollectionsTrendPoint[]> {
+  const query = params.weeks ? `?weeks=${params.weeks}` : '';
+  return apiFetch<FeeCollectionsTrendPoint[]>(`${BASE}/collections-trend/${query}`);
 }
