@@ -156,6 +156,15 @@ class StudentFeeSummarySerializer(serializers.Serializer):
     plans = FeePlanSerializer(many=True)
 
 
+class FeeCollectionsTrendPointSerializer(serializers.Serializer):
+    """One week's takings. `amount` is money, so it stays a decimal all the
+    way to the client rather than becoming a float on the way."""
+
+    week = serializers.DateField()
+    amount = serializers.DecimalField(**MONEY)
+    receipts = serializers.IntegerField()
+
+
 class FeesOverviewSerializer(serializers.Serializer):
     collected_today = serializers.DecimalField(**MONEY)
     collected_this_week = serializers.DecimalField(**MONEY)

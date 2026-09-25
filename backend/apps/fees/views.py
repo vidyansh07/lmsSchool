@@ -14,7 +14,7 @@ totals are about their centre and nobody else's.
 
 from __future__ import annotations
 
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
@@ -30,6 +30,7 @@ from apps.students import access as students_access
 from . import services
 from .models import FeePayment, FeePlan
 from .serializers import (
+    FeeCollectionsTrendPointSerializer,
     FeeHistoryEntrySerializer,
     FeePaymentSerializer,
     FeePlanBriefSerializer,
@@ -229,6 +230,37 @@ class MyFeesView(APIView):
         if student is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(StudentFeeSummarySerializer(services.student_fee_summary(student)).data)
+
+
+class FeeCollectionsTrendView(APIView):
+    """Collections per week, for the fees chart.
+
+    Declared with `required_capability` rather than checked in the body, so
+    `tests/test_authorization_matrix.py` -- which reads that attribute off
+    the view class -- sweeps this route for every role automatically.
+
+    Uncached, deliberately. `fees/overview/` is cached for a minute and
+    `services._forget_overviews()` exists to invalidate it; a second cached
+    prefix is a second thing that invalidation has to remember, and a
+    collections chart that does not move after a payment is recorded is a
+    support ticket. If it is ever cached, the key needs the caller and the
+    `weeks` window in it -- a key without `weeks` serves the 52-week payload
+    to a 4-week request, which is a wrong chart with no error anywhere.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_VIEW_ANY
+
+    @extend_schema(
+        summary="Fee collections by week",
+        parameters=[OpenApiParameter("weeks", int)],
+        responses={200: FeeCollectionsTrendPointSerializer(many=True)},
+        tags=FEES_TAG,
+    )
+    def get(self, request):
+        weeks = max(1, min(52, int(request.query_params.get("weeks", 12))))
+        rows = services.fee_collections_trend(user=request.user, weeks=weeks)
+        return Response(FeeCollectionsTrendPointSerializer(rows, many=True).data)
 
 
 class FeesOverviewView(APIView):

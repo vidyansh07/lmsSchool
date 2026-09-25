@@ -12,6 +12,7 @@ with its relations in one go and every count is an annotation.
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -33,6 +34,7 @@ from .calendar import MAX_RANGE_DAYS, events_for
 from .serializers import (
     CalendarResponseSerializer,
     CounsellorDashboardSerializer,
+    CounsellorPipelineSerializer,
     StudentDashboardSerializer,
     TrainerDashboardSerializer,
 )
@@ -401,6 +403,110 @@ def _counsellor_dashboard(user) -> dict:
         "unassigned_trainer": unassigned_trainer,
         "warnings": warnings_services.cached_warnings_for(user),
     }
+
+
+def _counsellor_pipeline(user, *, weeks: int = 12) -> dict[str, Any]:
+    """The admissions funnel, and the weekly shape behind it.
+
+    The stages have to be a genuine nested chain or the funnel lies, so each
+    one is a narrowing of the same already-scoped student queryset rather
+    than five independent counts: registered, then those with any enrolment,
+    then those with a live one, then those with a fee plan, then those who
+    have actually paid something. Four `Count(distinct=True)` annotations over
+    one queryset, not five round trips.
+
+    Scoped through `visible_students`, so a branch-bounded counsellor's
+    funnel is about their own centre.
+    """
+    from datetime import timedelta
+
+    from django.db.models import Count, DateField, Q
+    from django.db.models.functions import TruncWeek
+
+    from apps.enrollments.models import EnrollmentStatus
+    from apps.students.access import visible_students
+
+    since = timezone.localdate() - timedelta(weeks=weeks)
+    students = visible_students(user).filter(created_at__date__gte=since)
+
+    live = Q(enrollments__status__in=(EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED))
+    totals = students.aggregate(
+        registered=Count("id", distinct=True),
+        enrolled=Count("id", filter=Q(enrollments__isnull=False), distinct=True),
+        active=Count("id", filter=live, distinct=True),
+        with_plan=Count("id", filter=Q(enrollments__fee_plan__isnull=False), distinct=True),
+        # `payments__isnull=False` first, and it is not redundant: on its
+        # own, `voided_at__isnull=True` also matches the NULL a LEFT JOIN
+        # produces for a student with no payments at all, so the last stage
+        # came out larger than the one above it and the funnel stopped
+        # nesting. Requiring the row to exist is what makes the filter mean
+        # "has a live receipt".
+        paying=Count(
+            "id",
+            filter=Q(
+                enrollments__fee_plan__payments__isnull=False,
+                enrollments__fee_plan__payments__voided_at__isnull=True,
+            ),
+            distinct=True,
+        ),
+    )
+
+    stages = [
+        {"key": "registered", "label": "Registered", "count": totals["registered"] or 0},
+        {"key": "enrolled", "label": "Enrolled", "count": totals["enrolled"] or 0},
+        {"key": "active", "label": "On a live batch", "count": totals["active"] or 0},
+        {"key": "with_plan", "label": "Fee plan agreed", "count": totals["with_plan"] or 0},
+        {"key": "paying", "label": "Paid something", "count": totals["paying"] or 0},
+    ]
+
+    weekly = [
+        {
+            "week": row["week"],
+            "registered": row["registered"],
+            "enrolled": row["enrolled"],
+        }
+        for row in (
+            # `created_at` is a datetime, so the truncation has to be pinned
+            # to a date or the serializer refuses it and the week boundary
+            # drifts by the active timezone's offset -- the same trap as
+            # `enrolled_at` in `reporting/metrics.py`.
+            students.annotate(week=TruncWeek("created_at", output_field=DateField()))
+            .values("week")
+            .annotate(
+                registered=Count("id", distinct=True),
+                enrolled=Count("id", filter=Q(enrollments__isnull=False), distinct=True),
+            )
+            .order_by("week")
+        )
+    ]
+
+    return {"stages": stages, "weekly": weekly}
+
+
+class CounsellorPipelineView(APIView):
+    """The admissions funnel behind `/admissions/dashboard`.
+
+    A separate route rather than new fields on `CounsellorDashboardView`,
+    for two reasons: that payload is cached under `dashboard:counsellor` and
+    its serializer is strict, so a new field there 500s the view unless the
+    builder supplies it; and this one takes a `weeks` window, which a
+    per-caller cache key without `weeks` in it would serve wrongly.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.STUDENT_CREATE
+
+    @extend_schema(
+        summary="Admissions pipeline",
+        parameters=[OpenApiParameter("weeks", int)],
+        responses={200: CounsellorPipelineSerializer},
+        tags=DASHBOARD_TAG,
+    )
+    def get(self, request):
+        weeks = max(1, min(52, int(request.query_params.get("weeks", 12))))
+        return Response(
+            CounsellorPipelineSerializer(_counsellor_pipeline(request.user, weeks=weeks)).data
+        )
 
 
 class CounsellorDashboardView(APIView):

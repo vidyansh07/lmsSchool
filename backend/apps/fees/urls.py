@@ -7,6 +7,7 @@ from .views import (
     EnrollmentFeeNextDueView,
     EnrollmentFeePaymentsView,
     EnrollmentFeeView,
+    FeeCollectionsTrendView,
     FeePaymentReceiptView,
     FeePaymentVoidView,
     FeesOverviewView,
@@ -19,6 +20,7 @@ app_name = "fees"
 urlpatterns = [
     path("me/", MyFeesView.as_view(), name="me"),
     path("overview/", FeesOverviewView.as_view(), name="overview"),
+    path("collections-trend/", FeeCollectionsTrendView.as_view(), name="collections-trend"),
     path("students/<uuid:student_id>/", StudentFeesView.as_view(), name="student"),
     path("enrollments/<uuid:enrollment_id>/", EnrollmentFeeView.as_view(), name="enrollment"),
     path(

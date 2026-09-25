@@ -104,6 +104,26 @@ class TrainerDashboardSerializer(serializers.Serializer):
     work = TrainerWorkSerializer(read_only=True)
 
 
+class PipelineStageSerializer(serializers.Serializer):
+    """One rung of the admissions funnel. Each stage is a subset of the one
+    above it, which is what makes a conversion between them meaningful."""
+
+    key = serializers.CharField()
+    label = serializers.CharField()
+    count = serializers.IntegerField()
+
+
+class PipelineWeekSerializer(serializers.Serializer):
+    week = serializers.DateField()
+    registered = serializers.IntegerField()
+    enrolled = serializers.IntegerField()
+
+
+class CounsellorPipelineSerializer(serializers.Serializer):
+    stages = PipelineStageSerializer(many=True)
+    weekly = PipelineWeekSerializer(many=True)
+
+
 class CounsellorDashboardSerializer(serializers.Serializer):
     """ERP Phase 17 (`API_CONTRACTS.md`, verbatim field names) — every count
     scoped to the calling counsellor's own reach, never `null`."""

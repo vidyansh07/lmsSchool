@@ -2,7 +2,13 @@
 
 from django.urls import path
 
-from .views import CalendarView, CounsellorDashboardView, StudentDashboardView, TrainerDashboardView
+from .views import (
+    CalendarView,
+    CounsellorDashboardView,
+    CounsellorPipelineView,
+    StudentDashboardView,
+    TrainerDashboardView,
+)
 
 calendar_patterns = [
     path("", CalendarView.as_view(), name="events"),
@@ -20,4 +26,9 @@ dashboard_patterns = [
 #: and trainer ones.
 counsellor_urlpatterns = [
     path("counsellor/", CounsellorDashboardView.as_view(), name="counsellor"),
+    path(
+        "counsellor/pipeline/",
+        CounsellorPipelineView.as_view(),
+        name="counsellor-pipeline",
+    ),
 ]

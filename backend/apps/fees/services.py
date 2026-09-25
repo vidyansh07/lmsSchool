@@ -25,7 +25,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from apps.accounts.models import User
@@ -438,6 +438,51 @@ def sync_student_fee_status(student: StudentProfile, *, actor: User) -> None:
             profile=student, fee_status=status, actor=actor, note="Derived from the fee ledger."
         )
     _forget_overviews()
+
+
+def fee_collections_trend(*, user: User, weeks: int = 12) -> list[dict[str, Any]]:
+    """What was actually collected, per week, over the enrolments the caller sees.
+
+    Lives here rather than in `apps/reporting/metrics.py` because it is fee
+    data: the scoping that matters is `visible_enrollments`, the capability
+    that matters is `fee.view_any`, and `fees_overview` right above it already
+    established both. A reporting-side copy would have to re-derive them.
+
+    Two constraints this shares with every other figure in this module.
+    Voided payments are excluded -- a receipt that was cancelled was never
+    money, and including it makes a collections chart disagree with the
+    ledger it came from. And the aggregate is a `Sum` over `FeePayment`, not
+    over `FeePlan`, because `FeePlan.paid`/`payable`/`balance`/`status` are
+    Python properties rather than columns; grouping a queryset by one of them
+    raises `FieldError`.
+
+    `paid_on` is a `DateField`, so `TruncWeek` needs no timezone pinning
+    here -- unlike the enrolment trend, which buckets a datetime.
+    """
+    from django.db.models.functions import TruncWeek
+
+    from apps.batches.access import visible_enrollments
+
+    since = timezone.localdate() - timedelta(weeks=weeks)
+    live = FeePayment.objects.filter(
+        voided_at__isnull=True,
+        plan__enrollment__in=visible_enrollments(user),
+        paid_on__gte=since,
+    )
+    rows = (
+        live.annotate(week=TruncWeek("paid_on"))
+        .values("week")
+        .annotate(amount=Sum("amount"), receipts=Count("id"))
+        .order_by("week")
+    )
+    return [
+        {
+            "week": row["week"],
+            "amount": Decimal(row["amount"] or 0),
+            "receipts": row["receipts"],
+        }
+        for row in rows
+    ]
 
 
 def fees_overview(*, user: User, limit: int = 20) -> dict[str, Any]:
