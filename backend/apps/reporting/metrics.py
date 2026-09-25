@@ -171,22 +171,69 @@ ALL_METRICS = (
 # ---------------------------------------------------------------------------
 
 
-def _enrollments(scope):
+def _enrollments(scope, *, statuses=None):
+    """The enrolments a caller may count, narrowed to their own scope.
+
+    ``statuses`` defaults to the three that mean "this enrolment is real" --
+    the set every ratio metric has always used. A caller that genuinely needs
+    the cancelled ones, such as the enrolment trend, passes its own set; it
+    must never widen the default, because every existing metric reads it.
+    """
     from apps.enrollments.models import Enrollment, EnrollmentStatus
 
-    rows = Enrollment.objects.filter(
-        status__in=(
+    if statuses is None:
+        statuses = (
             EnrollmentStatus.ACTIVE,
             EnrollmentStatus.COMPLETED,
             EnrollmentStatus.SUSPENDED,
         )
-    )
+    rows = Enrollment.objects.filter(status__in=tuple(statuses))
     if scope.get("batch"):
         rows = rows.filter(batch_id=scope["batch"])
     if scope.get("course"):
         rows = rows.filter(course_id=scope["course"])
     # A caller without the global capability carries the batches they may see.
     # Applied here rather than at the call sites so no metric can forget it.
+    if "restrict_to_batches" in scope:
+        rows = rows.filter(batch_id__in=scope["restrict_to_batches"])
+    return rows
+
+
+def _sessions(scope):
+    """The class sessions a caller may count.
+
+    A second choke point, for the same reason ``_enrollments`` is one. A
+    session carries no per-row permission check of its own, so an aggregate
+    that filtered ``ClassSession`` inline would hand a trainer every batch in
+    the institution and nothing in the test suite would notice.
+
+    ``ClassSession`` has no ``course`` FK; a batch's course is the only path.
+    """
+    from apps.sessions.models import ClassSession
+
+    rows = ClassSession.objects.all()
+    if scope.get("batch"):
+        rows = rows.filter(batch_id=scope["batch"])
+    if scope.get("course"):
+        rows = rows.filter(batch__course_id=scope["course"])
+    if "restrict_to_batches" in scope:
+        rows = rows.filter(batch_id__in=scope["restrict_to_batches"])
+    return rows
+
+
+def _dsr(scope):
+    """The daily status reports a caller may count.
+
+    Through the default manager, so a soft-deleted report stays out of every
+    aggregate built on it.
+    """
+    from apps.dsr.models import DSR
+
+    rows = DSR.objects.all()
+    if scope.get("batch"):
+        rows = rows.filter(batch_id=scope["batch"])
+    if scope.get("course"):
+        rows = rows.filter(batch__course_id=scope["course"])
     if "restrict_to_batches" in scope:
         rows = rows.filter(batch_id__in=scope["restrict_to_batches"])
     return rows
@@ -507,6 +554,148 @@ def attendance_trend(scope: dict, *, weeks: int = 12) -> list[dict[str, Any]]:
             "counted": row["counted"],
             "attended": row["attended"],
             "percent": _percent(row["attended"], row["counted"]),
+        }
+        for row in rows
+    ]
+
+
+def enrolment_trend(scope: dict, *, weeks: int = 12) -> list[dict[str, Any]]:
+    """Enrolments started per week, and where they ended up.
+
+    Grouped in the database, like every other trend here. Two details that
+    are not cosmetic:
+
+    ``enrolled_at`` is a ``DateTimeField``, unlike the ``DateField`` every
+    other trend in this module buckets on, so ``TruncWeek`` would hand back a
+    datetime and the serializer's ``DateField`` would shift the week boundary
+    by the active timezone's offset. ``output_field`` pins it to a date.
+
+    The status set is the full one, deliberately widened past
+    ``_enrollments``' default: a trend that silently dropped cancellations
+    would show a pipeline with no leaks in it.
+    """
+    from datetime import timedelta
+
+    from django.db.models import DateField
+    from django.db.models.functions import TruncWeek
+    from django.utils import timezone
+
+    from apps.enrollments.models import EnrollmentStatus
+
+    since = timezone.localdate() - timedelta(weeks=weeks)
+    rows = (
+        _enrollments(scope, statuses=EnrollmentStatus.values)
+        .filter(enrolled_at__date__gte=since)
+        .annotate(week=TruncWeek("enrolled_at", output_field=DateField()))
+        .values("week")
+        .annotate(
+            started=Count("id"),
+            active=Count("id", filter=Q(status=EnrollmentStatus.ACTIVE)),
+            completed=Count("id", filter=Q(status=EnrollmentStatus.COMPLETED)),
+            cancelled=Count("id", filter=Q(status=EnrollmentStatus.CANCELLED)),
+        )
+        .order_by("week")
+    )
+    return [
+        {
+            "week": row["week"],
+            "started": row["started"],
+            "active": row["active"],
+            "completed": row["completed"],
+            "cancelled": row["cancelled"],
+        }
+        for row in rows
+    ]
+
+
+def delivery_trend(scope: dict, *, weeks: int = 12) -> list[dict[str, Any]]:
+    """Classes scheduled, held and cancelled per week, and registers still owed.
+
+    ``registers_outstanding`` counts only sessions that have already happened
+    and are marked completed: a class later today with no register yet is not
+    outstanding, it is pending, and counting it would make every Monday
+    morning look like a compliance failure.
+    """
+    from datetime import timedelta
+
+    from django.db.models.functions import TruncWeek
+    from django.utils import timezone
+
+    from apps.sessions.models import SessionStatus
+
+    today = timezone.localdate()
+    rows = (
+        _sessions(scope)
+        .filter(session_date__gte=today - timedelta(weeks=weeks))
+        .annotate(week=TruncWeek("session_date"))
+        .values("week")
+        .annotate(
+            scheduled=Count("id"),
+            held=Count("id", filter=Q(status=SessionStatus.COMPLETED)),
+            cancelled=Count("id", filter=Q(status=SessionStatus.CANCELLED)),
+            registers_outstanding=Count(
+                "id",
+                filter=Q(
+                    attendance_taken_at__isnull=True,
+                    status=SessionStatus.COMPLETED,
+                    session_date__lt=today,
+                ),
+            ),
+        )
+        .order_by("week")
+    )
+    return [
+        {
+            "week": row["week"],
+            "scheduled": row["scheduled"],
+            "held": row["held"],
+            "cancelled": row["cancelled"],
+            "registers_outstanding": row["registers_outstanding"],
+        }
+        for row in rows
+    ]
+
+
+def dsr_compliance_trend(scope: dict, *, weeks: int = 12) -> list[dict[str, Any]]:
+    """Daily status reports per week, by where each one got to.
+
+    This measures *report submission*, and nothing else. The DSR model also
+    stores ``present_count``/``absent_count``, which are prefilled from the
+    register and then editable by the trainer -- so an attendance figure
+    derived from them would disagree with the register-derived
+    ``attendance_rate`` metric, and §8.6's rule that every metric carries one
+    definition would become two contradictory definitions on one screen. If
+    the online/offline split is ever wanted it belongs on its own card,
+    labelled "as reported by the trainer".
+    """
+    from datetime import timedelta
+
+    from django.db.models.functions import TruncWeek
+    from django.utils import timezone
+
+    from apps.dsr.models import DSRStatus
+
+    since = timezone.localdate() - timedelta(weeks=weeks)
+    rows = (
+        _dsr(scope)
+        .filter(report_date__gte=since)
+        .annotate(week=TruncWeek("report_date"))
+        .values("week")
+        .annotate(
+            draft=Count("id", filter=Q(status=DSRStatus.DRAFT)),
+            submitted=Count("id", filter=Q(status=DSRStatus.SUBMITTED)),
+            approved=Count("id", filter=Q(status=DSRStatus.APPROVED)),
+            rejected=Count("id", filter=Q(status=DSRStatus.REJECTED)),
+        )
+        .order_by("week")
+    )
+    return [
+        {
+            "week": row["week"],
+            "draft": row["draft"],
+            "submitted": row["submitted"],
+            "approved": row["approved"],
+            "rejected": row["rejected"],
         }
         for row in rows
     ]

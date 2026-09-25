@@ -20,7 +20,25 @@ export_urlpatterns = [
 report_urlpatterns = [
     path("", views.ReportCatalogueView.as_view(), name="report-catalogue"),
     path("metrics/", views.MetricsView.as_view(), name="report-metrics"),
+    # Every `metrics/` route has to be declared above the `<slug:key>/` lines
+    # below, or `ReportView` swallows it and answers for a report key that
+    # does not exist -- a plausible-looking response rather than a 404.
     path("metrics/attendance-trend/", views.AttendanceTrendView.as_view(), name="report-trend"),
+    path(
+        "metrics/enrolment-trend/",
+        views.EnrolmentTrendView.as_view(),
+        name="report-enrolment-trend",
+    ),
+    path(
+        "metrics/delivery-trend/",
+        views.DeliveryTrendView.as_view(),
+        name="report-delivery-trend",
+    ),
+    path(
+        "metrics/dsr-compliance-trend/",
+        views.DsrComplianceTrendView.as_view(),
+        name="report-dsr-trend",
+    ),
     path("exports/", include(export_urlpatterns)),
     path("<slug:key>/", views.ReportView.as_view(), name="report-run"),
     path("<slug:key>/count/", views.ReportCountView.as_view(), name="report-count"),

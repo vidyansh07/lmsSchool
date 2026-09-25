@@ -59,6 +59,36 @@ class TrendPointSerializer(StrictSerializer):
     percent = serializers.FloatField(allow_null=True)
 
 
+class EnrolmentTrendPointSerializer(StrictSerializer):
+    """Enrolments started in a week, and where they stand now."""
+
+    week = serializers.DateField()
+    started = serializers.IntegerField()
+    active = serializers.IntegerField()
+    completed = serializers.IntegerField()
+    cancelled = serializers.IntegerField()
+
+
+class DeliveryTrendPointSerializer(StrictSerializer):
+    """Classes in a week, and the registers still owed for them."""
+
+    week = serializers.DateField()
+    scheduled = serializers.IntegerField()
+    held = serializers.IntegerField()
+    cancelled = serializers.IntegerField()
+    registers_outstanding = serializers.IntegerField()
+
+
+class DsrTrendPointSerializer(StrictSerializer):
+    """Daily status reports in a week, by how far each one got."""
+
+    week = serializers.DateField()
+    draft = serializers.IntegerField()
+    submitted = serializers.IntegerField()
+    approved = serializers.IntegerField()
+    rejected = serializers.IntegerField()
+
+
 class AdminDashboardSerializer(StrictSerializer):
     active_students = serializers.IntegerField()
     active_trainers = serializers.IntegerField()

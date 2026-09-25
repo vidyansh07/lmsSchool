@@ -42,6 +42,9 @@ from .serializers import (
     BatchRosterRowSerializer,
     BatchSummarySerializer,
     BulkImportSerializer,
+    DeliveryTrendPointSerializer,
+    DsrTrendPointSerializer,
+    EnrolmentTrendPointSerializer,
     ExportJobRequestSerializer,
     ExportJobSerializer,
     ManagerDashboardSerializer,
@@ -786,6 +789,88 @@ class AttendanceTrendView(APIView):
         return Response(
             TrendPointSerializer(metrics.attendance_trend(scope, weeks=weeks), many=True).data
         )
+
+
+class _TrendView(APIView):
+    """The shared shape of every weekly trend on this app.
+
+    Four things every one of them has to get right, in one place rather than
+    copied three times: the staff-only gate, the scope the aggregate is
+    narrowed to, the 1..52 clamp on `weeks` (so a typed value cannot ask for
+    a decade), and the serializer.
+
+    Subclasses supply `summary`, `serializer_class` and `metric`.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    #: Set by each subclass.
+    summary = ""
+    serializer_class = None
+    metric = None
+
+    def get(self, request):
+        if not access.can_read_reports(request.user):
+            return _forbidden(request, "Reports are staff-facing.")
+        batch, course = _filters(request)
+        scope = access.scope_for(request.user, batch=batch, course=course)
+        weeks = max(1, min(52, int(request.query_params.get("weeks", 12))))
+        rows = type(self).metric(scope, weeks=weeks)
+        return Response(type(self).serializer_class(rows, many=True).data)
+
+
+class EnrolmentTrendView(_TrendView):
+    serializer_class = EnrolmentTrendPointSerializer
+    metric = staticmethod(metrics.enrolment_trend)
+
+    @extend_schema(
+        summary="Enrolments by week",
+        parameters=[
+            OpenApiParameter("batch", str),
+            OpenApiParameter("course", str),
+            OpenApiParameter("weeks", int),
+        ],
+        responses={200: EnrolmentTrendPointSerializer(many=True)},
+        tags=REPORTS_TAG,
+    )
+    def get(self, request):
+        return super().get(request)
+
+
+class DeliveryTrendView(_TrendView):
+    serializer_class = DeliveryTrendPointSerializer
+    metric = staticmethod(metrics.delivery_trend)
+
+    @extend_schema(
+        summary="Classes by week, and registers outstanding",
+        parameters=[
+            OpenApiParameter("batch", str),
+            OpenApiParameter("course", str),
+            OpenApiParameter("weeks", int),
+        ],
+        responses={200: DeliveryTrendPointSerializer(many=True)},
+        tags=REPORTS_TAG,
+    )
+    def get(self, request):
+        return super().get(request)
+
+
+class DsrComplianceTrendView(_TrendView):
+    serializer_class = DsrTrendPointSerializer
+    metric = staticmethod(metrics.dsr_compliance_trend)
+
+    @extend_schema(
+        summary="Daily status report submission by week",
+        parameters=[
+            OpenApiParameter("batch", str),
+            OpenApiParameter("course", str),
+            OpenApiParameter("weeks", int),
+        ],
+        responses={200: DsrTrendPointSerializer(many=True)},
+        tags=REPORTS_TAG,
+    )
+    def get(self, request):
+        return super().get(request)
 
 
 class AdminDashboardView(APIView):
