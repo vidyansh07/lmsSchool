@@ -36,6 +36,12 @@ case "$ENVIRONMENT" in
     # Staging terminates TLS with a certificate it issued itself; the
     # certificate authority is not what this script is checking.
     CURL=(curl --silent --show-error --max-time 20 --insecure)
+    # .env.staging is compose's --env-file, not this shell's environment; the
+    # one value this script needs from it is read out by hand so that the
+    # allow-list below is the same one the host's stack was configured with.
+    if [ -z "${VERIFY_ALLOWED_EMAIL_DOMAINS:-}" ] && [ -f .env.staging ]; then
+      VERIFY_ALLOWED_EMAIL_DOMAINS="$(grep -E '^VERIFY_ALLOWED_EMAIL_DOMAINS=' .env.staging | tail -1 | cut -d= -f2-)"
+    fi
     ;;
   *)
     echo "Usage: $0 [local|staging]" >&2
@@ -67,8 +73,15 @@ check() {
   fi
 }
 
+#: Comma-separated domains `demo_data_is_fake` accepts on top of the reserved
+#: TLDs. Empty by default: the rule is "reserved domains only" unless an
+#: environment says otherwise. See that check for why staging says otherwise.
+VERIFY_ALLOWED_EMAIL_DOMAINS="${VERIFY_ALLOWED_EMAIL_DOMAINS:-}"
+
 manage() {
-  "${COMPOSE[@]}" exec -T -e DJANGO_SETTINGS_MODULE="$SETTINGS" backend python manage.py "$@"
+  "${COMPOSE[@]}" exec -T -e DJANGO_SETTINGS_MODULE="$SETTINGS" \
+    -e VERIFY_ALLOWED_EMAIL_DOMAINS="$VERIFY_ALLOWED_EMAIL_DOMAINS" \
+    backend python manage.py "$@"
 }
 
 # `manage shell -c` prints whatever the environment's shell plugins announce on
@@ -173,16 +186,32 @@ demo_data_is_fake() {
   # A staging environment holding a real address is a data-protection incident,
   # not a configuration slip. RFC 2606 and RFC 6761 reserve these four so that
   # nothing addressed to them can ever be delivered anywhere.
+  #
+  # One exception, by explicit allow-list: VERIFY_ALLOWED_EMAIL_DOMAINS names
+  # domains (comma-separated) that are also accepted. On staging it is set to
+  # `grras.com` — the owner's own domain — because the showcase accounts that
+  # `manage.py seed_showcase` creates must look like a real institution to the
+  # people it is shown to, and `.invalid` addresses read as a fixture. That is
+  # safe only while nothing addressed to those accounts is delivered: staging
+  # sends mail to the console backend, seed_showcase itself refuses to run
+  # under an SMTP backend, and every one of those accounts is invented. Any
+  # *other* real domain still fails this check — the list is an allow-list of
+  # domains the owner controls, not a switch that turns the check off.
   manage shell -c '
+import os
 import sys
 from django.db.models import Q
 from apps.accounts.models import User
 reserved = Q()
 for suffix in (".invalid", ".test", ".example", ".localhost"):
     reserved |= Q(email__endswith=suffix)
+for domain in os.environ.get("VERIFY_ALLOWED_EMAIL_DOMAINS", "").split(","):
+    domain = domain.strip().lower()
+    if domain:
+        reserved |= Q(email__endswith="@" + domain)
 real = list(User.objects.exclude(reserved).values_list("email", flat=True)[:3])
 if real:
-    sys.exit(f"account(s) not on a reserved domain, e.g. {real[0]}")
+    sys.exit(f"account(s) not on a reserved or allowed domain, e.g. {real[0]}")
 '
 }
 
