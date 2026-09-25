@@ -44,6 +44,9 @@ vi.mock('@/lib/performance', () => ({ getMyPerformance, listMyFeedback }));
 vi.mock('@/lib/progress', () => ({ listMyCertificates, certificatePdfUrl: (id: string) => `/pdf/${id}` }));
 vi.mock('@/lib/communication', () => ({ listNotifications }));
 vi.mock('@/lib/batches', () => ({ getStudentDashboard, getTrainerDashboard }));
+// The trainer's queue chart. Null by default: its empty state, nothing more.
+const trainerWorkload = vi.hoisted(() => vi.fn(() => Promise.resolve(null)));
+vi.mock('@/lib/reporting', () => ({ trainerWorkload }));
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => useAuthMock.value }));
 
 function paginated<T>(results: T[]): Paginated<T> {
@@ -207,8 +210,10 @@ describe('StudentView — full data', () => {
     expect(await screen.findByText(/1 assignment/i)).toBeInTheDocument();
     // The standing tiles count up from zero on mount, so the final value
     // arrives a frame or two after render.
-    expect(await screen.findByText('90%')).toBeInTheDocument();
-    expect(await screen.findByText('75%')).toBeInTheDocument();
+    // Twice now, legitimately: on the standing tile, and again in the
+    // performance radar's screen-reader table beneath it.
+    expect((await screen.findAllByText('90%')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('75%')).length).toBeGreaterThan(0);
   });
 
   it('renders a partially-loaded course — attendance known, results not yet recorded', async () => {
@@ -577,10 +582,12 @@ describe('StudentView — attendance gauge and batch-status chart', () => {
       ],
     };
 
-    const { container } = render(<StudentView data={data} />);
+    render(<StudentView data={data} />);
     await waitForBucketsToSettle();
     await screen.findByText('My batches by status');
-    await waitFor(() => expect(container.querySelector('.recharts-pie-sector')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId('batch-status-card').querySelector('.recharts-pie-sector')).toBeInTheDocument(),
+    );
 
     const table = within(screen.getByRole('table', { hidden: true }));
     expect(table.getByText('Active')).toBeInTheDocument();

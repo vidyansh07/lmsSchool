@@ -29,14 +29,23 @@
  */
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { ClipboardCheck, GraduationCap, Layers, Users } from 'lucide-react';
+import { ClipboardCheck, GraduationCap, Layers, Users, ClipboardList, ListChecks } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { RequireAuth } from '@/components/require-auth';
 import { ErrorState, LoadingState } from '@/components/states';
-import { BarChart, DonutChart, RadialProgress, type CategoryDatum } from '@/components/ui/charts';
+import {
+  AreaChart,
+  BarChart,
+  ChartCard,
+  DonutChart,
+  HorizontalBarChart,
+  RadialProgress,
+  paletteColor,
+  type CategoryDatum,
+} from '@/components/ui/charts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Grid, GridItem } from '@/components/ui/layout';
 import { StatCard } from '@/components/ui/stat';
@@ -45,7 +54,11 @@ import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
 import { formatNumber } from '@/lib/format';
 import { greeting } from '@/lib/greeting';
+import { useSection } from '@/hooks/use-section';
+import { mergeByWeek } from '@/lib/analytics';
 import { getManagerDashboard, type ManagerDashboard } from '@/lib/manage';
+import { dsrComplianceTrend } from '@/lib/reporting';
+import type { DsrTrendPoint } from '@/types/api';
 
 /**
  * Six counts already on `ManagerDashboard` that are each, in their own way,
@@ -58,6 +71,26 @@ import { getManagerDashboard, type ManagerDashboard } from '@/lib/manage';
  * rather than shown as a bar — this chart is where both finally get a
  * number a manager can compare against the rest at a glance.
  */
+/**
+ * The three activity counts nothing on this page showed. Coloured by state,
+ * because each one is a state: pending is information, overdue is a problem,
+ * under review is waiting on someone.
+ */
+function activitiesQueue(data: ManagerDashboard): (CategoryDatum & { colour: string })[] {
+  return [
+    { label: 'Pending', value: data.activities.pending, colour: 'var(--color-info)' },
+    { label: 'Overdue', value: data.activities.overdue, colour: 'var(--color-danger)' },
+    { label: 'Under review', value: data.activities.under_review, colour: 'var(--color-warning)' },
+  ];
+}
+
+/** A week's Monday, short enough for a twelve-tick axis. */
+function formatWeekLabel(iso: string): string {
+  const [, month, day] = iso.split('-');
+  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${day} ${months[Number(month)]}`;
+}
+
 function attentionBreakdown(data: ManagerDashboard): CategoryDatum[] {
   return [
     { label: 'Behind schedule', value: data.batches.behind_schedule },
@@ -71,6 +104,11 @@ function attentionBreakdown(data: ManagerDashboard): CategoryDatum[] {
 
 function ManagerOverview() {
   const { user } = useAuth();
+  // Loads on its own, so a slow reporting endpoint costs one card.
+  const dsr = useSection(() => dsrComplianceTrend({ weeks: 12 }), [] as DsrTrendPoint[]);
+  const dsrSeries = mergeByWeek([{ rows: dsr.data, keys: ['submitted', 'approved', 'rejected'] }]).map(
+    (row) => ({ ...row, date: formatWeekLabel(String(row.date)) }),
+  );
   // Same "compare during render, never `setState` unconditionally inside the
   // effect body" pattern `Dashboard()` (`app/dashboard/page.tsx`) and every
   // `useDashboardSection` call site already use in this app — an
@@ -230,7 +268,7 @@ function ManagerOverview() {
         ))}
       </Grid>
 
-      <Card>
+      <Card data-testid="attention-chart-card">
         <CardHeader>
           <CardTitle as="h2">What needs attention, by kind</CardTitle>
           <CardDescription>
@@ -246,6 +284,54 @@ function ManagerOverview() {
           />
         </CardContent>
       </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Activities queue"
+          subtitle="Open activities across your centre — pending, overdue, and waiting on a review"
+          icon={ListChecks}
+          testId="activities-queue-card"
+        >
+          <HorizontalBarChart
+            data={activitiesQueue(data)}
+            series={[{ key: 'value', label: 'Activities' }]}
+            colorKey="colour"
+            categoryWidth={110}
+            height={160}
+            emptyMessage="No open activities"
+            valueFormatter={(value) => formatNumber(value)}
+            ariaLabel="Open activities, by state"
+          />
+        </ChartCard>
+
+        <ChartCard
+          title="Daily report compliance"
+          subtitle="Reports submitted, approved and sent back each week — submission only"
+          icon={ClipboardList}
+          testId="dsr-compliance-card"
+          legend={[
+            { label: 'Submitted', color: paletteColor(0) },
+            { label: 'Approved', color: paletteColor(1) },
+            { label: 'Sent back', color: paletteColor(2) },
+          ]}
+        >
+          <AreaChart
+            data={dsrSeries}
+            series={[
+              { key: 'submitted', label: 'Submitted' },
+              { key: 'approved', label: 'Approved' },
+              { key: 'rejected', label: 'Sent back' },
+            ]}
+            gradient
+            hideLegend
+            xLabel="Week"
+            height={200}
+            loading={dsr.isLoading}
+            emptyMessage="No daily reports in the last twelve weeks"
+            valueFormatter={(value) => formatNumber(value)}
+          />
+        </ChartCard>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -277,7 +363,7 @@ function ManagerOverview() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card data-testid="students-donut-card">
           <CardHeader>
             <CardTitle as="h2">Students, active vs. other</CardTitle>
             <CardDescription>

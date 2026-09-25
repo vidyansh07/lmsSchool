@@ -33,6 +33,9 @@ import {
   PlayCircle,
   TrendingUp,
   Users,
+  ListChecks,
+  Radar,
+  Target,
 } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
@@ -54,7 +57,16 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { DonutChart, RadialProgress, type DonutDatum } from '@/components/ui/charts';
+import {
+  BarChart,
+  ChartCard,
+  DonutChart,
+  HorizontalBarChart,
+  RadarChart,
+  RadialProgress,
+  type DonutDatum,
+} from '@/components/ui/charts';
+import { trainerWorkload } from '@/lib/reporting';
 import { Grid, GridItem } from '@/components/ui/layout';
 import { StatCard } from '@/components/ui/stat';
 import { ApiError } from '@/lib/api';
@@ -80,6 +92,7 @@ import {
 import { listMyCertificates } from '@/lib/progress';
 import { listMyProjects } from '@/lib/projects';
 import type {
+  TrainerWorkload,
   AppNotification,
   BatchStatus,
   CalendarEvent,
@@ -290,6 +303,23 @@ export function StudentView({ data }: { data: StudentDashboard }) {
   // reaching into that panel's internals.
   const avgAttendance = averageMetric(performance.data, (entry) => entry.attendance.percent);
   const avgAttendanceThreshold = averageMetric(performance.data, attendanceThreshold);
+  // The six dimensions `StudentPerformanceEntry` carries and nothing here
+  // plotted. Averaged with the same helper the standing panel uses, so a
+  // missing measure stays missing rather than dragging the average to zero.
+  const performanceSpokes = [
+    { label: 'Attendance', value: averageMetric(performance.data, (entry) => entry.attendance.percent) },
+    { label: 'Assessments', value: averageMetric(performance.data, (entry) => entry.assessment.average_percent) },
+    { label: 'Assignments', value: averageMetric(performance.data, (entry) => entry.assignments.percent) },
+    { label: 'Projects', value: averageMetric(performance.data, (entry) => entry.projects.percent) },
+    { label: 'Progress', value: averageMetric(performance.data, (entry) => entry.progress.percent) },
+    { label: 'Overall', value: averageMetric(performance.data, (entry) => entry.overall_score) },
+  ];
+  const progressAgainstPlan = performance.data.map((entry) => ({
+    label: entry.course_title,
+    actual: entry.progress.percent,
+    expected: entry.progress.expected_percent,
+  }));
+
   const attendanceGaugeReady =
     !performance.isLoading && !performance.error && avgAttendance !== null && avgAttendanceThreshold !== null;
 
@@ -408,7 +438,7 @@ export function StudentView({ data }: { data: StudentDashboard }) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card data-testid="batch-status-card">
           <CardHeader>
             <CardTitle>My batches by status</CardTitle>
             <CardDescription>Every batch you have ever enrolled on, past and present.</CardDescription>
@@ -422,6 +452,43 @@ export function StudentView({ data }: { data: StudentDashboard }) {
             />
           </CardContent>
         </Card>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <ChartCard
+          title="Your performance picture"
+          subtitle="Six measures averaged across your enrolments — an uneven shape shows the weak spoke before a number is read"
+          icon={Radar}
+          testId="performance-radar-card"
+        >
+          <RadarChart
+            data={performanceSpokes}
+            series={[{ key: 'value', label: 'You' }]}
+            height={260}
+            loading={performance.isLoading}
+            emptyMessage="Nothing measured yet"
+            valueFormatter={(value) => `${Math.round(value)}%`}
+          />
+        </ChartCard>
+
+        <ChartCard
+          title="Progress against plan"
+          subtitle="Where you are on each course, beside where the schedule expects you to be"
+          icon={Target}
+          testId="progress-vs-plan-card"
+        >
+          <BarChart
+            data={progressAgainstPlan}
+            series={[
+              { key: 'actual', label: 'Your progress' },
+              { key: 'expected', label: 'Expected by now' },
+            ]}
+            height={260}
+            loading={performance.isLoading}
+            emptyMessage="No course progress recorded yet"
+            valueFormatter={(value) => `${Math.round(value)}%`}
+          />
+        </ChartCard>
       </section>
 
       <section className="space-y-3">
@@ -556,6 +623,20 @@ export function StudentView({ data }: { data: StudentDashboard }) {
 }
 
 function TrainerView({ data }: { data: TrainerDashboard }) {
+  // Fetched by no screen until the analytics build; every field it carries,
+  // so the chart is the whole queue rather than a selection of it.
+  const workload = useDashboardSection(() => trainerWorkload(), null as TrainerWorkload | null);
+  const queue = workload.data
+    ? [
+        { label: 'Registers to take', value: workload.data.registers_outstanding },
+        { label: 'Work to mark', value: workload.data.submissions_to_mark },
+        { label: 'Exam answers', value: workload.data.exam_answers_to_mark },
+        { label: 'Projects to review', value: workload.data.projects_to_review },
+        { label: 'Tests coming up', value: workload.data.upcoming_tests },
+        { label: 'Exams coming up', value: workload.data.upcoming_exams },
+      ]
+    : [];
+
   return (
     <div className="space-y-6">
       <Grid>
@@ -594,20 +675,39 @@ function TrainerView({ data }: { data: TrainerDashboard }) {
         </GridItem>
       </Grid>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Batch status mix</CardTitle>
-          <CardDescription>Every batch you teach, by where it stands right now.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DonutChart
-            data={summarizeBatchStatuses(data.batches)}
-            centerLabel="Batches"
-            emptyMessage="No batches assigned yet."
-            ariaLabel="Your batches by status"
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Batch status mix</CardTitle>
+            <CardDescription>Every batch you teach, by where it stands right now.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DonutChart
+              data={summarizeBatchStatuses(data.batches)}
+              centerLabel="Batches"
+              emptyMessage="No batches assigned yet."
+              ariaLabel="Your batches by status"
+            />
+          </CardContent>
+        </Card>
+
+        <ChartCard
+          title="What is waiting on you"
+          subtitle="Open work across your batches, so the largest queue is obvious"
+          icon={ListChecks}
+          testId="trainer-queue-card"
+        >
+          <HorizontalBarChart
+            data={queue}
+            series={[{ key: 'value', label: 'Outstanding' }]}
+            colorPerBar
+            categoryWidth={150}
+            height={Math.max(160, queue.length * 30)}
+            loading={workload.isLoading}
+            emptyMessage="Nothing is waiting on you"
           />
-        </CardContent>
-      </Card>
+        </ChartCard>
+      </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>

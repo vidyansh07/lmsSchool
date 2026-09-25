@@ -30,6 +30,10 @@ vi.mock('@/lib/manage', async () => {
   return { ...actual, getManagerDashboard };
 });
 vi.mock('@/hooks/use-api', () => ({ useApi }));
+// The compliance chart's endpoint. Empty by default: every existing case
+// sees its empty state and nothing else about the page changes.
+const dsrComplianceTrend = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/reporting', () => ({ dsrComplianceTrend }));
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => useAuthMock.value }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -99,6 +103,7 @@ function dataTable(): HTMLElement {
 }
 
 beforeEach(() => {
+  dsrComplianceTrend.mockResolvedValue([]);
   grantedAuth();
   // Deterministic chart render, same reasoning as `admin-overview-page
   // .test.tsx`: Recharts reveals a chart's shapes across animation frames
@@ -182,7 +187,9 @@ describe('ManagePage — real data', () => {
     // two do not collide.
     await screen.findByRole('heading', { name: 'What needs attention, by kind' });
 
-    await waitFor(() => expect(document.querySelector('.recharts-bar-rectangle')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId('attention-chart-card').querySelector('.recharts-bar-rectangle')).toBeInTheDocument(),
+    );
 
     // Two categories legitimately share a count (4, 3), so each row is read
     // by walking from its own label cell to its own value cell rather than
@@ -272,7 +279,9 @@ describe('ManagePage — design pivot additions', () => {
     render(<ManagePage />);
 
     await screen.findByRole('heading', { name: 'Students, active vs. other' });
-    await waitFor(() => expect(document.querySelector('.recharts-pie')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId('students-donut-card').querySelector('.recharts-pie')).toBeInTheDocument(),
+    );
 
     const tables = screen.getAllByRole('table', { hidden: true });
     const donutTable = tables.find((table) => within(table).queryByText('Active students'));

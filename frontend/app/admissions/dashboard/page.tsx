@@ -56,6 +56,9 @@ import {
   UserPlus,
   Users,
   UserX,
+  Banknote,
+  Filter,
+  Hourglass,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -65,7 +68,18 @@ import { FeesPanel } from '@/components/counsellor/fees-panel';
 import { NotYetEnrolledPanel } from '@/components/counsellor/not-yet-enrolled-panel';
 import { PendingConfirmationsPanel } from '@/components/counsellor/pending-confirmations-panel';
 import { RecentActivityPanel } from '@/components/counsellor/recent-activity-panel';
-import { BarChart, DonutChart, type CategoryDatum, type DonutDatum } from '@/components/ui/charts';
+import {
+  AreaChart,
+  BarChart,
+  ChartCard,
+  ComboChart,
+  DonutChart,
+  HorizontalBarChart,
+  StageFunnel,
+  paletteColor,
+  type CategoryDatum,
+  type DonutDatum,
+} from '@/components/ui/charts';
 import { Grid, GridItem } from '@/components/ui/layout';
 import { StatCard } from '@/components/ui/stat';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
@@ -77,12 +91,16 @@ import { ApiError } from '@/lib/api';
 import { listBatches, listEnrollments } from '@/lib/batches';
 import { ENROLLMENT_STATUS_LABEL } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
-import { getCounsellorDashboard } from '@/lib/dashboards';
-import { getFeesOverview } from '@/lib/fees';
+import { ageingBuckets, mergeByWeek, money, withCumulative } from '@/lib/analytics';
+import { getCounsellorDashboard, getCounsellorPipeline } from '@/lib/dashboards';
+import { feeCollectionsTrend, getFeesOverview } from '@/lib/fees';
+import { formatCurrency, formatNumber } from '@/lib/format';
 import { greeting } from '@/lib/greeting';
 import { listStudents } from '@/lib/people';
 import type {
   BatchListRow,
+  CounsellorPipeline,
+  FeeCollectionsTrendPoint,
   CounsellorDashboard,
   Enrollment,
   EnrollmentStatus,
@@ -237,6 +255,13 @@ function KpiTileSection({
  * worth comparing side by side. `new_students_today` is deliberately left
  * out — good news, not a bottleneck, and already its own KPI tile above.
  */
+/** A week's Monday, short enough for a twelve-tick axis. */
+function formatWeekLabel(iso: string): string {
+  const [, month, day] = iso.split('-');
+  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${day} ${months[Number(month)]}`;
+}
+
 function pipelineBottlenecks(dashboard: CounsellorDashboard | null): CategoryDatum[] {
   if (!dashboard) return [];
   return [
@@ -338,6 +363,32 @@ export function AdmissionsDashboardContent() {
   );
 
   const fees = useDashboardSection<FeesOverview | null>(() => getFeesOverview(), null);
+  const pipeline = useDashboardSection<CounsellorPipeline | null>(
+    () => getCounsellorPipeline({ weeks: 12 }),
+    null,
+  );
+  const collections = useDashboardSection(
+    () => feeCollectionsTrend({ weeks: 12 }),
+    [] as FeeCollectionsTrendPoint[],
+  );
+
+  const admissionsSeries = mergeByWeek([
+    { rows: pipeline.data?.weekly ?? [], keys: ['registered', 'enrolled'] },
+  ]).map((row) => ({ ...row, date: formatWeekLabel(String(row.date)) }));
+
+  // Bars from the rows, the running total from the same rows -- so the line
+  // and the bars cannot disagree.
+  const collectionsSeries = withCumulative(
+    mergeByWeek([{ rows: collections.data.map((point) => ({ ...point, amount: money(point.amount) })), keys: ['amount', 'receipts'] }]),
+    'amount',
+  ).map((row) => ({ ...row, date: formatWeekLabel(String(row.date)) }));
+
+  // Ageing is worse the further right it goes, and says so in colour.
+  const AGEING_COLOURS = ['var(--color-info)', 'var(--color-warning)', 'var(--color-danger)', 'var(--color-danger)'];
+  const overdueByAge = ageingBuckets(fees.data?.overdue ?? []).map((bucket, index) => ({
+    ...bucket,
+    colour: AGEING_COLOURS[index] ?? 'var(--color-danger)',
+  }));
 
   const enrolledStudentCodes = new Set(
     recentEnrollments.data
@@ -479,7 +530,7 @@ export function AdmissionsDashboardContent() {
         </GridItem>
       </Grid>
 
-      <Card className="">
+      <Card className="" data-testid="pipeline-bottlenecks-card">
         <CardHeader>
           <CardTitle as="h2">Where the pipeline is stuck</CardTitle>
           <CardDescription>
@@ -522,6 +573,100 @@ export function AdmissionsDashboardContent() {
           )}
         </CardContent>
       </Card>
+
+      <Grid>
+        <GridItem span={12} lgSpan={6}>
+          <ChartCard
+            title="Admissions pipeline"
+            subtitle="Everyone registered in the last twelve weeks, and how far each got"
+            icon={Filter}
+            iconTone="info"
+            testId="admissions-funnel-card"
+          >
+            <StageFunnel
+              stages={pipeline.data?.stages ?? []}
+              height={200}
+              loading={pipeline.isLoading}
+              emptyMessage="Nobody registered in the last twelve weeks"
+            />
+          </ChartCard>
+        </GridItem>
+
+        <GridItem span={12} lgSpan={6}>
+          <ChartCard
+            title="Admissions over time"
+            subtitle="Students registered each week, and how many of them are enrolled"
+            icon={CalendarRange}
+            iconTone="info"
+            testId="admissions-trend-card"
+            legend={[
+              { label: 'Registered', color: paletteColor(0) },
+              { label: 'Enrolled', color: paletteColor(1) },
+            ]}
+          >
+            <AreaChart
+              data={admissionsSeries}
+              series={[
+                { key: 'registered', label: 'Registered' },
+                { key: 'enrolled', label: 'Enrolled' },
+              ]}
+              gradient
+              hideLegend
+              xLabel="Week"
+              height={200}
+              loading={pipeline.isLoading}
+              emptyMessage="Nobody registered in the last twelve weeks"
+              valueFormatter={(value) => formatNumber(value)}
+            />
+          </ChartCard>
+        </GridItem>
+
+        <GridItem span={12} lgSpan={6}>
+          <ChartCard
+            title="Fee collections"
+            subtitle="Taken each week, and the running total — voided receipts excluded"
+            icon={Banknote}
+            iconTone="success"
+            testId="fee-collections-card"
+          >
+            <ComboChart
+              data={collectionsSeries}
+              bars={[{ key: 'amount', label: 'This week' }]}
+              lines={[{ key: 'cumulative', label: 'Running total' }]}
+              rightAxisKeys={['cumulative']}
+              leftLabel="Per week"
+              rightLabel="To date"
+              xLabel="Week"
+              height={220}
+              loading={collections.isLoading}
+              emptyMessage="Nothing collected in the last twelve weeks"
+              valueFormatter={(value) => formatCurrency(value)}
+              rightValueFormatter={(value) => formatCurrency(value)}
+            />
+          </ChartCard>
+        </GridItem>
+
+        <GridItem span={12} lgSpan={6}>
+          <ChartCard
+            title="Overdue, by how late"
+            subtitle={`Of the ${fees.data?.overdue.length ?? 0} oldest overdue plans shown on this page, not the whole book`}
+            icon={Hourglass}
+            iconTone="warning"
+            testId="overdue-ageing-card"
+          >
+            <HorizontalBarChart
+              data={overdueByAge}
+              series={[{ key: 'value', label: 'Plans' }]}
+              colorKey="colour"
+              categoryWidth={100}
+              height={180}
+              loading={fees.isLoading}
+              emptyMessage="Nothing is overdue"
+              valueFormatter={(value) => formatNumber(value)}
+            />
+          </ChartCard>
+        </GridItem>
+      </Grid>
 
       <Card className="">
         <CardHeader>

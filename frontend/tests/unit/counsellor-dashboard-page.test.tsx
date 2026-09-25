@@ -39,8 +39,14 @@ function counsellorDashboard(overrides: Partial<CounsellorDashboard> = {}): Coun
 
 vi.mock('@/lib/people', () => ({ listStudents }));
 vi.mock('@/lib/batches', () => ({ listBatches, listEnrollments }));
-vi.mock('@/lib/dashboards', () => ({ getCounsellorDashboard }));
+// The funnel and the admissions trend read one more endpoint; empty by
+// default so the existing cases see two empty states.
+const getCounsellorPipeline = vi.hoisted(() =>
+  vi.fn(() => Promise.resolve({ stages: [], weekly: [] })),
+);
+vi.mock('@/lib/dashboards', () => ({ getCounsellorDashboard, getCounsellorPipeline }));
 vi.mock('@/lib/fees', () => ({
+  feeCollectionsTrend: () => Promise.resolve([]),
   getFeesOverview: () =>
     Promise.resolve({
       collected_today: '0.00',
@@ -461,10 +467,12 @@ describe('AdmissionsDashboardContent — pipeline bottleneck chart', () => {
       }),
     );
 
-    const { container } = render(<AdmissionsDashboardContent />);
+    render(<AdmissionsDashboardContent />);
     await screen.findByText('Where the pipeline is stuck');
 
-    await waitFor(() => expect(container.querySelector('.recharts-bar-rectangle')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByTestId('pipeline-bottlenecks-card').querySelector('.recharts-bar-rectangle')).toBeInTheDocument(),
+    );
 
     const table = within(screen.getByRole('table', { hidden: true }));
     const rowValue = (label: string) =>
