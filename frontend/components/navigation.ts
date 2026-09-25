@@ -180,6 +180,12 @@ export const STAFF_NAV: NavGroup[] = [
         icon: BarChart3,
         capability: Capability.reportViewAny,
       },
+      {
+        href: "/analytics",
+        label: "Analytics",
+        icon: TrendingUp,
+        capability: Capability.reportViewAny,
+      },
     ],
   },
   {
@@ -508,6 +514,12 @@ export const ADMIN_NAV: NavGroup[] = [
         href: "/admin/overview",
         label: "Overview",
         icon: BarChart3,
+        capability: Capability.reportViewAny,
+      },
+      {
+        href: "/analytics",
+        label: "Analytics",
+        icon: TrendingUp,
         capability: Capability.reportViewAny,
       },
     ],

@@ -40,6 +40,9 @@ export interface LineChartProps extends ChartBaseProps {
   /** Column header for the x-axis series, used in the tooltip and the text
    *  alternative table (e.g. "Week"). */
   xLabel?: string;
+  /** Suppress the chart's own legend, for when the card around it already
+   *  carries one. Two legends for one plot is the same information twice. */
+  hideLegend?: boolean;
 }
 
 const DEFAULT_SERIES: ChartSeriesDef[] = [{ key: 'value', label: 'Value' }];
@@ -54,6 +57,7 @@ export function LineChart({
   data,
   series = DEFAULT_SERIES,
   xLabel = 'Date',
+  hideLegend = false,
   height = 240,
   loading = false,
   emptyMessage,
@@ -93,7 +97,7 @@ export function LineChart({
             content={(tooltipProps) => <ChartTooltipContent {...tooltipProps} valueFormatter={format} />}
             cursor={{ stroke: CHART_GRID_COLOR, strokeWidth: 1 }}
           />
-          {series.length > 1 ? (
+          {series.length > 1 && !hideLegend ? (
             <Legend content={(legendProps) => <ChartLegendContent {...legendProps} markShape="line" />} />
           ) : null}
           {series.map((line, index) => {

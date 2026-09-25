@@ -37,6 +37,9 @@ export interface AreaChartProps extends ChartBaseProps {
   /** One entry per area. Defaults to a single series read from `value`. */
   series?: ChartSeriesDef[];
   xLabel?: string;
+  /** Suppress the chart's own legend, for when the card around it already
+   *  carries one. Two legends for one plot is the same information twice. */
+  hideLegend?: boolean;
   /** Stack series on top of each other (composition over time) instead of
    *  overlaying them. Only meaningful with more than one series.
    *
@@ -66,6 +69,7 @@ export function AreaChart({
   series = DEFAULT_SERIES,
   xLabel = 'Date',
   stacked = false,
+  hideLegend = false,
   gradient = false,
   height = 240,
   loading = false,
@@ -127,7 +131,7 @@ export function AreaChart({
             content={(tooltipProps) => <ChartTooltipContent {...tooltipProps} valueFormatter={format} />}
             cursor={{ stroke: CHART_GRID_COLOR, strokeWidth: 1 }}
           />
-          {series.length > 1 ? (
+          {series.length > 1 && !hideLegend ? (
             <Legend content={(legendProps) => <ChartLegendContent {...legendProps} markShape="line" />} />
           ) : null}
           {series.map((area, index) => {

@@ -626,7 +626,12 @@ def delivery_trend(scope: dict, *, weeks: int = 12) -> list[dict[str, Any]]:
     today = timezone.localdate()
     rows = (
         _sessions(scope)
-        .filter(session_date__gte=today - timedelta(weeks=weeks))
+        # Bounded at both ends. Without the upper bound a "last 12 weeks"
+        # chart runs its axis out to whenever the furthest class is
+        # scheduled -- batches are created months ahead, so the window would
+        # be mostly empty future and the shape of the recent past would be
+        # squeezed into the left margin.
+        .filter(session_date__gte=today - timedelta(weeks=weeks), session_date__lte=today)
         .annotate(week=TruncWeek("session_date"))
         .values("week")
         .annotate(

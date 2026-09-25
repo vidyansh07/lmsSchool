@@ -83,7 +83,11 @@ function Column({ item, index }: { item: StatStripItem; index: number }) {
           className="size-2 shrink-0 rounded-full"
           style={{ backgroundColor: paletteColor(item.colorIndex ?? index) }}
         />
-        <span className="truncate text-2xs font-semibold uppercase tracking-wider text-ink-faint">
+        {/* Wraps rather than truncates. Seven columns at 1440px leaves
+            about 150px each, which cut "Active students" to "ACTIVE
+            STUDEN..." -- and a headline figure whose label is unreadable is
+            not a headline figure. Two lines of 11px costs nothing here. */}
+        <span className="text-2xs font-semibold uppercase leading-tight tracking-wider text-ink-faint">
           {item.label}
         </span>
       </span>
@@ -93,11 +97,11 @@ function Column({ item, index }: { item: StatStripItem; index: number }) {
     </>
   );
 
-  if (!item.href) return <div className="min-w-0 px-4 py-3.5">{body}</div>;
+  if (!item.href) return <div className="min-w-0 px-3.5 py-3">{body}</div>;
   return (
     <Link
       href={item.href}
-      className="min-w-0 px-4 py-3.5 transition-colors duration-150 hover:bg-sunken"
+      className="min-w-0 px-3.5 py-3 transition-colors duration-150 hover:bg-sunken"
     >
       {body}
     </Link>

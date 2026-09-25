@@ -15,7 +15,15 @@ export function ChartLegendContent({
   return (
     <ul className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-ink-muted">
       {payload.map((entry) => (
-        <li key={`${entry.dataKey ?? entry.value}`} className="flex items-center gap-1.5">
+        // `value` first, not `dataKey`. For a line or an area `dataKey` is
+        // the series key and is unique, but for a pie Recharts reports the
+        // *same* `dataKey` on every slice (the one field the pie reads), so
+        // keying on it gave four legend items the identical key `value` and
+        // React logged a duplicate-key error for every donut on the page.
+        // `value` is the visible label in both cases, which is unique by
+        // definition -- two legend entries reading the same word would be a
+        // legend bug of its own.
+        <li key={`${entry.value ?? entry.dataKey}`} className="flex items-center gap-1.5">
           {markShape === 'rect' ? (
             <span aria-hidden="true" className="size-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: entry.color }} />
           ) : (

@@ -22,6 +22,7 @@ import { BarChart } from '@/components/ui/charts/bar-chart';
 import { HorizontalBarChart } from '@/components/ui/charts/bar-chart-horizontal';
 import { ChartCard } from '@/components/ui/charts/chart-card';
 import { ComboChart } from '@/components/ui/charts/combo-chart';
+import { DonutChart } from '@/components/ui/charts/donut-chart';
 import { RadarChart } from '@/components/ui/charts/radar-chart';
 import { StageFunnel } from '@/components/ui/charts/stage-funnel';
 import { StatStrip } from '@/components/ui/stat-strip';
@@ -145,6 +146,60 @@ describe('HorizontalBarChart', () => {
       ),
     );
     expect(fills.size).toBe(3);
+  });
+
+  it('takes each bar colour from a field when given one', () => {
+    // Distinct from palette cycling: this is the bar saying *what* it is,
+    // which is the only reason a single-metric comparison should be
+    // coloured at all.
+    const { container } = render(
+      <HorizontalBarChart
+        data={[
+          { label: 'Below', value: 60, colour: 'var(--color-warning)' },
+          { label: 'Above', value: 90, colour: 'var(--color-success)' },
+        ]}
+        colorKey="colour"
+      />,
+    );
+    const fills = Array.from(container.querySelectorAll('.recharts-bar-rectangle path')).map((p) =>
+      p.getAttribute('fill'),
+    );
+    expect(fills).toEqual(['var(--color-warning)', 'var(--color-success)']);
+  });
+
+  it('falls back to the palette for a datum with no colour field', () => {
+    const { container } = render(
+      <HorizontalBarChart
+        data={[{ label: 'A', value: 1, colour: 'var(--color-success)' }, { label: 'B', value: 2 }]}
+        colorKey="colour"
+      />,
+    );
+    const fills = Array.from(container.querySelectorAll('.recharts-bar-rectangle path')).map((p) =>
+      p.getAttribute('fill'),
+    );
+    expect(fills[0]).toBe('var(--color-success)');
+    expect(fills[1]).toBe('var(--color-chart-2)');
+  });
+
+  it('shows the empty state when every bar is zero', () => {
+    // An axis with no bars on it reads as broken, and "nothing happened" is
+    // what the empty state is for.
+    const { container } = render(
+      <HorizontalBarChart data={[{ label: 'A', value: 0 }, { label: 'B', value: 0 }]} />,
+    );
+    expect(container.querySelector('svg.recharts-surface')).toBeNull();
+  });
+
+  it('plots as soon as one bar is non-zero', () => {
+    const { container } = render(
+      <HorizontalBarChart data={[{ label: 'A', value: 0 }, { label: 'B', value: 3 }]} />,
+    );
+    // The chart draws. Recharts renders no rectangle for a zero-value bar,
+    // so the count is one even though there are two categories -- which is
+    // why "is anything non-zero" is the right question for the empty state
+    // rather than "how many bars are there".
+    expect(container.querySelector('svg.recharts-surface')).toBeInTheDocument();
+    expect(container.querySelectorAll('.recharts-bar-rectangle')).toHaveLength(1);
   });
 
   it('ignores colorPerBar for more than one series, and says so', () => {
@@ -287,6 +342,35 @@ describe('BarChart colorPerBar', () => {
       ),
     );
     expect(fills.size).toBe(3);
+  });
+});
+
+describe('the shared legend', () => {
+  it('gives a donut\'s legend items distinct keys', () => {
+    // Recharts reports the same `dataKey` on every pie slice -- the one
+    // field the pie reads -- so keying a legend item on it made every item
+    // in a donut's legend share the key `value`, and React logged a
+    // duplicate-key error for each one.
+    const errors: unknown[] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+      errors.push(args);
+    });
+
+    render(
+      <DonutChart
+        data={[
+          { label: 'Active', value: 40 },
+          { label: 'Completed', value: 30 },
+          { label: 'Cancelled', value: 20 },
+        ]}
+      />,
+    );
+
+    const duplicateKeyWarnings = errors.filter((entry) =>
+      JSON.stringify(entry).includes('same key'),
+    );
+    expect(duplicateKeyWarnings).toEqual([]);
+    spy.mockRestore();
   });
 });
 

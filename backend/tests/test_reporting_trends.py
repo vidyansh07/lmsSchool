@@ -296,6 +296,35 @@ def test_a_class_later_today_is_not_an_outstanding_register(
 
 
 @pytest.mark.django_db
+def test_the_delivery_trend_stops_at_today(
+    api_client_no_csrf, admin_user, upcoming_batch, batch, schedule
+):
+    """A "last N weeks" window is bounded at both ends.
+
+    Batches are created months ahead, so without an upper bound the axis runs
+    out to the furthest scheduled class and the recent past -- the part
+    anybody is looking at -- is squeezed into the left margin.
+    """
+    from apps.sessions.services import create_session
+
+    future = create_session(
+        batch=upcoming_batch,
+        actor=admin_user,
+        session_date=upcoming_batch.start_date + timedelta(days=30),
+        start_time=time(9, 0),
+        end_time=time(11, 0),
+        topic="Months away",
+    )
+
+    api_client_no_csrf.force_login(admin_user)
+    body = api_client_no_csrf.get("/api/v1/reports/metrics/delivery-trend/").json()
+
+    weeks = {row["week"] for row in body}
+    assert str(future.session_date - timedelta(days=future.session_date.weekday())) not in weeks
+    assert all(week <= timezone.localdate().isoformat() for week in weeks)
+
+
+@pytest.mark.django_db
 def test_the_dsr_trend_groups_by_status(
     api_client_no_csrf,
     admin_user,

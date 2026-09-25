@@ -45,10 +45,21 @@ export interface HorizontalBarChartProps extends ChartBaseProps {
   series?: ChartSeriesDef[];
   /** Stack series within each category instead of grouping them. */
   stacked?: boolean;
+  /** Suppress the chart's own legend, for when the card around it already
+   *  carries one. Two legends for one plot is the same information twice. */
+  hideLegend?: boolean;
   /** Give each bar its own palette step. Single-series only, as in
    *  `BarChart` -- with more than one series the colour already means
    *  "which series". */
   colorPerBar?: boolean;
+  /** A field on each datum holding that bar's colour.
+   *
+   *  Different in kind from `colorPerBar`, which cycles the palette and so
+   *  says only "these are different things". This says *what* each bar is --
+   *  above or below a target, one severity or another -- which is the only
+   *  reason a bar in a single-metric comparison should carry a colour at
+   *  all. Takes precedence over `colorPerBar` when both are given. */
+  colorKey?: string;
   /** Pixels reserved for the left-hand category labels. Raise it for long
    *  names; the labels are clipped rather than wrapped if it is too small. */
   categoryWidth?: number;
@@ -69,7 +80,9 @@ export function HorizontalBarChart({
   data,
   series = DEFAULT_SERIES,
   stacked = false,
+  hideLegend = false,
   colorPerBar = false,
+  colorKey,
   categoryWidth = 120,
   height = 240,
   loading = false,
@@ -82,16 +95,29 @@ export function HorizontalBarChart({
 
   if (loading) return <ChartSkeleton height={height} />;
 
-  const hasData = data.some((row) => series.some((bar) => Number.isFinite(row[bar.key] as number)));
+  // Finite *and* non-zero. A bar chart where every value is 0 draws an
+  // axis with no bars on it, which reads as broken rather than as "nothing
+  // happened" -- and "nothing happened" is exactly what the empty state is
+  // for. A single non-zero bar is enough to be worth plotting.
+  const hasData = data.some((row) =>
+    series.some((bar) => {
+      const value = row[bar.key];
+      return typeof value === 'number' && Number.isFinite(value) && value !== 0;
+    }),
+  );
   if (!hasData) return <ChartEmpty message={emptyMessage} height={height} />;
 
   if (process.env.NODE_ENV !== 'production' && colorPerBar && series.length > 1) {
     console.warn(
-      `HorizontalBarChart: colorPerBar is ignored for ${series.length} series. With more than one series a bar's colour already means "which series".`,
+      `HorizontalBarChart: per-bar colour is ignored for ${series.length} series. With more than one series a bar's colour already means "which series".`,
     );
   }
 
-  const perBar = colorPerBar && series.length === 1;
+  const perBar = (colorPerBar || Boolean(colorKey)) && series.length === 1;
+  const colourFor = (row: (typeof data)[number], index: number): string => {
+    const named = colorKey ? row[colorKey] : undefined;
+    return typeof named === 'string' && named !== '' ? named : paletteColor(index, CHART_PALETTE);
+  };
   const format = valueFormatter ?? ((value: number) => String(value));
   const caption = ariaLabel ?? `${series.map((bar) => bar.label).join(', ')} by category`;
 
@@ -125,7 +151,7 @@ export function HorizontalBarChart({
             content={(tooltipProps) => <ChartTooltipContent {...tooltipProps} valueFormatter={format} />}
             cursor={{ fill: CHART_GRID_COLOR, fillOpacity: 0.4 }}
           />
-          {series.length > 1 ? (
+          {series.length > 1 && !hideLegend ? (
             <Legend content={(legendProps) => <ChartLegendContent {...legendProps} markShape="rect" />} />
           ) : null}
           {series.map((bar, index) => {
@@ -143,7 +169,7 @@ export function HorizontalBarChart({
               >
                 {perBar
                   ? data.map((row, cellIndex) => (
-                      <Cell key={`${row.label}-${cellIndex}`} fill={paletteColor(cellIndex, CHART_PALETTE)} />
+                      <Cell key={`${row.label}-${cellIndex}`} fill={colourFor(row, cellIndex)} />
                     ))
                   : null}
               </Bar>

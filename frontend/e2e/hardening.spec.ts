@@ -64,7 +64,7 @@ test.describe('Cookies and authorization', () => {
 
     // Hiding a navigation link is presentation. This is the thing behind it:
     // the page loads, asks the API, and the API refuses.
-    for (const path of ['/admin/overview', '/admin/reports', '/admin/imports']) {
+    for (const path of ['/admin/overview', '/admin/reports', '/admin/imports', '/analytics']) {
       await page.goto(path);
       await expect(page.getByTestId('report-body')).toHaveCount(0);
       await expect(page.getByTestId('headline-figure')).toHaveCount(0);
