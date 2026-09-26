@@ -47,6 +47,7 @@ from apps.assignments.models import (
 from apps.batches.models import Batch
 from apps.certificates.models import Certificate, CertificateStatus, CertificateTemplate
 from apps.common.showcase.context import MARKER
+from apps.common.showcase.stages.s04_batches import SPECS
 from apps.common.showcase.stages.s07_teaching_ops import (
     IMPORT_CLEAN,
     IMPORT_WITH_ERRORS,
@@ -196,7 +197,15 @@ def test_teaching_ops_builds_every_state_and_is_idempotent(django_capture_on_com
     headline = headline_enrolments()
     active = headline["DevOps Engineering Morning — Aug 2026"]
     finished = headline["RHCSA Evening — Mar 2026"]
-    fast_track = headline["Python Django Fast Track — Dec 2025"]
+    # The fast-track cohort is reached through its *batch*, not through the
+    # headline student. Which cohorts that student sits on is stage 4's call —
+    # its contract places them on one active batch and one completed one — and a
+    # test that reads the placement as a fixed list of three names breaks the day
+    # that stage changes its mind, which is what happened. The batch comes from
+    # the spec key so even a rename cannot reach this assertion.
+    fast_track_batch = Batch.all_objects.get(
+        name=next(spec.name for spec in SPECS if spec.key == "c2")
+    )
 
     # --- The relaxed rule: a course-level policy on the fast track's course
     policy = AcademicPolicy.objects.get(course__slug=POLICY_COURSE)
@@ -300,7 +309,7 @@ def test_teaching_ops_builds_every_state_and_is_idempotent(django_capture_on_com
     ).exists()
     assert work.filter(status=WorkStatus.REWORK).exclude(feedback="").exists()
     assert not work.filter(submitted_at__gt=now).exists()
-    assert work.filter(enrollment=fast_track, status=WorkStatus.COMPLETED).exists()
+    assert work.filter(enrollment__batch=fast_track_batch, status=WorkStatus.COMPLETED).exists()
 
     # --- Exams: a draft that is not ready, one open now, one closed ------------
     exams = Exam.objects.all()
@@ -340,12 +349,12 @@ def test_teaching_ops_builds_every_state_and_is_idempotent(django_capture_on_com
     assert set(completions.values_list("status", flat=True)) == set(CompletionStatus.values)
     eligible = completions.filter(status=CompletionStatus.ELIGIBLE)
     assert eligible.count() >= QUEUE_LEFT
-    assert eligible.filter(enrollment__batch=fast_track.batch).count() == QUEUE_LEFT
+    assert eligible.filter(enrollment__batch=fast_track_batch).count() == QUEUE_LEFT
     approved = completions.filter(status=CompletionStatus.APPROVED)
     assert approved.filter(rule_snapshot__overridden=True).exists()
     assert approved.filter(rule_snapshot__overridden=False).exists()
     assert (
-        approved.filter(enrollment__batch=fast_track.batch, rule_snapshot__overridden=True).count()
+        approved.filter(enrollment__batch=fast_track_batch, rule_snapshot__overridden=True).count()
         == 0
     )
     for completion in approved:
@@ -355,7 +364,9 @@ def test_teaching_ops_builds_every_state_and_is_idempotent(django_capture_on_com
     rejected = completions.get(status=CompletionStatus.REJECTED)
     assert rejected.decision_note.startswith(MARKER) and rejected.decided_by is not None
     assert completions.get(enrollment=finished).status == CompletionStatus.APPROVED
-    assert completions.get(enrollment=fast_track).status == CompletionStatus.APPROVED
+    assert completions.filter(
+        enrollment__batch=fast_track_batch, status=CompletionStatus.APPROVED
+    ).exists()
     assert completions.get(enrollment=active).status == CompletionStatus.IN_PROGRESS
     assert (
         not completions.filter(enrollment__batch__start_date__gt=today)

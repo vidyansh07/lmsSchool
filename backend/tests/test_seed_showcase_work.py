@@ -332,7 +332,11 @@ def test_work_stage_builds_every_state_and_a_second_run_creates_nothing(
     preview = BulkImport.objects.get(kind="students")
     assert (preview.valid_count, preview.error_count, preview.status) == (4, 5, "preview")
     problems = {row["problem"] for row in preview.report["errors"]}
-    assert "A cell looks like a formula." in problems
+    # The refusal names the cell and the character it starts with, rather than
+    # saying only that something somewhere looked like a formula — a message
+    # that, on a two-hundred-row file, says neither which cell nor why. The
+    # fixture's bad row puts an `=` in the first name.
+    assert any("reads as the start of a formula" in problem for problem in problems), problems
     assert "An account with this address already exists." in problems
 
     # --- Recycle bin --------------------------------------------------------
