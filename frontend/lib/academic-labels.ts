@@ -187,6 +187,65 @@ export const ATTEMPT_STATUS_VARIANT: Record<import('@/types/api').AttemptStatus,
   expired: 'error',
 };
 
+/**
+ * The badge for a candidate's own attempt.
+ *
+ * `ATTEMPT_STATUS_LABEL` alone is a workflow word, not a candidate-facing one.
+ * `graded` means the marking is finished *inside* the institution; whether the
+ * candidate may see the result is a separate decision the exam's
+ * `results_published` flag records, and releasing is deliberately a step of its
+ * own (see `services.publish_results`). Badging a withheld result "Graded" in
+ * green put three statements on one screen -- the badge, the card body's
+ * "Results have not been released yet", and the attempts table's "Not
+ * released" -- of which only the badge was wrong.
+ *
+ * So a finished-but-unreleased attempt says what is true of it: the paper is
+ * marked, the result is not out. Neutral rather than green, because green is
+ * the colour of a result the candidate can act on.
+ */
+export function attemptBadge(attempt: {
+  status: import('@/types/api').AttemptStatus;
+  results_published: boolean;
+}): { label: string; variant: Variant } {
+  if (attempt.status === 'graded' && !attempt.results_published) {
+    return { label: 'Marked, result not released', variant: 'neutral' };
+  }
+  return {
+    label: ATTEMPT_STATUS_LABEL[attempt.status],
+    variant: ATTEMPT_STATUS_VARIANT[attempt.status],
+  };
+}
+
+/**
+ * The badge for one marked question on a reviewed paper.
+ *
+ * `is_correct` is a two-value answer to a question that has three answers once
+ * a person marks written work: `mark_written_answer` sets it to
+ * `awarded >= marks`, so a long answer given 3 of 5 with the feedback "Clear
+ * and complete" came back `false` and was badged "Incorrect". Partial credit is
+ * not a wrong answer, and telling a candidate it is misreports their paper.
+ *
+ * Derived from the marks rather than from `is_correct`, because the marks are
+ * the thing the candidate is being shown on the same line. `is_correct` still
+ * decides the two-value cases, so an auto-marked question whose penalty took
+ * its award below zero reads "Incorrect" rather than "Partly correct".
+ */
+export function answerOutcome(answer: {
+  awarded: string | null;
+  marks: string;
+  is_correct: boolean | null;
+}): { label: string; variant: Variant } {
+  if (answer.is_correct === null) return { label: 'Marked by a person', variant: 'neutral' };
+  if (answer.is_correct) return { label: 'Correct', variant: 'success' };
+
+  const awarded = answer.awarded === null ? 0 : Number(answer.awarded);
+  const marks = Number(answer.marks);
+  if (Number.isFinite(awarded) && Number.isFinite(marks) && awarded > 0 && awarded < marks) {
+    return { label: 'Partly correct', variant: 'warning' };
+  }
+  return { label: 'Incorrect', variant: 'error' };
+}
+
 /** `12:05` from 725 seconds. The value itself always comes from the server. */
 export function formatCountdown(seconds: number): string {
   const safe = Math.max(0, seconds);

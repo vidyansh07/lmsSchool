@@ -583,6 +583,131 @@ def test_a_superseded_attempt_cannot_be_graded(
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def second_batch(admin_user, published_course, trainer_profile_two):
+    """A live second batch of the same course, taught by the other trainer.
+
+    `upcoming_batch` will not do: it starts in a fortnight and is never made
+    active, so an enrolment on it does not grant access and nothing can be
+    handed in against it.
+    """
+    from apps.batches.models import BatchStatus
+    from apps.batches.services import create_batch, set_batch_status
+
+    today = timezone.localdate()
+    created = create_batch(
+        actor=admin_user,
+        name="Linux Essentials — Evening",
+        course=published_course,
+        trainer=trainer_profile_two,
+        start_date=today - timedelta(days=7),
+        end_date=today + timedelta(days=60),
+        capacity=3,
+    )
+    return set_batch_status(batch=created, target=BatchStatus.ACTIVE, actor=admin_user)
+
+
+@pytest.fixture
+def cross_batch_submission(admin_user, assignment, second_batch, other_student_profile):
+    """One attempt on the course-wide brief, from the other trainer's batch."""
+    from apps.assignments.services import submit_assignment
+    from apps.enrollments.services import enrol_student
+
+    enrollment = enrol_student(student=other_student_profile, batch=second_batch, actor=admin_user)
+    return submit_assignment(
+        assignment=assignment,
+        enrollment=enrollment,
+        actor=other_student_profile.user,
+        files=[_code_file("theirs.py")],
+    )
+
+
+@pytest.mark.django_db
+def test_a_trainer_does_not_see_another_batchs_work_on_course_wide_work(
+    api_client_no_csrf, trainer_profile, assignment, submission, cross_batch_submission
+):
+    """The brief is shared; the marking queue is not.
+
+    `assignment` carries no batch, so it applies to every batch of the course
+    and both trainers may edit it. That must not hand either of them the other's
+    students: this trainer's queue holds their own batch's attempt and nothing
+    else, and the other batch's submission id is not found.
+    """
+    api_client_no_csrf.force_login(trainer_profile.user)
+
+    body = api_client_no_csrf.get(f"/api/v1/assignments/{assignment.id}/submissions/").json()
+    assert body["count"] == 1
+    assert body["results"][0]["id"] == str(submission.id)
+
+    assert (
+        api_client_no_csrf.get(f"/api/v1/submissions/{cross_batch_submission.id}/").status_code
+        == 404
+    )
+
+
+@pytest.mark.django_db
+def test_a_trainer_cannot_grade_another_batchs_work_on_course_wide_work(
+    api_client_no_csrf, trainer_profile, cross_batch_submission
+):
+    """The 404 above has to hold for the write too, not only the read."""
+    api_client_no_csrf.force_login(trainer_profile.user)
+    response = api_client_no_csrf.post(
+        f"/api/v1/submissions/{cross_batch_submission.id}/grade/",
+        {"marks": "10.00", "feedback": "Not mine to mark."},
+        format="json",
+    )
+
+    assert response.status_code == 404
+    cross_batch_submission.refresh_from_db()
+    assert cross_batch_submission.marks_awarded is None
+
+
+@pytest.mark.django_db
+def test_a_manager_still_sees_every_batchs_work_on_course_wide_work(
+    api_client_no_csrf, manager_user, assignment, submission, cross_batch_submission
+):
+    """Narrowing the trainer must not narrow the centre: the manager sees both."""
+    api_client_no_csrf.force_login(manager_user)
+    body = api_client_no_csrf.get(f"/api/v1/assignments/{assignment.id}/submissions/").json()
+
+    assert body["count"] == 2
+    assert {row["id"] for row in body["results"]} == {
+        str(submission.id),
+        str(cross_batch_submission.id),
+    }
+
+
+@pytest.mark.django_db
+def test_an_authoring_trainer_still_sees_every_batchs_work(
+    api_client_no_csrf,
+    admin_user,
+    trainer_profile,
+    published_course,
+    assignment,
+    submission,
+    cross_batch_submission,
+):
+    """Authoring the course is documented as enough to mark its work.
+
+    The narrowing above is about *teaching a different batch*, not about
+    authorship, so a trainer named on the course keeps the whole queue.
+    """
+    from apps.courses.models import CourseAuthorRole
+    from apps.courses.services import assign_author
+
+    assign_author(
+        course=published_course,
+        user=trainer_profile.user,
+        role=CourseAuthorRole.EDITOR,
+        actor=admin_user,
+    )
+
+    api_client_no_csrf.force_login(trainer_profile.user)
+    body = api_client_no_csrf.get(f"/api/v1/assignments/{assignment.id}/submissions/").json()
+
+    assert body["count"] == 2
+
+
 @pytest.mark.django_db
 def test_a_student_cannot_read_a_classmates_submission(
     api_client_no_csrf, submission, other_student_profile, other_enrollment

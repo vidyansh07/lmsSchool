@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { listStudentEnrollments, transferEnrollment } from '@/lib/batches';
+import {
+  listEnrolmentDestinations,
+  listStudentEnrollments,
+  transferEnrollment,
+} from '@/lib/batches';
 import { ApiError } from '@/lib/api';
-import type { Enrollment } from '@/types/api';
+import type { BatchListRow, BatchStatus, Enrollment, Paginated } from '@/types/api';
 
 const apiFetch = vi.hoisted(() => vi.fn());
 const apiMutate = vi.hoisted(() => vi.fn());
@@ -34,6 +38,35 @@ function enrollment(overrides: Partial<Enrollment> = {}): Enrollment {
     student_code: 'GRS-S-00042',
     ...overrides,
   };
+}
+
+function batch(
+  id: string,
+  status: BatchStatus,
+  start_date: string,
+  name = id,
+): BatchListRow {
+  return {
+    id,
+    code: `GRS-B-${id}`,
+    name,
+    course_id: 'c1',
+    course_code: 'GRS-C-001',
+    course_title: 'Linux Essentials',
+    course_slug: 'linux-essentials',
+    trainer_name: 'Tina Trainer',
+    start_date,
+    end_date: '2026-12-31',
+    capacity: 20,
+    enrolled_count: 1,
+    seats_available: 19,
+    status,
+    created_at: '2026-01-01T00:00:00Z',
+  };
+}
+
+function page(results: BatchListRow[], count = results.length): Paginated<BatchListRow> {
+  return { count, page: 1, page_size: 100, total_pages: 1, next: null, previous: null, results };
 }
 
 beforeEach(() => {
@@ -104,5 +137,54 @@ describe('transferEnrollment', () => {
       expect.stringContaining('/status/'),
       expect.anything(),
     );
+  });
+});
+
+describe('listEnrolmentDestinations', () => {
+  /**
+   * A destination is a batch that can accept an enrolment. The pickers used to
+   * offer every non-archived batch — a cancelled one and sixteen completed ones
+   * among them — thirty rows at a time, so the server's refusal arrived after
+   * the operator had chosen, and a live batch below the cut could not be
+   * reached from the list at all.
+   */
+  it('asks only for the statuses that can accept an enrolment, uncapped', async () => {
+    apiFetch.mockResolvedValue(page([]));
+
+    await listEnrolmentDestinations({ search: 'devops' });
+
+    const paths = apiFetch.mock.calls.map((call) => String(call[0]));
+    expect(paths).toHaveLength(2);
+    expect(paths.some((path) => path.includes('status=upcoming'))).toBe(true);
+    expect(paths.some((path) => path.includes('status=active'))).toBe(true);
+    expect(paths.every((path) => path.includes('page_size=100'))).toBe(true);
+    expect(paths.every((path) => path.includes('search=devops'))).toBe(true);
+    // Never a completed, cancelled or archived batch, by any spelling.
+    expect(paths.join(' ')).not.toMatch(/status=(completed|cancelled|archived)/);
+  });
+
+  it('merges the two pages back into one newest-first list', async () => {
+    apiFetch.mockImplementation(async (path: string) =>
+      path.includes('status=upcoming')
+        ? page([batch('u1', 'upcoming', '2026-10-17'), batch('u2', 'upcoming', '2026-09-29')])
+        : page([batch('a1', 'active', '2026-10-01'), batch('a2', 'active', '2026-05-09')]),
+    );
+
+    const { batches, isComplete } = await listEnrolmentDestinations();
+
+    expect(batches.map((row) => row.id)).toEqual(['u1', 'a1', 'u2', 'a2']);
+    expect(isComplete).toBe(true);
+  });
+
+  it('says so when a status has more batches than one page holds', async () => {
+    apiFetch.mockImplementation(async (path: string) =>
+      path.includes('status=active')
+        ? page([batch('a1', 'active', '2026-10-01')], 140)
+        : page([]),
+    );
+
+    const { isComplete } = await listEnrolmentDestinations();
+
+    expect(isComplete).toBe(false);
   });
 });

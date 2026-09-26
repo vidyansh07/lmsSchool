@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
+import { ListToolbar } from '@/components/list-toolbar';
+import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
@@ -11,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
+import { useList } from '@/hooks/use-list';
 import { ApiError, fieldErrors } from '@/lib/api';
 import { DIFFICULTY_LABEL, QUESTION_TYPE_LABEL } from '@/lib/academic-labels';
 import { formatNumber, NO_DATA } from '@/lib/format';
@@ -20,9 +23,38 @@ import type { BatchListRow, Difficulty, Question, QuestionType } from '@/types/a
 
 const BLANK_OPTION = { text: '', is_correct: false };
 
-/** The question bank. Staff only — every row carries the answer. */
+/**
+ * A tag as the bank stores it.
+ *
+ * The create form writes tags lowercased and hyphenated, and the server matches
+ * a *whole* tag (`tags__contains=[value]`), not a prefix — so "Shell Scripting"
+ * typed into the filter has to become "shell-scripting" or it matches nothing.
+ * Shared with the filter below rather than spelled twice, because the two have
+ * to agree by definition.
+ *
+ * It must only ever be applied to a *finished* value. Applied per keystroke it
+ * eats the space between two words — "Shell " trims to "shell", and the next
+ * keystroke lands as "shells" rather than "shell-s" — which is why the filter
+ * keeps the raw text in `tagDraft` and normalises once the typing settles.
+ */
+function normaliseTag(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, '-');
+}
+
+/**
+ * The question bank. Staff only — every row carries the answer.
+ *
+ * Server-filtered and server-paginated through `useList`, like every other
+ * list in the product. It used to call `listQuestions()` with no query at all
+ * and render `results`, so a trainer with fifty-seven questions saw
+ * twenty-five of them, in one fixed order, with nothing on the page to reach
+ * the rest — and the filters the API has always supported (`question_type`,
+ * `difficulty`, `tag`, `search`) were unreachable from the only screen that
+ * reads the bank.
+ */
 function QuestionBank() {
-  const [rows, setRows] = useState<Question[]>([]);
+  const list = useList<Question>(listQuestions);
+  const [tagDraft, setTagDraft] = useState('');
   const [batches, setBatches] = useState<BatchListRow[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,13 +77,25 @@ function QuestionBank() {
     { ...BLANK_OPTION },
   ]);
 
+  // The tag box keeps what was typed and hands the *normalised* tag to the
+  // query, debounced the same 300 ms as `ListToolbar`'s own search box — one
+  // request per tag rather than one per keystroke.
+  useEffect(() => {
+    const tag = normaliseTag(tagDraft);
+    if (tag === (list.query.tag ?? '')) return;
+    const timer = setTimeout(() => list.setQuery({ tag }), 300);
+    return () => clearTimeout(timer);
+    // `list.setQuery` is stable; `list.query.tag` is the value being compared.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tagDraft, list.query.tag]);
+
+  // Only the batch list for the create form lives here now; the questions
+  // themselves are `useList`'s business, one page at a time.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([listQuestions(), listBatches({ page_size: 100 })])
-      .then(([questions, batchPage]) => {
-        if (cancelled) return;
-        setRows(questions.results);
-        setBatches(batchPage.results);
+    listBatches({ page_size: 100 })
+      .then((batchPage) => {
+        if (!cancelled) setBatches(batchPage.results);
       })
       .catch((cause: unknown) => {
         if (!cancelled) setError(cause instanceof ApiError ? cause : null);
@@ -65,6 +109,14 @@ function QuestionBank() {
   }, []);
 
   const takesOptions = ['mcq', 'multiple', 'true_false'].includes(form.question_type);
+  // Which empty state to show: "nothing matches" reads as a bug when the bank
+  // really is empty, and "the bank is empty" reads as a bug when it is not.
+  const hasFilters = Boolean(
+    list.query.search || list.query.question_type || list.query.difficulty || list.query.tag,
+  );
+
+  // The create form normalises what it writes the same way the filter does.
+  const formTags = form.tags.split(',').map(normaliseTag).filter(Boolean);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -83,10 +135,7 @@ function QuestionBank() {
         difficulty: form.difficulty,
         marks: form.marks,
         negative_marks: form.negative_marks,
-        tags: form.tags
-          .split(',')
-          .map((tag) => tag.trim().toLowerCase().replace(/\s+/g, '-'))
-          .filter(Boolean),
+        tags: formTags,
         explanation: form.explanation || undefined,
         answer_key:
           form.question_type === 'short_answer'
@@ -98,7 +147,10 @@ function QuestionBank() {
             : undefined,
       });
       setIsOpen(false);
-      setRows((await listQuestions()).results);
+      // Back to page 1 of the current filter, where a brand-new question is —
+      // the list orders newest first.
+      list.setQuery({});
+      list.reload();
     } catch (cause) {
       setErrors(fieldErrors(cause));
     } finally {
@@ -106,13 +158,17 @@ function QuestionBank() {
     }
   }
 
-  if (isLoading) return <LoadingState label="Loading the question bank…" rows={5} />;
-  if (error) {
+  const failure = error ?? list.error;
+  if (isLoading && list.isLoading) {
+    return <LoadingState label="Loading the question bank…" rows={5} />;
+  }
+  if (failure) {
     return (
       <ErrorState
         title="Could not load the question bank"
-        message={error.message}
-        requestId={error.requestId || undefined}
+        message={failure.message}
+        requestId={failure.requestId || undefined}
+        onRetry={list.reload}
       />
     );
   }
@@ -315,10 +371,82 @@ function QuestionBank() {
         </Card>
       ) : null}
 
-      {rows.length === 0 ? (
+      <ListToolbar
+        search={String(list.query.search ?? '')}
+        onSearchChange={(value) => list.setQuery({ search: value })}
+        placeholder="Words in the question"
+      >
+        <div>
+          <label htmlFor="filter-type" className="mb-1.5 block text-sm font-medium">
+            Type
+          </label>
+          <Select
+            id="filter-type"
+            value={String(list.query.question_type ?? '')}
+            onChange={(event) => list.setQuery({ question_type: event.target.value })}
+          >
+            <option value="">Any type</option>
+            {Object.entries(QUESTION_TYPE_LABEL).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <label htmlFor="filter-difficulty" className="mb-1.5 block text-sm font-medium">
+            Difficulty
+          </label>
+          <Select
+            id="filter-difficulty"
+            value={String(list.query.difficulty ?? '')}
+            onChange={(event) => list.setQuery({ difficulty: event.target.value })}
+          >
+            <option value="">Any difficulty</option>
+            {Object.entries(DIFFICULTY_LABEL).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <label htmlFor="filter-tag" className="mb-1.5 block text-sm font-medium">
+            Tag
+          </label>
+          <Input
+            id="filter-tag"
+            value={tagDraft}
+            placeholder="one tag"
+            onChange={(event) => setTagDraft(event.target.value)}
+          />
+        </div>
+        <div>
+          <label htmlFor="filter-active" className="mb-1.5 block text-sm font-medium">
+            In use
+          </label>
+          <Select
+            id="filter-active"
+            value={String(list.query.is_active ?? '')}
+            onChange={(event) => list.setQuery({ is_active: event.target.value })}
+          >
+            <option value="">Live and retired</option>
+            <option value="true">Live only</option>
+            <option value="false">Retired only</option>
+          </Select>
+        </div>
+      </ListToolbar>
+
+      {list.isLoading ? (
+        <LoadingState label="Loading the question bank…" rows={5} />
+      ) : !list.data || list.data.count === 0 ? (
         <EmptyState
-          title="The bank is empty"
-          description="Add questions here, then draw examinations from them."
+          title={hasFilters ? 'No question matches that' : 'The bank is empty'}
+          description={
+            hasFilters
+              ? 'Widen the filters, or clear the search.'
+              : 'Add questions here, then draw examinations from them.'
+          }
         />
       ) : (
         <TableWrapper className="max-h-[min(36rem,65vh)] overflow-y-auto">
@@ -332,7 +460,7 @@ function QuestionBank() {
               </tr>
             </thead>
             <tbody className="">
-              {rows.map((row) => (
+              {list.data.results.map((row) => (
                 <tr key={row.id} className="animate-fade-in transition-colors hover:bg-sunken/40">
                   <Td>
                     <div className="font-medium">{row.text}</div>
@@ -355,6 +483,16 @@ function QuestionBank() {
           </Table>
         </TableWrapper>
       )}
+
+      {list.data ? (
+        <Pagination
+          page={list.data.page}
+          totalPages={list.data.total_pages}
+          count={list.data.count}
+          pageSize={list.data.page_size}
+          onPageChange={list.setPage}
+        />
+      ) : null}
     </div>
   );
 }

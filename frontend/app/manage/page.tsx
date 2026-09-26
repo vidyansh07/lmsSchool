@@ -89,7 +89,14 @@ function attentionBreakdown(data: ManagerDashboard): CategoryDatum[] {
     { label: 'Behind schedule', value: data.batches.behind_schedule },
     { label: 'At-risk batches', value: data.batches.at_risk },
     { label: 'At-risk students', value: data.students.at_risk },
-    { label: 'Overdue DSRs', value: data.trainers.with_overdue_dsr },
+    // `trainers.with_overdue_dsr` counts *trainers*, not reports — one trainer
+    // with nine unwritten registers is 1 here. Labelled "Overdue DSRs" it read
+    // as a report count and sat on the same screen as the warnings strip's own
+    // "85 classes finished with no daily report", so the page appeared to state
+    // two totals for one thing. The bar now says which of the two it is, and
+    // matches the wording of the strip's own tile below
+    // (`components/manage/attention-strip.tsx`).
+    { label: 'Trainers with overdue DSRs', value: data.trainers.with_overdue_dsr },
     { label: 'Critical flags', value: data.risk.critical },
     { label: 'Reviews due', value: data.reviews_due },
   ];

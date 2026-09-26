@@ -129,6 +129,10 @@ class CounsellorDashboardSerializer(serializers.Serializer):
     scoped to the calling counsellor's own reach, never `null`."""
 
     new_students_today = serializers.IntegerField(read_only=True)
+    #: A rolling seven days including today, so it can never come out smaller
+    #: than `new_students_today` — which is exactly what the browser-side
+    #: version it replaced did.
+    new_students_this_week = serializers.IntegerField(read_only=True)
     pending_registrations = serializers.IntegerField(read_only=True)
     follow_ups_due = serializers.IntegerField(read_only=True)
     follow_ups_overdue = serializers.IntegerField(read_only=True)
@@ -138,3 +142,8 @@ class CounsellorDashboardSerializer(serializers.Serializer):
     #: redeclared — `apps.warnings.services.cached_warnings_for` is the one
     #: source for both.
     warnings = WarningSerializer(many=True, read_only=True)
+    #: field name → what that number counts (§8.6). Shipped with the payload so
+    #: the screen can caption every tile with its own definition rather than
+    #: keeping a second, drifting copy of the wording in TSX; the source is
+    #: `apps.dashboards.views.COUNSELLOR_FIGURE_DEFINITIONS`.
+    definitions = serializers.DictField(child=serializers.CharField(), read_only=True)

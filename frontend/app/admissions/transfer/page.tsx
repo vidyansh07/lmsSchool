@@ -30,6 +30,7 @@ import {
   getBatchRoster,
   getEnrollment,
   listBatches,
+  listEnrolmentDestinations,
   listStudentEnrollments,
   transferEnrollment,
 } from '@/lib/batches';
@@ -64,6 +65,7 @@ function StudentTransfer({
   const [batchQuery, setBatchQuery] = useState('');
   const [batchOptions, setBatchOptions] = useState<BatchListRow[]>([]);
   const [targetBatch, setTargetBatch] = useState<BatchListRow | null>(null);
+  const [isTargetListComplete, setIsTargetListComplete] = useState(true);
   const [isLoadingContext, setIsLoadingContext] = useState(Boolean(initialStudentId));
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
@@ -113,16 +115,17 @@ function StudentTransfer({
       .catch(() => setEnrollments([]));
   }, [student]);
 
+  // Destinations only: `transfer_student` enrols on the target, so a batch
+  // that cannot accept an enrolment — cancelled, completed, archived — is not
+  // somewhere a student can be moved to, and offering it only produces a
+  // refusal after the operator has chosen.
   useEffect(() => {
     const timer = setTimeout(() => {
-      listBatches({ search: batchQuery, page_size: 30, ordering: '-start_date' })
-        .then((page) =>
-          setBatchOptions(
-            page.results.filter(
-              (row) => row.id !== sourceEnrollment?.batch_id && row.status !== 'archived',
-            ),
-          ),
-        )
+      listEnrolmentDestinations({ search: batchQuery })
+        .then(({ batches, isComplete }) => {
+          setBatchOptions(batches.filter((row) => row.id !== sourceEnrollment?.batch_id));
+          setIsTargetListComplete(isComplete);
+        })
         .catch(() => setBatchOptions([]));
     }, 250);
     return () => clearTimeout(timer);
@@ -250,7 +253,12 @@ function StudentTransfer({
           selected={targetBatch?.id ?? ''}
           onSelect={(option) => setTargetBatch(batchOptions.find((row) => row.id === option.value) ?? null)}
           placeholder="Batch name or code"
-          emptyMessage="Type to search for the target batch."
+          hint={
+            isTargetListComplete
+              ? 'Every batch still open to enrolment — upcoming or running.'
+              : 'Too many open batches to list; type to narrow it.'
+          }
+          emptyMessage="No batch open to enrolment matches that."
         />
       ) : null}
 
@@ -287,6 +295,7 @@ function BatchTransfer() {
   const [targetQuery, setTargetQuery] = useState('');
   const [targetOptions, setTargetOptions] = useState<BatchListRow[]>([]);
   const [targetBatch, setTargetBatch] = useState<BatchListRow | null>(null);
+  const [isTargetListComplete, setIsTargetListComplete] = useState(true);
   const [results, setResults] = useState<RowResult[] | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState('');
@@ -307,10 +316,16 @@ function BatchTransfer() {
       .catch(() => setRoster([]));
   }, [sourceBatch]);
 
+  // As in single-student mode: a destination is a batch that can take an
+  // enrolment. The *source* list above is deliberately not narrowed this way —
+  // emptying a cancelled batch is exactly when this screen is needed.
   useEffect(() => {
     const timer = setTimeout(() => {
-      listBatches({ search: targetQuery, page_size: 30, ordering: '-start_date' })
-        .then((page) => setTargetOptions(page.results.filter((row) => row.id !== sourceBatch?.id)))
+      listEnrolmentDestinations({ search: targetQuery })
+        .then(({ batches, isComplete }) => {
+          setTargetOptions(batches.filter((row) => row.id !== sourceBatch?.id));
+          setIsTargetListComplete(isComplete);
+        })
         .catch(() => setTargetOptions([]));
     }, 250);
     return () => clearTimeout(timer);
@@ -397,7 +412,12 @@ function BatchTransfer() {
             selected={targetBatch?.id ?? ''}
             onSelect={(option) => setTargetBatch(targetOptions.find((row) => row.id === option.value) ?? null)}
             placeholder="Target batch"
-            emptyMessage="Type to search."
+            hint={
+              isTargetListComplete
+                ? 'Every batch still open to enrolment — upcoming or running.'
+                : 'Too many open batches to list; type to narrow it.'
+            }
+            emptyMessage="No batch open to enrolment matches that."
           />
 
           {targetBatch ? (

@@ -31,6 +31,14 @@ export const ENROLLMENT_STATUS_LABEL: Record<EnrollmentStatus, string> = {
   suspended: 'Suspended',
   completed: 'Completed',
   cancelled: 'Cancelled',
+  // The sixth `EnrollmentStatus` (`apps.enrollments.models`) the backend has
+  // always had and this map never did, which is why a real transferred row
+  // rendered a blank STATUS cell on `/admissions` and could not be filtered
+  // for: `ENROLLMENT_STATUS_OPTIONS` is derived from these keys.
+  // Shortened from the backend's "Transferred to another batch" because this
+  // string is a badge in a table column; the batch it moved to is on the
+  // student's own timeline, not in the cell.
+  transferred: 'Transferred',
 };
 
 export const ENROLLMENT_STATUS_VARIANT: Record<
@@ -42,6 +50,10 @@ export const ENROLLMENT_STATUS_VARIANT: Record<
   suspended: 'warning',
   completed: 'neutral',
   cancelled: 'error',
+  // Neutral, not `error`: colour means state, and "moved to another batch" is
+  // a fact about where the student is, not something that went wrong. The
+  // backend keeps it apart from `cancelled` for exactly that reason.
+  transferred: 'neutral',
 };
 
 export const ENROLLMENT_STATUS_OPTIONS = (
@@ -75,6 +87,10 @@ export const EVENT_KIND_LABEL: Record<CalendarEventKind, string> = {
   quiz: 'Quiz',
   exam: 'Exam',
   announcement: 'Announcement',
+  // `apps.dashboards.calendar.EventKind.ACTIVITY_DUE`, registered as a source
+  // in ERP Phase 9 and never labelled here — so eighteen of a manager's
+  // twenty-seven calendar rows read the raw enum `activity_due` in their badge.
+  activity_due: 'Activity due',
 };
 
 /** "09:00" from the API's "09:00:00". */

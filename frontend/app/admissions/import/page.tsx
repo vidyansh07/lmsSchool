@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { errorMessage } from '@/lib/api';
-import { listBatches } from '@/lib/batches';
+import { listEnrolmentDestinations } from '@/lib/batches';
 import { Capability } from '@/lib/capabilities';
 import { confirmImport, previewStudentImport, rejectImport } from '@/lib/reporting';
 import type { BatchListRow, BulkImport } from '@/types/api';
@@ -68,6 +68,7 @@ export function ImportFlow() {
   const [batchQuery, setBatchQuery] = useState('');
   const [batchOptions, setBatchOptions] = useState<BatchListRow[]>([]);
   const [targetBatch, setTargetBatch] = useState<BatchListRow | null>(null);
+  const [isBatchListComplete, setIsBatchListComplete] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [run, setRun] = useState<BulkImport | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -75,10 +76,17 @@ export function ImportFlow() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
+  // Confirming the file enrols every valid row through `enrol_student`, which
+  // refuses a batch that is not open to enrolment — so a completed or cancelled
+  // one here would take the whole import down at the last step. Only batches
+  // that can accept somebody are offered, and the list is not cut off at thirty.
   useEffect(() => {
     const timer = setTimeout(() => {
-      listBatches({ search: batchQuery, page_size: 30, ordering: '-start_date' })
-        .then((page) => setBatchOptions(page.results.filter((b) => b.status !== 'archived')))
+      listEnrolmentDestinations({ search: batchQuery })
+        .then(({ batches, isComplete }) => {
+          setBatchOptions(batches);
+          setIsBatchListComplete(isComplete);
+        })
         .catch(() => setBatchOptions([]));
     }, 250);
     return () => clearTimeout(timer);
@@ -187,8 +195,12 @@ export function ImportFlow() {
                 options={batchOptionList}
                 selected={targetBatch?.id ?? ''}
                 onSelect={(option) => setTargetBatch(batchOptions.find((b) => b.id === option.value) ?? null)}
-                emptyMessage="No batches match."
-                hint="Leave this empty to only create accounts."
+                emptyMessage="No batch open to enrolment matches that."
+                hint={
+                  isBatchListComplete
+                    ? 'Leave this empty to only create accounts. Batches open to enrolment only.'
+                    : 'Leave this empty to only create accounts. Too many open batches to list; type to narrow it.'
+                }
               />
               {targetBatch ? (
                 <p className="text-sm text-ink-muted">

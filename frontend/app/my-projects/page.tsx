@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field } from '@/components/ui/field';
 import { Input, Textarea } from '@/components/ui/input';
 import { ApiError, fieldErrors } from '@/lib/api';
+import { formatDate } from '@/lib/format';
 import {
   PROJECT_KIND_LABEL,
   PROJECT_WORK_LABEL,
@@ -185,7 +186,11 @@ function MyProjects() {
                 <CardTitle>{project.title}</CardTitle>
                 <CardDescription>
                   {project.course_title} · {PROJECT_KIND_LABEL[project.kind]} · due{' '}
-                  {project.end_date ?? 'no date set'} · out of {project.max_marks}
+                  {/* The API sends a plain date ("2026-10-14"); every other
+                      date on a student screen goes through `lib/format`, and
+                      this one printed the ISO string straight out. */}
+                  {project.end_date ? formatDate(project.end_date) : 'no date set'} · out of{' '}
+                  {project.max_marks}
                 </CardDescription>
               </CardHeader>
 

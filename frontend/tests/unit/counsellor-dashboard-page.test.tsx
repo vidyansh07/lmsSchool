@@ -27,12 +27,14 @@ const useAuthMock = vi.hoisted(() => ({ value: {} as Record<string, unknown> }))
 function counsellorDashboard(overrides: Partial<CounsellorDashboard> = {}): CounsellorDashboard {
   return {
     new_students_today: 0,
+    new_students_this_week: 0,
     pending_registrations: 0,
     follow_ups_due: 0,
     follow_ups_overdue: 0,
     unassigned_batch: 0,
     unassigned_trainer: 0,
     warnings: [],
+    definitions: {},
     ...overrides,
   };
 }
@@ -160,9 +162,14 @@ function cardFor(titleText: string | RegExp): HTMLElement {
 
 /** A `StatCard` KPI tile, found by its plain-text label (`StatCard` renders
  *  the label as a `<span>`, not a heading, unlike the `Card`/`CardTitle`
- *  tiles `cardFor` above locates). */
+ *  tiles `cardFor` above locates).
+ *
+ *  `selector: 'span'` is what keeps that unambiguous: the "What these figures
+ *  count" block under the grid quotes every tile's label verbatim — on purpose,
+ *  so a reader can match a definition back to the number they just read — in a
+ *  `<dt>`, so the label text now appears twice on the page. */
 function kpiTileFor(labelText: string | RegExp): HTMLElement {
-  const label = screen.getByText(labelText);
+  const label = screen.getByText(labelText, { selector: 'span' });
   const tile = label.parentElement?.parentElement;
   if (!tile) throw new Error(`Could not locate the KPI tile for "${String(labelText)}"`);
   return tile as HTMLElement;
@@ -182,6 +189,8 @@ function kpiValue(tile: HTMLElement, value: number): void {
 }
 
 function mockEmptyPipeline() {
+  // Two calls now, told apart by `awaiting_enrolment`: the recent-registrations
+  // window (for "Recent activity") and the real "no seat on any batch" list.
   listStudents.mockResolvedValue(paginated<StudentListRow>([]));
   listEnrollments.mockImplementation((query: Record<string, unknown> = {}) =>
     Promise.resolve(paginated<Enrollment>([], query.status === 'pending' ? 0 : 0)),
@@ -225,38 +234,72 @@ describe('AdmissionsDashboardContent', () => {
     );
   });
 
-  it('renders the "registered, not yet enrolled" list and links each row to that student', async () => {
-    listStudents.mockResolvedValue(paginated<StudentListRow>([student()]));
-    listEnrollments.mockImplementation((query: Record<string, unknown> = {}) =>
-      Promise.resolve(paginated<Enrollment>([], query.status === 'pending' ? 0 : 0)),
+  it('asks the server who is awaiting a seat, rather than diffing two windows', async () => {
+    // The defect this replaces: the panel used to list the recent
+    // registrations whose student code was absent from a page of recent
+    // *enrolments* — two windows ordered by different columns. On the showcase
+    // data it listed fifteen students who all had enrolments, beside a tile on
+    // the same screen that said 1. The page now asks the one question.
+    listStudents.mockImplementation((query: Record<string, unknown> = {}) =>
+      Promise.resolve(
+        query.awaiting_enrolment === 'true'
+          ? paginated<StudentListRow>([student()], 1)
+          : paginated<StudentListRow>([]),
+      ),
     );
+    listEnrollments.mockResolvedValue(paginated<Enrollment>([]));
     listBatches.mockResolvedValue(paginated<BatchListRow>([]));
 
     render(<AdmissionsDashboardContent />);
 
-    await waitFor(() => expect(screen.getByText(/1 of the last 1 registration/i)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/1 registered student holds no seat/i)).toBeInTheDocument(),
+    );
     const scope = within(cardFor('Registered, not yet enrolled'));
     expect(scope.getByRole('link', { name: /new student/i })).toHaveAttribute(
       'href',
       '/admissions/student-1',
     );
+    expect(listStudents).toHaveBeenCalledWith(
+      expect.objectContaining({ awaiting_enrolment: 'true' }),
+    );
   });
 
-  it('does not list a student whose enrolment already appears in the recent enrolments window', async () => {
-    listStudents.mockResolvedValue(paginated<StudentListRow>([student()]));
-    listEnrollments.mockImplementation((query: Record<string, unknown> = {}) =>
+  it('does not list a recent registration that the server says holds a seat', async () => {
+    // A student in the recent-registrations window (so they are on "Recent
+    // activity") but absent from the awaiting-enrolment answer. The old
+    // browser-side diff, given an enrolment outside its window, would have
+    // listed them; now there is nothing here to get wrong.
+    listStudents.mockImplementation((query: Record<string, unknown> = {}) =>
       Promise.resolve(
-        paginated<Enrollment>(query.status === 'pending' ? [] : [enrollment()], query.status === 'pending' ? 0 : 1),
+        query.awaiting_enrolment === 'true'
+          ? paginated<StudentListRow>([], 0)
+          : paginated<StudentListRow>([student()]),
       ),
     );
+    listEnrollments.mockResolvedValue(paginated<Enrollment>([enrollment()], 1));
     listBatches.mockResolvedValue(paginated<BatchListRow>([]));
 
     render(<AdmissionsDashboardContent />);
 
-    await waitFor(() => expect(listStudents).toHaveBeenCalled());
-    expect(await screen.findByText(/every recent registration is enrolled/i)).toBeInTheDocument();
+    expect(await screen.findByText(/every registration is on a batch/i)).toBeInTheDocument();
     const scope = within(cardFor('Registered, not yet enrolled'));
     expect(scope.queryByRole('link', { name: /new student/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the server total for the gap, not the length of the page it listed', async () => {
+    listStudents.mockImplementation((query: Record<string, unknown> = {}) =>
+      Promise.resolve(
+        query.awaiting_enrolment === 'true'
+          ? paginated<StudentListRow>([student()], 14)
+          : paginated<StudentListRow>([]),
+      ),
+    );
+    listEnrollments.mockResolvedValue(paginated<Enrollment>([]));
+    listBatches.mockResolvedValue(paginated<BatchListRow>([]));
+
+    render(<AdmissionsDashboardContent />);
+    expect(await screen.findByText(/14 registered students hold no seat/i)).toBeInTheDocument();
   });
 
   it('shows the exact pending-confirmation total from the server, not the capped page size', async () => {
@@ -274,10 +317,23 @@ describe('AdmissionsDashboardContent', () => {
 
   it('separates "starting soon" from "filling up" batches', async () => {
     mockEmptyPipeline();
+    // A start date genuinely ahead of the clock, computed rather than written
+    // down: an `upcoming` batch whose date has gone is a different row now
+    // ("was due to start"), and a fixed date in this file would quietly become
+    // that row the moment it passed.
+    const inAMonth = new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10);
     listBatches.mockImplementation((query: Record<string, unknown> = {}) => {
       if (query.status === 'upcoming') {
         return Promise.resolve(
-          paginated<BatchListRow>([batch({ id: 'soon', status: 'upcoming', seats_available: 15, capacity: 20 })]),
+          paginated<BatchListRow>([
+            batch({
+              id: 'soon',
+              status: 'upcoming',
+              seats_available: 15,
+              capacity: 20,
+              start_date: inAMonth,
+            }),
+          ]),
         );
       }
       return Promise.resolve(
@@ -325,6 +381,7 @@ describe('AdmissionsDashboardContent', () => {
     getCounsellorDashboard.mockResolvedValue(
       counsellorDashboard({
         new_students_today: 4,
+        new_students_this_week: 9,
         pending_registrations: 7,
         follow_ups_due: 3,
         follow_ups_overdue: 2,
@@ -341,6 +398,10 @@ describe('AdmissionsDashboardContent', () => {
     await screen.findByText(/registered today/i);
 
     kpiValue(kpiTileFor(/registered today/i), 4);
+    // Both windows from the same payload, so the week can no longer come out
+    // smaller than the day inside it — the contradiction this screen showed
+    // ("today 61, this week 30") was a browser-side window, not a real figure.
+    kpiValue(kpiTileFor(/registered this week/i), 9);
     kpiValue(kpiTileFor(/pending registrations/i), 7);
     kpiValue(kpiTileFor(/follow-ups due/i), 3);
     kpiValue(kpiTileFor(/follow-ups overdue/i), 2);
@@ -356,7 +417,10 @@ describe('AdmissionsDashboardContent', () => {
 
     expect(await screen.findAllByText(/not available/i)).not.toHaveLength(0);
     // A KPI backed by a different, healthy fetch still renders its number.
-    kpiValue(kpiTileFor(/registered this week/i), 0);
+    // "Registered this week" is no longer one of those: it comes from this
+    // endpoint now, which is the point — it is a measured figure or nothing,
+    // never a window standing in for one.
+    kpiValue(kpiTileFor(/batches starting soon/i), 0);
   });
 });
 

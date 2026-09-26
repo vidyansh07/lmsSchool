@@ -17,6 +17,7 @@ A ``course_id`` in a URL is never treated as proof of anything.
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid as uuid_module
 from pathlib import PurePosixPath
@@ -74,6 +75,8 @@ from .serializers import (
     ResourceUpdateSerializer,
     VideoPlaybackSerializer,
 )
+
+logger = logging.getLogger("grras.courses")
 
 COURSES_TAG = ["courses"]
 CATEGORIES_TAG = ["categories"]
@@ -909,8 +912,27 @@ class ResourceDownloadView(APIView):
         if resource.kind != ResourceKind.FILE or not resource.file or not resource.is_downloadable:
             raise Http404
 
+        try:
+            handle = resource.file.open("rb")
+        except (FileNotFoundError, OSError) as exc:
+            # The row says there is a file and the storage disagrees. It happens
+            # when a database is restored next to a media directory that was
+            # not, or when a seeded environment wrote its uploads under a
+            # MEDIA_ROOT that has since gone: the record survives, the bytes do
+            # not. Answering 404 says the honest thing -- there is nothing to
+            # download -- instead of the generic 500 that reads as a broken
+            # server and sends the reader looking at the wrong layer. Logged at
+            # error level because an operator does want to know.
+            logger.error(
+                "lesson resource %s references missing storage path %s",
+                resource.pk,
+                resource.file.name,
+                exc_info=exc,
+            )
+            raise Http404 from exc
+
         response = FileResponse(
-            resource.file.open("rb"),
+            handle,
             content_type=resource.content_type or "application/octet-stream",
         )
         response["Content-Disposition"] = f'attachment; filename="{_safe_download_name(resource)}"'

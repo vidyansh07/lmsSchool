@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { use, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+import { LessonAside } from '@/components/lesson-aside';
 import { LessonBody } from '@/components/lesson-content';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
@@ -247,7 +248,8 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
           </nav>
         </div>
 
-        <aside className="lg:sticky lg:top-4 lg:self-start">
+        <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <LessonAside lessonId={lesson.id} />
           <nav
             aria-label="Course outline"
             className="max-h-[70vh] overflow-y-auto rounded-card border border-line"

@@ -26,8 +26,15 @@ export interface SessionQuery {
   [key: string]: string | number | undefined;
 }
 
-export async function listSessions(query: SessionQuery = {}): Promise<Paginated<ClassSession>> {
-  return apiFetch<Paginated<ClassSession>>(`/api/v1/sessions/${queryString(query)}`);
+export async function listSessions(
+  query: SessionQuery = {},
+  // Takes the caller's cancellation, the same shape as `listBatches`: this is
+  // now driven by `useList` on the batch screen, and a superseded page or a
+  // panel that unmounts mid-flight must abort its request rather than land a
+  // stale page of rows on a screen that has moved on.
+  signal?: AbortSignal,
+): Promise<Paginated<ClassSession>> {
+  return apiFetch<Paginated<ClassSession>>(`/api/v1/sessions/${queryString(query)}`, { signal });
 }
 
 /** The trainer's daily driver: every class they teach today. */

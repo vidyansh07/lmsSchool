@@ -111,13 +111,31 @@ class TrainerWorkloadSerializer(StrictSerializer):
 
 
 class BatchSummarySerializer(StrictSerializer):
+    """One batch at a glance. The two numbers answer different questions, and
+    §8.6 wants that said where a reader can see it rather than inferred from a
+    row where they disagree."""
+
     id = serializers.CharField()
     code = serializers.CharField()
     name = serializers.CharField()
     course_title = serializers.CharField()
     status = serializers.CharField()
-    students = serializers.IntegerField()
-    attendance_percent = serializers.FloatField(allow_null=True)
+    students = serializers.IntegerField(
+        help_text=(
+            "Enrolments holding a seat on this batch: pending, active, suspended "
+            "or completed. Cancelled and transferred enrolments are excluded. The "
+            "same count `/api/v1/batches/` reports as `enrolled_count`."
+        )
+    )
+    attendance_percent = serializers.FloatField(
+        allow_null=True,
+        help_text=(
+            "Present or late as a percentage of every register taken for this "
+            "batch, excused records excluded — over the batch's whole history, so "
+            "it includes students who have since left. `null` when no register "
+            "has been taken at all."
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -217,6 +235,11 @@ class BatchOverviewAttendanceSerializer(StrictSerializer):
     percentage = serializers.IntegerField(allow_null=True)
     present = serializers.IntegerField()
     absent = serializers.IntegerField()
+    #: The two statuses the card used to leave out, which is what made
+    #: "Present + Absent" fail to reach "Records counted" on screen. `late` is
+    #: inside `total_sessions`, `excused` is outside it.
+    late = serializers.IntegerField()
+    excused = serializers.IntegerField()
     total_sessions = serializers.IntegerField()
 
 

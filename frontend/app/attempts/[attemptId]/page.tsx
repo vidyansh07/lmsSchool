@@ -8,7 +8,7 @@ import { ErrorState, LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiError } from '@/lib/api';
-import { QUESTION_TYPE_LABEL, formatDateTime } from '@/lib/academic-labels';
+import { QUESTION_TYPE_LABEL, answerOutcome, formatDateTime } from '@/lib/academic-labels';
 import { NOT_AVAILABLE } from '@/lib/format';
 import { getAttemptReview } from '@/lib/exams';
 import type { AttemptReview } from '@/types/api';
@@ -86,40 +86,39 @@ function Review({ attemptId }: { attemptId: string }) {
         </CardHeader>
       </Card>
 
-      {review.questions.map((question) => (
-        <Card key={question.position} data-testid="review-question" className="">
-          <CardHeader className="gap-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="neutral">Question {question.position + 1}</Badge>
-              {question.is_correct === null ? (
-                <Badge variant="neutral">Marked by a person</Badge>
-              ) : (
-                <Badge variant={question.is_correct ? 'success' : 'error'}>
-                  {question.is_correct ? 'Correct' : 'Incorrect'}
-                </Badge>
-              )}
-              <span className="text-xs text-ink-muted">
-                {question.awarded ?? '—'} of {question.marks}
-              </span>
-            </div>
-            <CardTitle className="text-base">{question.question_text}</CardTitle>
-            <CardDescription>{QUESTION_TYPE_LABEL[question.question_type]}</CardDescription>
-          </CardHeader>
+      {review.questions.map((question) => {
+        // Three outcomes, not two: see `answerOutcome`. Partial credit on a
+        // written answer used to be badged "Incorrect" beside its own marks.
+        const outcome = answerOutcome(question);
+        return (
+          <Card key={question.position} data-testid="review-question" className="">
+            <CardHeader className="gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="neutral">Question {question.position + 1}</Badge>
+                <Badge variant={outcome.variant}>{outcome.label}</Badge>
+                <span className="text-xs text-ink-muted">
+                  {question.awarded ?? '—'} of {question.marks}
+                </span>
+              </div>
+              <CardTitle className="text-base">{question.question_text}</CardTitle>
+              <CardDescription>{QUESTION_TYPE_LABEL[question.question_type]}</CardDescription>
+            </CardHeader>
 
-          {question.explanation || question.marker_feedback ? (
-            <CardContent className="space-y-2 text-sm">
-              {question.explanation ? (
-                <p className="whitespace-pre-wrap">{question.explanation}</p>
-              ) : null}
-              {question.marker_feedback ? (
-                <p className="whitespace-pre-wrap text-ink-muted">
-                  {question.marker_feedback}
-                </p>
-              ) : null}
-            </CardContent>
-          ) : null}
-        </Card>
-      ))}
+            {question.explanation || question.marker_feedback ? (
+              <CardContent className="space-y-2 text-sm">
+                {question.explanation ? (
+                  <p className="whitespace-pre-wrap">{question.explanation}</p>
+                ) : null}
+                {question.marker_feedback ? (
+                  <p className="whitespace-pre-wrap text-ink-muted">
+                    {question.marker_feedback}
+                  </p>
+                ) : null}
+              </CardContent>
+            ) : null}
+          </Card>
+        );
+      })}
     </div>
   );
 }

@@ -28,6 +28,58 @@ export async function listBatches(
   return apiFetch<Paginated<BatchListRow>>(`/api/v1/batches/${queryString(query)}`, { signal });
 }
 
+/**
+ * The statuses a batch must be in to accept an enrolment.
+ *
+ * Mirrors `ENROLLABLE_STATUSES` in `backend/apps/batches/models.py`, which
+ * `enrol_student` — and therefore `transfer_student`, which goes through it —
+ * enforces: "A completed batch is not accepting students."
+ */
+export const ENROLMENT_DESTINATION_STATUSES = ['upcoming', 'active'] as const;
+
+/**
+ * Batches an enrolment can actually be put *on*: complete, not capped.
+ *
+ * The destination pickers used to list every non-archived batch, thirty rows at
+ * a time. That offered a cancelled batch and every completed one as somewhere
+ * to move a student to — each of which the server refuses, but only after the
+ * operator has picked it and pressed the button — while the thirty-row cap hid
+ * live batches further down the list, so a real destination could not be
+ * reached at all from the list. Both halves are the same mistake: the list was
+ * "batches", where the question is "batches that can take somebody".
+ *
+ * Two requests, because the API's `status` filter is an exact match rather than
+ * a set, and one per status is cheaper to read than a new server-side filter
+ * that would mean the same thing. `page_size` is the server's own ceiling
+ * (`DefaultPagination.max_page_size`), so `isComplete` is false only for a site
+ * running more than a hundred live batches of one status at once — there the
+ * caller's search box is the answer, and the flag exists to say so rather than
+ * quietly truncate.
+ */
+export async function listEnrolmentDestinations(
+  query: { search?: string } = {},
+  signal?: AbortSignal,
+): Promise<{ batches: BatchListRow[]; isComplete: boolean }> {
+  const pages = await Promise.all(
+    ENROLMENT_DESTINATION_STATUSES.map((status) =>
+      listBatches({ ...query, status, page_size: 100, ordering: '-start_date' }, signal),
+    ),
+  );
+  const batches = pages
+    .flatMap((page) => page.results)
+    // The two requests are each ordered newest-first; merged they are not, so
+    // the list is sorted again rather than showing every upcoming batch above
+    // every active one.
+    .sort((left, right) =>
+      left.start_date === right.start_date
+        ? left.name.localeCompare(right.name)
+        : left.start_date < right.start_date
+          ? 1
+          : -1,
+    );
+  return { batches, isComplete: pages.every((page) => page.results.length >= page.count) };
+}
+
 export async function getBatch(id: string): Promise<BatchDetail> {
   return apiFetch<BatchDetail>(`/api/v1/batches/${id}/`);
 }

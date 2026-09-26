@@ -10,9 +10,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
-import { Input, Textarea } from '@/components/ui/input';
+import { Input, Select, Textarea } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
+import { Toolbar } from '@/components/ui/toolbar';
+import { Pagination } from '@/components/pagination';
 import { ApiError, fieldErrors } from '@/lib/api';
+import { formatDate } from '@/lib/format';
 import {
   LIFECYCLE_LABEL,
   LIFECYCLE_VARIANT,
@@ -29,7 +32,12 @@ import {
   reviewProject,
   setProjectStatus,
 } from '@/lib/projects';
-import type { Project, ProjectWorkStatus, ReviewerProjectWork } from '@/types/api';
+import type {
+  Paginated,
+  Project,
+  ProjectWorkStatus,
+  ReviewerProjectWork,
+} from '@/types/api';
 
 /**
  * The states a reviewer can act on.
@@ -39,10 +47,34 @@ import type { Project, ProjectWorkStatus, ReviewerProjectWork } from '@/types/ap
  */
 const REVIEWABLE = new Set<ProjectWorkStatus>(['submitted', 'under_review']);
 
+/**
+ * The order the status filter offers.
+ *
+ * `''` is every row and is the default, because a reviewer arriving from the
+ * brief wants to see the cohort. The two reviewable states come first so the
+ * question this screen exists to answer — "what is waiting on me?" — is the
+ * first thing under the "Everyone" option.
+ */
+const QUEUE_FILTERS: ProjectWorkStatus[] = [
+  'submitted',
+  'under_review',
+  'rework',
+  'approved',
+  'completed',
+  'in_progress',
+  'assigned',
+];
+
 /** The brief, and the review queue for it. */
 function ProjectDetail({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null>(null);
-  const [queue, setQueue] = useState<ReviewerProjectWork[]>([]);
+  // The whole envelope, not just `results`. The card used to hold the rows
+  // alone and print `queue.length` as the total, which for a cohort of
+  // sixty-nine read "(25)" — the page size — and offered no way to reach the
+  // other forty-four.
+  const [queue, setQueue] = useState<Paginated<ReviewerProjectWork> | null>(null);
+  const [status, setStatus] = useState<'' | ProjectWorkStatus>('');
+  const [page, setPage] = useState(1);
   const [error, setError] = useState<ApiError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -50,29 +82,28 @@ function ProjectDetail({ projectId }: { projectId: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [marks, setMarks] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<Record<string, string>>({});
+  // Bumped by `run` after a review lands, so refreshing goes through the one
+  // effect below rather than a second copy of the same two requests.
+  const [reloadToken, setReloadToken] = useState(0);
 
-  const load = useCallback(async () => {
-    const [brief, work] = await Promise.all([
-      getProject(projectId),
-      listProjectWork(projectId),
-    ]);
-    setProject(brief);
-    setQueue(work.results);
+  const apply = useCallback((work: Paginated<ReviewerProjectWork>) => {
+    setQueue(work);
+    // Keyed by row, and only this page's rows: an edit typed against a row
+    // that is no longer on screen has nowhere to be submitted from.
     setMarks(Object.fromEntries(work.results.map((row) => [row.id, row.marks_awarded ?? ''])));
     setFeedback(Object.fromEntries(work.results.map((row) => [row.id, row.feedback])));
-  }, [projectId]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getProject(projectId), listProjectWork(projectId)])
+    Promise.all([
+      getProject(projectId),
+      listProjectWork(projectId, { status: status || undefined, page }),
+    ])
       .then(([brief, work]) => {
         if (cancelled) return;
         setProject(brief);
-        setQueue(work.results);
-        setMarks(
-          Object.fromEntries(work.results.map((row) => [row.id, row.marks_awarded ?? ''])),
-        );
-        setFeedback(Object.fromEntries(work.results.map((row) => [row.id, row.feedback])));
+        apply(work);
       })
       .catch((cause: unknown) => {
         if (!cancelled) setError(cause instanceof ApiError ? cause : null);
@@ -83,7 +114,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, status, page, reloadToken, apply]);
 
   async function run(key: string, action: () => Promise<unknown>, message: string) {
     setBusy(key);
@@ -91,7 +122,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
     setNotice(null);
     try {
       await action();
-      await load();
+      setReloadToken((value) => value + 1);
       setNotice(message);
     } catch (cause) {
       setFormError(fieldErrors(cause).__all__ ?? 'That could not be done.');
@@ -142,7 +173,11 @@ function ProjectDetail({ projectId }: { projectId: string }) {
       <Card>
         <CardHeader>
           <CardTitle as="h2">The brief</CardTitle>
-          <CardDescription>Due {project.end_date ?? 'no date set'}</CardDescription>
+          {/* `formatDate`, not the raw field: `end_date` arrives as
+              "2026-10-14" and every sibling screen shows "14 Oct 2026". */}
+          <CardDescription>
+            Due {project.end_date ? formatDate(project.end_date) : 'no date set'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {project.description ? (
@@ -232,18 +267,48 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Submitted work ({queue.length})</CardTitle>
+          <CardTitle>The review queue ({queue?.count ?? 0})</CardTitle>
           <CardDescription>
             {hasRubric
               ? 'This project is marked against a rubric, so the total is summed by the server.'
-              : 'Approve with a mark, or send it back with a reason.'}
+              : 'Approve with a mark, or send it back with a reason.'}{' '}
+            Handed-in work first — then everyone the project is still with.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {queue.length === 0 ? (
+        <CardContent className="space-y-4">
+          <Toolbar>
+            <div>
+              <label htmlFor="queue-status" className="mb-1.5 block text-sm font-medium">
+                Show
+              </label>
+              <Select
+                id="queue-status"
+                value={status}
+                onChange={(event) => {
+                  setStatus(event.target.value as '' | ProjectWorkStatus);
+                  // A filter that kept the page number would land a reviewer on
+                  // page 3 of a one-page result and show them nothing.
+                  setPage(1);
+                }}
+              >
+                <option value="">Everyone</option>
+                {QUEUE_FILTERS.map((value) => (
+                  <option key={value} value={value}>
+                    {PROJECT_WORK_LABEL[value]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          </Toolbar>
+
+          {!queue || queue.count === 0 ? (
             <EmptyState
-              title="Nobody has this project yet"
-              description="Assign it to the cohort, or wait for a student to open it."
+              title={status ? 'Nothing in that state' : 'Nobody has this project yet'}
+              description={
+                status
+                  ? 'Choose another state, or show everyone.'
+                  : 'Assign it to the cohort, or wait for a student to open it.'
+              }
             />
           ) : (
             <TableWrapper>
@@ -257,7 +322,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {queue.map((row) => (
+                  {queue.results.map((row) => (
                     <tr key={row.id}>
                       <Td>
                         <div className="font-medium">{row.student_name}</div>
@@ -423,6 +488,15 @@ function ProjectDetail({ projectId }: { projectId: string }) {
               </Table>
             </TableWrapper>
           )}
+          {queue ? (
+            <Pagination
+              page={queue.page}
+              totalPages={queue.total_pages}
+              count={queue.count}
+              pageSize={queue.page_size}
+              onPageChange={setPage}
+            />
+          ) : null}
         </CardContent>
       </Card>
     </div>

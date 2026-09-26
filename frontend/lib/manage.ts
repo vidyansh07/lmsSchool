@@ -135,7 +135,17 @@ export interface BatchOverview {
   };
   course: { id: string; title: string; code: string };
   trainer: { id: string; name: string; trainer_id: string } | null;
-  attendance: { percentage: number | null; present: number; absent: number; total_sessions: number };
+  attendance: {
+    percentage: number | null;
+    present: number;
+    absent: number;
+    /** Inside `total_sessions` — a late student was in the room (`COUNTS_AS_PRESENT`). */
+    late: number;
+    /** Outside `total_sessions` — excused is neither attended nor held against them. */
+    excused: number;
+    /** Student-class records that count towards `percentage`: present + late + absent. */
+    total_sessions: number;
+  };
   timeline: {
     percent_complete: number | null;
     percent_expected: number | null;

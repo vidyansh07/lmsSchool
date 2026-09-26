@@ -142,6 +142,28 @@ describe('AdmissionsPage', () => {
     expect(screen.getByText('Asha Rao')).toBeInTheDocument();
   });
 
+  /**
+   * A real seeded row: `EnrollmentStatus.TRANSFERRED` has existed in the
+   * backend since batch transfers landed, and `ENROLLMENT_STATUS_LABEL` never
+   * carried it — so the STATUS cell rendered empty and, because
+   * `ENROLLMENT_STATUS_OPTIONS` is derived from that map's keys, the filter had
+   * no way to ask for those rows either.
+   */
+  it('labels a transferred enrolment and offers it as a status filter', async () => {
+    listEnrollments.mockResolvedValue(page([enrollmentRow({ status: 'transferred' })]));
+    render(<AdmissionsPage />);
+    await waitFor(() => expect(screen.getByText('Asha Rao')).toBeInTheDocument());
+
+    // The row's own STATUS cell, not the filter's new option of the same name.
+    const row = screen.getByText('Asha Rao').closest('tr') as HTMLElement;
+    expect(row).toHaveTextContent('Transferred');
+
+    const options = Array.from(
+      (screen.getByLabelText('Status') as HTMLSelectElement).options,
+    ).map((option) => option.value);
+    expect(options).toContain('transferred');
+  });
+
   it('shows an error with retry on failure', async () => {
     listEnrollments.mockRejectedValue(new ApiError(500, 'server_error', 'Could not load.', 'req-1'));
     render(<AdmissionsPage />);

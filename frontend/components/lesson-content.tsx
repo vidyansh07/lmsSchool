@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ApiError } from '@/lib/api';
+import { apiUrl } from '@/lib/env';
 import { getVideoPlayback } from '@/lib/courses';
 import { formatBytes } from '@/lib/course-labels';
 import type { LessonContent, LessonResource, VideoPlayback } from '@/types/api';
@@ -138,7 +139,13 @@ function ResourceRow({ resource }: { resource: LessonResource }) {
         </Button>
       ) : resource.download_url ? (
         <Button asChild variant="outline" size="sm">
-          <a href={resource.download_url}>
+          {/* `download_url` is a path, not a URL: the serializer does not know
+              the API's public hostname. A bare `/api/...` in an href is
+              resolved by the browser against the page's origin, which is the
+              Next server, so this link 404'd on the front end without ever
+              reaching the download view. `apiUrl` composes the origin -- the
+              same thing `submissionFileUrl` and the export downloads do. */}
+          <a href={apiUrl(resource.download_url)}>
             Download
             <Download className="size-3.5" aria-hidden="true" />
           </a>

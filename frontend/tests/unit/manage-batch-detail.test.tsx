@@ -31,7 +31,16 @@ function overview(overrides: Partial<BatchOverview> = {}): BatchOverview {
     },
     course: { id: 'course-1', title: 'Linux Essentials', code: 'GRS-C-001' },
     trainer: { id: 'trainer-1', name: 'Tina Trainer', trainer_id: 'GRS-T-001' },
-    attendance: { percentage: 82, present: 90, absent: 20, total_sessions: 12 },
+    // Real arithmetic: 90 present + 25 late + 20 absent = 135 counted, and
+    // 5 excused records sit outside that total.
+    attendance: {
+      percentage: 85,
+      present: 90,
+      absent: 20,
+      late: 25,
+      excused: 5,
+      total_sessions: 135,
+    },
     timeline: {
       percent_complete: 40,
       percent_expected: 45,
@@ -61,9 +70,36 @@ describe('BatchDetail', () => {
     getBatchOverview.mockResolvedValue(overview());
     render(<BatchDetail batchId="batch-1" />);
     await waitFor(() => expect(screen.getByText('Morning Linux batch')).toBeInTheDocument());
-    expect(screen.getByText('82%')).toBeInTheDocument();
+    expect(screen.getByText('85%')).toBeInTheDocument();
     expect(screen.getByText('Tina Trainer')).toBeInTheDocument();
     expect(screen.getByText('File permissions')).toBeInTheDocument();
+  });
+
+  /**
+   * The card puts Present, Absent and "Records counted" in one row, so a
+   * reader adds them up — and on the seeded Pune MERN batch the sum failed:
+   * 229 + 76 under a total of 347, because 42 late records were inside that
+   * total and 13 excused ones outside it, and the card showed neither. Every
+   * status in the total is now on the row, and the total says what it counts.
+   */
+  it('shows every status that makes up the counted total, and says what the total counts', async () => {
+    getBatchOverview.mockResolvedValue(overview());
+    render(<BatchDetail batchId="batch-1" />);
+    await waitFor(() => expect(screen.getByText('Morning Linux batch')).toBeInTheDocument());
+
+    const total = screen.getByText('Records counted').closest('div') as HTMLElement;
+    expect(total).toHaveTextContent('135');
+    // Present + late + absent is what the total counts; excused is not in it.
+    expect(total).toHaveTextContent('Present + late + absent');
+    expect(total).toHaveTextContent('5 excused left out');
+
+    const late = screen.getByText('Late').closest('div') as HTMLElement;
+    expect(late).toHaveTextContent('25');
+    expect(
+      Number(screen.getByText('Present').closest('div')?.textContent?.replace(/\D/g, '')) +
+        25 +
+        Number(screen.getByText('Absent').closest('div')?.textContent?.replace(/\D/g, '')),
+    ).toBe(135);
   });
 
   it('renders "Not assigned" when no trainer is on the batch', async () => {
@@ -119,7 +155,14 @@ describe('BatchDetail', () => {
       },
       course: { id: 'course-2', title: 'New Course', code: 'GRS-C-002' },
       trainer: null,
-      attendance: { percentage: null, present: 0, absent: 0, total_sessions: 0 },
+      attendance: {
+        percentage: null,
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0,
+        total_sessions: 0,
+      },
       timeline: {
         percent_complete: null,
         percent_expected: null,

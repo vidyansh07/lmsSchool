@@ -375,7 +375,19 @@ function Analytics() {
         <GridItem span={12}>
           <ChartCard
             title="Batch performance"
-            subtitle="Every batch you can see, with how many students and how well they attend"
+            // The two columns count different things over different spans, and
+            // this row is where that has to be said: "Students" is who holds a
+            // seat now, "Attendance" is every register ever taken for the
+            // batch. A finished cohort therefore reads 102 students at 72% —
+            // it used to read *0* students at 72%, because the endpoint counted
+            // only `active` enrolments and a completed batch has none, which
+            // looked like a broken row and disagreed with
+            // `/admissions/batches` about the same batch.
+            // Not "every batch you can see", which is what this said and is
+            // not what the endpoint returns: `batch_summaries` takes the first
+            // twenty by code. The full report behind the footer link is the
+            // one that carries them all.
+            subtitle="The first 20 batches by code, of the ones you can see. Students: holding a seat now — pending, active, suspended or completed, the same count /admissions/batches shows. Attendance: present or late across every register taken for the batch, over its whole life, so it includes students who have since left."
             icon={CalendarCheck}
             iconTone="neutral"
             testId="batch-table-card"

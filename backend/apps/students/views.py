@@ -58,6 +58,17 @@ class StudentFilterSet(django_filters.FilterSet):
     institution_kind = django_filters.CharFilter(field_name="institution_kind", lookup_expr="exact")
     referred_by = django_filters.UUIDFilter(field_name="referred_by_id")
     branch = django_filters.UUIDFilter(field_name="branch_id")
+    # "Registered, nowhere to sit" — the question the counsellor dashboard's
+    # `Registered, not yet enrolled` panel asks. It used to answer it in the
+    # browser by diffing the thirty most recent students against a page of the
+    # hundred most recently *enrolled*, two windows that need not overlap: on
+    # the showcase data that listed fifteen students who all had enrolments.
+    # A real filter means the panel gets the real rows and a real `count`,
+    # scoped by `visible_students` like every other row on that screen.
+    awaiting_enrolment = django_filters.BooleanFilter(
+        method="filter_awaiting_enrolment",
+        label="Only students holding no seat on any batch (or only those who do).",
+    )
 
     class Meta:
         model = StudentProfile
@@ -70,6 +81,21 @@ class StudentFilterSet(django_filters.FilterSet):
             "referred_by",
             "branch",
         )
+
+    def filter_awaiting_enrolment(self, queryset, name, value):
+        """Both directions through the one shared definition.
+
+        `access.awaiting_enrolment` is what the dashboard tile counts, so
+        `?awaiting_enrolment=true` cannot list a different set of students from
+        the number beside it. `false` is its exact complement — everyone the
+        helper excludes — rather than a second, hand-written condition.
+        """
+        if value is None:
+            return queryset
+        awaiting = access.awaiting_enrolment(queryset)
+        if value:
+            return awaiting
+        return queryset.exclude(pk__in=awaiting.values("pk"))
 
 
 class StudentListCreateView(ListCreateAPIView):

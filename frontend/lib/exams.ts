@@ -27,8 +27,11 @@ export interface QuestionQuery {
   [key: string]: string | number | undefined;
 }
 
-export async function listQuestions(query: QuestionQuery = {}): Promise<Paginated<Question>> {
-  return apiFetch<Paginated<Question>>(`/api/v1/questions/${queryString(query)}`);
+export async function listQuestions(
+  query: QuestionQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<Question>> {
+  return apiFetch<Paginated<Question>>(`/api/v1/questions/${queryString(query)}`, { signal });
 }
 
 export async function createQuestion(payload: Record<string, unknown>): Promise<Question> {

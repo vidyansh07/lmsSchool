@@ -177,4 +177,49 @@ describe("ActivitiesPage", () => {
       ),
     );
   });
+
+  // The two checkboxes send a *flag*, `1`, not the string `"true"` — and the
+  // backend only honours `1` because `ActivityFilterSet` declares those two
+  // filters with django-filter's `BooleanWidget`. django-filter's default
+  // boolean widget silently coerces `1` to `None` and drops the filter, which
+  // is exactly how both boxes came to fire a request and change nothing on
+  // screen. The assertions below pin this screen's half of that contract, so
+  // a future edit here cannot drift away from the widget without failing.
+  it("sends the boolean flags as the numeric spelling the backend filterset accepts", async () => {
+    listActivities.mockResolvedValue(paginated([]));
+    render(<ActivitiesPage />);
+    await waitFor(() => expect(listActivities).toHaveBeenCalledOnce());
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Mine" }));
+    await waitFor(() => expect(listActivities).toHaveBeenCalledTimes(2));
+    const sent = listActivities.mock.calls.at(-1)?.[0];
+    expect(sent.mine).toBe(1);
+    expect(new URLSearchParams({ mine: String(sent.mine) }).toString()).toBe("mine=1");
+  });
+
+  it("unticks both flags when the filters are cleared, and drops them from the query", async () => {
+    listActivities.mockResolvedValue(paginated([]));
+    render(<ActivitiesPage />);
+    await waitFor(() => expect(listActivities).toHaveBeenCalledOnce());
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Mine" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Overdue" }));
+    await waitFor(() =>
+      expect(listActivities).toHaveBeenLastCalledWith(
+        expect.objectContaining({ mine: 1, overdue: 1 }),
+      ),
+    );
+    expect(screen.getByRole("checkbox", { name: "Mine" })).toBeChecked();
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    await waitFor(() =>
+      expect(listActivities).toHaveBeenLastCalledWith(
+        expect.objectContaining({ mine: undefined, overdue: undefined }),
+      ),
+    );
+    // A cleared flag must leave the box unticked too: `undefined` on the wire
+    // with a still-ticked box would read as a dead checkbox all over again.
+    expect(screen.getByRole("checkbox", { name: "Mine" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Overdue" })).not.toBeChecked();
+  });
 });

@@ -174,7 +174,13 @@ function ExamPlayer({ examId }: { examId: string }) {
                 {question.section ? <Badge variant="neutral">{question.section}</Badge> : null}
                 <span className="text-xs text-ink-muted">
                   {question.marks} marks
-                  {Number(question.negative_marks) > 0
+                  {/* Only when the exam deducts. Every question carries the
+                      bank's `negative_marks` whether or not this exam applies
+                      them -- `grade_attempt` gates the deduction on the exam's
+                      flag -- so reading the per-question figure alone told
+                      candidates "−0.25 if wrong" on a paper whose own
+                      instructions said "there is no negative marking". */}
+                  {paper.attempt.negative_marking && Number(question.negative_marks) > 0
                     ? ` · −${question.negative_marks} if wrong`
                     : ''}
                 </span>

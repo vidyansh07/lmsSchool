@@ -70,6 +70,42 @@ describe('CalendarView', () => {
     expect(document.body.textContent).not.toMatch(/Invalid Date/);
   });
 
+  /**
+   * `activity_due` (ERP Phase 9) is a registered backend source that this map
+   * never knew, and the badge's old `?? event.kind` fallback printed the wire
+   * value: 18 of a manager's 27 calendar rows read "activity_due".
+   */
+  it('labels an activity deadline rather than printing the backend enum', async () => {
+    getCalendar.mockResolvedValue({
+      start: '2026-03-01',
+      end: '2026-03-28',
+      count: 1,
+      events: [event({ kind: 'activity_due', title: 'Due: Call the guardian', all_day: false })],
+    });
+    render(<CalendarView />);
+
+    await waitFor(() => expect(screen.getByText('Due: Call the guardian')).toBeInTheDocument());
+    expect(screen.getByText('Activity due')).toBeInTheDocument();
+    expect(screen.queryByText('activity_due')).not.toBeInTheDocument();
+  });
+
+  it('humanises a kind no label map knows rather than printing it raw', async () => {
+    // A source registered in a later phase must read as words, not as a wire
+    // value — `labelFor`'s own contract.
+    getCalendar.mockResolvedValue({
+      start: '2026-03-01',
+      end: '2026-03-28',
+      count: 1,
+      events: [
+        event({ kind: 'course_review' as CalendarEvent['kind'], title: 'Curriculum review' }),
+      ],
+    });
+    render(<CalendarView />);
+
+    await waitFor(() => expect(screen.getByText('Curriculum review')).toBeInTheDocument());
+    expect(screen.getByText('Course Review')).toBeInTheDocument();
+  });
+
   it('renders an unknown event kind rather than breaking', async () => {
     // A source registered in a later phase must not blank the calendar.
     getCalendar.mockResolvedValue({
