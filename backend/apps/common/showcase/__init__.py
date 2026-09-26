@@ -22,8 +22,12 @@ Four safety properties, in order of importance
    whatever the database already holds — on staging that is the ``seed_demo_data``
    roster and ~1,700 imported SITP accounts — and it only *changes* an existing
    row where a stage deliberately upgrades it (renaming the default centre,
-   publishing the imported courses). Every other row it did not create is
-   left exactly as found.
+   publishing the imported courses). One stated exception: stage 1
+   **overwrites** the institution settings, the branding, the global academic
+   policy and its five policy keys on every run — they are singletons the
+   showcase must own for the screens to look configured, so a value somebody
+   changed there by hand is replaced by the showcase's on the next run. Every
+   other row it did not create is left exactly as found.
 2. **Idempotent.** Re-running creates no duplicates. Each stage finds its own
    rows before creating them: people by their roster email, branches by code,
    calendar entries by (name, date), free-text rows by the ``[showcase]`` marker
@@ -43,9 +47,12 @@ Why the accounts look real
 The roster lives on ``grras.com``, the owner's own domain, because a showcase
 whose every address ends in ``.invalid`` reads as a fixture rather than as an
 institution. That is safe only while nothing addressed to those accounts is
-delivered: the command refuses to run when ``EMAIL_BACKEND`` is SMTP (staging
-uses the console backend; ``--allow-real-mail`` is the one way past that
-refusal), and ``scripts/verify_demo.sh`` accepts that one domain by explicit
-allow-list (``VERIFY_ALLOWED_EMAIL_DOMAINS``) while still failing on any other
-real domain.
+delivered: the command refuses to run unless ``EMAIL_BACKEND`` is one of
+Django's non-delivering backends (console, locmem, dummy, filebased — staging
+*must* keep the console one, as its ``.env.staging`` template sets;
+``--allow-real-mail`` is the one way past that refusal), the finish stage
+abandons every outbox row the run queued so a worker cannot send it later,
+and ``scripts/verify_demo.sh`` accepts that one domain by explicit allow-list
+(``VERIFY_ALLOWED_EMAIL_DOMAINS``) while still failing on any other real
+domain.
 """

@@ -20,7 +20,16 @@ Creates, through the services and idempotently:
   mfa_required_roles``, ``password.*``, ``session.*``, ``deletion.*``), because
   a demo that forces its own reviewers into MFA after a week is a demo that
   locks its reviewers out — plus one branch-level override so the resolver's
-  branch-then-global walk is visible;
+  branch-then-global walk is visible.
+
+**These four are overwritten on every run.** The settings row, the branding
+row, the global academic policy and the five policy keys above are singletons
+or keyed rows with no "mine" to tell from "theirs": each run writes the
+values listed in this module, and whatever a person changed on those screens
+since the last run is replaced (an audit row records it). That is the one
+place the showcase is not purely additive; every other row it did not create
+is left as found. The stage also creates:
+
 * the **academic calendar**: the public holidays in the coming ninety days
   (Gandhi Jayanti, Dussehra, Diwali) and one already past, so class generation
   in stage 4 has dates to skip and the calendar has history. Idempotent by
@@ -196,6 +205,14 @@ def _ensure_owner(ctx: Context) -> User:
         user.is_email_verified = True
         user.email_verified_at = timezone.now()
         user.save(update_fields=["is_email_verified", "email_verified_at"])
+    # And into the Django admin, whoever created him, for the same reason the
+    # created path grants it: a found owner somebody demoted by hand (or one
+    # `seed_demo_data` made without the flags) would otherwise stay locked
+    # out of the one screen the showcase promises him.
+    if not (user.is_staff and user.is_superuser):
+        user.is_staff = True
+        user.is_superuser = True
+        user.save(update_fields=["is_staff", "is_superuser"])
 
     ctx.superadmin = user
     ctx.users[person.local_part] = user

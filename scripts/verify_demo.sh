@@ -39,8 +39,19 @@ case "$ENVIRONMENT" in
     # .env.staging is compose's --env-file, not this shell's environment; the
     # one value this script needs from it is read out by hand so that the
     # allow-list below is the same one the host's stack was configured with.
+    # `sed -n .../p` rather than `grep`: under `set -e` a grep that matches
+    # nothing exits 1 and would end the whole script here, silently, on a
+    # host whose .env.staging simply has no such key. The value is then
+    # unquoted and stripped of a trailing ` # comment`, the two shapes an
+    # env file writes that compose itself would also strip.
     if [ -z "${VERIFY_ALLOWED_EMAIL_DOMAINS:-}" ] && [ -f .env.staging ]; then
-      VERIFY_ALLOWED_EMAIL_DOMAINS="$(grep -E '^VERIFY_ALLOWED_EMAIL_DOMAINS=' .env.staging | tail -1 | cut -d= -f2-)"
+      VERIFY_ALLOWED_EMAIL_DOMAINS="$(sed -n 's/^VERIFY_ALLOWED_EMAIL_DOMAINS=//p' .env.staging | tail -1)"
+      VERIFY_ALLOWED_EMAIL_DOMAINS="${VERIFY_ALLOWED_EMAIL_DOMAINS%%[[:space:]]#*}"
+      VERIFY_ALLOWED_EMAIL_DOMAINS="${VERIFY_ALLOWED_EMAIL_DOMAINS%"${VERIFY_ALLOWED_EMAIL_DOMAINS##*[![:space:]]}"}"
+      case "$VERIFY_ALLOWED_EMAIL_DOMAINS" in
+        \"*\") VERIFY_ALLOWED_EMAIL_DOMAINS="${VERIFY_ALLOWED_EMAIL_DOMAINS#\"}"; VERIFY_ALLOWED_EMAIL_DOMAINS="${VERIFY_ALLOWED_EMAIL_DOMAINS%\"}" ;;
+        \'*\') VERIFY_ALLOWED_EMAIL_DOMAINS="${VERIFY_ALLOWED_EMAIL_DOMAINS#\'}"; VERIFY_ALLOWED_EMAIL_DOMAINS="${VERIFY_ALLOWED_EMAIL_DOMAINS%\'}" ;;
+      esac
     fi
     ;;
   *)
@@ -78,10 +89,16 @@ check() {
 #: environment says otherwise. See that check for why staging says otherwise.
 VERIFY_ALLOWED_EMAIL_DOMAINS="${VERIFY_ALLOWED_EMAIL_DOMAINS:-}"
 
+# The allow-list is passed into the container only when this shell has a
+# value: compose's env_file already supplies the host's own, and an explicit
+# empty `-e` would override that with nothing.
+MANAGE_ENV=(-e DJANGO_SETTINGS_MODULE="$SETTINGS")
+if [ -n "$VERIFY_ALLOWED_EMAIL_DOMAINS" ]; then
+  MANAGE_ENV+=(-e VERIFY_ALLOWED_EMAIL_DOMAINS="$VERIFY_ALLOWED_EMAIL_DOMAINS")
+fi
+
 manage() {
-  "${COMPOSE[@]}" exec -T -e DJANGO_SETTINGS_MODULE="$SETTINGS" \
-    -e VERIFY_ALLOWED_EMAIL_DOMAINS="$VERIFY_ALLOWED_EMAIL_DOMAINS" \
-    backend python manage.py "$@"
+  "${COMPOSE[@]}" exec -T "${MANAGE_ENV[@]}" backend python manage.py "$@"
 }
 
 # `manage shell -c` prints whatever the environment's shell plugins announce on
@@ -193,8 +210,9 @@ demo_data_is_fake() {
   # `manage.py seed_showcase` creates must look like a real institution to the
   # people it is shown to, and `.invalid` addresses read as a fixture. That is
   # safe only while nothing addressed to those accounts is delivered: staging
-  # sends mail to the console backend, seed_showcase itself refuses to run
-  # under an SMTP backend, and every one of those accounts is invented. Any
+  # must keep EMAIL_BACKEND on a non-delivering backend (the console one, as
+  # the .env.staging template sets), seed_showcase itself refuses to run under
+  # any delivering backend, and every one of those accounts is invented. Any
   # *other* real domain still fails this check — the list is an allow-list of
   # domains the owner controls, not a switch that turns the check off.
   manage shell -c '

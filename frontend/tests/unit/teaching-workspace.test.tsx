@@ -306,6 +306,31 @@ describe('ClassWorkspace', () => {
     expect(screen.getByLabelText('Teaching notes')).toBeInTheDocument();
   });
 
+  it('shows the report’s own stored counts, and never autosaves them, while the register is missing', async () => {
+    // A transient register failure must not read as "nobody came" — and,
+    // since the autosave carries the counts it shows, must not write that
+    // back over the server draft either (`draftAutosaveDue` in page.tsx).
+    const state = fixtures();
+    state.dsr = { ...state.dsr, student_count: 24, present_count: 20, absent_count: 4 };
+    wireHappyPath(state);
+    getRegister.mockRejectedValue(new ApiError(500, 'error', 'Register service unavailable.', 'req-reg'));
+    const user = userEvent.setup();
+    render(<ClassWorkspace sessionId="session-1" />);
+
+    await waitFor(() => expect(screen.getByText('The register is not available')).toBeInTheDocument());
+    expect(screen.getByText('On roster:').parentElement).toHaveTextContent('24');
+    expect(screen.getByText('Present:').parentElement).toHaveTextContent('20');
+    expect(screen.getByText('Absent:').parentElement).toHaveTextContent('4');
+
+    await user.type(screen.getByLabelText('Teaching notes'), 'Ran a live demo.');
+    // Outlast the 1200 ms server-draft debounce: a gated autosave is silent,
+    // so the only proof it did not fire is that nothing arrives after it.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(updateDsr).not.toHaveBeenCalled();
+    expect(startDsr).not.toHaveBeenCalled();
+    expect(screen.getByText('Present:').parentElement).toHaveTextContent('20');
+  });
+
   it('keeps the register when only the day\'s report refuses to load', async () => {
     const state = fixtures();
     wireHappyPath(state);

@@ -32,7 +32,7 @@ import { useApi } from "@/hooks/use-api";
 import { errorMessage } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
 import { formatDateTime } from "@/lib/format";
-import { ROLE_LABEL } from "@/lib/labels";
+import { ROLE_LABEL, labelFor } from "@/lib/labels";
 import { deleteRole } from "@/lib/roles";
 import type { RoleSummary } from "@/types/api";
 
@@ -156,7 +156,7 @@ function RolesList() {
                       </p>
                     ) : null}
                   </Td>
-                  <Td>{ROLE_LABEL[role.kind]}</Td>
+                  <Td>{labelFor(ROLE_LABEL, role.kind)}</Td>
                   <Td className="text-right tabular-nums">{role.user_count}</Td>
                   <Td className="text-right tabular-nums">
                     {role.permission_count}

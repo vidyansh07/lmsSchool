@@ -313,7 +313,18 @@ export function ClassWorkspace({
   // --- Live counts (always the number that will actually be submitted) -----
 
   const liveCounts = useMemo(() => {
-    if (!register) return { present: 0, absent: 0, student: 0 };
+    // No register (it refused to load — see the settled load above) means
+    // nothing is being marked, so there is nothing live to count. Show what
+    // the report already holds rather than 0/0/0: a transient register 500
+    // must not read as "nobody came", and — see the autosave gate below —
+    // must never be written back over the server draft either.
+    if (!register) {
+      return {
+        present: dsr?.present_count ?? 0,
+        absent: dsr?.absent_count ?? 0,
+        student: dsr?.student_count ?? 0,
+      };
+    }
     let present = 0;
     let absent = 0;
     for (const entry of register.entries) {
@@ -322,7 +333,7 @@ export function ClassWorkspace({
       else if (status === 'absent') absent += 1;
     }
     return { present, absent, student: register.entries.length };
-  }, [register, marks]);
+  }, [register, marks, dsr]);
 
   // --- Local draft: synchronous, no debounce (see the module docstring) ----
 
@@ -344,7 +355,12 @@ export function ClassWorkspace({
   // and has not been sent yet" is decided during render (comparing against
   // the last value this hook started saving), not with a synchronous
   // setState at the top of the effect.
-  const draftAutosaveDue = isDirty && Boolean(dsr?.is_editable);
+  // Gated on the register too: the autosave carries the live counts, and
+  // without a register those are only the report's own stored numbers (or
+  // zeros) — sending them back would overwrite the server draft with a
+  // copy of itself at best and wipe a real count at worst. The local draft
+  // still keeps the trainer's typing safe meanwhile.
+  const draftAutosaveDue = isDirty && Boolean(register) && Boolean(dsr?.is_editable);
   const [savingDraftFor, setSavingDraftFor] = useState<DSRWritePayload | null>(null);
   if (draftAutosaveDue && savingDraftFor !== debouncedDraft) {
     setSavingDraftFor(debouncedDraft);
@@ -352,7 +368,7 @@ export function ClassWorkspace({
   }
 
   useEffect(() => {
-    if (!isDirty || !dsr || !dsr.is_editable) return;
+    if (!isDirty || !register || !dsr || !dsr.is_editable) return;
     let cancelled = false;
     const payload: DSRWritePayload = {
       ...debouncedDraft,

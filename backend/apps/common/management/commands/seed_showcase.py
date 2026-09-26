@@ -36,6 +36,14 @@ from django.db import transaction
 from apps.common.showcase.context import Context, hydrate
 from apps.common.showcase.stages import STAGE_KEYS, STAGES, s10_finish
 
+#: Django's own backends that deliver nowhere: to stdout, to memory, to /dev/null
+#: and to a directory. Anything else — SMTP, a provider's, a custom one — is
+#: assumed to deliver until ``--allow-real-mail`` says otherwise.
+NON_DELIVERING_BACKENDS = frozenset(
+    f"django.core.mail.backends.{name}.EmailBackend"
+    for name in ("console", "locmem", "dummy", "filebased")
+)
+
 
 class Command(BaseCommand):
     help = (
@@ -70,8 +78,9 @@ class Command(BaseCommand):
             "--allow-real-mail",
             action="store_true",
             help=(
-                "Run even though EMAIL_BACKEND is SMTP. The showcase fans notifications "
-                "out to every active account, imported real addresses included."
+                "Run even though EMAIL_BACKEND is not one of Django's non-delivering "
+                "backends. The showcase fans notifications out to every active account, "
+                "imported real addresses included."
             ),
         )
 
@@ -90,14 +99,19 @@ class Command(BaseCommand):
         # The second gate is about mail. Publishing an 'everyone' announcement,
         # grading, recording a result, a risk change — each queues an email to
         # every account it concerns, and on a database holding imported real
-        # addresses that is real people receiving "[showcase]" mail. Refuse
-        # while the backend would actually deliver, unless told in so many
-        # words. The console and locmem backends deliver nowhere.
-        if settings.EMAIL_BACKEND.endswith("smtp.EmailBackend") and not options["allow_real_mail"]:
+        # addresses that is real people receiving "[showcase]" mail. An
+        # allow-list, not a block-list: only the backends *known* to deliver
+        # nowhere pass, so an SMTP backend, a provider's (anymail, SES) and any
+        # backend this code has never heard of are all refused alike, unless
+        # told in so many words.
+        backend = settings.EMAIL_BACKEND
+        if backend not in NON_DELIVERING_BACKENDS and not options["allow_real_mail"]:
             raise CommandError(
-                "EMAIL_BACKEND is SMTP: the showcase fans notifications out to every active "
-                "account, including imported real addresses. Set EMAIL_BACKEND to the console "
-                "backend, or pass --allow-real-mail if that is really intended."
+                f"EMAIL_BACKEND is {backend}, which may deliver mail: the showcase fans "
+                "notifications out to every active account, including imported real "
+                "addresses. Set EMAIL_BACKEND to the console backend (or another of "
+                f"{', '.join(sorted(NON_DELIVERING_BACKENDS))}), or pass --allow-real-mail "
+                "if that is really intended."
             )
 
         if options["list"]:

@@ -378,6 +378,21 @@ def hydrate(ctx: Context) -> None:
                 f"{person.email} exists with role {user.role!r}, but the showcase "
                 f"roster says {person.role!r}. Fix the account or the roster first."
             )
+        # The same for the centre: the slots below are keyed by the roster's
+        # branch code, and an account moved to another centre by hand would
+        # be filed under Pune while every one of its rows landed in Jaipur.
+        # A trainer's or student's profile carries its own branch, which the
+        # services read in preference to the user's, so it is checked too.
+        actual = {"account": user.branch.code if user.branch_id else None}
+        profile = trainer_profiles.get(user.pk) or student_profiles.get(user.pk)
+        if profile is not None:
+            actual["profile"] = profile.branch.code if profile.branch_id else None
+        if any(code != person.branch_code for code in actual.values()):
+            where = ", ".join(f"{what} {code!r}" for what, code in actual.items())
+            raise RuntimeError(
+                f"{person.email} exists at branch {where}, but the showcase roster "
+                f"says {person.branch_code!r}. Fix the account or the roster first."
+            )
         ctx.users[person.local_part] = user
         code = person.branch_code or MAIN
         if person.role == UserRole.SUPERADMIN:

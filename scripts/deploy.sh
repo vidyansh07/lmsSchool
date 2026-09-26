@@ -96,12 +96,20 @@ if [ "$SHOWCASE" = true ]; then
   # summary line are shown here; the whole thing is idempotent, so re-run it
   # on the host for the full table.
   echo "▶ 5/5 seed: showcase data set"
-  remote "$COMPOSE exec -T backend python manage.py seed_showcase 2>&1 | grep -v grras.audit | grep -E '^stage|not implemented|ready\.|Error|Traceback|refus' | tail -30"
+  # The filter keeps the stage lines, the closing line and anything that
+  # looks like a failure — case-insensitively, and including the last line
+  # of a traceback (`SomeError: …`, `PermissionDenied: …`), which is the one
+  # line that says *why* and would otherwise be the one line dropped.
+  remote "$COMPOSE exec -T backend python manage.py seed_showcase 2>&1 | grep -v grras.audit | grep -iE '^stage|not implemented|ready\.|error|traceback|refus|warning|^[A-Za-z_.]+(Error|Exception|Denied|Refused|Conflict):' | tail -30"
 fi
 
 if [ -n "$IMPORT_DIR" ]; then
   echo "▶ 5/5 seed: SITP workbooks from $IMPORT_DIR"
-  ACTOR=$(remote "$COMPOSE exec -T backend python manage.py shell -c \"from apps.accounts.models import User; print(User.objects.filter(role='admin').order_by('email').values_list('email', flat=True).first())\" 2>/dev/null | tail -1")
+  # The import's actor: the owner when the showcase has made him, else an
+  # admin at the main centre, else any admin. "First admin by email" used to
+  # do, but after the showcase that is admin.pune@grras.com, and imported
+  # SITP batches would be filed under Pune.
+  ACTOR=$(remote "$COMPOSE exec -T backend python manage.py shell -c \"from apps.accounts.models import User; admins = User.objects.filter(role='admin').order_by('email'); actor = User.objects.filter(email='owner@grras.com').first() or admins.filter(branch__code='MAIN').first() or admins.first(); print(actor.email if actor else '')\" 2>/dev/null | tail -1")
   echo "  as $ACTOR"
   STAGE=$(mktemp -d)
   rsync -a --include='*/' --include='*.xlsx' --exclude='*' "$IMPORT_DIR/" "$STAGE/"

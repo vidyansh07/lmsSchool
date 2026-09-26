@@ -14,6 +14,7 @@ import { ApiError } from '@/lib/api';
 import { setLessonCompletion } from '@/lib/batches';
 import { getCourse, getLesson } from '@/lib/courses';
 import { CONTENT_TYPE_LABEL, formatDuration } from '@/lib/course-labels';
+import { labelFor } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 import type { CourseDetail, LessonContent, LessonSummary } from '@/types/api';
 
@@ -208,7 +209,7 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
           <header className="space-y-2">
             <h1 className="text-2xl font-semibold tracking-tight">{lesson.title}</h1>
             <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-              <Badge>{CONTENT_TYPE_LABEL[lesson.content_type]}</Badge>
+              <Badge>{labelFor(CONTENT_TYPE_LABEL, lesson.content_type)}</Badge>
               {lesson.duration_minutes ? (
                 <span>{formatDuration(lesson.duration_minutes)}</span>
               ) : null}
