@@ -11,8 +11,10 @@ import { expect, type Page, type Response } from '@playwright/test';
  * its signed-in form once the browser has fetched the current user, so the
  * greeting arrives a beat after the session does. Twenty-four tests failed on
  * staging for that reason and none failed locally — the most expensive kind of
- * difference between environments. The Sign out control in the banner appears
- * exactly when there is a session.
+ * difference between environments. The Sign out control in the navigation rail
+ * (`<aside>`, the accessible `complementary` landmark) appears exactly when
+ * there is a session — it lived in the banner until the shell became a rail
+ * and a labelled top bar, and the session is what it still signals.
  *
  * **It waits out the rate limit.** The suite signs in about fifty times from
  * one address, which is the shape of traffic the credential throttle exists to
@@ -49,8 +51,9 @@ export async function signIn(page: Page, email: string, password = DEMO_PASSWORD
     await page.getByRole('button', { name: /^sign in$/i }).click();
 
     const signedIn = await page
-      .getByRole('banner')
+      .getByRole('complementary')
       .getByRole('button', { name: /sign out/i })
+      .first()
       .waitFor({ state: 'visible', timeout: SESSION_TIMEOUT })
       .then(() => true)
       .catch(() => false);
@@ -80,7 +83,11 @@ export async function signIn(page: Page, email: string, password = DEMO_PASSWORD
 }
 
 export async function signOut(page: Page) {
-  await page.getByRole('banner').getByRole('button', { name: /sign out/i }).click();
+  await page
+    .getByRole('complementary')
+    .getByRole('button', { name: /sign out/i })
+    .first()
+    .click();
   // Scoped to the header: a signed-out page may also offer a Sign in link in
   // its body, and either one appearing means the sign-out landed.
   await expect(page.getByRole('banner').getByRole('link', { name: /sign in/i })).toBeVisible();
