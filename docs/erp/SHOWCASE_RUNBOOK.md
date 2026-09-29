@@ -188,7 +188,78 @@ actually executed once against staging.
 
 ---
 
-## 4. Undoing a showcase run
+## 4. Switching mail on, in the one order that is safe
+
+Password reset and email verification are the two features nobody can
+demonstrate with a mail backend that delivers nowhere. Switching to SMTP on a
+staging database is not a configuration change on its own, because that
+database holds **397 real Gmail addresses** the SITP workbook import brought
+in. The moment mail delivers, the announcements, grade notifications and fee
+reminders the showcase fanned out reach those people.
+
+So the order matters, and only this order is safe:
+
+```bash
+# 1. a backup, because step 2 is irreversible
+./scripts/backup.sh staging
+
+# 2. see what would change, on the host
+docker compose -f docker-compose.staging.yml --env-file .env.staging \
+  exec -T backend python manage.py anonymise_imported_contacts --dry-run
+
+# 3. do it
+docker compose … exec -T backend python manage.py anonymise_imported_contacts
+
+# 4. only now, put the SMTP values in the host's own .env.staging and restart
+```
+
+`anonymise_imported_contacts` rewrites every address that is neither on a
+reserved domain (`.invalid`, `.test`, `.example`, `.localhost`) nor on a
+`--keep` domain (default `grras.com`, the roster's own) to
+`rtu-<roll number>@sitp.grras.invalid`, and every phone number — the account's,
+the guardian's and the emergency contact's — to `+000000000000`. That number
+passes `PHONE_RE` so the record still validates when somebody edits it, and no
+carrier can route it, because an E.164 country code never begins with a zero.
+WhatsApp consent and email verification are cleared with the address they were
+given for, and anything already queued to a real address is withdrawn — without
+that last part the first sweep after SMTP is switched on would send the backlog
+to exactly the people this protects.
+
+It keeps no record of the old values, anywhere. That is the point of running
+it, and it is why step 1 is not optional: restoring the backup is the only way
+back.
+
+Two things worth knowing before running it:
+
+- **Every** account on a real domain is in scope, staff included. The report
+  breaks the count down by role so that is not a surprise; anyone who signs in
+  with a real address will need a `@grras.com` one instead, or their domain
+  named with `--keep`.
+- The showcase seeder itself **refuses to run** once `EMAIL_BACKEND` can
+  deliver, so on a host with SMTP configured the order is seed first,
+  anonymise, then switch the backend — or pass `--allow-real-mail` and know why.
+
+### The SMTP values themselves
+
+The deploy script edits nothing on the host, so these go in the host's own
+`.env.staging` by hand:
+
+| Variable | Note |
+|---|---|
+| `EMAIL_BACKEND` | `django.core.mail.backends.smtp.EmailBackend` |
+| `EMAIL_HOST` / `EMAIL_PORT` | e.g. `smtp.gmail.com` / `587` |
+| `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | For Gmail this is an **app password**, and its display spaces must be stripped — SMTP AUTH rejects them. |
+| `EMAIL_USE_TLS` | `True` on port 587. |
+| `DEFAULT_FROM_EMAIL` | Must be an address the account is allowed to send as. Gmail refuses a domain it does not own, so a `no-reply@` alias needs "Send mail as" verified first. |
+| `FRONTEND_BASE_URL` | Already set; it is where the reset and verification links point, so check it before testing the links rather than after. |
+
+Gmail sends roughly 500 messages a day. An announcement to "everyone" on a
+seeded staging database is well over that, which is a second reason the finish
+stage abandons the outbox the run queued.
+
+---
+
+## 5. Undoing a showcase run
 
 There is no unseed command, deliberately: a delete pass across thirty models
 with protected foreign keys is how a demo environment loses real data. Restore
