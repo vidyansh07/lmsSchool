@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { ErrorState, LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -529,7 +530,7 @@ function Overview() {
 
 export default function OverviewPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.reportViewAny}>
       <Overview />
     </RequireAuth>
   );

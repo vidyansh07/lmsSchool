@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -499,7 +500,7 @@ function QuestionBank() {
 
 export default function QuestionBankPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.questionViewAny} roles={["trainer"]}>
       <QuestionBank />
     </RequireAuth>
   );

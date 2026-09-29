@@ -25,6 +25,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -260,7 +261,7 @@ function MyWorkWorkspace() {
 
 export default function TeachingWorkPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.activityViewAny} roles={["trainer"]}>
       <Suspense fallback={<LoadingState label="Loading your work…" rows={6} />}>
         <MyWorkWorkspace />
       </Suspense>

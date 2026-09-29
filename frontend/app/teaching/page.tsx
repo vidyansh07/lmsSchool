@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -135,7 +136,7 @@ function Teaching() {
 
 export default function TeachingPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.sessionManageAny} roles={["trainer"]}>
       <Teaching />
     </RequireAuth>
   );

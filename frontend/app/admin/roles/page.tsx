@@ -257,7 +257,7 @@ function RolesList() {
 
 export default function RolesPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.roleView}>
       <Suspense fallback={<LoadingState label="Loading roles…" rows={6} />}>
         <RolesList />
       </Suspense>

@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -506,7 +507,7 @@ function ProjectDetail({ projectId }: { projectId: string }) {
 export default function TeachingProjectPage() {
   const params = useParams<{ projectId: string }>();
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.projectManageAny} roles={["trainer"]}>
       <ProjectDetail projectId={params.projectId} />
     </RequireAuth>
   );

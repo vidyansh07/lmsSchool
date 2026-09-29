@@ -46,6 +46,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { ErrorState, LoadingState } from '@/components/states';
 import {
   ClassHeader,
@@ -922,7 +923,7 @@ export function TodayWorkspace() {
 
 export default function TodayPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.sessionManageAny} roles={["trainer"]}>
       <Suspense fallback={<LoadingState label="Loading today's classes…" rows={6} />}>
         <TodayWorkspace />
       </Suspense>

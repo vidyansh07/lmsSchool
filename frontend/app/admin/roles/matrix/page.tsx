@@ -1,11 +1,12 @@
 import Link from "next/link";
 
 import { RequireAuth } from "@/components/require-auth";
+import { Capability } from "@/lib/capabilities";
 import { PermissionMatrix } from "@/components/roles/permission-matrix";
 
 export default function MatrixPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.roleView}>
       <div className="space-y-6">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">

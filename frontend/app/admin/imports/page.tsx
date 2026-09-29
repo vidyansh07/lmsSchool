@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -266,7 +267,7 @@ function Imports() {
 
 export default function ImportsPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.dataImport}>
       <Imports />
     </RequireAuth>
   );

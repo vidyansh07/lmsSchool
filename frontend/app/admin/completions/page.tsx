@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { ProgressRules } from '@/components/progress-rules';
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -321,7 +322,7 @@ function Completions() {
 
 export default function CompletionsPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.completionApprove}>
       <Completions />
     </RequireAuth>
   );

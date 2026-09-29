@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -313,7 +314,7 @@ function Exams() {
 
 export default function TeachingExamsPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.examManageAny} roles={["trainer"]}>
       <Exams />
     </RequireAuth>
   );

@@ -1,4 +1,5 @@
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { BatchDetailView } from './batch-detail-view';
 
 // Not a client component: reading the route param needs nothing that only a
@@ -12,7 +13,7 @@ export default async function AdminBatchPage({
 }) {
   const { batchId } = await params;
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.batchViewAny} roles={["trainer"]}>
       <BatchDetailView batchId={batchId} />
     </RequireAuth>
   );

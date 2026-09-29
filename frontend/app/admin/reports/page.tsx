@@ -198,7 +198,7 @@ function Reports() {
 
 export default function ReportsPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.reportViewAny} roles={["trainer"]}>
       <Reports />
     </RequireAuth>
   );
