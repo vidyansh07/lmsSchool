@@ -805,6 +805,27 @@ def _end_of(ctx: Context, session: ClassSession) -> datetime:
     return min(timezone.localtime(session.ends_at), ctx.now - timedelta(minutes=1))
 
 
+def _within_the_day(ended: datetime, offsets: dict[str, timedelta]) -> dict[str, datetime]:
+    """``ended`` plus each offset, all held inside the class's own local day.
+
+    A daily report belongs to the day it reports on: the DSR list, the overdue
+    warning and the weekly compliance figures all read its timestamps, and a
+    report filed twenty minutes after a class that ended at 23:52 would land in
+    the next day's bucket while the register stayed in this one. So when the
+    offsets do not fit before local midnight they are compressed into whatever
+    time is left, which keeps their order — created, submitted, reviewed — and
+    keeps every one of them on the session's date.
+    """
+    midnight = timezone.localtime(ended).replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = midnight + timedelta(days=1) - timedelta(minutes=1)
+    span = max(offsets.values(), default=timedelta())
+    remaining = day_end - ended
+    if span and remaining < span:
+        scale = max(remaining, timedelta()) / span
+        offsets = {name: off * scale for name, off in offsets.items()}
+    return {name: ended + off for name, off in offsets.items()}
+
+
 # ---------------------------------------------------------------------------
 # Corrections
 # ---------------------------------------------------------------------------
@@ -1016,14 +1037,15 @@ def _write_report(ctx: Context, scope: Scope, held: Held, target: str) -> None:
         assessment_conducted=draw.random() < 0.10,
     )
     ended = _end_of(ctx, session)
-    stamps: dict[str, datetime] = {"created_at": ended + timedelta(minutes=5)}
+    offsets: dict[str, timedelta] = {"created_at": timedelta(minutes=5)}
     if target != DSRStatus.DRAFT:
         submit_dsr(dsr=dsr, actor=trainer)
-        stamps["submitted_at"] = ended + timedelta(minutes=20)
+        offsets["submitted_at"] = timedelta(minutes=20)
     if target not in (DSRStatus.DRAFT, DSRStatus.SUBMITTED):
         comments = draw.choice(REVIEW_COMMENTS.get(target, ("",)))
         review_dsr(dsr=dsr, actor=_reviewer(ctx, held.batch), decision=target, comments=comments)
-        stamps["reviewed_at"] = ended + timedelta(hours=2, minutes=draw.randint(0, 40))
+        offsets["reviewed_at"] = timedelta(hours=2, minutes=draw.randint(0, 40))
+    stamps = _within_the_day(ended, offsets)
     latest = ctx.now - timedelta(minutes=1)
     ctx.backdate(dsr, **{name: min(when, latest) for name, when in stamps.items()})
 
