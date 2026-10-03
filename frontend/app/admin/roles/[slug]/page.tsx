@@ -3,6 +3,7 @@
 import { use } from "react";
 
 import { RequireAuth } from "@/components/require-auth";
+import { Capability } from "@/lib/capabilities";
 import { RoleBuilder } from "@/components/roles/role-builder";
 
 export default function EditRolePage({
@@ -12,7 +13,7 @@ export default function EditRolePage({
 }) {
   const { slug } = use(params);
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.roleView}>
       <RoleBuilder slug={slug} />
     </RequireAuth>
   );

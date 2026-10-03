@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -318,7 +319,7 @@ function Certificates() {
 
 export default function CertificatesPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.certificateManage}>
       <Certificates />
     </RequireAuth>
   );

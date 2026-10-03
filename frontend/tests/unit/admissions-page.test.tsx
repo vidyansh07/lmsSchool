@@ -125,6 +125,45 @@ describe('AdmissionsPage', () => {
     expect(listEnrollments.mock.calls.length).toBe(callsBefore);
   });
 
+  it('keeps an enrolment with no registration date out of a date-filtered view instead of throwing', async () => {
+    listEnrollments.mockResolvedValue(
+      page([
+        enrollmentRow({ id: 'e-undated', enrolled_at: null as unknown as string, student_name: 'Imported Student' }),
+        enrollmentRow({ id: 'e-new', enrolled_at: '2026-09-10T00:00:00Z', student_name: 'Asha Rao' }),
+      ]),
+    );
+    render(<AdmissionsPage />);
+    await waitFor(() => expect(screen.getByText('Imported Student')).toBeInTheDocument());
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Registered from'), '2026-09-01');
+
+    await waitFor(() => expect(screen.queryByText('Imported Student')).not.toBeInTheDocument());
+    expect(screen.getByText('Asha Rao')).toBeInTheDocument();
+  });
+
+  /**
+   * A real seeded row: `EnrollmentStatus.TRANSFERRED` has existed in the
+   * backend since batch transfers landed, and `ENROLLMENT_STATUS_LABEL` never
+   * carried it — so the STATUS cell rendered empty and, because
+   * `ENROLLMENT_STATUS_OPTIONS` is derived from that map's keys, the filter had
+   * no way to ask for those rows either.
+   */
+  it('labels a transferred enrolment and offers it as a status filter', async () => {
+    listEnrollments.mockResolvedValue(page([enrollmentRow({ status: 'transferred' })]));
+    render(<AdmissionsPage />);
+    await waitFor(() => expect(screen.getByText('Asha Rao')).toBeInTheDocument());
+
+    // The row's own STATUS cell, not the filter's new option of the same name.
+    const row = screen.getByText('Asha Rao').closest('tr') as HTMLElement;
+    expect(row).toHaveTextContent('Transferred');
+
+    const options = Array.from(
+      (screen.getByLabelText('Status') as HTMLSelectElement).options,
+    ).map((option) => option.value);
+    expect(options).toContain('transferred');
+  });
+
   it('shows an error with retry on failure', async () => {
     listEnrollments.mockRejectedValue(new ApiError(500, 'server_error', 'Could not load.', 'req-1'));
     render(<AdmissionsPage />);

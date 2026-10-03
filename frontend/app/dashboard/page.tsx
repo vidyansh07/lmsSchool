@@ -233,7 +233,9 @@ function useDashboardSection<T>(loader: () => Promise<T>, empty: T): SectionStat
  * `unknown`, so this stays defensive rather than trusting it blindly).
  */
 function attendanceThreshold(entry: StudentPerformanceEntry): number | null {
-  const outcome = entry.risk.outcomes.find((item) => item.key === 'attendance');
+  // `risk` is null (and `outcomes` absent) for an enrolment the engine has
+  // never evaluated — see `collectRiskItems` in the standing panel.
+  const outcome = entry.risk?.outcomes?.find((item) => item.key === 'attendance');
   if (!outcome) return null;
   const raw = outcome.numbers?.threshold;
   const parsed = typeof raw === 'string' || typeof raw === 'number' ? Number(raw) : NaN;

@@ -155,6 +155,30 @@ anywhere in this repository. It lives in the staging secret manager entry
 untracked `.env.staging`). Rotate it by changing that entry and re-running the
 seed with `--force`.
 
+### The showcase data set
+
+`python manage.py seed_showcase` (or `./scripts/deploy.sh … --showcase`,
+`make seed-showcase`) layers a coherent, live-dated showcase on top of
+whatever the database holds: two open centres and one closed, a roster of
+every role on `grras.com`, and — stage by stage — the catalogue, batches,
+fees, classes, work and communication. It is additive and idempotent (nothing
+is deleted; a re-run creates nothing new), with one stated exception: the
+institution settings, branding, global academic policy and its five policy
+keys are overwritten with the showcase's values on every run. It is gated on
+`ALLOW_DEMO_SEED` like the other seeders, and shares `DEMO_USER_PASSWORD`
+with them. `--list` prints the stages; `--only KEY` and `--from KEY` run part
+of it.
+
+Because those accounts are on a real domain, `scripts/verify_demo.sh` must be
+told to accept it: set `VERIFY_ALLOWED_EMAIL_DOMAINS=grras.com` in
+`.env.staging` (see the template). The check still fails on any other real
+domain. And because the showcase fans notifications out to every account,
+staging **must** keep `EMAIL_BACKEND` on a non-delivering backend — the
+template sets the console one, so mail (password resets included) lands in
+the backend container's log — and the command refuses to run under any other
+unless passed `--allow-real-mail`. The SMTP block in the template is for when
+credentials exist.
+
 ---
 
 ## Production

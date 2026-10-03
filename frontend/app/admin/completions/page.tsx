@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { ProgressRules } from '@/components/progress-rules';
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -106,8 +107,15 @@ function Completions() {
       setDetail(({ [row.id]: _removed, ...rest }) => rest);
       return;
     }
-    const evaluation = await getEnrollmentProgress(row.enrollment);
-    setDetail((current) => ({ ...current, [row.id]: evaluation }));
+    // The same banner the approve/reject actions report through: a 404 or
+    // 403 from the progress read is a message, not a silent no-op button.
+    setFormError(null);
+    try {
+      const evaluation = await getEnrollmentProgress(row.enrollment);
+      setDetail((current) => ({ ...current, [row.id]: evaluation }));
+    } catch (cause) {
+      setFormError(errorMessage(cause, 'The rules for this completion could not be loaded.'));
+    }
   }
 
   if (isLoading) return <LoadingState label="Loading completions…" rows={5} />;
@@ -314,7 +322,7 @@ function Completions() {
 
 export default function CompletionsPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.completionApprove}>
       <Completions />
     </RequireAuth>
   );

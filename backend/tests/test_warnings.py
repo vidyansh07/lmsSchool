@@ -114,6 +114,80 @@ def test_an_administrator_is_warned_about_everything(api_client_no_csrf, admin_u
 
 
 @pytest.mark.django_db
+def test_the_at_risk_warning_counts_students_not_enrolments(
+    api_client_no_csrf, admin_user, manager_user, trainer_profile, published_course, enrollment
+):
+    """One student on two batches is one student at risk, not two.
+
+    `/manage` renders this strip directly above the manager dashboard's own
+    at-risk figures, and both say "N students flagged at risk" and link to the
+    same list — so the two must be the same N. Counting flagged *enrolment rows*
+    here made the seeded database read "154 students flagged at risk" in the
+    strip and 142 in the KPI tile and chart bar beneath it: the twelve students
+    on two batches each, counted twice above and once below.
+    """
+    from apps.attendance.services import mark_attendance
+    from apps.batches.models import BatchStatus
+    from apps.batches.services import create_batch, set_batch_status
+    from apps.enrollments.services import enrol_student
+    from apps.sessions.models import SessionStatus
+    from apps.sessions.services import create_session
+
+    today = timezone.localdate()
+    second = set_batch_status(
+        batch=create_batch(
+            actor=admin_user,
+            name="Linux Essentials — Evening",
+            course=published_course,
+            trainer=trainer_profile,
+            start_date=today - timedelta(days=7),
+            end_date=today + timedelta(days=60),
+            capacity=3,
+        ),
+        target=BatchStatus.ACTIVE,
+        actor=admin_user,
+    )
+    also = enrol_student(student=enrollment.student, batch=second, actor=admin_user)
+
+    # One class attended out of four on each batch — 25%, well under the 75%
+    # risk threshold, so both enrolments are flagged and the same person is
+    # behind on both.
+    for row in (enrollment, also):
+        for day in range(4):
+            session = create_session(
+                batch=row.batch,
+                actor=admin_user,
+                session_date=today - timedelta(days=day + 1),
+                start_time=time(9, 0),
+                end_time=time(11, 0),
+                topic=f"Class {day}",
+                status=SessionStatus.COMPLETED,
+            )
+            mark_attendance(
+                session=session,
+                actor=trainer_profile.user,
+                entries=[
+                    {"enrollment_id": str(row.pk), "status": "present" if day == 0 else "absent"}
+                ],
+            )
+
+    api_client_no_csrf.force_login(manager_user)
+    warning = _by_kind(api_client_no_csrf.get(URL).json())["students_at_risk"]
+    dashboard = api_client_no_csrf.get("/api/v1/dashboards/manager/").json()
+
+    assert warning["count"] == 1
+    assert warning["label"] == "1 student flagged at risk"
+    assert warning["count"] == dashboard["students"]["at_risk"]
+    # The item still names an enrolment — a risk flag belongs to a student on a
+    # course — but only one of the two, so the list matches the count.
+    assert len(warning["items"]) == 1
+    assert warning["items"][0]["href"] in (
+        f"/manage/students/{enrollment.pk}",
+        f"/manage/students/{also.pk}",
+    )
+
+
+@pytest.mark.django_db
 def test_a_student_is_refused_rather_than_handed_an_empty_list(
     api_client_no_csrf, student_profile, trouble
 ):

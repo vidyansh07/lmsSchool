@@ -61,6 +61,25 @@ function isUnexpectedFailure(status: number): boolean {
   return status >= 400 && ![401, 403, 404, 429].includes(status);
 }
 
+/** Chromium writes a console error of its own for every subresource that came
+ *  back non-2xx — "Failed to load resource: the server responded with a status
+ *  of 403 (Forbidden)" — including the statuses {@link isUnexpectedFailure}
+ *  above already declares a screen may legitimately see. Counting those made
+ *  the crawl stricter than its own network rule, and failed screens that are
+ *  working exactly as written: `/announcements` asks for the centre list so it
+ *  can offer a centre-wide audience, catches the refusal a trainer or a
+ *  student gets, and renders the noticeboard without that option. The
+ *  browser's own note about a status the network rule accepts is not a defect.
+ *  Every other console error — including one the browser wrote about a 400 or
+ *  a 500 — still is, which is how `/admin/activity`'s refused feed was found.
+ */
+const RESOURCE_STATUS = /^Failed to load resource: the server responded with a status of (\d{3})\b/;
+
+function isAppConsoleError(text: string): boolean {
+  const status = RESOURCE_STATUS.exec(text)?.[1];
+  return status === undefined || isUnexpectedFailure(Number(status));
+}
+
 /** Every same-origin path the signed-in caller's own rendered nav links to,
  *  in document order, de-duplicated. */
 async function navRoutes(page: Page): Promise<string[]> {
@@ -82,7 +101,9 @@ for (const role of ROLES) {
     const networkFailures: string[] = [];
 
     page.on('console', (message) => {
-      if (message.type() === 'error') consoleErrors.push(message.text());
+      if (message.type() === 'error' && isAppConsoleError(message.text())) {
+        consoleErrors.push(message.text());
+      }
     });
     page.on('pageerror', (error) => {
       consoleErrors.push(error.message);

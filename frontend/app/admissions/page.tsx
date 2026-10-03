@@ -66,7 +66,11 @@ export function AdmissionsList() {
     const rows = list.data?.results ?? [];
     if (!registeredFrom && !registeredTo) return rows;
     return rows.filter((row) => {
-      const day = row.enrolled_at.slice(0, 10);
+      // An imported enrolment can arrive with no registration date at all;
+      // it cannot fall inside a date range, so it drops out of a filtered
+      // view rather than throwing on `.slice`.
+      const day = typeof row.enrolled_at === 'string' ? row.enrolled_at.slice(0, 10) : '';
+      if (!day) return false;
       if (registeredFrom && day < registeredFrom) return false;
       if (registeredTo && day > registeredTo) return false;
       return true;

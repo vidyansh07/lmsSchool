@@ -18,6 +18,7 @@ import {
   STATUS_VARIANT,
   formatDuration,
 } from '@/lib/course-labels';
+import { labelFor } from '@/lib/labels';
 import type { CourseDetail, LessonContentType, LessonSummary } from '@/types/api';
 
 const CONTENT_ICON: Record<LessonContentType, typeof FileText> = {
@@ -28,7 +29,10 @@ const CONTENT_ICON: Record<LessonContentType, typeof FileText> = {
 };
 
 function LessonRow({ lesson, courseSlug }: { lesson: LessonSummary; courseSlug: string }) {
-  const Icon = CONTENT_ICON[lesson.content_type];
+  // A content type outside the four this map knows (an imported lesson, a
+  // newer backend) must still get *an* icon: an undefined component here is
+  // "Element type is invalid" and takes the whole course page down.
+  const Icon = CONTENT_ICON[lesson.content_type] ?? FileText;
   return (
     <li className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0">
       <Icon className="size-4 shrink-0 text-ink-muted" aria-hidden="true" />
@@ -44,7 +48,7 @@ function LessonRow({ lesson, courseSlug }: { lesson: LessonSummary; courseSlug: 
         <Badge variant={STATUS_VARIANT[lesson.status]}>{STATUS_LABEL[lesson.status]}</Badge>
       ) : null}
       <span className="text-xs text-ink-muted">
-        {CONTENT_TYPE_LABEL[lesson.content_type]}
+        {labelFor(CONTENT_TYPE_LABEL, lesson.content_type)}
         {lesson.duration_minutes ? ` · ${formatDuration(lesson.duration_minutes)}` : ''}
       </span>
     </li>

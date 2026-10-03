@@ -33,14 +33,33 @@
  *
  * ERP Phase 17 adds `GET /api/v1/dashboards/counsellor/` (`lib/dashboards
  * .ts::getCounsellorDashboard`), one call in place of several for the
- * figures it now computes server-side: registered today, pending
- * registrations, and two genuinely new ones this page had no way to show
- * before (follow-ups due/overdue, unassigned batch/trainer). It carries no
- * rows, though, only counts — so every panel below that needs an actual
- * list (batches to watch, students awaiting enrolment, the fees corner,
- * recent activity) keeps its own fetch exactly as before. "Registered this
- * week" also stays on the old recent-window computation, since the new
- * endpoint has no weekly figure to replace it with.
+ * figures it now computes server-side: registered today, registered this
+ * week, pending registrations, and two genuinely new ones this page had no
+ * way to show before (follow-ups due/overdue, unassigned batch/trainer). It
+ * carries no rows, though, only counts — so every panel below that needs an
+ * actual list (batches to watch, the fees corner, recent activity) keeps its
+ * own fetch.
+ *
+ * Two figures on this screen used to be computed here, in the browser, from
+ * one page of recent rows, and both were wrong in the same way — a window,
+ * mistaken for an answer:
+ *
+ * - "Registered this week" counted the rows newer than Monday among the
+ *   thirty most recent registrations, so a day with sixty-one registrations
+ *   rendered "today 61" beside "this week 30": a seven-day figure smaller
+ *   than one day inside it. It now reads `new_students_this_week`, a rolling
+ *   seven days ending today, which by construction cannot be smaller.
+ * - "Registered, not yet enrolled" diffed those thirty registrations against
+ *   the hundred most recent *enrolments* — two windows ordered by different
+ *   columns, which on real data did not overlap: fifteen students listed as
+ *   awaiting a batch while every one of them was enrolled. It now asks
+ *   `/api/v1/students/?awaiting_enrolment=true`, the same definition the
+ *   "Unassigned batch" tile counts.
+ *
+ * Which is why every figure in the KPI row now also carries what it counts
+ * (`definitions` on the payload, rendered under the grid): both of those
+ * contradictions were visible on this screen for anyone who read two tiles
+ * together, and neither number said enough about itself to be doubted.
  */
 
 import Link from 'next/link';
@@ -91,7 +110,7 @@ import { ApiError } from '@/lib/api';
 import { listBatches, listEnrollments } from '@/lib/batches';
 import { ENROLLMENT_STATUS_LABEL } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
-import { ageingBuckets, mergeByWeek, money, withCumulative } from '@/lib/analytics';
+import { ageingBuckets, formatWeekLabel, mergeByWeek, money, withCumulative } from '@/lib/analytics';
 import { getCounsellorDashboard, getCounsellorPipeline } from '@/lib/dashboards';
 import { feeCollectionsTrend, getFeesOverview } from '@/lib/fees';
 import { formatCurrency, formatNumber } from '@/lib/format';
@@ -171,28 +190,74 @@ function useDashboardSection<T>(loader: () => Promise<T>, empty: T): SectionStat
 
 const REGISTRATION_WINDOW = 30;
 
-/** Monday 00:00 of the given date's week, as an ISO instant — matches `DateRangePicker`'s own week start. */
-function startOfWeekIso(reference: Date): string {
-  const day = reference.getDay();
-  const diff = (day + 6) % 7;
-  const monday = new Date(reference);
-  monday.setDate(monday.getDate() - diff);
-  monday.setHours(0, 0, 0, 0);
-  return monday.toISOString();
-}
+/** How many students awaiting a seat the panel lists; the figure beside the
+ *  list is the server's own total, so this cap shortens the list and never the
+ *  count. */
+const AWAITING_ENROLMENT_SHOWN = 10;
 
 /**
- * How many of `students` were registered at or after `sinceIso`.
+ * What each figure in the KPI row counts, and where that wording comes from.
  *
- * `students` is only ever the most recent `REGISTRATION_WINDOW` rows (there is
- * no date filter on `/api/v1/students/` to ask the server for "today's"
- * directly — see `StudentFilterSet` in `apps/students/views.py`), so on a day
- * busy enough to exceed that window this undercounts. Exported so that
- * boundary is exactly what a test pins down, rather than something only
- * discoverable by reading the fetch below.
+ * `definitions` on the counsellor dashboard payload
+ * (`apps.dashboards.views.COUNSELLOR_FIGURE_DEFINITIONS`) is the source for
+ * every server-computed figure, so the wording lives next to the query it
+ * describes and cannot drift from it. The one tile computed here — batches
+ * starting soon, filtered from the batches fetch below — has no server
+ * definition to quote, so its own is written here and marked as this screen's.
+ *
+ * `label` is the tile's label verbatim: this is a reader matching a sentence
+ * back to a number they just read, so the two have to be the same words.
  */
-export function countRegisteredSince(students: StudentListRow[], sinceIso: string): number {
-  return students.filter((student) => student.created_at >= sinceIso).length;
+const KPI_DEFINITIONS: { key: string; label: string; own?: string }[] = [
+  { key: 'new_students_today', label: 'Registered today' },
+  { key: 'new_students_this_week', label: 'Registered this week' },
+  { key: 'pending_registrations', label: 'Pending registrations' },
+  {
+    key: 'batches_starting_soon',
+    label: 'Batches starting soon',
+    own:
+      'Batches still marked upcoming, at the centres you can see — including ' +
+      'any whose start date has already passed without the batch being made ' +
+      'active, which is why the list below can lead with one that was due to ' +
+      'start weeks ago.',
+  },
+  { key: 'follow_ups_due', label: 'Follow-ups due' },
+  { key: 'follow_ups_overdue', label: 'Follow-ups overdue' },
+  { key: 'unassigned_batch', label: 'Unassigned batch' },
+  { key: 'unassigned_trainer', label: 'Unassigned trainer' },
+];
+
+/**
+ * The definitions behind the KPI row, in a `<details>` under it.
+ *
+ * Under the grid rather than inside each tile because a definition is a
+ * sentence and a tile has room for a phrase — `StatCard`'s `hint` is
+ * documented as "one short line, not a paragraph", and a tile that grows to
+ * hold three lines of prose stops being a tile. Collapsed by default: this is
+ * for the reader who is comparing two numbers and wants to know why they
+ * differ, not for every visit.
+ */
+export function FigureDefinitions({ definitions }: { definitions?: Record<string, string> }) {
+  const rows = KPI_DEFINITIONS.map((figure) => ({
+    ...figure,
+    text: figure.own ?? definitions?.[figure.key],
+  })).filter((figure): figure is typeof figure & { text: string } => Boolean(figure.text));
+
+  if (rows.length === 0) return null;
+
+  return (
+    <details className="rounded-card border border-line bg-surface px-4 py-3 text-sm">
+      <summary className="cursor-pointer font-medium">What these figures count</summary>
+      <dl className="mt-2 space-y-2">
+        {rows.map((figure) => (
+          <div key={figure.key}>
+            <dt className="font-medium">{figure.label}</dt>
+            <dd className="text-ink-muted">{figure.text}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
 }
 
 /**
@@ -255,13 +320,6 @@ function KpiTileSection({
  * worth comparing side by side. `new_students_today` is deliberately left
  * out — good news, not a bottleneck, and already its own KPI tile above.
  */
-/** A week's Monday, short enough for a twelve-tick axis. */
-function formatWeekLabel(iso: string): string {
-  const [, month, day] = iso.split('-');
-  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${day} ${months[Number(month)]}`;
-}
-
 function pipelineBottlenecks(dashboard: CounsellorDashboard | null): CategoryDatum[] {
   if (!dashboard) return [];
   return [
@@ -279,7 +337,7 @@ function pipelineBottlenecks(dashboard: CounsellorDashboard | null): CategoryDat
 }
 
 /**
- * The 5 mutually-exclusive `EnrollmentStatus` values, in a fixed display
+ * The 6 mutually-exclusive `EnrollmentStatus` values, in a fixed display
  * order (never count-sorted, so the same status always lands in the same
  * palette slice run to run) — a real composition, unlike `pipelineBottlenecks`
  * above, whose own comment explains why those five figures overlap. Statuses
@@ -294,6 +352,10 @@ const ENROLLMENT_STATUS_ORDER: EnrollmentStatus[] = [
   'suspended',
   'completed',
   'cancelled',
+  // `transferred` was missing here as well as from the label map, so a
+  // transferred enrolment was silently dropped from a donut whose own caption
+  // calls itself a composition of the total.
+  'transferred',
 ];
 
 export function summarizeEnrollmentStatuses(enrollments: Enrollment[]): DonutDatum[] {
@@ -318,12 +380,30 @@ export function AdmissionsDashboardContent() {
     null,
   );
 
+  // Still fetched, but only for "Recent activity" below: the two figures this
+  // window used to stand in for — "Registered this week" and "not yet
+  // enrolled" — are now asked of the server directly.
   const recentStudents = useDashboardSection(
     () =>
       listStudents({ ordering: '-created_at', page_size: REGISTRATION_WINDOW }).then(
         (page) => page.results,
       ),
     [] as StudentListRow[],
+  );
+
+  // "Registered, not yet enrolled", asked as a question rather than assembled
+  // from two windows: `awaiting_enrolment` is `apps.students.access
+  // .awaiting_enrolment`, the same definition the "Unassigned batch" tile
+  // counts, so the list and that tile cannot disagree. `count` is the whole
+  // total, not the page — the panel says so.
+  const awaitingEnrolment = useDashboardSection(
+    () =>
+      listStudents({
+        awaiting_enrolment: 'true',
+        ordering: '-created_at',
+        page_size: AWAITING_ENROLMENT_SHOWN,
+      }).then((page) => ({ results: page.results, count: page.count })),
+    { results: [] as StudentListRow[], count: 0 },
   );
 
   // A wide recent window, not a targeted one: the point of fetching this many
@@ -390,17 +470,10 @@ export function AdmissionsDashboardContent() {
     colour: AGEING_COLOURS[index] ?? 'var(--color-danger)',
   }));
 
-  const enrolledStudentCodes = new Set(
-    recentEnrollments.data
-      .map((entry) => entry.student_code)
-      .filter((code): code is string => Boolean(code)),
-  );
-
-  const now = new Date();
-  // "Registered this week" has no figure on the new endpoint (only
-  // `new_students_today`), so it is still computed from the recent-window
-  // fetch below, the same approximation `countRegisteredSince` always was.
-  const registeredThisWeek = countRegisteredSince(recentStudents.data, startOfWeekIso(now));
+  // `BatchWatchlist` is given the same date it counts by, so the tile, the
+  // list under it and the "was due to start" wording in that list can never be
+  // computed from two different days.
+  const today = new Date().toISOString().slice(0, 10);
   const startingSoonCount = batches.data.filter((batch) => batch.status === 'upcoming').length;
 
   const quickActions: QuickAction[] = [
@@ -455,11 +528,11 @@ export function AdmissionsDashboardContent() {
         <GridItem span={3}>
           <KpiTileSection
             label="Registered this week"
-            value={registeredThisWeek}
-            isLoading={recentStudents.isLoading}
-            failed={Boolean(recentStudents.error)}
+            value={dashboard.data?.new_students_this_week ?? 0}
+            isLoading={dashboard.isLoading}
+            failed={Boolean(dashboard.error)}
             icon={CalendarRange}
-            hint="Rolling seven days"
+            hint="Rolling seven days, today included"
             href="/admissions"
           />
         </GridItem>
@@ -529,6 +602,8 @@ export function AdmissionsDashboardContent() {
           />
         </GridItem>
       </Grid>
+
+      <FigureDefinitions definitions={dashboard.data?.definitions} />
 
       <Card className="" data-testid="pipeline-bottlenecks-card">
         <CardHeader>
@@ -677,14 +752,11 @@ export function AdmissionsDashboardContent() {
         </CardHeader>
         <CardContent>
           <NotYetEnrolledPanel
-            recentStudents={recentStudents.data}
-            enrolledStudentCodes={enrolledStudentCodes}
-            isLoading={recentStudents.isLoading || recentEnrollments.isLoading}
-            error={recentStudents.error ?? recentEnrollments.error}
-            onRetry={() => {
-              recentStudents.reload();
-              recentEnrollments.reload();
-            }}
+            students={awaitingEnrolment.data.results}
+            totalCount={awaitingEnrolment.data.count}
+            isLoading={awaitingEnrolment.isLoading}
+            error={awaitingEnrolment.error}
+            onRetry={awaitingEnrolment.reload}
           />
         </CardContent>
       </Card>
@@ -726,12 +798,16 @@ export function AdmissionsDashboardContent() {
         <Card className="">
           <CardHeader>
             <CardTitle>Starting soon</CardTitle>
-            <CardDescription>Upcoming batches, soonest first.</CardDescription>
+            <CardDescription>
+              Batches not running yet. Any that were due to start and were never
+              made active come first — they need a decision today, not a date.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <BatchWatchlist
               batches={batches.data}
               kind="starting-soon"
+              today={today}
               isLoading={batches.isLoading}
               error={batches.error}
               onRetry={batches.reload}

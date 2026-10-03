@@ -7,7 +7,7 @@ FRONTEND = $(COMPOSE) exec frontend
 
 .DEFAULT_GOAL := help
 .PHONY: help setup up down logs ps restart shell dbshell migrate makemigrations \
-        superuser seed seed-courses seed-batches seed-academics seed-all test test-backend test-frontend test-e2e lint lint-backend \
+        superuser seed seed-courses seed-batches seed-academics seed-all seed-showcase test test-backend test-frontend test-e2e lint lint-backend \
         lint-frontend format typecheck security check build clean
 
 help: ## Show this help
@@ -67,6 +67,9 @@ seed-academics: ## Create fake classes, attendance, assignments and tests (run `
 	$(BACKEND) python manage.py seed_academics
 
 seed-all: seed seed-courses seed-batches seed-academics ## Seed everything, in order
+
+seed-showcase: ## Layer the live-dated showcase data set on top (additive, idempotent; needs DEMO_USER_PASSWORD)
+	$(BACKEND) python manage.py seed_showcase
 
 seed-scale: ## Build a large dataset for performance work (see the WARNING below)
 	@echo "This adds hundreds of generated students and courses."

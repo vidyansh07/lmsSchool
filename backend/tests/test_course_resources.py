@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -320,8 +322,6 @@ def test_deleting_a_resource_keeps_the_stored_file_until_it_is_purged(
 ):
     """A soft-deleted resource must be restorable, downloads included; only the
     purge — a superadmin's second, deliberate decision — removes the file."""
-    import os
-
     from apps.common.deletion import purge
     from apps.courses.models import LessonResource
 
@@ -354,3 +354,28 @@ def test_students_can_download_from_a_published_preview_lesson(
     api_client_no_csrf.force_login(student)
     assert preview_lesson.status == PublishStatus.PUBLISHED
     assert api_client_no_csrf.get(f"/api/v1/resources/{resource.id}/download/").status_code == 200
+
+
+@pytest.mark.django_db
+def test_a_resource_whose_file_has_gone_from_storage_is_404_not_500(
+    api_client_no_csrf, admin_user, preview_lesson, pdf_bytes
+):
+    """The row says there is a file and the storage disagrees.
+
+    It happens when a database is restored next to a media directory that was
+    not, or when a seeded environment wrote its uploads under a ``MEDIA_ROOT``
+    that has since gone. ``FileResponse`` then raises ``FileNotFoundError`` from
+    inside the view and the caller gets "An unexpected error occurred", which
+    reads as a broken server and sends whoever is looking at the wrong layer.
+    404 is the honest answer: there is nothing there to download.
+    """
+    api_client_no_csrf.force_login(admin_user)
+    _upload(api_client_no_csrf, preview_lesson.id, pdf_bytes, "handout.pdf")
+    resource = preview_lesson.resources.first()
+
+    # Delete the bytes and leave the row, which is exactly the state a restored
+    # database without its media directory is in.
+    os.remove(resource.file.path)
+
+    response = api_client_no_csrf.get(f"/api/v1/resources/{resource.id}/download/")
+    assert response.status_code == 404

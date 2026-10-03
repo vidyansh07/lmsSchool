@@ -173,6 +173,17 @@ describe("RoleBuilder", () => {
     );
   });
 
+  it("edits a role whose kind is outside the six it knows without throwing on the kind's label", async () => {
+    const odd: Role = { ...managerRole, slug: "auditor", name: "Auditor", kind: "auditor" as Role["kind"] };
+    getRole.mockResolvedValue(odd);
+    render(<RoleBuilder slug="auditor" />);
+    await screen.findByLabelText("Name");
+    fireEvent.click(screen.getByRole("button", { name: "Permissions" }));
+    expect(
+      await screen.findByText(/never be wider than a auditor sees/),
+    ).toBeInTheDocument();
+  });
+
   it("shows permissions read-only without permission.assign", async () => {
     auth.capabilities = ["role.view", "role.manage"];
     render(<RoleBuilder />);

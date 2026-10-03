@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -286,7 +287,7 @@ function Projects() {
 
 export default function TeachingProjectsPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.projectManageAny} roles={["trainer"]}>
       <Projects />
     </RequireAuth>
   );

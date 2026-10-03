@@ -42,6 +42,7 @@ import {
   FEE_STATUS_VARIANT,
   INSTITUTION_KIND_LABEL,
   QUALIFICATION_LABEL,
+  labelFor,
 } from '@/lib/labels';
 import { getStudent } from '@/lib/people';
 import type { BatchListRow, CourseListRow, Enrollment, StudentProfile } from '@/types/api';
@@ -433,14 +434,14 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               <dt className="text-xs text-ink-muted">Qualification</dt>
               <dd>
                 {student.qualification
-                  ? QUALIFICATION_LABEL[student.qualification]
+                  ? labelFor(QUALIFICATION_LABEL, student.qualification)
                   : 'Not provided'}
               </dd>
             </div>
             <div>
               <dt className="text-xs text-ink-muted">
                 {student.institution_kind
-                  ? INSTITUTION_KIND_LABEL[student.institution_kind]
+                  ? labelFor(INSTITUTION_KIND_LABEL, student.institution_kind)
                   : 'College or employer'}
               </dt>
               <dd>{student.institution || 'Not provided'}</dd>

@@ -12,7 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/input';
 import { useList } from '@/hooks/use-list';
 import { Capability } from '@/lib/capabilities';
-import { ROLE_LABEL, ROLE_OPTIONS } from '@/lib/labels';
+import { formatDate } from '@/lib/format';
+import { ROLE_LABEL, ROLE_OPTIONS, labelFor } from '@/lib/labels';
 import { listUsers } from '@/lib/people';
 import type { AdminUser } from '@/types/api';
 
@@ -29,7 +30,7 @@ function UsersTable() {
       render: (row) => <span className="font-medium">{row.email}</span>,
     },
     { key: 'full_name', header: 'Name', render: (row) => row.full_name || '—' },
-    { key: 'role', header: 'Role', sortable: true, render: (row) => <Badge>{ROLE_LABEL[row.role]}</Badge> },
+    { key: 'role', header: 'Role', sortable: true, render: (row) => <Badge>{labelFor(ROLE_LABEL, row.role)}</Badge> },
     {
       key: 'is_active',
       header: 'Status',
@@ -54,7 +55,7 @@ function UsersTable() {
       sortable: true,
       render: (row) => (
         <span className="whitespace-nowrap text-ink-muted">
-          {new Date(row.date_joined).toLocaleDateString()}
+          {formatDate(row.date_joined)}
         </span>
       ),
     },

@@ -35,6 +35,7 @@ from apps.assessments.importers import FORMULA_PREFIXES, _cell, _normalise_heade
 from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError, ConflictError
 from apps.common.uploads import checksum_of
+from apps.common.validators import PHONE_RE
 
 from .models import BulkImport, BulkImportStatus, ImportKind
 
@@ -55,6 +56,38 @@ ATTENDANCE_COLUMNS: dict[str, frozenset[str]] = {
     "note": frozenset({"note", "notes", "remark", "remarks"}),
 }
 ATTENDANCE_REQUIRED = ("student_id", "status")
+
+
+def _formula_refusal(label: str, value: str, *, is_phone: bool = False) -> str | None:
+    """``None`` when the cell is safe to store, else why it is refused, by name.
+
+    The guard itself is §4.6's and stays as it is: a stored cell beginning
+    ``=``, ``+``, ``-`` or ``@`` becomes an injection payload the moment this
+    data is exported again, so it is refused rather than sanitised.
+
+    What the blanket version got wrong is the phone column. ``+919876543210``
+    is exactly how this application *displays* a phone number — it is what an
+    operator copies out of a student's page and back into a spreadsheet — so
+    refusing it turned "import your own export" into an error, and an error
+    naming a formula nobody had written. The exemption is narrow on purpose:
+    only the phone column, and only a value ``PHONE_RE`` accepts in full, which
+    is an optional leading ``+`` and 8-15 digits and nothing else. There is no
+    string both that pattern and a formula engine would accept — no function
+    name, no cell reference, no ``|``, no separator — so the column loses
+    nothing but the false positive. Every other column is refused as before,
+    a phone-shaped name included.
+
+    The message names the cell and the character, because "a cell looks like a
+    formula" on a 200-row file is a hunt: it says neither which cell nor why.
+    """
+    if not value.startswith(FORMULA_PREFIXES):
+        return None
+    if is_phone and PHONE_RE.match(value):
+        return None
+    return (
+        f"The {label} cell starts with '{value[0]}', which a spreadsheet reads "
+        "as the start of a formula."
+    )
 
 
 def _map_columns(header: list[Any], aliases: dict[str, frozenset[str]], required) -> dict[str, int]:
@@ -109,8 +142,15 @@ def validate_students(rows: list[list[Any]]) -> dict[str, Any]:
         if not any((email, first_name, last_name)):
             continue
 
-        if any(text.startswith(FORMULA_PREFIXES) for text in (email, first_name, last_name, phone)):
-            errors.append({"line": line, "email": email, "problem": "A cell looks like a formula."})
+        refusals = (
+            _formula_refusal("email", email),
+            _formula_refusal("first name", first_name),
+            _formula_refusal("last name", last_name),
+            _formula_refusal("phone", phone, is_phone=True),
+        )
+        formula = next((problem for problem in refusals if problem), None)
+        if formula is not None:
+            errors.append({"line": line, "email": email, "problem": formula})
             continue
         if not email:
             errors.append({"line": line, "email": "", "problem": "No email address."})
@@ -233,15 +273,41 @@ def confirm_students(*, run: BulkImport, actor: User) -> BulkImport:
                     ]
                 }
             )
-        student = create_student(
-            email=row["email"],
-            first_name=row["first_name"],
-            last_name=row["last_name"],
-            actor=actor,
-            password=None,
-            send_invitation=False,
-            profile_fields={"phone": row["phone"]} if row["phone"] else None,
-        )
+        try:
+            student = create_student(
+                email=row["email"],
+                first_name=row["first_name"],
+                last_name=row["last_name"],
+                # The phone number belongs to the *account*, not the profile:
+                # `StudentProfile` has no `phone` field at all (only
+                # `emergency_contact_phone` and `guardian_phone`), so passing it
+                # as a profile field raised `TypeError` inside the model
+                # constructor and the whole confirmation answered 500. Any file
+                # with a phone column filled in was unimportable; the leading-`+`
+                # refusal at preview time was hiding it for the app's own format.
+                phone=row["phone"],
+                actor=actor,
+                password=None,
+                send_invitation=False,
+            )
+        except ApplicationError as exc:
+            detail = getattr(exc, "detail", None)
+            if not (isinstance(detail, dict) and "override_reason" in detail):
+                raise
+            # §4.2's duplicate check matches on phone as well as address, and
+            # asks for a reason before a second record is created. A bulk file
+            # has nowhere to write one and this runs inside the import's single
+            # transaction, so the honest answer is to stop and say which row —
+            # that person is registered by hand, where the wizard can ask.
+            raise ConflictError(
+                {
+                    "import": [
+                        f"Line {row['line']} ({row['email']}): the phone number "
+                        f"{row['phone']} is already on a student record you can see. "
+                        "Take that row out and register that person by hand."
+                    ]
+                }
+            ) from exc
         created += 1
 
         if batch is not None:
@@ -295,10 +361,9 @@ def validate_attendance(*, session, rows: list[list[Any]]) -> dict[str, Any]:
 
         if not student_id and not status_text:
             continue
-        if student_id.startswith(FORMULA_PREFIXES) or note.startswith(FORMULA_PREFIXES):
-            errors.append(
-                {"line": line, "student_id": student_id, "problem": "A cell looks like a formula."}
-            )
+        formula = _formula_refusal("student ID", student_id) or _formula_refusal("note", note)
+        if formula is not None:
+            errors.append({"line": line, "student_id": student_id, "problem": formula})
             continue
 
         key = student_id.upper()

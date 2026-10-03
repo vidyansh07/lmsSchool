@@ -32,6 +32,14 @@ function Announcements() {
   const { user } = useAuth();
   const isStudent = user?.role === 'student';
   const mayAnnounceToAll = can(user?.capabilities, Capability.announcementManageAny);
+  // The centre list is the only staff-only call on this page: `/api/v1/branches/`
+  // requires `organisation.view_any`, so for a student or a trainer it is a
+  // guaranteed 403 — a red console error and a wasted request on every load of a
+  // page they are entitled to read. The capability is already in hand; asking it
+  // first is the difference between "not offered" and "refused". Every role that
+  // can address a centre ("A centre" below, gated on `announcement.manage_any`)
+  // holds this one too, so nothing that used the list loses it.
+  const mayListBranches = can(user?.capabilities, Capability.organisationViewAny);
 
   const [rows, setRows] = useState<Announcement[]>([]);
   const [batches, setBatches] = useState<BatchListRow[]>([]);
@@ -66,7 +74,7 @@ function Announcements() {
     Promise.all([
       listAnnouncements(),
       listBatches({ page_size: 100 }).catch(() => null),
-      listBranches({ page_size: 100 }).catch(() => null),
+      mayListBranches ? listBranches({ page_size: 100 }).catch(() => null) : null,
     ])
       .then(([page, batchPage, branchPage]) => {
         if (cancelled) return;
@@ -83,7 +91,7 @@ function Announcements() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [mayListBranches]);
 
   async function run(key: string, action: () => Promise<unknown>, message: string) {
     setBusy(key);

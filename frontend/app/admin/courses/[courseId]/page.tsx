@@ -1,4 +1,5 @@
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { CourseEditor } from './course-editor';
 
 // Not a client component: reading the route param needs nothing that only a
@@ -12,7 +13,7 @@ export default async function AdminCoursePage({
 }) {
   const { courseId } = await params;
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.courseViewAny} roles={["trainer"]}>
       <CourseEditor courseId={courseId} />
     </RequireAuth>
   );

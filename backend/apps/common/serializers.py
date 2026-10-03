@@ -16,6 +16,8 @@ from typing import Any
 
 from rest_framework import serializers
 
+from apps.common.pagination import DefaultPagination
+
 from .validators import validate_no_control_characters
 
 
@@ -40,6 +42,33 @@ class StrictFieldsMixin:
 
 class StrictSerializer(StrictFieldsMixin, serializers.Serializer):
     """Plain serializer that rejects unknown fields."""
+
+
+class PaginatedQuerySerializer(StrictSerializer):
+    """Strict query serializer for a view that paginates in its own body.
+
+    ``StrictSerializer`` refuses any field it does not declare, which is what
+    turns a mistyped filter into a 400 rather than a parameter silently doing
+    nothing. A view that paginates by hand validates ``request.query_params``
+    with one of these *and* hands the same dict to
+    :class:`~apps.common.pagination.DefaultPagination`, which reads ``page``
+    and ``page_size`` out of it — so a serializer that does not declare those
+    two rejects the very request its own ``@extend_schema`` advertises, and
+    the screen behind it can never load a second page. That is exactly how
+    the activity feed was broken: the endpoint answered every unpaginated
+    request and 400'd every paginated one.
+
+    Declared here rather than on each serializer so the paginator's parameter
+    names and the validator's field names cannot drift apart. The view does
+    not read these values — the paginator takes them from the request — so
+    they exist to be *accepted*; the bounds are the paginator's own, which
+    makes a nonsense page a clear 400 instead of an empty list.
+    """
+
+    page = serializers.IntegerField(required=False, min_value=1)
+    page_size = serializers.IntegerField(
+        required=False, min_value=1, max_value=DefaultPagination.max_page_size
+    )
 
 
 class StrictModelSerializer(StrictFieldsMixin, serializers.ModelSerializer):

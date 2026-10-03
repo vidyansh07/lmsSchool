@@ -74,6 +74,17 @@ describe('AdminUsersPage', () => {
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
   });
 
+  it('renders a placeholder account — no join date, a role outside the six — without "Invalid Date" or a blank badge', async () => {
+    listUsers.mockResolvedValue(
+      page([userRow({ date_joined: null as unknown as string, role: 'auditor' as AdminUser['role'] })]),
+    );
+    render(<AdminUsersPage />);
+    await waitFor(() => expect(screen.getByText('asha@example.com')).toBeInTheDocument());
+    expect(screen.getByText('Not available')).toBeInTheDocument();
+    expect(screen.getByText('Auditor')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/Invalid Date/);
+  });
+
   it('sends the same sort field on the same server request', async () => {
     listUsers.mockResolvedValue(page([userRow()]));
     render(<AdminUsersPage />);

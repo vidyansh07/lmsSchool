@@ -8,6 +8,7 @@ any permission code runs.
 from __future__ import annotations
 
 import django_filters
+from django.db.models import F
 from django.http import FileResponse, Http404
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -225,21 +226,45 @@ class ProjectAssignView(APIView):
         return Response(AssignResultSerializer(result).data)
 
 
+class StudentProjectFilterSet(django_filters.FilterSet):
+    status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
+    batch = django_filters.UUIDFilter(field_name="enrollment__batch_id")
+    is_late = django_filters.BooleanFilter(field_name="is_late")
+
+    class Meta:
+        model = StudentProject
+        fields = ("status", "batch", "is_late")
+
+
 class ProjectWorkListView(ListAPIView):
     """Every student's work on one project — the review queue."""
 
     permission_classes = (IsActiveUser,)
     serializer_class = ReviewerProjectSerializer
     filter_backends = (DjangoFilterBackend, OrderingFilter)
+    filterset_class = StudentProjectFilterSet
     ordering_fields = ("submitted_at", "status", "marks_awarded")
-    ordering = ("-submitted_at",)
+    # Deliberately *not* ``ordering = ("-submitted_at",)``, which is what this
+    # used to say and is a trap on a nullable column: in PostgreSQL ``DESC``
+    # sorts NULLs *first*, so a queue of sixty-nine assigned rows put the sixty-
+    # seven students who had handed in nothing at the top and pushed the two
+    # awaiting a decision onto page three. The declared intent — newest hand-in
+    # first — needs `nulls_last`, which a plain field-name tuple cannot express,
+    # so the default is applied in `get_queryset` and this attribute is left
+    # unset: DRF's `OrderingFilter` returns the queryset untouched when a view
+    # declares no default, and an explicit `?ordering=` still wins.
+    ordering = None
     queryset = StudentProject.objects.none()
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return StudentProject.objects.none()
         project = _project_for(self.request, self.kwargs["project_id"], manage=True)
-        return access.visible_student_projects(self.request.user).filter(project=project)
+        return (
+            access.visible_student_projects(self.request.user)
+            .filter(project=project)
+            .order_by(F("submitted_at").desc(nulls_last=True), "-created_at")
+        )
 
     @extend_schema(summary="Work submitted on a project", tags=PROJECTS_TAG)
     def get(self, request, *args, **kwargs):

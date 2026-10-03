@@ -282,7 +282,24 @@ def _risk_warnings(user, enrollments) -> list[dict[str, Any]]:
     flagged = [row for row in rows if bulk[row.pk]["risk"]["at_risk"]]
     if not flagged:
         return []
-    n = len(flagged)
+    # Counted by *student*, not by enrolment row.
+    #
+    # `_risk_rollup` (`apps.reporting.dashboards`) counts distinct student ids
+    # for the very same sentence, on the very same screen, linking to the very
+    # same list — and `/manage` renders both at once: this strip said "154
+    # students flagged at risk" directly above a KPI tile and a chart bar
+    # reading 142, because the twelve students who are on two batches each were
+    # counted twice here and once there. A number that contradicts the number
+    # beside it teaches people to trust neither, so "how many students" has one
+    # definition and this is not a second one.
+    #
+    # The *item* still points at an enrolment, because a risk flag belongs to a
+    # student on a course rather than to a person in general, so the first
+    # flagged enrolment per student is the one named and linked.
+    by_student: dict[Any, Any] = {}
+    for row in flagged:
+        by_student.setdefault(row.student_id, row)
+    n = len(by_student)
     return [
         _warning(
             "students_at_risk",
@@ -295,15 +312,24 @@ def _risk_warnings(user, enrollments) -> list[dict[str, Any]]:
                     "label": f"{_student_of(e)} · {e.batch.code}",
                     "href": f"/manage/students/{e.pk}",
                 }
-                for e in flagged
+                for e in by_student.values()
             ),
         )
     ]
 
 
 def _admissions_warnings(user, students) -> list[dict[str, Any]]:
+    from apps.students.access import awaiting_enrolment
+
+    # "Not on any batch" through the one shared definition
+    # (`apps.students.access.awaiting_enrolment`), not `enrollments__isnull=
+    # True` restated here: a student whose only enrolment was cancelled holds
+    # no seat either, and this warning and the counsellor dashboard's
+    # "Unassigned batch" tile must never disagree about that — the tile is
+    # documented as this condition minus the week-old threshold.
     waiting = (
-        students.filter(enrollments__isnull=True, created_at__lt=timezone.now() - timedelta(days=7))
+        awaiting_enrolment(students)
+        .filter(created_at__lt=timezone.now() - timedelta(days=7))
         .select_related("user")
         .order_by("created_at")
     )

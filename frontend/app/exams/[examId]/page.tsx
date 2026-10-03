@@ -28,6 +28,9 @@ import type { AttemptPaper, CandidateQuestion } from '@/types/api';
 function ExamPlayer({ examId }: { examId: string }) {
   const [paper, setPaper] = useState<AttemptPaper | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
+  // Set whenever the attempt could not be started, whether or not the cause
+  // was an `ApiError` — a bare `null` error used to leave the page blank.
+  const [openFailed, setOpenFailed] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,6 +60,7 @@ function ExamPlayer({ examId }: { examId: string }) {
       .then(adopt)
       .catch((cause: unknown) => {
         setError(cause instanceof ApiError ? cause : null);
+        setOpenFailed(true);
         // The envelope message is generic for a validation failure; the reason
         // a candidate needs ("this examination is not open") is in the details.
         setFormError(errorMessage(cause, 'The examination could not be opened.'));
@@ -111,16 +115,18 @@ function ExamPlayer({ examId }: { examId: string }) {
   }
 
   if (isLoading) return <LoadingState label="Opening the examination…" rows={6} />;
-  if (error) {
+  if (openFailed || !paper) {
+    // "Not open", "no attempts left", "bank too small for its sections" all
+    // arrive here as the API's own message; a non-API failure gets the
+    // generic sentence rather than a blank screen.
     return (
       <ErrorState
         title="Could not open the examination"
-        message={formError ?? error.message}
-        requestId={error.requestId || undefined}
+        message={formError ?? error?.message ?? 'The examination could not be opened.'}
+        requestId={error?.requestId || undefined}
       />
     );
   }
-  if (!paper) return null;
 
   const finished = paper.attempt.status !== 'in_progress';
 
@@ -168,7 +174,13 @@ function ExamPlayer({ examId }: { examId: string }) {
                 {question.section ? <Badge variant="neutral">{question.section}</Badge> : null}
                 <span className="text-xs text-ink-muted">
                   {question.marks} marks
-                  {Number(question.negative_marks) > 0
+                  {/* Only when the exam deducts. Every question carries the
+                      bank's `negative_marks` whether or not this exam applies
+                      them -- `grade_attempt` gates the deduction on the exam's
+                      flag -- so reading the per-question figure alone told
+                      candidates "−0.25 if wrong" on a paper whose own
+                      instructions said "there is no negative marking". */}
+                  {paper.attempt.negative_marking && Number(question.negative_marks) > 0
                     ? ` · −${question.negative_marks} if wrong`
                     : ''}
                 </span>
@@ -183,7 +195,9 @@ function ExamPlayer({ examId }: { examId: string }) {
                   <legend className="sr-only">Answer for question {question.position + 1}</legend>
                   {question.options.map((option) => {
                     const many = question.question_type === 'multiple';
-                    const checked = current.selected_options.includes(option.id);
+                    // `null` for a question never answered on some payloads.
+                    const chosen = current.selected_options ?? [];
+                    const checked = chosen.includes(option.id);
                     return (
                       <label key={option.id} className="flex items-center gap-2 text-sm">
                         <input
@@ -193,8 +207,8 @@ function ExamPlayer({ examId }: { examId: string }) {
                           onChange={(event) => {
                             const selected = many
                               ? event.target.checked
-                                ? [...current.selected_options, option.id]
-                                : current.selected_options.filter((id) => id !== option.id)
+                                ? [...chosen, option.id]
+                                : chosen.filter((id) => id !== option.id)
                               : [option.id];
                             void record(current, { selected_options: selected });
                           }}

@@ -336,6 +336,47 @@ def test_the_trainer_workload_counts_what_is_outstanding(
 
 
 @pytest.mark.django_db
+def test_a_finished_batch_reports_the_students_who_finished_it(
+    api_client_no_csrf, admin_user, marked_session, batch
+):
+    """A completed batch is not an empty batch.
+
+    `/analytics`'s "Batch performance" table read this endpoint and showed
+    every finished cohort as "0 students" beside a real attendance percentage —
+    0 students who attended 72% of classes — while `/admissions/batches` showed
+    the same batch with a hundred and two. The count here was
+    `status=ACTIVE` only, and a finished cohort's enrolments are all
+    `completed`.
+
+    `marked_session` leaves two enrolments on `batch` and one register taken
+    (one present, one absent), so both numbers below are arithmetic a reader
+    can check.
+    """
+    from apps.batches.models import BatchStatus
+    from apps.enrollments.services import complete_enrollments_for_batch
+
+    assert complete_enrollments_for_batch(batch=batch, actor=admin_user) == 2
+    batch.status = BatchStatus.COMPLETED
+    batch.save(update_fields=["status"])
+
+    api_client_no_csrf.force_login(admin_user)
+    row = next(
+        entry
+        for entry in api_client_no_csrf.get("/api/v1/dashboards/batches/").json()
+        if entry["code"] == batch.code
+    )
+
+    assert row["status"] == "completed"
+    assert row["students"] == 2
+    assert row["attendance_percent"] == 50.0
+
+    # And it is the same size `/admissions/batches` shows for that batch —
+    # which is the contradiction this row used to put on one screen.
+    listed = api_client_no_csrf.get(f"/api/v1/batches/?search={batch.code}").json()
+    assert [entry["enrolled_count"] for entry in listed["results"]] == [row["students"]]
+
+
+@pytest.mark.django_db
 def test_batch_summaries_do_not_grow_a_query_per_batch(
     api_client_no_csrf, admin_user, marked_session, django_assert_max_num_queries
 ):
@@ -463,6 +504,106 @@ def test_a_bad_student_file_is_reported(api_client_no_csrf, admin_user, rows, fr
         body = response.json()
         assert body["error_count"] >= 1
         assert fragment.lower() in str(body["report"]["errors"]).lower()
+
+
+@pytest.mark.django_db
+def test_a_phone_in_the_apps_own_format_is_not_a_formula(api_client_no_csrf, admin_user):
+    """`+919876543210` is what every screen here *displays* a phone number as.
+
+    The formula guard refused the whole row for it, with "A cell looks like a
+    formula" — so an operator who copied a number out of a student's page and
+    back into a spreadsheet got an error naming something they had not written,
+    and no way to tell which of four cells it meant. Three rows, one file: the
+    phone imports, a real formula in the phone column is still refused, and the
+    exemption does not travel to another column.
+    """
+    api_client_no_csrf.force_login(admin_user)
+    body = api_client_no_csrf.post(
+        "/api/v1/imports/students/",
+        {
+            "file": _csv(
+                [
+                    ["email", "first name", "phone"],
+                    ["asha.phone@example.test", "Asha", "+919876543210"],
+                    ["bilal.formula@example.test", "Bilal", "=SUM(A1)"],
+                    ["chen.plus@example.test", "+919876543210", ""],
+                ]
+            )
+        },
+        format="multipart",
+    ).json()
+
+    assert body["valid_count"] == 1
+    assert body["report"]["rows"][0]["phone"] == "+919876543210"
+
+    problems = {error["email"]: error["problem"] for error in body["report"]["errors"]}
+    assert problems["bilal.formula@example.test"] == (
+        "The phone cell starts with '=', which a spreadsheet reads as the start of a formula."
+    )
+    # By value, in the phone column only: a name beginning with a plus is a
+    # formula as far as this importer is concerned, exactly as before.
+    assert "first name cell" in problems["chen.plus@example.test"]
+
+    # And the accepted number survives the write: `User.phone` carries the same
+    # international-format validator, so a previewed row cannot fail at
+    # confirmation over the leading plus. A clean file of its own, because a
+    # file with any error in it is refused at confirmation by design.
+    clean = api_client_no_csrf.post(
+        "/api/v1/imports/students/",
+        {
+            "file": _csv(
+                [
+                    ["email", "first name", "phone"],
+                    ["dia.phone@example.test", "Dia", "+919876543210"],
+                ]
+            )
+        },
+        format="multipart",
+    ).json()
+    confirmed = api_client_no_csrf.post(f"/api/v1/imports/{clean['id']}/confirm/", format="json")
+    assert confirmed.status_code == 200, confirmed.json()
+
+    from apps.accounts.models import User
+
+    assert User.objects.get(email="dia.phone@example.test").phone == "+919876543210"
+
+
+@pytest.mark.django_db
+def test_a_phone_already_on_a_record_names_the_row_it_stopped_on(
+    api_client_no_csrf, admin_user, student_profile
+):
+    """The duplicate check is kept; what changes is that it says where.
+
+    §4.2's check matches on the phone number too, and asks for a reason before
+    a second record is created. A bulk file cannot answer that, so the import
+    stops — and a 200-row file needs to be told which line to take out.
+    """
+    student_profile.user.phone = "+919812345678"
+    student_profile.user.save(update_fields=["phone"])
+
+    api_client_no_csrf.force_login(admin_user)
+    preview = api_client_no_csrf.post(
+        "/api/v1/imports/students/",
+        {
+            "file": _csv(
+                [
+                    ["email", "first name", "phone"],
+                    ["eve.phone@example.test", "Eve", "+919812345678"],
+                ]
+            )
+        },
+        format="multipart",
+    ).json()
+    assert preview["valid_count"] == 1
+
+    response = api_client_no_csrf.post(f"/api/v1/imports/{preview['id']}/confirm/", format="json")
+
+    assert response.status_code == 409, response.json()
+    assert "Line 2 (eve.phone@example.test)" in str(response.json())
+
+    from apps.accounts.models import User
+
+    assert not User.objects.filter(email="eve.phone@example.test").exists()
 
 
 @pytest.mark.django_db

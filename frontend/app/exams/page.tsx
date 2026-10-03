@@ -10,11 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { ApiError } from '@/lib/api';
-import {
-  ATTEMPT_STATUS_LABEL,
-  ATTEMPT_STATUS_VARIANT,
-  formatDateTime,
-} from '@/lib/academic-labels';
+import { attemptBadge, formatDateTime } from '@/lib/academic-labels';
 import { listMyAttempts, listMyExams } from '@/lib/exams';
 import type { AttemptResult, Exam } from '@/types/api';
 
@@ -55,7 +51,24 @@ function MyExams() {
     );
   }
 
-  const byExam = new Map(attempts.map((attempt) => [attempt.exam, attempt]));
+  /**
+   * The attempt to show per exam, and how many that exam has used.
+   *
+   * The list arrives newest-first (`MyAttemptsView` orders by `-started_at`),
+   * so building the map straight from it left the *oldest* attempt as the
+   * survivor of each key -- a candidate on their second sitting was shown their
+   * first. Highest `attempt_number` wins instead, which is the current one
+   * whatever the server's ordering does next.
+   */
+  const latestByExam = new Map<string, AttemptResult>();
+  const usedByExam = new Map<string, number>();
+  for (const attempt of attempts) {
+    usedByExam.set(attempt.exam, (usedByExam.get(attempt.exam) ?? 0) + 1);
+    const held = latestByExam.get(attempt.exam);
+    if (!held || attempt.attempt_number > held.attempt_number) {
+      latestByExam.set(attempt.exam, attempt);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -75,16 +88,30 @@ function MyExams() {
         <>
         <h2 className="sr-only">Examinations</h2>
         {exams.map((exam) => {
-          const mine = byExam.get(exam.id);
+          const mine = latestByExam.get(exam.id);
+          const used = usedByExam.get(exam.id) ?? 0;
+          const badge = mine ? attemptBadge(mine) : null;
+          /**
+           * Whether this candidate may open the paper.
+           *
+           * An attempt still running is resumed. Otherwise a fresh one is
+           * offered while the exam has attempts left -- which is what
+           * `services.start_attempt` will actually allow, and what an exam
+           * advertising "two attempts allowed" promises. The condition used to
+           * be "no attempt at all, or one in progress", so submitting the first
+           * attempt on a two-attempt exam removed the only control that could
+           * start the second and there was no way back to the paper.
+           */
+          const resumable = mine?.status === 'in_progress';
+          const attemptsLeft = Math.max(0, exam.max_attempts - used);
+          const canOpen = exam.is_open && (resumable || attemptsLeft > 0);
           return (
             <Card key={exam.id} data-testid="exam-card" className="">
               <CardHeader className="gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-xs text-ink-muted">{exam.code}</span>
-                  {mine ? (
-                    <Badge variant={ATTEMPT_STATUS_VARIANT[mine.status]}>
-                      {ATTEMPT_STATUS_LABEL[mine.status]}
-                    </Badge>
+                  {badge ? (
+                    <Badge variant={badge.variant}>{badge.label}</Badge>
                   ) : (
                     <Badge variant={exam.is_open ? 'success' : 'neutral'}>
                       {exam.is_open ? 'Open' : 'Not open'}
@@ -132,12 +159,23 @@ function MyExams() {
                   </div>
                 ) : null}
 
-                {exam.is_open && (!mine || mine.status === 'in_progress') ? (
-                  <Button asChild size="sm">
-                    <Link href={`/exams/${exam.id}`}>
-                      {mine ? 'Continue the examination' : 'Start the examination'}
-                    </Link>
-                  </Button>
+                {canOpen ? (
+                  <div className="space-y-2">
+                    <Button asChild size="sm">
+                      <Link href={`/exams/${exam.id}`}>
+                        {resumable
+                          ? 'Continue the examination'
+                          : used > 0
+                            ? `Start attempt ${used + 1}`
+                            : 'Start the examination'}
+                      </Link>
+                    </Button>
+                    {!resumable && exam.max_attempts > 1 ? (
+                      <p className="text-xs text-ink-muted" data-testid="attempts-left">
+                        {attemptsLeft} of {exam.max_attempts} attempts left.
+                      </p>
+                    ) : null}
+                  </div>
                 ) : null}
               </CardContent>
             </Card>

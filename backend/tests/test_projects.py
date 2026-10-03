@@ -801,3 +801,92 @@ def test_the_student_project_list_is_one_request_not_one_per_project(
     assert body["count"] == 5
     # Every row already carries the student's own work; nothing to fetch after.
     assert all(row["my_work"] is not None for row in body["results"])
+
+
+# ---------------------------------------------------------------------------
+# The review queue (a list, not a page's worth of a list)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def cohort_queue(admin_user, project, batch, enrollment, student_profile):
+    """A queue of thirty rows on one project, of which exactly one is handed in.
+
+    Deliberately larger than `DefaultPagination.page_size` (25), because the bug
+    this covers only appears past the first page boundary.
+    """
+    from apps.batches.services import update_batch
+    from apps.enrollments.services import enrol_student
+    from apps.projects.services import student_project_for, submit_project
+    from apps.students.services import create_student
+
+    handed_in = student_project_for(project=project, student=student_profile)
+    submit_project(work=handed_in, actor=student_profile.user, files=[_file()])
+
+    # The `batch` fixture seats three; twenty-nine more would be refused.
+    update_batch(batch=batch, actor=admin_user, capacity=40)
+    for index in range(29):
+        other = create_student(
+            email=f"queue{index}@example.test",
+            first_name="Queue",
+            last_name=f"Student {index}",
+            actor=admin_user,
+            send_invitation=False,
+        )
+        enrol_student(student=other, batch=batch, actor=admin_user)
+        student_project_for(project=project, student=other)
+
+    return handed_in
+
+
+@pytest.mark.django_db
+def test_the_review_queue_puts_handed_in_work_on_the_first_page(
+    api_client_no_csrf, trainer_profile, project, cohort_queue
+):
+    """`-submitted_at` on a nullable column sorts NULLs first in PostgreSQL.
+
+    So a queue of thirty rows led with the twenty-nine students who had handed in
+    nothing and pushed the one awaiting a decision onto page two — the one row
+    the trainer's own dashboard had sent them here to review.
+    """
+    api_client_no_csrf.force_login(trainer_profile.user)
+    body = api_client_no_csrf.get(f"/api/v1/projects/{project.id}/submissions/").json()
+
+    assert body["count"] == 30
+    assert body["page"] == 1
+    assert body["page_size"] == 25
+    assert body["total_pages"] == 2
+    assert len(body["results"]) == 25
+    assert body["results"][0]["id"] == str(cohort_queue.id)
+
+
+@pytest.mark.django_db
+def test_the_review_queue_pages_to_the_end(
+    api_client_no_csrf, trainer_profile, project, cohort_queue
+):
+    """The rows past the first page are reachable, and none is served twice."""
+    api_client_no_csrf.force_login(trainer_profile.user)
+    seen: list[str] = []
+    for page in (1, 2):
+        body = api_client_no_csrf.get(
+            f"/api/v1/projects/{project.id}/submissions/?page={page}"
+        ).json()
+        assert body["page"] == page
+        seen.extend(row["id"] for row in body["results"])
+
+    assert len(seen) == 30
+    assert len(set(seen)) == 30
+
+
+@pytest.mark.django_db
+def test_the_review_queue_filters_by_status(
+    api_client_no_csrf, trainer_profile, project, cohort_queue
+):
+    """What a reviewer actually asks of a thirty-row queue: show me the decisions."""
+    api_client_no_csrf.force_login(trainer_profile.user)
+    body = api_client_no_csrf.get(
+        f"/api/v1/projects/{project.id}/submissions/?status={WorkStatus.SUBMITTED}"
+    ).json()
+
+    assert body["count"] == 1
+    assert body["results"][0]["id"] == str(cohort_queue.id)

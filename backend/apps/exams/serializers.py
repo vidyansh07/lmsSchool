@@ -158,12 +158,22 @@ class AttemptSerializer(StrictModelSerializer):
 
     ``seconds_remaining`` is computed on the server for every response, so the
     browser's clock is a display detail rather than a source of truth.
+
+    ``negative_marking`` is the exam's flag, carried on the paper because the
+    paper is where it matters. Every question carries its own
+    ``negative_marks`` -- copied from the bank when the paper was drawn -- but
+    those are only ever *applied* when this flag is on (see
+    ``services.grade_attempt``). Without the flag on the payload the player has
+    a per-question penalty and no way to know whether it counts, and it told
+    candidates a wrong answer would cost them marks on exams that deduct
+    nothing.
     """
 
     exam_code = serializers.CharField(source="exam.code", read_only=True)
     exam_title = serializers.CharField(source="exam.title", read_only=True)
     seconds_remaining = serializers.IntegerField(read_only=True)
     results_published = serializers.BooleanField(source="exam.results_published", read_only=True)
+    negative_marking = serializers.BooleanField(source="exam.negative_marking", read_only=True)
 
     class Meta:
         model = ExamAttempt
@@ -179,6 +189,7 @@ class AttemptSerializer(StrictModelSerializer):
             "submitted_at",
             "seconds_remaining",
             "results_published",
+            "negative_marking",
         )
         read_only_fields = fields
 

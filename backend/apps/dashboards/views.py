@@ -48,6 +48,56 @@ UPCOMING_DAYS = 7
 #: useful information, not everything.
 RECENT_LIMIT = 5
 
+#: "This week" on the counsellor's dashboard, in days, counted back from today
+#: inclusive — a rolling window, not the calendar week, because that is what
+#: the tile says ("Rolling seven days") and the two must agree.
+ROLLING_WEEK_DAYS = 7
+
+#: What each figure on the counsellor dashboard actually computes, keyed by the
+#: field carrying it.
+#:
+#: §8.6 ("every metric must have a documented definition") applied to a
+#: dashboard rather than to the metrics page: these figures sit next to each
+#: other on one screen, and it was reading "Registered today 61" beside
+#: "Registered this week 30" that exposed the browser-side week window this
+#: endpoint now replaces. A number whose definition travels with it is a
+#: number whose contradiction with the one beside it is visible on the screen
+#: instead of six months later in a meeting.
+#:
+#: The wording is the contract: `apps.reporting.metrics.Metric` carries its
+#: definition into the API the same way, and the frontend renders these
+#: verbatim as each tile's caption rather than restating them in TSX.
+COUNSELLOR_FIGURE_DEFINITIONS: dict[str, str] = {
+    "new_students_today": (
+        "Students registered today — by the date their record was created, in "
+        "the institution's own timezone, at the centres you can see."
+    ),
+    "new_students_this_week": (
+        f"Students registered in the last {ROLLING_WEEK_DAYS} days, today "
+        "included, at the centres you can see. A rolling window, so it always "
+        "contains today's figure and can never be smaller than it."
+    ),
+    "pending_registrations": (
+        "Enrolments still awaiting confirmation (status 'pending'). Counted per "
+        "enrolment, so a student pending on two courses counts twice."
+    ),
+    "follow_ups_due": (
+        "Follow-up activities assigned to or created by you that are still "
+        "open and not yet overdue."
+    ),
+    "follow_ups_overdue": (
+        "Follow-up activities assigned to or created by you that are past their due date."
+    ),
+    "unassigned_batch": (
+        "Registered students holding no seat on any batch — no enrolment that "
+        "is pending, active, suspended or completed. A cancelled or transferred "
+        "enrolment leaves a student here, because it leaves them nowhere to sit."
+    ),
+    "unassigned_trainer": (
+        "Upcoming or active batches with nobody teaching them, at the centres you can see."
+    ),
+}
+
 
 class CalendarView(APIView):
     """Every event the caller may see in a date range.
@@ -356,11 +406,22 @@ def _counsellor_dashboard(user) -> dict:
 
     students = students_access.visible_students(user)
     new_students_today = students.filter(created_at__date=today).count()
+    # The same window the "Rolling seven days" tile claims, computed here
+    # rather than in the browser. It used to be counted client-side from the
+    # thirty most recent registrations `/api/v1/students/` returns, which on a
+    # busy day silently capped the week at thirty and reported "today 61, this
+    # week 30" — a seven-day figure smaller than one day inside it. Inclusive
+    # of today, hence `days - 1`: the window is today and the six days before
+    # it, which is what makes this figure always at least `new_students_today`.
+    new_students_this_week = students.filter(
+        created_at__date__gte=today - timedelta(days=ROLLING_WEEK_DAYS - 1)
+    ).count()
     # "Registered, not yet placed on any batch" — the same underlying
     # condition `apps.warnings.services._admissions_warnings` raises its
     # `not_enrolled` warning from, minus that warning's week-old threshold:
-    # this tile is a live count, not an escalation.
-    unassigned_batch = students.filter(enrollments__isnull=True).count()
+    # this tile is a live count, not an escalation. Both go through
+    # `awaiting_enrolment`, so "no batch" means one thing on this screen.
+    unassigned_batch = students_access.awaiting_enrolment(students).count()
 
     # `EnrollmentStatus.PENDING` is this codebase's existing "awaiting its
     # next step" concept — the same status
@@ -396,12 +457,16 @@ def _counsellor_dashboard(user) -> dict:
 
     return {
         "new_students_today": new_students_today,
+        "new_students_this_week": new_students_this_week,
         "pending_registrations": pending_registrations,
         "follow_ups_due": follow_up_counts["due"] or 0,
         "follow_ups_overdue": follow_up_counts["overdue"] or 0,
         "unassigned_batch": unassigned_batch,
         "unassigned_trainer": unassigned_trainer,
         "warnings": warnings_services.cached_warnings_for(user),
+        # Shipped with the numbers, not alongside them in a doc: see
+        # `COUNSELLOR_FIGURE_DEFINITIONS` above.
+        "definitions": COUNSELLOR_FIGURE_DEFINITIONS,
     }
 
 

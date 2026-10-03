@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -248,7 +249,7 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
 export default function SessionRegisterPage() {
   const params = useParams<{ sessionId: string }>();
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.sessionManageAny} roles={["trainer"]}>
       <RegisterScreen sessionId={params.sessionId} />
     </RequireAuth>
   );

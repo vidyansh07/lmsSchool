@@ -11,16 +11,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   fillingUpBatches,
+  hasOverdueStart,
   startingSoonBatches,
   BatchWatchlist,
 } from '@/components/counsellor/batches-panel';
-import {
-  NotYetEnrolledPanel,
-  studentsAwaitingEnrolment,
-} from '@/components/counsellor/not-yet-enrolled-panel';
+import { NotYetEnrolledPanel } from '@/components/counsellor/not-yet-enrolled-panel';
 import { PendingConfirmationsPanel } from '@/components/counsellor/pending-confirmations-panel';
 import { RecentActivityPanel, buildActivityFeed } from '@/components/counsellor/recent-activity-panel';
-import { countRegisteredSince } from '@/app/admissions/dashboard/page';
+import { FigureDefinitions } from '@/app/admissions/dashboard/page';
 import { ApiError } from '@/lib/api';
 import type { BatchListRow, Enrollment, StudentListRow } from '@/types/api';
 
@@ -102,25 +100,44 @@ const apiError = new ApiError(500, 'server_error', 'The server exploded.', 'req-
 
 // --- Pure computations -----------------------------------------------------
 
-describe('studentsAwaitingEnrolment', () => {
-  it('keeps a student whose code is not in the enrolled set', () => {
-    const result = studentsAwaitingEnrolment([student()], new Set(['GRS-S-99999']));
-    expect(result).toHaveLength(1);
-  });
-
-  it('drops a student whose code already appears in the enrolled set', () => {
-    const result = studentsAwaitingEnrolment([student()], new Set(['GRS-S-00001']));
-    expect(result).toHaveLength(0);
-  });
-});
-
 describe('startingSoonBatches / fillingUpBatches', () => {
+  const TODAY = '2026-04-15';
+
   it('only considers upcoming batches for "starting soon", earliest first', () => {
     const soon = batch({ id: 'a', status: 'upcoming', start_date: '2026-05-01' });
-    const sooner = batch({ id: 'b', status: 'upcoming', start_date: '2026-04-01' });
+    const sooner = batch({ id: 'b', status: 'upcoming', start_date: '2026-04-20' });
     const active = batch({ id: 'c', status: 'active', start_date: '2026-01-01' });
-    const result = startingSoonBatches([soon, sooner, active]);
+    const result = startingSoonBatches([soon, sooner, active], TODAY);
     expect(result.map((b) => b.id)).toEqual(['b', 'a']);
+  });
+
+  it('leads with a batch that was due to start, not with the one starting next', () => {
+    // The defect this pins down: `GRS-B-00017` sat at the top of "Upcoming
+    // batches, soonest first" fourteen days after its own start date, reading
+    // as the next thing to start. It is still first — it is the row to act on —
+    // but the list is no longer claiming it starts soon.
+    const overdue = batch({ id: 'late', status: 'upcoming', start_date: '2026-04-01' });
+    const next = batch({ id: 'next', status: 'upcoming', start_date: '2026-04-20' });
+    expect(startingSoonBatches([next, overdue], TODAY).map((b) => b.id)).toEqual(['late', 'next']);
+    expect(hasOverdueStart(overdue, TODAY)).toBe(true);
+    expect(hasOverdueStart(next, TODAY)).toBe(false);
+  });
+
+  it('treats a batch starting today as starting, not as overdue', () => {
+    const starting = batch({ id: 'today', status: 'upcoming', start_date: TODAY });
+    expect(hasOverdueStart(starting, TODAY)).toBe(false);
+  });
+
+  it('puts the longest-overdue start first among several', () => {
+    const older = batch({ id: 'older', status: 'upcoming', start_date: '2026-03-01' });
+    const newer = batch({ id: 'newer', status: 'upcoming', start_date: '2026-04-10' });
+    expect(startingSoonBatches([newer, older], TODAY).map((b) => b.id)).toEqual(['older', 'newer']);
+  });
+
+  it('sorts an upcoming batch with no start date last rather than throwing', () => {
+    const dated = batch({ id: 'a', status: 'upcoming', start_date: '2026-05-01' });
+    const undated = batch({ id: 'b', status: 'upcoming', start_date: null as unknown as string });
+    expect(startingSoonBatches([undated, dated], TODAY).map((b) => b.id)).toEqual(['a', 'b']);
   });
 
   it('excludes completed, cancelled and archived batches from "filling up"', () => {
@@ -161,20 +178,27 @@ describe('buildActivityFeed', () => {
   });
 });
 
-describe('countRegisteredSince', () => {
-  it('counts only students at or after the cut-off', () => {
-    const count = countRegisteredSince(
-      [
-        student({ created_at: '2026-03-05T09:00:00Z' }),
-        student({ created_at: '2026-03-01T09:00:00Z' }),
-      ],
-      '2026-03-03T00:00:00.000Z',
+describe('FigureDefinitions', () => {
+  it('renders the definition the server sent, under the tile it belongs to', () => {
+    render(
+      <FigureDefinitions
+        definitions={{
+          new_students_this_week: 'A rolling seven days, today included.',
+          unassigned_batch: 'Registered students holding no seat on any batch.',
+        }}
+      />,
     );
-    expect(count).toBe(1);
+    expect(screen.getByText('Registered this week')).toBeInTheDocument();
+    expect(screen.getByText('A rolling seven days, today included.')).toBeInTheDocument();
+    expect(screen.getByText('Unassigned batch')).toBeInTheDocument();
   });
 
-  it('is zero for an empty list', () => {
-    expect(countRegisteredSince([], '2026-03-03T00:00:00.000Z')).toBe(0);
+  it('still explains the one figure this screen computes itself', () => {
+    // "Batches starting soon" is filtered in the browser, so the payload
+    // carries no definition for it and this file is its only source.
+    render(<FigureDefinitions definitions={{}} />);
+    expect(screen.getByText('Batches starting soon')).toBeInTheDocument();
+    expect(screen.getByText(/start date has already passed/)).toBeInTheDocument();
   });
 });
 
@@ -182,36 +206,24 @@ describe('countRegisteredSince', () => {
 
 describe('NotYetEnrolledPanel', () => {
   it('shows a loading skeleton', () => {
-    render(<NotYetEnrolledPanel recentStudents={[]} enrolledStudentCodes={new Set()} isLoading />);
+    render(<NotYetEnrolledPanel students={[]} totalCount={0} isLoading />);
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('shows an error with a working retry', async () => {
     const onRetry = vi.fn();
-    render(
-      <NotYetEnrolledPanel
-        recentStudents={[]}
-        enrolledStudentCodes={new Set()}
-        error={apiError}
-        onRetry={onRetry}
-      />,
-    );
+    render(<NotYetEnrolledPanel students={[]} totalCount={0} error={apiError} onRetry={onRetry} />);
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
-  it('says plainly that everyone recent is already enrolled', () => {
-    render(
-      <NotYetEnrolledPanel
-        recentStudents={[student()]}
-        enrolledStudentCodes={new Set(['GRS-S-00001'])}
-      />,
-    );
-    expect(screen.getByText(/every recent registration is enrolled/i)).toBeInTheDocument();
+  it('says plainly that everyone is on a batch', () => {
+    render(<NotYetEnrolledPanel students={[]} totalCount={0} />);
+    expect(screen.getByText(/every registration is on a batch/i)).toBeInTheDocument();
   });
 
   it('lists an outstanding registration and links to that student', () => {
-    render(<NotYetEnrolledPanel recentStudents={[student()]} enrolledStudentCodes={new Set()} />);
+    render(<NotYetEnrolledPanel students={[student()]} totalCount={1} />);
     expect(screen.getByText('New Student')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /new student/i })).toHaveAttribute(
       'href',
@@ -219,12 +231,25 @@ describe('NotYetEnrolledPanel', () => {
     );
   });
 
+  it('reports the server total, not the length of the page it was given', () => {
+    // The count and the rows come from one request now (`count` and `results`
+    // of `?awaiting_enrolment=true`), so a capped list cannot understate the
+    // gap — and the panel can no longer invent a count of its own, which is
+    // how it came to claim fifteen students who were all enrolled.
+    render(<NotYetEnrolledPanel students={[student()]} totalCount={14} />);
+    expect(screen.getByText(/14 registered students hold no seat/i)).toBeInTheDocument();
+    expect(screen.getByText(/showing the 1 most recent/i)).toBeInTheDocument();
+  });
+
+  it('does not say "showing the N most recent" when the page is the whole total', () => {
+    render(<NotYetEnrolledPanel students={[student()]} totalCount={1} />);
+    expect(screen.getByText(/1 registered student holds no seat/i)).toBeInTheDocument();
+    expect(screen.queryByText(/showing the/i)).not.toBeInTheDocument();
+  });
+
   it('renders an unnamed student honestly rather than a blank row', () => {
     render(
-      <NotYetEnrolledPanel
-        recentStudents={[student({ full_name: '', email: '' })]}
-        enrolledStudentCodes={new Set()}
-      />,
+      <NotYetEnrolledPanel students={[student({ full_name: '', email: '' })]} totalCount={1} />,
     );
     expect(screen.getByText('Unknown')).toBeInTheDocument();
   });
@@ -275,8 +300,26 @@ describe('BatchWatchlist', () => {
   });
 
   it('shows a start date for the starting-soon variant', () => {
-    render(<BatchWatchlist batches={[batch({ status: 'upcoming', start_date: '2026-05-01' })]} kind="starting-soon" />);
+    render(
+      <BatchWatchlist
+        batches={[batch({ status: 'upcoming', start_date: '2026-05-01' })]}
+        kind="starting-soon"
+        today="2026-04-15"
+      />,
+    );
     expect(screen.getByText(/starts/i)).toBeInTheDocument();
+  });
+
+  it('never says "starts" about a date that has gone', () => {
+    render(
+      <BatchWatchlist
+        batches={[batch({ status: 'upcoming', start_date: '2026-04-01' })]}
+        kind="starting-soon"
+        today="2026-04-15"
+      />,
+    );
+    expect(screen.getByText(/was due to start .* not marked active/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^starts/i)).not.toBeInTheDocument();
   });
 });
 

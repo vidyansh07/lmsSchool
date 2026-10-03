@@ -11,6 +11,16 @@
  * larger, is a judgement call fixed here rather than invented as a fake
  * "backend setting" — it is written down once, in `FEW_SEATS_LEFT`, so it is
  * easy to find and revisit rather than buried in a filter expression.
+ *
+ * "Starting soon" has one subtlety worth stating, because getting it wrong is
+ * what the list did until now: a batch's status is set by a person, not by the
+ * calendar, so `upcoming` with a start date two weeks in the past is a real
+ * state — somebody scheduled a cohort and never marked it active. Sorting
+ * purely by start date put that batch at the top of a list headed "soonest
+ * first", where it read as the next thing to start. It is still shown, because
+ * it is the row most in need of attention, but it is shown as what it is:
+ * overdue to start, said in words, above the ones that genuinely have not
+ * started yet.
  */
 import Link from 'next/link';
 
@@ -22,11 +32,33 @@ import type { BatchListRow } from '@/types/api';
 const FEW_SEATS_LEFT = 3;
 const FEW_SEATS_FRACTION = 0.15;
 
-export function startingSoonBatches(batches: BatchListRow[]): BatchListRow[] {
-  return batches
-    .filter((batch) => batch.status === 'upcoming')
-    .slice()
-    .sort((a, b) => a.start_date.localeCompare(b.start_date));
+/** Whether an `upcoming` batch's start date has already gone by — its start
+ *  is overdue, not soon. `today` is an ISO date (`YYYY-MM-DD`), compared as a
+ *  string so no timezone is involved: both sides are plain dates. */
+export function hasOverdueStart(batch: BatchListRow, today: string): boolean {
+  return Boolean(batch.start_date) && batch.start_date < today;
+}
+
+/**
+ * Batches not running yet, the most urgent first.
+ *
+ * Two groups, in this order: the ones whose start date has passed while they
+ * are still `upcoming` (oldest first — the longest overdue is the worst), then
+ * the ones still ahead (soonest first). An upcoming batch with no start date at
+ * all sorts last rather than throwing.
+ *
+ * `today` is passed in rather than read from the clock so the order a test
+ * pins down is the order a reader sees, and `formatDate`'s timezone cannot
+ * change which group a batch lands in.
+ */
+export function startingSoonBatches(batches: BatchListRow[], today: string): BatchListRow[] {
+  const byDate = (a: BatchListRow, b: BatchListRow) =>
+    (a.start_date ?? '￿').localeCompare(b.start_date ?? '￿');
+  const upcoming = batches.filter((batch) => batch.status === 'upcoming');
+  return [
+    ...upcoming.filter((batch) => hasOverdueStart(batch, today)).sort(byDate),
+    ...upcoming.filter((batch) => !hasOverdueStart(batch, today)).sort(byDate),
+  ];
 }
 
 export function fillingUpBatches(batches: BatchListRow[]): BatchListRow[] {
@@ -64,6 +96,9 @@ export function BatchWatchlist({
   error,
   onRetry,
   limit = 5,
+  /** Today as an ISO date. Injected so a test — and a screen holding a frozen
+   *  "as of" moment — does not depend on the clock. */
+  today = new Date().toISOString().slice(0, 10),
 }: {
   batches: BatchListRow[];
   kind: 'starting-soon' | 'filling-up';
@@ -71,13 +106,15 @@ export function BatchWatchlist({
   error?: { message: string; requestId?: string } | null;
   onRetry?: () => void;
   limit?: number;
+  today?: string;
 }) {
   if (isLoading) return <LoadingState label="Loading batches…" rows={3} />;
   if (error) {
     return <ErrorState message={error.message} requestId={error.requestId} onRetry={onRetry} />;
   }
 
-  const full = kind === 'starting-soon' ? startingSoonBatches(batches) : fillingUpBatches(batches);
+  const full =
+    kind === 'starting-soon' ? startingSoonBatches(batches, today) : fillingUpBatches(batches);
   const visible = full.slice(0, limit);
 
   if (visible.length === 0) {
@@ -99,7 +136,12 @@ export function BatchWatchlist({
             batch={batch}
             detail={
               kind === 'starting-soon'
-                ? `Starts ${formatDate(batch.start_date)}`
+                ? // Never "Starts 12 Sep" about a date that has gone: the
+                  // reader is told the batch was due to start and has not
+                  // been marked active, which is the thing to act on.
+                  hasOverdueStart(batch, today)
+                  ? `Was due to start ${formatDate(batch.start_date)} — not marked active`
+                  : `Starts ${formatDate(batch.start_date)}`
                 : formatCount(batch.seats_available, 'seat left', 'seats left')
             }
           />

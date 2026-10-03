@@ -15,6 +15,7 @@ import {
   isoDaysFromNow,
   isoToday,
 } from '@/lib/batch-labels';
+import { labelFor } from '@/lib/labels';
 import type { CalendarEvent } from '@/types/api';
 
 /**
@@ -83,6 +84,9 @@ export function CalendarView({ days = 28 }: { days?: number }) {
   // Grouped by day so the list reads as a diary rather than a flat feed.
   const byDay = new Map<string, CalendarEvent[]>();
   for (const event of state.events) {
+    // An event with no start at all cannot be placed on a day, and a diary
+    // cannot show it — but one bad row must not blank the whole calendar.
+    if (typeof event.start !== 'string' || !event.start) continue;
     const day = event.start.slice(0, 10);
     byDay.set(day, [...(byDay.get(day) ?? []), event]);
   }
@@ -129,8 +133,14 @@ export function CalendarView({ days = 28 }: { days?: number }) {
                     key={`${event.kind}-${event.start}-${index}`}
                     className="flex flex-wrap items-center gap-3 px-3 py-2.5 text-sm"
                   >
+                    {/* `labelFor`, not `?? event.kind`: the fallback used to
+                        print the backend's own enum, so a source registered
+                        after this map was written showed up as `activity_due`
+                        in the badge. The shared helper humanises an unknown
+                        kind ("Activity Due") instead of leaking a wire
+                        value. */}
                     <Badge variant={event.kind === 'class' ? 'success' : 'neutral'}>
-                      {EVENT_KIND_LABEL[event.kind] ?? event.kind}
+                      {labelFor(EVENT_KIND_LABEL, event.kind)}
                     </Badge>
                     <span className="min-w-0 flex-1 truncate font-medium">{event.title}</span>
                     {event.all_day ? (

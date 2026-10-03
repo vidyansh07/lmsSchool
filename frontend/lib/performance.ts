@@ -78,7 +78,8 @@ export interface StudentPerformanceEntry {
   projects: { percent: number | null; required: number; finished: number };
   progress: { percent: number | null; expected_percent: number | null; variance: number | null };
   overall_score: number | null;
-  risk: PerformanceRisk;
+  /** `null` until the risk engine has evaluated this enrolment at least once. */
+  risk: PerformanceRisk | null;
   counts: { components_measured: number; risk_flags: number };
 }
 

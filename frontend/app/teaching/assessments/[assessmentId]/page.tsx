@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -371,7 +372,7 @@ function AssessmentDetail({ assessmentId }: { assessmentId: string }) {
 export default function TeachingAssessmentPage() {
   const params = useParams<{ assessmentId: string }>();
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.assessmentManageAny} roles={["trainer"]}>
       <AssessmentDetail assessmentId={params.assessmentId} />
     </RequireAuth>
   );

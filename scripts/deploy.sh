@@ -3,7 +3,7 @@
 # Deploy the staging stack to a host over SSH.
 #
 #   ./scripts/deploy.sh ubuntu@ec2-….amazonaws.com [--key vidyansh.pem] \
-#       [--branch feat/x] [--seed] [--import-sitp DIR]
+#       [--branch feat/x] [--seed] [--showcase] [--import-sitp DIR]
 #
 # What it does, in order, stopping at the first failure:
 #   1. backs the database up on the host — a deploy that cannot be undone is a
@@ -13,7 +13,9 @@
 #   3. builds and starts the stack; migrations apply on backend start
 #      (RUN_MIGRATIONS=true in docker-compose.staging.yml);
 #   4. waits for the backend to report ready;
-#   5. optionally seeds the demo accounts and imports the SITP workbooks.
+#   5. optionally seeds the demo accounts, layers the showcase data set on
+#      top (--showcase; additive and idempotent), and imports the SITP
+#      workbooks.
 #
 # It edits nothing on the host: hostname, ports and secrets live in the host's
 # own .env.staging. If the host has local edits it stops and says so, rather
@@ -21,17 +23,19 @@
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
-TARGET="${1:?usage: $0 user@host [--key pem] [--branch name] [--seed] [--import-sitp DIR]}"
+TARGET="${1:?usage: $0 user@host [--key pem] [--branch name] [--seed] [--showcase] [--import-sitp DIR]}"
 shift
 KEY=""
 BRANCH=""
 SEED=false
+SHOWCASE=false
 IMPORT_DIR=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --key) KEY="$2"; shift 2 ;;
     --branch) BRANCH="$2"; shift 2 ;;
     --seed) SEED=true; shift ;;
+    --showcase) SHOWCASE=true; shift ;;
     --import-sitp) IMPORT_DIR="$2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
@@ -85,9 +89,27 @@ if [ "$SEED" = true ]; then
   remote "$COMPOSE exec -T backend python manage.py seed_demo_data 2>&1 | grep -v grras.audit | tail -3"
 fi
 
+if [ "$SHOWCASE" = true ]; then
+  # Reads DEMO_USER_PASSWORD from the host's .env.staging through compose,
+  # exactly as seed_demo_data does. The sign-in table it ends with is long
+  # (one line per roster account), so only the stage lines and the closing
+  # summary line are shown here; the whole thing is idempotent, so re-run it
+  # on the host for the full table.
+  echo "▶ 5/5 seed: showcase data set"
+  # The filter keeps the stage lines, the closing line and anything that
+  # looks like a failure — case-insensitively, and including the last line
+  # of a traceback (`SomeError: …`, `PermissionDenied: …`), which is the one
+  # line that says *why* and would otherwise be the one line dropped.
+  remote "$COMPOSE exec -T backend python manage.py seed_showcase 2>&1 | grep -v grras.audit | grep -iE '^stage|not implemented|ready\.|error|traceback|refus|warning|^[A-Za-z_.]+(Error|Exception|Denied|Refused|Conflict):' | tail -30"
+fi
+
 if [ -n "$IMPORT_DIR" ]; then
   echo "▶ 5/5 seed: SITP workbooks from $IMPORT_DIR"
-  ACTOR=$(remote "$COMPOSE exec -T backend python manage.py shell -c \"from apps.accounts.models import User; print(User.objects.filter(role='admin').order_by('email').values_list('email', flat=True).first())\" 2>/dev/null | tail -1")
+  # The import's actor: the owner when the showcase has made him, else an
+  # admin at the main centre, else any admin. "First admin by email" used to
+  # do, but after the showcase that is admin.pune@grras.com, and imported
+  # SITP batches would be filed under Pune.
+  ACTOR=$(remote "$COMPOSE exec -T backend python manage.py shell -c \"from apps.accounts.models import User; admins = User.objects.filter(role='admin').order_by('email'); actor = User.objects.filter(email='owner@grras.com').first() or admins.filter(branch__code='MAIN').first() or admins.first(); print(actor.email if actor else '')\" 2>/dev/null | tail -1")
   echo "  as $ACTOR"
   STAGE=$(mktemp -d)
   rsync -a --include='*/' --include='*.xlsx' --exclude='*' "$IMPORT_DIR/" "$STAGE/"

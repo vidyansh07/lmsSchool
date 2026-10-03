@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
+import { Capability } from '@/lib/capabilities';
 import { ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -216,7 +217,7 @@ function AcademicRules() {
 
 export default function AcademicRulesPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.academicConfigure}>
       <AcademicRules />
     </RequireAuth>
   );

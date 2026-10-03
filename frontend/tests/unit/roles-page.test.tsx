@@ -66,6 +66,17 @@ describe("RolesPage", () => {
           user_count: 0,
           permission_count: 40,
         }),
+        // A kind this build's `ROLE_LABEL` has never heard of (a backend
+        // release ahead of the frontend) still gets a readable cell, not an
+        // empty one — `labelFor` humanises the raw value.
+        role({
+          id: "x",
+          slug: "placement-lead",
+          name: "Placement lead",
+          kind: "placement_lead" as RoleSummary["kind"],
+          is_system: true,
+          user_count: 0,
+        }),
       ],
       error: null,
       isLoading: false,
@@ -77,7 +88,8 @@ describe("RolesPage", () => {
       "href",
       "/admin/roles/manager",
     );
-    expect(screen.getByText("System")).toBeInTheDocument();
+    expect(screen.getAllByText("System")).toHaveLength(2);
+    expect(screen.getByText("Placement Lead")).toBeInTheDocument();
     // Only the custom role offers Remove.
     expect(screen.getAllByRole("button", { name: "Remove" })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));

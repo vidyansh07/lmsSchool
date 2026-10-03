@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { CalendarPlus, Trash2, UserPlus } from 'lucide-react';
 
-import { generateSessions } from '@/lib/academics';
+import { generateSessions, listSessions } from '@/lib/academics';
 import { useAuth } from '@/components/auth-provider';
+import { DataTable, type DataTableColumn } from '@/components/data-table';
+import { Pagination } from '@/components/pagination';
 import { ScheduleList } from '@/components/schedule-list';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
@@ -15,6 +17,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
+import { useList } from '@/hooks/use-list';
+import { SESSION_STATUS_LABEL, SESSION_STATUS_VARIANT } from '@/lib/academic-labels';
 import { ApiError, fieldErrors } from '@/lib/api';
 import {
   assignBatchTrainer,
@@ -36,10 +40,17 @@ import {
   formatDate,
 } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
-import { ensureTeachingProfile, listStudents, listTrainers, listUsers } from '@/lib/people';
+import {
+  ensureTeachingProfile,
+  listStudents,
+  listTrainers,
+  listUsers,
+  type ListQuery,
+} from '@/lib/people';
 import type {
   BatchDetail,
   BatchStatus,
+  ClassSession,
   RosterEntry,
   StudentListRow,
   TrainerListRow,
@@ -581,6 +592,151 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
   );
 }
 
+/**
+ * The batch's own classes — the dated sessions the timetable above generated.
+ *
+ * Why this card exists: the timetable card says a batch teaches on Mondays at
+ * 09:00 and offers "Generate classes", and then the fifty-three classes that
+ * command created were reachable from nowhere on this page. An administrator
+ * asked "did Tuesday's register get marked?" had to guess a class id or go
+ * round through a trainer's own screens.
+ *
+ * Reuse, deliberately, rather than a new list: `useList` + `DataTable` +
+ * `Pagination` is what `app/admin/batches/page.tsx` and
+ * `components/students/student-activities-tab.tsx` (the closest comparable —
+ * a server-paginated list embedded in a detail screen) already use, and the
+ * endpoint is the existing `GET /sessions/?batch=<id>`, whose `SessionFilterSet`
+ * has had a `batch` filter all along. Nothing new was added to the backend.
+ *
+ * Newest first (`-session_date`, the list endpoint's own default ordering), on
+ * the reasoning that a fifty-three-class batch is read from its recent end —
+ * "what happened in the last few classes" — not from the first week of term.
+ * The Date column is sortable, so the first class is one click away.
+ *
+ * Each row opens `/teaching/sessions/<id>`, the register, which is the only
+ * screen a single class is viewable on. It is not gated here: every role that
+ * can reach this page (administrator, manager and counsellor hold
+ * `attendance.correct_any`; a trainer only ever sees batches they teach, which
+ * is exactly `can_take_attendance`) can open it, and the one that cannot is
+ * refused by the API with its own error state — the documented pattern in
+ * `hardening.spec.ts` rather than a second copy of the permission rule here.
+ */
+export function ClassesPanel({ batch }: { batch: BatchDetail }) {
+  // Bound to this batch and memoised on its id: `useList` re-runs on its query
+  // key, so the batch filter travels with every page and sort change without
+  // being a knob the reader can clear.
+  const fetchSessions = useCallback(
+    (query: ListQuery, signal?: AbortSignal) => listSessions({ ...query, batch: batch.id }, signal),
+    [batch.id],
+  );
+  const list = useList<ClassSession>(fetchSessions, { page_size: 10, ordering: '-session_date' });
+
+  const columns: DataTableColumn<ClassSession>[] = [
+    {
+      key: 'session_date',
+      header: 'Date',
+      sortable: true,
+      sticky: 'start',
+      width: '11rem',
+      render: (session) => (
+        <Link
+          href={`/teaching/sessions/${session.id}`}
+          className="font-medium whitespace-nowrap hover:text-action hover:underline"
+        >
+          {formatDate(session.session_date)}
+        </Link>
+      ),
+    },
+    {
+      key: 'start_time',
+      header: 'Time',
+      sortable: true,
+      render: (session) => (
+        <span className="whitespace-nowrap text-ink-muted">
+          {session.start_time.slice(0, 5)}–{session.end_time.slice(0, 5)}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      sortable: true,
+      render: (session) => (
+        <Badge variant={SESSION_STATUS_VARIANT[session.status]}>
+          {SESSION_STATUS_LABEL[session.status]}
+        </Badge>
+      ),
+    },
+    {
+      key: 'register',
+      header: 'Register',
+      // Not a sort field: `attendance_taken_at` is not in the endpoint's
+      // `ordering_fields`, and a column header that looks sortable and does
+      // nothing is worse than one that does not offer it.
+      render: (session) =>
+        session.attendance_taken_at ? (
+          <Badge variant="success">Register taken</Badge>
+        ) : (
+          <span className="text-ink-muted">Not taken</span>
+        ),
+    },
+  ];
+
+  // A cancelled batch is told the truth and nothing else: generating classes
+  // for one is refused by `services.generate_sessions`, so pointing its reader
+  // at the button above would be an instruction that cannot be followed.
+  const cancelled = batch.status === 'cancelled';
+  const emptyDescription = cancelled
+    ? 'This batch was cancelled, so its timetable does not turn into classes.'
+    : !batch.can_manage
+      ? 'Nobody has generated this batch\u2019s classes from its timetable yet.'
+      : batch.schedules.length === 0
+        ? 'Add a weekly class to the timetable above, then generate the classes from it.'
+        : 'Use \u201cGenerate classes\u201d in the timetable above to turn the weekly pattern into dated classes.';
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Classes</CardTitle>
+        <CardDescription>
+          {list.data
+            ? `${list.data.count} ${list.data.count === 1 ? 'class' : 'classes'} on this batch, newest first. Opening one shows its register.`
+            : 'The dated classes generated from the timetable above.'}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <DataTable
+          columns={columns}
+          rows={list.data?.results ?? []}
+          getRowId={(session) => session.id}
+          isLoading={list.isLoading}
+          loadingLabel="Loading classes\u2026"
+          error={
+            list.error ? { message: list.error.message, requestId: list.error.requestId } : null
+          }
+          errorTitle="Could not load this batch\u2019s classes"
+          onRetry={list.reload}
+          emptyTitle={cancelled ? 'No classes' : 'No classes yet'}
+          emptyDescription={emptyDescription}
+          sort={list.query.ordering}
+          onSortChange={list.toggleSort}
+          caption="Classes on this batch"
+          densityStorageKey="grras.batch-classes-density"
+        />
+        {list.data ? (
+          <Pagination
+            page={list.data.page}
+            totalPages={list.data.total_pages}
+            count={list.data.count}
+            pageSize={list.data.page_size}
+            onPageChange={list.setPage}
+          />
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function BatchDetailView({ batchId }: { batchId: string }) {
   const [batch, setBatch] = useState<BatchDetail | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
@@ -713,6 +869,8 @@ export function BatchDetailView({ batchId }: { batchId: string }) {
           </CardContent>
         </Card>
       )}
+
+      <ClassesPanel batch={batch} />
 
       {batch.can_view_roster ? <RosterPanel batch={batch} onChanged={load} /> : null}
     </div>

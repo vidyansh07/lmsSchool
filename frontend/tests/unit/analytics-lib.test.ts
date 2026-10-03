@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ageingBuckets,
+  formatWeekLabel,
   heldAgainstAttendance,
   mergeByWeek,
   money,
@@ -76,6 +77,28 @@ describe('mergeByWeek', () => {
   it('ignores a row with no week at all', () => {
     const merged = mergeByWeek([{ rows: [{ held: 4 }], keys: ['held'] }]);
     expect(merged).toEqual([]);
+  });
+});
+
+describe('formatWeekLabel', () => {
+  it('renders a Monday as a short axis tick', () => {
+    expect(formatWeekLabel('2026-03-02')).toBe('2 Mar');
+    expect(formatWeekLabel('2026-11-30')).toBe('30 Nov');
+  });
+
+  it('reads only the date from a datetime, so a timestamp labels like its day', () => {
+    expect(formatWeekLabel('2026-03-02T00:00:00Z')).toBe('2 Mar');
+  });
+
+  it('shows anything it cannot read as itself, never "undefined undefined"', () => {
+    expect(formatWeekLabel('2026-W09')).toBe('2026-W09');
+    expect(formatWeekLabel('2026-13-02')).toBe('2026-13-02');
+  });
+
+  it('falls back for a missing week', () => {
+    expect(formatWeekLabel(null)).toBe('Not available');
+    expect(formatWeekLabel(undefined)).toBe('Not available');
+    expect(formatWeekLabel('')).toBe('Not available');
   });
 });
 

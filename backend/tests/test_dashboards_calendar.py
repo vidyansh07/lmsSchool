@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import time, timedelta
+from decimal import Decimal
 
 import pytest
 from django.utils import timezone
@@ -97,6 +98,107 @@ def test_a_cancelled_batch_leaves_the_calendar(
         f"{CALENDAR_URL}?start={today}&end={today + timedelta(days=30)}"
     ).content.decode()
     assert batch.code not in body
+
+
+@pytest.mark.django_db
+def test_a_trainer_sees_the_deadlines_of_the_batches_they_teach(
+    api_client_no_csrf, admin_user, published_course, batch, trainer_profile, upcoming_batch
+):
+    """A trainer's own batch's assignment, test, exam and project deadlines.
+
+    These four sources resolved their scope from a *student profile*, so a
+    trainer — who has none — got an empty scope and four empty sources: their
+    calendar carried classes and activity dues and not one deadline for the
+    batches they teach themselves. The other half of the fix is still the access
+    layer: `upcoming_batch` belongs to a different trainer, and its deadline must
+    stay off this one's calendar.
+    """
+    from apps.assessments.models import AssessmentDelivery, AssessmentStatus
+    from apps.assessments.services import create_assessment, set_assessment_status
+    from apps.assignments.models import AssignmentStatus
+    from apps.assignments.services import create_assignment, set_assignment_status
+    from apps.exams.models import ExamStatus
+    from apps.exams.services import create_exam, set_exam_status
+    from apps.projects.models import ProjectStatus
+    from apps.projects.services import create_project, set_project_status
+    from apps.questions.models import QuestionType
+    from apps.questions.services import create_question
+
+    soon = timezone.now() + timedelta(days=3)
+
+    work = create_assignment(
+        actor=admin_user,
+        course=published_course,
+        batch=batch,
+        title="Mine to mark",
+        due_at=soon,
+    )
+    set_assignment_status(assignment=work, actor=admin_user, status=AssignmentStatus.PUBLISHED)
+
+    test = create_assessment(
+        actor=admin_user,
+        batch=batch,
+        title="Mine to run",
+        delivery=AssessmentDelivery.OFFLINE,
+        scheduled_for=soon,
+    )
+    set_assessment_status(assessment=test, actor=admin_user, status=AssessmentStatus.PUBLISHED)
+
+    project = create_project(
+        actor=admin_user,
+        course=published_course,
+        batch=batch,
+        title="Mine to review",
+        end_date=(soon + timedelta(days=1)).date(),
+    )
+    set_project_status(project=project, actor=admin_user, status=ProjectStatus.PUBLISHED)
+
+    for index in range(2):
+        create_question(
+            actor=admin_user,
+            course=published_course,
+            question_type=QuestionType.MCQ,
+            text=f"T{index}?",
+            marks=Decimal("1.00"),
+            options=[{"text": "a", "is_correct": True}, {"text": "b"}],
+        )
+    exam = create_exam(
+        actor=admin_user,
+        batch=batch,
+        title="Mine to invigilate",
+        opens_at=soon,
+        closes_at=soon + timedelta(hours=2),
+        sections=[{"title": "A", "question_count": 2, "question_type": QuestionType.MCQ}],
+    )
+    set_exam_status(exam=exam, actor=admin_user, status=ExamStatus.PUBLISHED)
+
+    # The same deadline shape on somebody else's batch.
+    theirs = create_assignment(
+        actor=admin_user,
+        course=published_course,
+        batch=upcoming_batch,
+        title="Not mine to mark",
+        due_at=soon,
+    )
+    set_assignment_status(assignment=theirs, actor=admin_user, status=AssignmentStatus.PUBLISHED)
+
+    api_client_no_csrf.force_login(trainer_profile.user)
+    today = timezone.localdate()
+    body = api_client_no_csrf.get(
+        f"{CALENDAR_URL}?start={today}&end={today + timedelta(days=10)}"
+    ).json()
+
+    kinds = {event["kind"] for event in body["events"]}
+    assert {"assignment_due", "quiz", "exam", "project_due"} <= kinds
+    titles = {event["title"] for event in body["events"]}
+    assert "Due: Mine to mark" in titles
+    assert "Project due: Mine to review" in titles
+    assert "Due: Not mine to mark" not in titles
+    assert all(
+        event["batch_code"] == batch.code
+        for event in body["events"]
+        if event["kind"] in {"assignment_due", "quiz", "exam", "project_due"}
+    )
 
 
 @pytest.mark.django_db
@@ -276,7 +378,12 @@ def test_the_trainer_dashboard_costs_a_bounded_number_of_queries(
     api_client_no_csrf, trainer_profile, batch, schedule, enrollment, django_assert_max_num_queries
 ):
     api_client_no_csrf.force_login(trainer_profile.user)
-    with django_assert_max_num_queries(25):
+    # 30 rather than 25 since the four deadline sources started running for a
+    # trainer at all (they resolved a student profile and returned nothing
+    # before). Each costs two queries — the scope, then the rows — and neither
+    # grows with the number of batches, students or deadlines, which is the
+    # growth this bound exists to catch.
+    with django_assert_max_num_queries(30):
         assert api_client_no_csrf.get(TRAINER_DASHBOARD).status_code == 200
 
 
@@ -559,20 +666,130 @@ def test_the_counsellor_dashboard_is_zero_but_not_null_with_nothing_going_on(
     api_client_no_csrf.force_login(counsellor_user)
     body = api_client_no_csrf.get(COUNSELLOR_DASHBOARD).json()
     warnings = body.pop("warnings")
+    definitions = body.pop("definitions")
 
     assert body == {
         "new_students_today": 0,
+        "new_students_this_week": 0,
         "pending_registrations": 0,
         "follow_ups_due": 0,
         "follow_ups_overdue": 0,
         "unassigned_batch": 0,
         "unassigned_trainer": 0,
     }
+    # §8.6: every figure carries what it computes, so a contradiction between
+    # two tiles is visible on the screen rather than only in this file.
+    assert set(definitions) == set(body)
+    assert all(text.strip() for text in definitions.values())
     # Not asserted empty: an unrelated, pre-existing warning
     # (`email_unverified`, since `counsellor_user` never verified) is real
     # and correct to show — only that the field is a measured list, never
     # `null`.
     assert isinstance(warnings, list)
+
+
+@pytest.mark.django_db
+def test_a_cancelled_enrolment_leaves_a_student_in_the_not_yet_enrolled_figure(
+    api_client_no_csrf, admin_user, counsellor_user, student_profile, enrollment, batch
+):
+    """The tile and the list behind it are one query.
+
+    `/admissions/dashboard` used to answer "registered, not yet enrolled" in
+    the browser, by diffing the thirty most recent registrations against a page
+    of the hundred most recent *enrolments* — two windows that need not
+    overlap. On the showcase data it listed fifteen students who all had
+    enrolments while the tile beside it said 1. Both now go through
+    `apps.students.access.awaiting_enrolment`, so the only way they can
+    disagree is if this test fails.
+    """
+    from apps.enrollments.models import EnrollmentStatus
+    from apps.enrollments.services import enrol_student, set_enrollment_status
+    from apps.students.services import create_student
+
+    # Three students whose right answer is not in doubt:
+    #   `student_profile` holds an active seat (`enrollment`) — enrolled.
+    nowhere = create_student(
+        email="nowhere@example.test",
+        first_name="No",
+        last_name="Batch",
+        actor=admin_user,
+        password=_TEST_PASSWORD,
+        send_invitation=False,
+    )
+    walked = create_student(
+        email="walked@example.test",
+        first_name="Walked",
+        last_name="Away",
+        actor=admin_user,
+        password=_TEST_PASSWORD,
+        send_invitation=False,
+    )
+    cancelled = enrol_student(student=walked, batch=batch, actor=admin_user)
+    set_enrollment_status(enrollment=cancelled, target=EnrollmentStatus.CANCELLED, actor=admin_user)
+
+    api_client_no_csrf.force_login(counsellor_user)
+    body = api_client_no_csrf.get(COUNSELLOR_DASHBOARD).json()
+
+    # `nowhere` has no enrolment row at all; `walked` has one that holds no
+    # seat. Both are registered with nowhere to sit, which is the whole point
+    # of the figure — the pre-fix `enrollments__isnull=True` counted only the
+    # first and reported 1.
+    assert body["unassigned_batch"] == 2
+
+    listed = api_client_no_csrf.get("/api/v1/students/?awaiting_enrolment=true").json()
+    assert listed["count"] == body["unassigned_batch"]
+    assert {row["id"] for row in listed["results"]} == {str(nowhere.pk), str(walked.pk)}
+
+    # And the complement is exactly the rest, not a second hand-written rule.
+    enrolled = api_client_no_csrf.get("/api/v1/students/?awaiting_enrolment=false").json()
+    assert {row["id"] for row in enrolled["results"]} == {str(student_profile.pk)}
+
+
+@pytest.mark.django_db
+def test_this_week_is_a_rolling_seven_days_and_contains_today(
+    api_client_no_csrf, admin_user, counsellor_user
+):
+    """A seven-day window that cannot come out smaller than the day inside it.
+
+    The old tile counted "this week" in the browser, from the thirty rows
+    `/api/v1/students/` returns for one page: a day with sixty-one
+    registrations therefore rendered "Registered today 61" beside "Registered
+    this week 30". Three students — today, six days ago, eight days ago — pin
+    both the window and the invariant.
+    """
+    from apps.students.models import StudentProfile
+    from apps.students.services import create_student
+
+    for email, days_ago in (
+        ("today@example.test", 0),
+        ("six@example.test", 6),
+        ("eight@example.test", 8),
+    ):
+        profile = create_student(
+            email=email,
+            first_name="Reg",
+            last_name=email.split("@")[0],
+            actor=admin_user,
+            password=_TEST_PASSWORD,
+            send_invitation=False,
+        )
+        if days_ago:
+            # `created_at` is `auto_now_add`, so the backdating has to go round
+            # the model — which is also the only way to write a row older than
+            # the test run.
+            StudentProfile.objects.filter(pk=profile.pk).update(
+                created_at=timezone.now() - timedelta(days=days_ago)
+            )
+
+    api_client_no_csrf.force_login(counsellor_user)
+    body = api_client_no_csrf.get(COUNSELLOR_DASHBOARD).json()
+
+    assert body["new_students_today"] == 1
+    # Today and the six days before it: the eight-day-old row is outside, the
+    # six-day-old one inside. Not the calendar week — whichever weekday the
+    # suite runs on, the answer is the same.
+    assert body["new_students_this_week"] == 2
+    assert body["new_students_this_week"] >= body["new_students_today"]
 
 
 @pytest.mark.django_db

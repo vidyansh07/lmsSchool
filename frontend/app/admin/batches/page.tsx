@@ -182,7 +182,7 @@ function BatchList() {
 
 export default function AdminBatchesPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.batchViewAny} roles={["trainer"]}>
       <BatchList />
     </RequireAuth>
   );

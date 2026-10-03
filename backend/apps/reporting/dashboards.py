@@ -148,7 +148,7 @@ def batch_summaries(user, limit: int = 20) -> list[dict[str, Any]]:
 
     from apps.attendance.models import COUNTS_AS_PRESENT, EXCLUDED_FROM_PERCENTAGE, AttendanceRecord
     from apps.batches import access as batch_access
-    from apps.enrollments.models import Enrollment, EnrollmentStatus
+    from apps.enrollments.models import SEAT_HOLDING_STATUSES, Enrollment
 
     batches = list(
         batch_access.visible_batches(user).select_related("course").order_by("code")[:limit]
@@ -157,8 +157,18 @@ def batch_summaries(user, limit: int = 20) -> list[dict[str, Any]]:
         return []
 
     ids = [batch.pk for batch in batches]
+    # Seats held, the same `SEAT_HOLDING_STATUSES` set `BatchQuerySet
+    # .with_counts()` annotates `enrolled_count` from — so this row and the
+    # `/admissions/batches` row for the same batch report the same size.
+    #
+    # `status=ACTIVE` alone was the bug: a *completed* batch's enrolments are
+    # all `completed`, so every finished cohort came out of here as "0
+    # students" next to its real attendance percentage — 102 students and
+    # 72.25% attendance rendered as "0 students, 72.25%", which reads as a
+    # broken number rather than a finished course. A batch with genuinely
+    # nothing in it now says 0 and means it.
     students = dict(
-        Enrollment.objects.filter(batch_id__in=ids, status=EnrollmentStatus.ACTIVE)
+        Enrollment.objects.filter(batch_id__in=ids, status__in=tuple(SEAT_HOLDING_STATUSES))
         .values_list("batch_id")
         .annotate(total=Count("id"))
     )
@@ -682,11 +692,19 @@ def batch_overview(batch) -> dict[str, Any]:
     today = timezone.localdate()
     seats_taken = batch.seats_taken()
 
+    # `late` and `excused` are reported beside `present`/`absent` because the
+    # screen puts all four next to `total_sessions` and a reader adds them up:
+    # the Pune MERN batch showed "Present 229, Absent 76, Records counted 347"
+    # — 42 late records inside the total and 13 excused ones outside it, both
+    # invisible, so the card looked like arithmetic that does not work. Every
+    # status that makes up the total is now on the row that shows the total.
     attendance_counts = AttendanceRecord.objects.filter(session__batch=batch).aggregate(
         counted=Count("id", filter=~Q(status__in=list(EXCLUDED_FROM_PERCENTAGE))),
         attended=Count("id", filter=Q(status__in=list(COUNTS_AS_PRESENT))),
         present=Count("id", filter=Q(status=AttendanceStatus.PRESENT)),
         absent=Count("id", filter=Q(status=AttendanceStatus.ABSENT)),
+        late=Count("id", filter=Q(status=AttendanceStatus.LATE)),
+        excused=Count("id", filter=Q(status=AttendanceStatus.EXCUSED)),
     )
 
     session_counts = ClassSession.objects.filter(batch=batch).aggregate(
@@ -779,6 +797,13 @@ def batch_overview(batch) -> dict[str, Any]:
             ),
             "present": attendance_counts["present"],
             "absent": attendance_counts["absent"],
+            # `late` counts towards `percentage` and towards `total_sessions`
+            # (`COUNTS_AS_PRESENT`); `excused` counts towards neither
+            # (`EXCLUDED_FROM_PERCENTAGE`). Both are reported so the screen can
+            # show the arithmetic rather than leave a gap in it:
+            # present + late + absent == total_sessions, always.
+            "late": attendance_counts["late"],
+            "excused": attendance_counts["excused"],
             "total_sessions": attendance_counts["counted"],
         },
         "timeline": timeline_progress(batch),

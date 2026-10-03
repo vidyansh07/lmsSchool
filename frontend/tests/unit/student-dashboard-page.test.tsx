@@ -216,6 +216,34 @@ describe('StudentView — full data', () => {
     expect((await screen.findAllByText('75%')).length).toBeGreaterThan(0);
   });
 
+  it('renders an enrolment the risk engine has never evaluated (risk null) without crashing the page', async () => {
+    emptyBuckets();
+    getMyPerformance.mockResolvedValue([
+      {
+        enrollment_id: 'enrol-1',
+        course_title: 'Linux Essentials',
+        batch_code: 'GRS-B-001',
+        attendance: { percent: 90, total_sessions: 10, attended: 9, has_records: true },
+        assessment: { average_percent: null, sitting_percent: null, recorded: 0, total: 0 },
+        assignments: { percent: null, total: 0, submitted: 0, graded: 0, passed: 0, missed: 0 },
+        projects: { percent: null, required: 0, finished: 0 },
+        progress: { percent: null, expected_percent: null, variance: null },
+        overall_score: null,
+        risk: null,
+        counts: { components_measured: 1, risk_flags: 0 },
+      } satisfies StudentPerformanceEntry,
+    ]);
+
+    render(<StudentView data={{ ...emptyStudentDashboard(), courses: [dashboardCourse()] }} />);
+    await waitForBucketsToSettle();
+
+    expect((await screen.findAllByText('90%')).length).toBeGreaterThan(0);
+    expect(await screen.findByText(/everything looks on track/i)).toBeInTheDocument();
+    const bodyText = document.body.textContent ?? '';
+    expect(bodyText).not.toMatch(/undefined/);
+    expect(bodyText).not.toMatch(/\bnull\b/);
+  });
+
   it('renders a partially-loaded course — attendance known, results not yet recorded', async () => {
     emptyBuckets();
     getMyPerformance.mockResolvedValue([

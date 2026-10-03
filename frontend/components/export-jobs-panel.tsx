@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
 import { ApiError } from '@/lib/api';
-import { formatDateTime } from '@/lib/format';
+import { fallback, formatDateTime } from '@/lib/format';
 import { cancelExport, exportDownloadUrl, listExportJobs } from '@/lib/reporting';
 import type { ExportJob, ExportStatus } from '@/types/api';
 
@@ -124,7 +124,9 @@ export function ExportJobsPanel() {
                   const href = exportDownloadUrl(job);
                   return (
                     <Tr key={job.id}>
-                      <Td className="font-medium">{job.report_key.replaceAll('_', ' ')}</Td>
+                      <Td className="font-medium">
+                        {fallback(typeof job.report_key === 'string' ? job.report_key.replaceAll('_', ' ') : null)}
+                      </Td>
                       <Td className="uppercase">{job.format}</Td>
                       <Td className="whitespace-nowrap text-ink-muted">
                         {formatDateTime(job.queued_at)}

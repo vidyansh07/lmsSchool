@@ -206,6 +206,29 @@ describe('Student360Content', () => {
     expect(within(popover).getAllByText('Attendance')).toHaveLength(1);
   });
 
+  it('renders the header and Overview for a student whose engines have never run (performance, risk and attendance all null)', async () => {
+    getStudent360.mockResolvedValueOnce(
+      student360({ performance: null, risk: null, attendance_summary: null }),
+    );
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByText('Not yet computed')).toBeInTheDocument();
+    expect(screen.getByText('No risk signals')).toBeInTheDocument();
+    expect(screen.getByText('No attendance recorded yet')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/undefined/);
+  });
+
+  it('renders a risk level outside the engine\'s three as itself, on a neutral badge, rather than a blank', async () => {
+    getStudent360.mockResolvedValueOnce(
+      student360({
+        risk: { level: 'unknown_import' as NonNullable<Student360Response['risk']>['level'], triggered: [] },
+      }),
+    );
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByText('Unknown Import')).toBeInTheDocument();
+  });
+
   it('renders the Phase 13 risk placeholder as a neutral "No risk signals" badge', async () => {
     getStudent360.mockResolvedValueOnce(student360());
     render(<Student360Content studentId="student-1" />);

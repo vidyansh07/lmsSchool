@@ -52,7 +52,7 @@ import { Select } from '@/components/ui/input';
 import { StatStrip } from '@/components/ui/stat-strip';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { useSection } from '@/hooks/use-section';
-import { heldAgainstAttendance, mergeByWeek } from '@/lib/analytics';
+import { formatWeekLabel, heldAgainstAttendance, mergeByWeek } from '@/lib/analytics';
 import { formatNumber, formatPercent } from '@/lib/format';
 import {
   adminDashboard,
@@ -73,13 +73,6 @@ const ATTENDANCE_TARGET = 75;
 const PERIODS = [4, 12, 26, 52] as const;
 
 const EMPTY_DASHBOARD: AdminDashboard | null = null;
-
-function formatWeek(iso: string): string {
-  // The API sends the Monday of each week. Rendered short, because a
-  // twelve-tick axis has no room for a year on every label.
-  const [, month, day] = iso.split('-');
-  return `${day} ${['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(month)]}`;
-}
 
 /** A chart card's link to the rows behind the shape. */
 function RowsLink({ report, children }: { report: string; children: string }) {
@@ -110,19 +103,19 @@ function Analytics() {
 
   const enrolmentSeries = mergeByWeek([
     { rows: enrolments.data, keys: ['started', 'active', 'completed', 'cancelled'] },
-  ]).map((row) => ({ ...row, date: formatWeek(String(row.date)) }));
+  ]).map((row) => ({ ...row, date: formatWeekLabel(row.date) }));
 
   const deliverySeries = heldAgainstAttendance(delivery.data, attendance.data).map((row) => ({
     ...row,
-    date: formatWeek(String(row.date)),
+    date: formatWeekLabel(row.date),
   }));
 
   const dsrSeries = mergeByWeek([
     { rows: dsr.data, keys: ['submitted', 'approved', 'rejected'] },
-  ]).map((row) => ({ ...row, date: formatWeek(String(row.date)) }));
+  ]).map((row) => ({ ...row, date: formatWeekLabel(row.date) }));
 
   const outstandingByWeek = delivery.data.map((point) => ({
-    label: formatWeek(point.week),
+    label: formatWeekLabel(point.week),
     value: point.registers_outstanding,
   }));
 
@@ -382,7 +375,19 @@ function Analytics() {
         <GridItem span={12}>
           <ChartCard
             title="Batch performance"
-            subtitle="Every batch you can see, with how many students and how well they attend"
+            // The two columns count different things over different spans, and
+            // this row is where that has to be said: "Students" is who holds a
+            // seat now, "Attendance" is every register ever taken for the
+            // batch. A finished cohort therefore reads 102 students at 72% —
+            // it used to read *0* students at 72%, because the endpoint counted
+            // only `active` enrolments and a completed batch has none, which
+            // looked like a broken row and disagreed with
+            // `/admissions/batches` about the same batch.
+            // Not "every batch you can see", which is what this said and is
+            // not what the endpoint returns: `batch_summaries` takes the first
+            // twenty by code. The full report behind the footer link is the
+            // one that carries them all.
+            subtitle="The first 20 batches by code, of the ones you can see. Students: holding a seat now — pending, active, suspended or completed, the same count /admissions/batches shows. Attendance: present or late across every register taken for the batch, over its whole life, so it includes students who have since left."
             icon={CalendarCheck}
             iconTone="neutral"
             testId="batch-table-card"

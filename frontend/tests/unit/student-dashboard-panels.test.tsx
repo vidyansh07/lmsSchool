@@ -277,6 +277,14 @@ describe('collectRiskItems', () => {
   it('is empty when nothing is triggered anywhere', () => {
     expect(collectRiskItems([performanceEntry(), performanceEntry()])).toHaveLength(0);
   });
+
+  it('treats an enrolment the risk engine has never evaluated (risk null) as having nothing to flag', () => {
+    const never = performanceEntry({ risk: null });
+    const noOutcomes = performanceEntry({
+      risk: { at_risk: false, triggered: [], triggered_count: 0 } as unknown as StudentPerformanceEntry['risk'],
+    });
+    expect(collectRiskItems([never, noOutcomes])).toHaveLength(0);
+  });
 });
 
 // --- PendingWorkPanel ----------------------------------------------------

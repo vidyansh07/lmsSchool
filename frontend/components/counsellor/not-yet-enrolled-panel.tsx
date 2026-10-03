@@ -3,22 +3,26 @@
  * this component exists to satisfy: every day a registered student sits
  * without a batch is a day they might go elsewhere.
  *
- * There is no backend query for this — `/api/v1/students/` carries no
- * enrolment information at all, and `/api/v1/enrollments/` cannot be filtered
- * by a set of student ids (see the docstring on `listStudentEnrollments` in
- * `lib/batches.ts` for why: it takes one student's code at a time). Rather
- * than issue one lookup per recently-registered student — an N+1 this
- * dashboard would pay on every load — the caller fetches one wide recent page
- * of enrolments instead (see `app/admissions/dashboard/page.tsx`) and this
- * module just answers "does this student's code appear in it".
+ * It used to answer that question in the browser, because there was no backend
+ * query for it: the page fetched the thirty most recent registrations and a
+ * page of the hundred most recent enrolments, and this module asked "does this
+ * student's code appear in that page". The two windows are ordered by
+ * different columns — `created_at` on one side, `enrolled_at` on the other —
+ * and need not overlap at all. On real data they did not: the panel listed
+ * fifteen students who every one of them had an active enrolment, next to a
+ * tile on the same screen that said 1.
  *
- * That makes the result a *recent-window* answer, not a lifetime guarantee: a
- * student who registered long enough ago that their eventual enrolment has
- * scrolled out of the enrolments window fetched would be a false positive
- * here. The caption below says exactly what was checked, so nobody reads this
- * list as more certain than it is — and the false-positive failure mode is
- * cheap: a counsellor opens a student who, on the next screen, turns out to
- * already be enrolled.
+ * So the question now goes to the server that can answer it —
+ * `/api/v1/students/?awaiting_enrolment=true`, which is
+ * `apps.students.access.awaiting_enrolment`, the same definition the
+ * "Unassigned batch" tile counts and the `not_enrolled` warning fires on. This
+ * component renders rows and a server-reported total; it computes nothing, so
+ * there is nothing left here to disagree with.
+ *
+ * "Not yet enrolled" means *holding no seat on any batch*: a student whose only
+ * enrolment was cancelled, or who was transferred off a batch and never placed
+ * on another, is in this list. That is the point — they are registered and have
+ * nowhere to sit.
  */
 import Link from 'next/link';
 
@@ -27,23 +31,19 @@ import { ErrorState, LoadingState } from '@/components/states';
 import { formatName, formatRelative } from '@/lib/format';
 import type { StudentListRow } from '@/types/api';
 
-/** Recently-registered students whose code does not appear among recent enrolments. */
-export function studentsAwaitingEnrolment(
-  recentStudents: StudentListRow[],
-  enrolledStudentCodes: Set<string>,
-): StudentListRow[] {
-  return recentStudents.filter((student) => !enrolledStudentCodes.has(student.student_id));
-}
-
 export function NotYetEnrolledPanel({
-  recentStudents,
-  enrolledStudentCodes,
+  students,
+  totalCount,
   isLoading,
   error,
   onRetry,
 }: {
-  recentStudents: StudentListRow[];
-  enrolledStudentCodes: Set<string>;
+  /** The page of rows fetched — newest registration first. */
+  students: StudentListRow[];
+  /** Every student awaiting a seat, not just the ones listed: the count comes
+   *  from the server's own `count`, so a capped list never understates the
+   *  problem. */
+  totalCount: number;
   isLoading?: boolean;
   error?: { message: string; requestId?: string } | null;
   onRetry?: () => void;
@@ -60,8 +60,7 @@ export function NotYetEnrolledPanel({
     );
   }
 
-  const outstanding = studentsAwaitingEnrolment(recentStudents, enrolledStudentCodes);
-  const items: AlertItem[] = outstanding.map((student) => ({
+  const items: AlertItem[] = students.map((student) => ({
     id: student.id,
     severity: 'warning',
     title: formatName({ full_name: student.full_name, email: student.email }),
@@ -72,16 +71,21 @@ export function NotYetEnrolledPanel({
   return (
     <div className="space-y-2">
       <p aria-live="polite" className="text-sm text-ink-muted">
-        {outstanding.length} of the last {recentStudents.length} registrations{' '}
-        {outstanding.length === 1 ? 'has' : 'have'} no enrolment yet.
+        {totalCount === 1
+          ? '1 registered student holds no seat on any batch.'
+          : `${totalCount} registered students hold no seat on any batch.`}
+        {totalCount > students.length ? ` Showing the ${students.length} most recent.` : ''}
       </p>
       <AlertList
         items={items}
         title="registrations without an enrolment"
-        emptyTitle="Every recent registration is enrolled"
-        emptyDescription="Nobody from the recent intake is waiting on a batch."
+        emptyTitle="Every registration is on a batch"
+        emptyDescription="Nobody registered is waiting for a seat."
       />
-      {outstanding.length > 0 ? (
+      {totalCount > 0 ? (
+        // `/admissions` carries no "awaiting enrolment" filter of its own, so
+        // this links to the plain list rather than to a query parameter that
+        // screen would ignore.
         <Link href="/admissions" className="inline-block text-sm underline hover:text-ink">
           See all admissions
         </Link>

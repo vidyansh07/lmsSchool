@@ -55,7 +55,7 @@ import { Capability } from '@/lib/capabilities';
 import { formatNumber } from '@/lib/format';
 import { greeting } from '@/lib/greeting';
 import { useSection } from '@/hooks/use-section';
-import { mergeByWeek } from '@/lib/analytics';
+import { formatWeekLabel, mergeByWeek } from '@/lib/analytics';
 import { getManagerDashboard, type ManagerDashboard } from '@/lib/manage';
 import { dsrComplianceTrend } from '@/lib/reporting';
 import type { DsrTrendPoint } from '@/types/api';
@@ -84,19 +84,19 @@ function activitiesQueue(data: ManagerDashboard): (CategoryDatum & { colour: str
   ];
 }
 
-/** A week's Monday, short enough for a twelve-tick axis. */
-function formatWeekLabel(iso: string): string {
-  const [, month, day] = iso.split('-');
-  const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${day} ${months[Number(month)]}`;
-}
-
 function attentionBreakdown(data: ManagerDashboard): CategoryDatum[] {
   return [
     { label: 'Behind schedule', value: data.batches.behind_schedule },
     { label: 'At-risk batches', value: data.batches.at_risk },
     { label: 'At-risk students', value: data.students.at_risk },
-    { label: 'Overdue DSRs', value: data.trainers.with_overdue_dsr },
+    // `trainers.with_overdue_dsr` counts *trainers*, not reports — one trainer
+    // with nine unwritten registers is 1 here. Labelled "Overdue DSRs" it read
+    // as a report count and sat on the same screen as the warnings strip's own
+    // "85 classes finished with no daily report", so the page appeared to state
+    // two totals for one thing. The bar now says which of the two it is, and
+    // matches the wording of the strip's own tile below
+    // (`components/manage/attention-strip.tsx`).
+    { label: 'Trainers with overdue DSRs', value: data.trainers.with_overdue_dsr },
     { label: 'Critical flags', value: data.risk.critical },
     { label: 'Reviews due', value: data.reviews_due },
   ];

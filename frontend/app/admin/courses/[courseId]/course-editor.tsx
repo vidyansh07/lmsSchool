@@ -20,6 +20,7 @@ import {
   setModuleStatus,
 } from '@/lib/courses';
 import { CONTENT_TYPE_LABEL, STATUS_LABEL, STATUS_VARIANT } from '@/lib/course-labels';
+import { labelFor } from '@/lib/labels';
 import type { CourseDetail, LessonSummary, Module } from '@/types/api';
 import { CourseSettingsForm } from './course-settings-form';
 import { LessonEditor } from './lesson-editor';
@@ -138,7 +139,7 @@ export function ModulePanel({
               <li key={lesson.id} className="space-y-3 px-3 py-2 transition-colors hover:bg-sunken/40">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="min-w-0 flex-1 truncate font-medium">{lesson.title}</span>
-                  <Badge>{CONTENT_TYPE_LABEL[lesson.content_type]}</Badge>
+                  <Badge>{labelFor(CONTENT_TYPE_LABEL, lesson.content_type)}</Badge>
                   {lesson.is_preview ? <Badge variant="success">Preview</Badge> : null}
                   <Badge variant={STATUS_VARIANT[lesson.status]}>
                     {STATUS_LABEL[lesson.status]}

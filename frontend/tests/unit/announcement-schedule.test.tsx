@@ -77,7 +77,7 @@ function announcement(overrides: Partial<Announcement> = {}): Announcement {
 beforeEach(() => {
   vi.clearAllMocks();
   auth.role = 'admin';
-  auth.capabilities = ['announcement.manage_any'];
+  auth.capabilities = ['announcement.manage_any', 'organisation.view_any'];
   listAnnouncements.mockResolvedValue(emptyPage<Announcement>());
   listBatches.mockResolvedValue(emptyPage<BatchListRow>());
   listBranches.mockResolvedValue(emptyPage<Branch>());
@@ -135,6 +135,26 @@ describe('Announcements — schedule for later', () => {
     const button = await screen.findByRole('button', { name: /cancel schedule/i });
     fireEvent.click(button);
     await waitFor(() => expect(cancelAnnouncement).toHaveBeenCalledWith('a-1'));
+  });
+
+  it('does not ask for the centre list on behalf of a caller who may not have it', async () => {
+    // `/api/v1/branches/` requires `organisation.view_any`. Calling it anyway
+    // put a red console error and a 403 on every student's noticeboard, for a
+    // select they are never shown.
+    auth.role = 'student';
+    auth.capabilities = [];
+    render(<AnnouncementsPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Announcements' })).toBeInTheDocument();
+    expect(listAnnouncements).toHaveBeenCalled();
+    expect(listBranches).not.toHaveBeenCalled();
+  });
+
+  it('still asks for it on behalf of staff who may read it', async () => {
+    render(<AnnouncementsPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Announcements' })).toBeInTheDocument();
+    await waitFor(() => expect(listBranches).toHaveBeenCalled());
   });
 
   it('offers the role and branch audiences only to someone who may announce to all', async () => {

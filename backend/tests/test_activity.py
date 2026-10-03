@@ -123,3 +123,36 @@ def test_only_an_administrator_reads_the_review(request, api_client_no_csrf, fix
     api_client_no_csrf.force_login(request.getfixturevalue(fixture))
     assert api_client_no_csrf.get(FEED_URL).status_code == 403
     assert api_client_no_csrf.get(CARDS_URL).status_code == 403
+
+
+@pytest.mark.django_db
+def test_the_feed_accepts_the_page_it_advertises(api_client_no_csrf, admin_user, a_days_work):
+    """The screen asks for a page; the endpoint must not refuse it.
+
+    ``ActivityFeedView`` paginates in its own body and its ``@extend_schema``
+    names ``page`` and ``page_size``, but its query serializer refuses any
+    field it does not declare — so before ``PaginatedQuerySerializer`` the
+    endpoint answered every request the schema described with a 400 and
+    ``/admin/activity`` could not load its table at all.
+    """
+    api_client_no_csrf.force_authenticate(admin_user)
+
+    response = api_client_no_csrf.get(FEED_URL, {"page": 1, "page_size": 5})
+
+    assert response.status_code == 200, response.data
+    body = response.json()
+    assert body["page"] == 1
+    assert body["page_size"] == 5
+    assert len(body["results"]) <= 5
+
+    # Still strict about everything else: a mistyped filter is an error, not a
+    # parameter that quietly does nothing.
+    refused = api_client_no_csrf.get(FEED_URL, {"pge": 1})
+    assert refused.status_code == 400
+    assert "pge" in refused.json()["error"]["details"]
+
+    # And bounded: the paginator's own ceiling, so a request for the whole
+    # table is refused rather than served.
+    too_big = api_client_no_csrf.get(FEED_URL, {"page_size": 5000})
+    assert too_big.status_code == 400
+    assert "page_size" in too_big.json()["error"]["details"]

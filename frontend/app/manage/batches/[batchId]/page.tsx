@@ -36,6 +36,7 @@ import { ApiError } from '@/lib/api';
 import { BATCH_STATUS_LABEL, BATCH_STATUS_VARIANT } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
 import { fallback, formatDate, formatNumber, formatPercent, NOT_ASSIGNED, NO_DATA } from '@/lib/format';
+import { labelFor } from '@/lib/labels';
 import {
   describeTimelineVariance,
   getBatchOverview,
@@ -181,11 +182,21 @@ export function BatchDetail({ batchId }: { batchId: string }) {
           <StatGrid>
             <Stat label="Attendance" value={formatPercent(attendance.percentage, { fallbackLabel: NO_DATA })} />
             <Stat label="Present" value={formatNumber(attendance.present)} />
+            {/* Late is its own column rather than folded into Present, because
+                without it the row did not add up: 229 present + 76 absent under
+                a "Records counted 347" that also held 42 late records read as
+                broken arithmetic. It still counts as attended in the percentage
+                (`COUNTS_AS_PRESENT`), which the hint below says out loud. */}
+            <Stat label="Late" value={formatNumber(attendance.late)} />
             <Stat label="Absent" value={formatNumber(attendance.absent)} />
             {/* Student-class records, not classes: a batch of eleven with 28
                 registers has 308 of these. The Sessions card below is where
                 "classes held" lives. */}
-            <Stat label="Records counted" value={formatNumber(attendance.total_sessions)} />
+            <Stat
+              label="Records counted"
+              value={formatNumber(attendance.total_sessions)}
+              hint={`Present + late + absent · ${formatNumber(attendance.excused)} excused left out`}
+            />
           </StatGrid>
           <Link
             href={`/manage/batches/${batchId}/students`}
@@ -205,8 +216,8 @@ export function BatchDetail({ batchId }: { batchId: string }) {
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={TIMELINE_STATUS_VARIANT[timeline.status]}>
-              {TIMELINE_STATUS_LABEL[timeline.status]}
+            <Badge variant={TIMELINE_STATUS_VARIANT[timeline.status] ?? 'neutral'}>
+              {labelFor(TIMELINE_STATUS_LABEL, timeline.status)}
             </Badge>
           </div>
           <StatGrid>

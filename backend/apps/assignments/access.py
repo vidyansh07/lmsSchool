@@ -92,6 +92,37 @@ def _trainer_scope(user, trainer) -> Q:
     return scope
 
 
+def _trainer_submission_scope(user) -> Q:
+    """The batches whose submitted work a trainer may read.
+
+    :func:`_trainer_scope` is one level too coarse to answer this on its own.
+    It decides whether a trainer may act on a *brief*, and for course-wide work
+    (``batch IS NULL``) the answer is yes for every trainer running any batch of
+    the course — which is correct for the brief and wrong for the attempts.
+    Filtering submissions by the brief alone put another trainer's students in
+    this trainer's marking queue, and because ``can_grade`` derives from the same
+    function they could award the marks too.
+
+    So the rows carry a second bound, taken from the batch the *enrolment* names:
+
+    * the batches this trainer teaches, or holds a scope grant for — that is
+      exactly ``assigned_batch_ids``, the list ``apps.organisation.scoping``
+      already uses for the ``assigned`` scope (ADR-02), so there is one answer
+      to "which batches does this person reach?" rather than two; and
+    * every batch of a course they author, because authoring is documented at
+      the top of this module as enough to set *and mark* work — narrowing that
+      here would quietly retire a rule stated one screen up.
+    """
+    from apps.authorization.scopes import assigned_batch_ids
+    from apps.courses.access import assigned_course_ids
+
+    scope = Q(enrollment__batch_id__in=assigned_batch_ids(user))
+    authored = assigned_course_ids(user)
+    if authored:
+        scope |= Q(enrollment__batch__course_id__in=authored)
+    return scope
+
+
 def manageable_assignments(user) -> QuerySet[Assignment]:
     """Assignments the caller may create against, edit, publish or grade."""
     base = Assignment.objects.with_related()
@@ -161,7 +192,9 @@ def visible_submissions(user) -> QuerySet[AssignmentSubmission]:
 
     A student sees their own attempts and nobody else's — the isolation rule
     §4.8 asks to be tested. A trainer sees the attempts on the assignments they
-    manage, which is derived from the same scope, not a second copy of it.
+    manage, narrowed to the batches they actually reach — see
+    :func:`_trainer_submission_scope` for why the first bound is not enough on
+    its own.
     """
     base = AssignmentSubmission.objects.with_related()
 
@@ -182,7 +215,12 @@ def visible_submissions(user) -> QuerySet[AssignmentSubmission]:
 
     trainer = batch_access.trainer_profile(user)
     if trainer is not None:
-        return base.filter(assignment__in=manageable_assignments(user))
+        # No `.distinct()`: both halves of the batch bound walk the same forward
+        # `enrollment -> batch` join, so neither can multiply a row, and the
+        # assignment bound is a subquery rather than a join.
+        return base.filter(
+            Q(assignment__in=manageable_assignments(user)) & _trainer_submission_scope(user)
+        )
 
     return base.none()
 

@@ -64,10 +64,23 @@ export async function assignProject(
   return apiMutate(`/api/v1/projects/${id}/assign/`, { method: 'POST' });
 }
 
+export interface ProjectWorkQuery {
+  status?: string;
+  batch?: string;
+  is_late?: string;
+  page?: number;
+  ordering?: string;
+  [key: string]: string | number | undefined;
+}
+
+/** One page of the review queue. A cohort's queue runs past twenty-five rows. */
 export async function listProjectWork(
   projectId: string,
+  query: ProjectWorkQuery = {},
 ): Promise<Paginated<ReviewerProjectWork>> {
-  return apiFetch<Paginated<ReviewerProjectWork>>(`/api/v1/projects/${projectId}/submissions/`);
+  return apiFetch<Paginated<ReviewerProjectWork>>(
+    `/api/v1/projects/${projectId}/submissions/${queryString(query)}`,
+  );
 }
 
 export async function getMyProjectWork(projectId: string): Promise<StudentProjectWork> {

@@ -126,6 +126,14 @@ describe('StudentPerformance', () => {
     expect(screen.queryByText(/80% average, at or above/)).not.toBeInTheDocument();
   });
 
+  it('shows no risk banner, and does not crash, for an enrolment the risk engine has never evaluated', async () => {
+    getEnrollment.mockResolvedValue(enrollment());
+    getBatchPerformance.mockResolvedValue([performanceRow({ risk: null })]);
+    render(<StudentPerformance enrollmentId="enrol-1" />);
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Jane Student' })).toBeInTheDocument());
+    expect(screen.queryByTestId('student-risk-banner')).not.toBeInTheDocument();
+  });
+
   it('shows no risk banner for a student who is not flagged', async () => {
     getEnrollment.mockResolvedValue(enrollment());
     getBatchPerformance.mockResolvedValue([performanceRow()]);

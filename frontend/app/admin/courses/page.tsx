@@ -139,7 +139,7 @@ function CourseAdminList() {
 
 export default function AdminCoursesPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.courseViewAny} roles={["trainer"]}>
       <CourseAdminList />
     </RequireAuth>
   );

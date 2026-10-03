@@ -36,12 +36,17 @@ describe('status labels', () => {
       'cancelled',
       'archived',
     ]);
+    // All six the backend declares. `transferred` was the one missing here,
+    // and because `ENROLLMENT_STATUS_OPTIONS` is derived from these keys, a
+    // real transferred enrolment rendered a blank badge and could not be
+    // filtered for.
     expect(Object.keys(ENROLLMENT_STATUS_LABEL)).toEqual([
       'pending',
       'active',
       'suspended',
       'completed',
       'cancelled',
+      'transferred',
     ]);
   });
 });

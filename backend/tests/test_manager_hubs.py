@@ -867,7 +867,14 @@ def test_batch_overview_shape(api_client_no_csrf, admin_user, batch, enrollment)
     }
     assert set(body["course"]) == {"id", "title", "code"}
     assert set(body["trainer"]) == {"id", "name", "trainer_id"}
-    assert set(body["attendance"]) == {"percentage", "present", "absent", "total_sessions"}
+    assert set(body["attendance"]) == {
+        "percentage",
+        "present",
+        "absent",
+        "late",
+        "excused",
+        "total_sessions",
+    }
     assert set(body["sessions"]) == {"total", "completed", "cancelled", "upcoming"}
     assert set(body["dsr"]) == {"expected", "submitted", "approved", "pending_review", "overdue"}
     assert set(body["assessments"]) == {"total", "completed", "average_percent"}
@@ -896,6 +903,8 @@ def test_batch_overview_empty_batch_has_null_percentages_and_zero_counts(
         "percentage": None,
         "present": 0,
         "absent": 0,
+        "late": 0,
+        "excused": 0,
         "total_sessions": 0,
     }
     assert body["timeline"]["percent_complete"] is None
@@ -1054,7 +1063,66 @@ def test_batch_overview_attendance_percentage(
 
     api_client_no_csrf.force_login(admin_user)
     body = api_client_no_csrf.get(_overview_url(batch)).json()
-    assert body["attendance"] == {"percentage": 50, "present": 1, "absent": 1, "total_sessions": 2}
+    assert body["attendance"] == {
+        "percentage": 50,
+        "present": 1,
+        "absent": 1,
+        "late": 0,
+        "excused": 0,
+        "total_sessions": 2,
+    }
+
+
+@pytest.mark.django_db
+def test_batch_overview_attendance_breakdown_accounts_for_every_counted_record(
+    api_client_no_csrf, admin_user, trainer_profile, batch, enrollment, other_enrollment
+):
+    """`present` + `late` + `absent` == `total_sessions`, and `excused` is outside it.
+
+    The batch card puts all of these in one row, so a reader adds them up. On
+    the seeded database the Pune MERN batch read "Present 229 · Absent 76 ·
+    Records counted 347" — 42 late records inside that total and 13 excused ones
+    outside it, neither of them on screen, so the only arithmetic the card
+    invites was arithmetic that failed. Every status that makes up the total is
+    now reported, which is what lets the screen show the sum.
+    """
+    from apps.attendance.services import mark_attendance
+
+    first = _completed_session(admin_user, batch, offset_days=2, topic="Register one")
+    mark_attendance(
+        session=first,
+        actor=trainer_profile.user,
+        entries=[
+            {"enrollment_id": str(enrollment.pk), "status": "present"},
+            {"enrollment_id": str(other_enrollment.pk), "status": "late"},
+        ],
+    )
+    second = _completed_session(admin_user, batch, offset_days=1, topic="Register two")
+    mark_attendance(
+        session=second,
+        actor=trainer_profile.user,
+        entries=[
+            {"enrollment_id": str(enrollment.pk), "status": "absent"},
+            {"enrollment_id": str(other_enrollment.pk), "status": "excused"},
+        ],
+    )
+
+    api_client_no_csrf.force_login(admin_user)
+    attendance = api_client_no_csrf.get(_overview_url(batch)).json()["attendance"]
+
+    assert attendance == {
+        # Two of the three counted records were attended (present + late).
+        "percentage": 67,
+        "present": 1,
+        "absent": 1,
+        "late": 1,
+        "excused": 1,
+        "total_sessions": 3,
+    }
+    assert (
+        attendance["present"] + attendance["late"] + attendance["absent"]
+        == attendance["total_sessions"]
+    )
 
 
 @pytest.mark.django_db

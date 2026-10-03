@@ -810,3 +810,45 @@ def test_two_simultaneous_starts_return_the_same_attempt(exam, enrollment, stude
     assert len(results) == 2
     assert results[0].pk == results[1].pk
     assert ExamAttempt.objects.filter(exam=exam, enrollment=enrollment).count() == 1
+
+
+@pytest.mark.django_db
+def test_the_paper_says_whether_this_exam_deducts_for_a_wrong_answer(
+    api_client_no_csrf, student_profile, enrollment, exam
+):
+    """A question's penalty is meaningless without the exam's flag beside it.
+
+    ``negative_marks`` is copied onto every drawn question from the bank whether
+    or not this exam applies it -- ``grade_attempt`` gates the deduction on
+    ``exam.negative_marking`` -- so a paper that carried the figure and not the
+    flag left the player nothing to decide with, and it told candidates "-0.50 if
+    wrong" on an exam that deducts nothing.
+    """
+    api_client_no_csrf.force_login(student_profile.user)
+    paper = _start(api_client_no_csrf, exam).json()
+
+    assert exam.negative_marking is False
+    assert paper["attempt"]["negative_marking"] is False
+    # The per-question figure is still there; it is simply not applied.
+    assert paper["questions"][0]["negative_marks"] == "0.50"
+
+
+@pytest.mark.django_db
+def test_the_paper_says_so_when_the_exam_does_deduct(
+    api_client_no_csrf, admin_user, batch, bank, student_profile, enrollment
+):
+    from apps.exams.services import create_exam, set_exam_status
+
+    deducting = create_exam(
+        actor=admin_user,
+        batch=batch,
+        title="Negatively marked",
+        negative_marking=True,
+        opens_at=timezone.now() - timedelta(minutes=1),
+        sections=[{"title": "Part A", "question_count": 4, "question_type": QuestionType.MCQ}],
+    )
+    set_exam_status(exam=deducting, actor=admin_user, status=ExamStatus.PUBLISHED)
+
+    api_client_no_csrf.force_login(student_profile.user)
+    paper = _start(api_client_no_csrf, deducting).json()
+    assert paper["attempt"]["negative_marking"] is True

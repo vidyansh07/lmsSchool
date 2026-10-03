@@ -201,7 +201,12 @@ describe('ManagePage — real data', () => {
     expect(rowValue('Behind schedule')).toBe('4');
     expect(rowValue('At-risk batches')).toBe('3');
     expect(rowValue('At-risk students')).toBe('18');
-    expect(rowValue('Overdue DSRs')).toBe('2');
+    // `trainers.with_overdue_dsr` counts trainers, not reports, and this bar
+    // used to be labelled "Overdue DSRs" — a report count, on the same screen
+    // as the warnings strip's own "N classes finished with no daily report",
+    // so the page read as two totals for one thing.
+    expect(rowValue('Trainers with overdue DSRs')).toBe('2');
+    expect(screen.queryByText('Overdue DSRs')).not.toBeInTheDocument();
     expect(rowValue('Critical flags')).toBe('3');
     expect(rowValue('Reviews due')).toBe('4');
   });

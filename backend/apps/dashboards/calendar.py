@@ -182,7 +182,7 @@ def batch_milestone_events(user, start: date, end: date) -> list[CalendarEvent]:
 
 #: The registry. Append a source here to put a new kind of thing on everyone's
 #: calendar; nothing else changes.
-def _deadline_event(*, kind, title, when, enrollment, metadata=None) -> CalendarEvent:
+def _deadline_event(*, kind, title, when, scope, metadata=None) -> CalendarEvent:
     """A deadline, as an all-day marker on the day it falls.
 
     Deliberately all-day rather than at the exact minute: a deadline at 23:59
@@ -195,51 +195,115 @@ def _deadline_event(*, kind, title, when, enrollment, metadata=None) -> Calendar
         start=when,
         end=when,
         all_day=True,
-        batch_id=str(enrollment.batch_id),
-        batch_code=enrollment.batch.code,
-        course_id=str(enrollment.course_id),
-        course_title=enrollment.course.title,
+        batch_id=str(scope.batch_id),
+        batch_code=scope.batch.code,
+        course_id=str(scope.course_id),
+        course_title=scope.course.title,
         metadata=metadata or {},
     )
 
 
-def _live_enrollments(user):
-    """The caller's enrolments that currently open a course.
+@dataclass(frozen=True)
+class _DeadlineScope:
+    """One batch, and the course it runs, that a deadline can land on.
+
+    A scope rather than an enrolment because a trainer or a manager has no
+    enrolment row and still has deadlines to see (see :func:`_deadline_scopes`).
+    It exposes the same four names an ``Enrollment`` does — ``batch``,
+    ``batch_id``, ``course``, ``course_id`` — so every source below reads the
+    same whoever is asking.
+    """
+
+    batch: Any
+    course: Any
+
+    @property
+    def batch_id(self):
+        return self.batch.pk
+
+    @property
+    def course_id(self):
+        return self.course.pk
+
+
+def _deadline_scopes(user, start: date, end: date) -> list[_DeadlineScope]:
+    """Every batch whose deadlines belong on this caller's calendar.
 
     Every deadline source needs the same answer, so it is asked once.
+
+    For a **student**, that is the enrolments which currently open a course —
+    the same ``grants_access()`` test the rest of the product uses, so a
+    suspended enrolment's deadlines leave the calendar along with the course.
+
+    For **staff** it is the batches the access layer already grants them, and
+    that branch is the whole of the defect this function replaced: the previous
+    `_live_enrollments` resolved a *student profile*, found `None` for a trainer
+    and returned an empty list, so all four deadline sources ran zero times —
+    a trainer's calendar carried classes and activity dues and not one
+    assignment, test, exam or project deadline for the batches they teach
+    themselves. `visible_batches` is the same access function `class_events`
+    and `batch_milestone_events` above already use, so a trainer sees their own
+    batches, a manager their centre's, and nobody reaches a batch the access
+    layer would not hand them.
+
+    A staff scope is clipped to batches whose own dates overlap the window, for
+    the same reason `class_events` clips each expansion to them: a course-wide
+    assignment due next week is not a deadline for a cohort that finished last
+    year.
     """
     from apps.batches import access as batch_access
+    from apps.batches.models import BatchStatus
     from apps.enrollments.models import Enrollment
 
     student = batch_access.student_profile(user)
-    if student is None:
-        return []
-    rows = (
-        Enrollment.objects.granting_access()
-        .filter(student=student)
-        .select_related("batch", "course")
+    if student is not None:
+        rows = (
+            Enrollment.objects.granting_access()
+            .filter(student=student)
+            .select_related("batch", "course")
+        )
+        return [
+            _DeadlineScope(batch=row.batch, course=row.course)
+            for row in rows
+            if row.grants_access()
+        ]
+
+    batches = (
+        batch_access.visible_batches(user)
+        .exclude(status=BatchStatus.CANCELLED)
+        .filter(start_date__lte=end, end_date__gte=start)
+        .select_related("course")
     )
-    return [row for row in rows if row.grants_access()]
+    return [_DeadlineScope(batch=batch, course=batch.course) for batch in batches]
 
 
 def assignment_events(user, start: date, end: date) -> list[CalendarEvent]:
     """Assignment deadlines — §7.4."""
     from apps.assignments.models import Assignment
 
+    scopes = _deadline_scopes(user, start, end)
+    if not scopes:
+        return []
+    # One query for the whole scope rather than one per batch: a manager's
+    # scope is every batch in their centre, and this used to be a query each.
+    rows = Assignment.objects.student_visible().filter(
+        course_id__in={scope.course_id for scope in scopes},
+        due_at__date__gte=start,
+        due_at__date__lte=end,
+    )
     events: list[CalendarEvent] = []
-    for enrollment in _live_enrollments(user):
-        rows = Assignment.objects.student_visible().filter(
-            course_id=enrollment.course_id, due_at__date__gte=start, due_at__date__lte=end
-        )
-        for assignment in rows:
-            if not assignment.applies_to_batch(enrollment.batch_id):
+    for assignment in rows:
+        for scope in scopes:
+            if scope.course_id != assignment.course_id:
+                continue
+            if not assignment.applies_to_batch(scope.batch_id):
                 continue
             events.append(
                 _deadline_event(
                     kind=EventKind.ASSIGNMENT_DUE,
                     title=f"Due: {assignment.title}",
                     when=assignment.due_at,
-                    enrollment=enrollment,
+                    scope=scope,
                     metadata={"assignment_id": str(assignment.pk), "code": assignment.code},
                 )
             )
@@ -250,24 +314,29 @@ def assessment_events(user, start: date, end: date) -> list[CalendarEvent]:
     """Weekly tests — §7.4."""
     from apps.assessments.models import Assessment
 
+    scopes = _deadline_scopes(user, start, end)
+    if not scopes:
+        return []
+    rows = Assessment.objects.student_visible().filter(
+        batch_id__in={scope.batch_id for scope in scopes},
+        scheduled_for__date__gte=start,
+        scheduled_for__date__lte=end,
+    )
     events: list[CalendarEvent] = []
-    for enrollment in _live_enrollments(user):
-        rows = Assessment.objects.student_visible().filter(
-            batch_id=enrollment.batch_id,
-            scheduled_for__date__gte=start,
-            scheduled_for__date__lte=end,
-        )
-        for assessment in rows:
+    for assessment in rows:
+        for scope in scopes:
+            if scope.batch_id != assessment.batch_id:
+                continue
             events.append(
                 CalendarEvent(
                     kind=EventKind.QUIZ,
                     title=assessment.title,
                     start=assessment.scheduled_for,
                     end=assessment.scheduled_for,
-                    batch_id=str(enrollment.batch_id),
-                    batch_code=enrollment.batch.code,
-                    course_id=str(enrollment.course_id),
-                    course_title=enrollment.course.title,
+                    batch_id=str(scope.batch_id),
+                    batch_code=scope.batch.code,
+                    course_id=str(scope.course_id),
+                    course_title=scope.course.title,
                     metadata={"assessment_id": str(assessment.pk), "code": assessment.code},
                 )
             )
@@ -278,22 +347,29 @@ def exam_events(user, start: date, end: date) -> list[CalendarEvent]:
     """Examination windows — §7.4."""
     from apps.exams.models import Exam
 
+    scopes = _deadline_scopes(user, start, end)
+    if not scopes:
+        return []
+    rows = Exam.objects.student_visible().filter(
+        batch_id__in={scope.batch_id for scope in scopes},
+        opens_at__date__gte=start,
+        opens_at__date__lte=end,
+    )
     events: list[CalendarEvent] = []
-    for enrollment in _live_enrollments(user):
-        rows = Exam.objects.student_visible().filter(
-            batch_id=enrollment.batch_id, opens_at__date__gte=start, opens_at__date__lte=end
-        )
-        for exam in rows:
+    for exam in rows:
+        for scope in scopes:
+            if scope.batch_id != exam.batch_id:
+                continue
             events.append(
                 CalendarEvent(
                     kind=EventKind.EXAM,
                     title=exam.title,
                     start=exam.opens_at,
                     end=exam.closes_at or exam.opens_at,
-                    batch_id=str(enrollment.batch_id),
-                    batch_code=enrollment.batch.code,
-                    course_id=str(enrollment.course_id),
-                    course_title=enrollment.course.title,
+                    batch_id=str(scope.batch_id),
+                    batch_code=scope.batch.code,
+                    course_id=str(scope.course_id),
+                    course_title=scope.course.title,
                     metadata={"exam_id": str(exam.pk), "code": exam.code},
                 )
             )
@@ -308,24 +384,31 @@ def project_events(user, start: date, end: date) -> list[CalendarEvent]:
 
     from apps.projects.models import Project
 
+    scopes = _deadline_scopes(user, start, end)
+    if not scopes:
+        return []
+    rows = Project.objects.student_visible().filter(
+        course_id__in={scope.course_id for scope in scopes},
+        end_date__gte=start,
+        end_date__lte=end,
+    )
     events: list[CalendarEvent] = []
-    for enrollment in _live_enrollments(user):
-        rows = Project.objects.student_visible().filter(
-            course_id=enrollment.course_id, end_date__gte=start, end_date__lte=end
+    for project in rows:
+        when = _timezone.make_aware(
+            _datetime.combine(project.end_date, time(23, 59)),
+            _timezone.get_current_timezone(),
         )
-        for project in rows:
-            if not project.applies_to_batch(enrollment.batch_id):
+        for scope in scopes:
+            if scope.course_id != project.course_id:
                 continue
-            when = _timezone.make_aware(
-                _datetime.combine(project.end_date, time(23, 59)),
-                _timezone.get_current_timezone(),
-            )
+            if not project.applies_to_batch(scope.batch_id):
+                continue
             events.append(
                 _deadline_event(
                     kind=EventKind.PROJECT_DUE,
                     title=f"Project due: {project.title}",
                     when=when,
-                    enrollment=enrollment,
+                    scope=scope,
                     metadata={"project_id": str(project.pk), "code": project.code},
                 )
             )

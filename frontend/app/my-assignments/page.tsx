@@ -19,7 +19,51 @@ import {
   formatDateTime,
 } from '@/lib/academic-labels';
 import { listMyAssignments, submissionFileUrl, submitAssignment } from '@/lib/assignments';
-import type { StudentAssignment } from '@/types/api';
+import type { StudentAssignment, SubmissionKind } from '@/types/api';
+
+/**
+ * Which inputs a hand-in form offers, per `submission_kind`.
+ *
+ * The backend's `_check_content` refuses a submission whose content does not
+ * match the kind: `file` needs files, `text` needs a written answer, `link`
+ * needs a link, `any` needs at least one of the three. The form used to be
+ * built from two negations -- "not text, so show files" and "not file, so show
+ * a textarea" -- which produced the right fields for three kinds and, for
+ * `link`, a file picker and a textarea and no URL box at all. A link
+ * assignment could not be handed in from this screen.
+ *
+ * Written as the positive statement of what each kind asks for, so a fourth
+ * kind is one row here rather than a third negation to reason about.
+ */
+const KIND_FIELDS: Record<SubmissionKind, readonly SubmissionField[]> = {
+  file: ['files'],
+  text: ['text_answer'],
+  link: ['link_url'],
+  any: ['files', 'text_answer', 'link_url'],
+};
+
+type SubmissionField = 'files' | 'text_answer' | 'link_url';
+
+function wants(kind: SubmissionKind, field: SubmissionField): boolean {
+  return KIND_FIELDS[kind].includes(field);
+}
+
+/**
+ * Field errors that no input on this form can display.
+ *
+ * `fieldErrors` returns the API's `details` keyed by field, and each `Field`
+ * renders its own. Anything left over -- `__all__`, `assignment`, or a field
+ * this kind does not show -- would otherwise be dropped on the floor: that is
+ * how a `link_url` refusal on a form with no link box became a Submit button
+ * that appeared to do nothing at all.
+ */
+function unplacedErrors(
+  problems: Record<string, string>,
+  kind: SubmissionKind,
+): [string, string][] {
+  const shown = new Set<string>(KIND_FIELDS[kind]);
+  return Object.entries(problems).filter(([field]) => !shown.has(field));
+}
 
 /** A student's work list, with the hand-in form on the same screen. */
 function MyAssignments() {
@@ -31,6 +75,7 @@ function MyAssignments() {
   const [errors, setErrors] = useState<Record<string, Record<string, string>>>({});
   const [files, setFiles] = useState<Record<string, FileList | null>>({});
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [links, setLinks] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setRows((await listMyAssignments({ ordering: 'due_at' })).results);
@@ -63,9 +108,11 @@ function MyAssignments() {
       await submitAssignment(assignment.id, {
         files: chosen ? Array.from(chosen) : [],
         text_answer: answers[assignment.id] ?? '',
+        link_url: links[assignment.id] ?? '',
       });
       setFiles({ ...files, [assignment.id]: null });
       setAnswers({ ...answers, [assignment.id]: '' });
+      setLinks({ ...links, [assignment.id]: '' });
       await load();
       setNotice(`Submitted "${assignment.title}".`);
     } catch (cause) {
@@ -195,12 +242,15 @@ function MyAssignments() {
 
                 {canSubmit ? (
                   <form className="space-y-3" onSubmit={(event) => hand(assignment, event)}>
-                    {problems.__all__ ? <Alert variant="error">{problems.__all__}</Alert> : null}
-                    {problems.assignment ? (
-                      <Alert variant="error">{problems.assignment}</Alert>
-                    ) : null}
+                    {unplacedErrors(problems, assignment.submission_kind).map(
+                      ([field, message]) => (
+                        <Alert variant="error" key={field}>
+                          {message}
+                        </Alert>
+                      ),
+                    )}
 
-                    {assignment.submission_kind !== 'text' ? (
+                    {wants(assignment.submission_kind, 'files') ? (
                       <Field
                         label="Files"
                         htmlFor={`files-${assignment.id}`}
@@ -218,7 +268,7 @@ function MyAssignments() {
                       </Field>
                     ) : null}
 
-                    {assignment.submission_kind !== 'file' ? (
+                    {wants(assignment.submission_kind, 'text_answer') ? (
                       <Field
                         label="Written answer"
                         htmlFor={`text-${assignment.id}`}
@@ -230,6 +280,26 @@ function MyAssignments() {
                           value={answers[assignment.id] ?? ''}
                           onChange={(event) =>
                             setAnswers({ ...answers, [assignment.id]: event.target.value })
+                          }
+                        />
+                      </Field>
+                    ) : null}
+
+                    {wants(assignment.submission_kind, 'link_url') ? (
+                      <Field
+                        label="Link"
+                        htmlFor={`link-${assignment.id}`}
+                        error={problems.link_url}
+                        hint="A repository, a published notebook or a deployed URL."
+                      >
+                        <Input
+                          id={`link-${assignment.id}`}
+                          type="url"
+                          inputMode="url"
+                          placeholder="https://"
+                          value={links[assignment.id] ?? ''}
+                          onChange={(event) =>
+                            setLinks({ ...links, [assignment.id]: event.target.value })
                           }
                         />
                       </Field>

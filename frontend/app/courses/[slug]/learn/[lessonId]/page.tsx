@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { use, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
+import { LessonAside } from '@/components/lesson-aside';
 import { LessonBody } from '@/components/lesson-content';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
@@ -14,6 +15,7 @@ import { ApiError } from '@/lib/api';
 import { setLessonCompletion } from '@/lib/batches';
 import { getCourse, getLesson } from '@/lib/courses';
 import { CONTENT_TYPE_LABEL, formatDuration } from '@/lib/course-labels';
+import { labelFor } from '@/lib/labels';
 import { cn } from '@/lib/utils';
 import type { CourseDetail, LessonContent, LessonSummary } from '@/types/api';
 
@@ -208,7 +210,7 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
           <header className="space-y-2">
             <h1 className="text-2xl font-semibold tracking-tight">{lesson.title}</h1>
             <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-              <Badge>{CONTENT_TYPE_LABEL[lesson.content_type]}</Badge>
+              <Badge>{labelFor(CONTENT_TYPE_LABEL, lesson.content_type)}</Badge>
               {lesson.duration_minutes ? (
                 <span>{formatDuration(lesson.duration_minutes)}</span>
               ) : null}
@@ -246,7 +248,8 @@ function Player({ slug, lessonId }: { slug: string; lessonId: string }) {
           </nav>
         </div>
 
-        <aside className="lg:sticky lg:top-4 lg:self-start">
+        <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <LessonAside lessonId={lesson.id} />
           <nav
             aria-label="Course outline"
             className="max-h-[70vh] overflow-y-auto rounded-card border border-line"

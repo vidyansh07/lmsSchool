@@ -3,12 +3,12 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from apps.accounts.models import UserRole
-from apps.common.serializers import StrictSerializer
+from apps.common.serializers import PaginatedQuerySerializer, StrictSerializer
 
 from .services import KIND_LABELS
 
 
-class FeedQuerySerializer(StrictSerializer):
+class FeedQuerySerializer(PaginatedQuerySerializer):
     since = serializers.DateField(required=False)
     until = serializers.DateField(required=False)
     actor = serializers.UUIDField(required=False)

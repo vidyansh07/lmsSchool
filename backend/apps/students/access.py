@@ -56,6 +56,32 @@ def visible_students(user) -> QuerySet[StudentProfile]:
     return base.none()
 
 
+def awaiting_enrolment(students: QuerySet[StudentProfile]) -> QuerySet[StudentProfile]:
+    """The students on ``students`` with nowhere to sit yet.
+
+    One definition, in one place, because three screens ask this same question
+    and used to answer it three ways: the counsellor dashboard's "Unassigned
+    batch" tile, its "Registered, not yet enrolled" list (which computed it in
+    the browser, from a recent window of enrolments, and therefore reported
+    fifteen students who were all enrolled), and
+    :func:`apps.warnings.services._admissions_warnings`.
+
+    "Nowhere to sit" is *no enrolment holding a seat*, not *no enrolment row at
+    all*. The difference is the student whose only enrolment was cancelled or
+    who was transferred off a batch and never placed on another: they are
+    registered, they occupy no seat, and they are exactly the gap this question
+    exists to find. ``SEAT_HOLDING_STATUSES`` is reused rather than restated so
+    this cannot disagree with ``BatchQuerySet.with_counts()`` — the seat count
+    ``/admissions/batches`` shows — about what an enrolment is.
+
+    ``exclude()`` across a multi-valued relation compiles to one NOT-EXISTS
+    subquery, so this adds no join and cannot duplicate a row.
+    """
+    from apps.enrollments.models import SEAT_HOLDING_STATUSES
+
+    return students.exclude(enrollments__status__in=tuple(SEAT_HOLDING_STATUSES))
+
+
 def reachable_students(user) -> QuerySet[StudentProfile]:
     """Every student record whose *centre* the caller is in — audience aside.
 

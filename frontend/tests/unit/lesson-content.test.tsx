@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LessonBody } from '@/components/lesson-content';
+import { apiBaseUrl } from '@/lib/env';
 import type { LessonContent } from '@/types/api';
 
 vi.mock('@/lib/courses', () => ({
@@ -101,9 +102,16 @@ describe('LessonBody', () => {
       />,
     );
 
+    // Absolute, against the API origin. `download_url` is a path -- the
+    // serializer does not know the API's hostname -- and a bare `/api/...` in
+    // an href is resolved against the page's origin, which is the Next server:
+    // the link 404'd on the front end without ever reaching the download view.
     expect(screen.getByRole('link', { name: /download/i })).toHaveAttribute(
       'href',
-      '/api/v1/resources/r1/download/',
+      `${apiBaseUrl()}/api/v1/resources/r1/download/`,
+    );
+    expect(screen.getByRole('link', { name: /download/i }).getAttribute('href')).toMatch(
+      /^https?:\/\//,
     );
     expect(screen.getByText(/not downloadable/i)).toBeInTheDocument();
   });

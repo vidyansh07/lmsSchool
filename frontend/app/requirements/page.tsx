@@ -1,12 +1,13 @@
 import { Suspense } from "react";
 
 import { RequireAuth } from "@/components/require-auth";
+import { Capability } from "@/lib/capabilities";
 import { RequirementsBoard } from "@/components/requirements/requirements-board";
 import { LoadingState } from "@/components/states";
 
 export default function RequirementsPage() {
   return (
-    <RequireAuth>
+    <RequireAuth capability={Capability.requirementManage} roles={["trainer"]}>
       <Suspense
         fallback={<LoadingState label="Loading requirements…" rows={3} />}
       >

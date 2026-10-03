@@ -39,6 +39,7 @@ import {
   PERMISSION_CATEGORY_LABEL,
   ROLE_LABEL,
   SCOPE_LABEL,
+  labelFor,
 } from "@/lib/labels";
 import {
   createRole,
@@ -392,7 +393,7 @@ export function RoleBuilder({ slug }: { slug?: string }) {
             <CardTitle>Permissions</CardTitle>
             <CardDescription>
               {mayAssign
-                ? `Switch each permission on or off. A scope narrows how far it reaches; it can never be wider than a ${ROLE_LABEL[kind].toLowerCase()} sees.`
+                ? `Switch each permission on or off. A scope narrows how far it reaches; it can never be wider than a ${labelFor(ROLE_LABEL, kind).toLowerCase()} sees.`
                 : "You can see the permissions but not change them: assigning permissions needs its own right."}
             </CardDescription>
           </CardHeader>
@@ -491,7 +492,7 @@ export function RoleBuilder({ slug }: { slug?: string }) {
           <CardHeader>
             <CardTitle>Review</CardTitle>
             <CardDescription>
-              Compared with the {ROLE_LABEL[kind].toLowerCase()} system role.
+              Compared with the {labelFor(ROLE_LABEL, kind).toLowerCase()} system role.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -499,7 +500,7 @@ export function RoleBuilder({ slug }: { slug?: string }) {
               <dt className="text-ink-muted">Name</dt>
               <dd>{name}</dd>
               <dt className="text-ink-muted">Built from</dt>
-              <dd>{ROLE_LABEL[kind]}</dd>
+              <dd>{labelFor(ROLE_LABEL, kind)}</dd>
               <dt className="text-ink-muted">Permissions</dt>
               <dd>{selected.length}</dd>
               <dt className="text-ink-muted">Affected people</dt>

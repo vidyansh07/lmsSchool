@@ -16,6 +16,7 @@ import django_filters
 from django.db.models import Count, Q
 from django.http import Http404
 from django_filters.rest_framework import DjangoFilterBackend
+from django_filters.widgets import BooleanWidget
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status as http_status
 from rest_framework.filters import OrderingFilter
@@ -155,8 +156,20 @@ class ActivityFilterSet(django_filters.FilterSet):
     created_by = django_filters.UUIDFilter(field_name="created_by_id")
     due_before = django_filters.DateTimeFilter(field_name="due_at", lookup_expr="lte")
     due_after = django_filters.DateTimeFilter(field_name="due_at", lookup_expr="gte")
-    overdue = django_filters.BooleanFilter(method="filter_overdue")
-    mine = django_filters.BooleanFilter(method="filter_mine")
+    # `BooleanWidget`, not `BooleanFilter`'s default. django-filter's plain
+    # `BooleanFilter` is a `forms.NullBooleanField`, whose `NullBooleanSelect`
+    # widget only recognises `true`/`false` (and the select's own `2`/`3`) —
+    # every other spelling, `1` and `0` included, coerces to `None`, which
+    # django-filter reads as "this filter was not supplied" and silently drops.
+    # `?mine=1` is the spelling this API documents (`MeActivitiesView` below)
+    # and the one `frontend/lib/work.ts` sends for the `/activities` screen's
+    # "Mine" and "Overdue" checkboxes, so both ticks were fetching the
+    # unfiltered list and changing nothing on screen. `BooleanWidget` is
+    # django-filter's own widget for a query-string flag: it accepts `1`/`0`
+    # as well as `true`/`false`, case-insensitively, so the documented and the
+    # OpenAPI-canonical spellings both work.
+    overdue = django_filters.BooleanFilter(method="filter_overdue", widget=BooleanWidget)
+    mine = django_filters.BooleanFilter(method="filter_mine", widget=BooleanWidget)
 
     class Meta:
         model = Activity
@@ -173,11 +186,36 @@ class ActivityFilterSet(django_filters.FilterSet):
         )
 
     def filter_overdue(self, queryset, name, value):
+        """`status=OVERDUE`, not "`due_at` is in the past".
+
+        Overdue is a *status* in this domain, not a derived predicate:
+        `services.mark_overdue_and_missed` is the only thing that decides an
+        activity has gone overdue, and `transitions.py` gives that move its
+        own `SYSTEM`-only edge and history row. A `due_at__lt=now` filter here
+        would disagree with the status badge the same row shows — it would
+        include a `COMPLETED` activity handed in late, and an `OVERDUE` one
+        whose `due_at` was pushed back after the sweep — so this filter asks
+        the same question the `Status → Overdue` option does, and `?overdue=1`
+        and `?status=overdue` return the same set by construction.
+        """
         if value:
             return queryset.filter(status=ActivityStatus.OVERDUE)
         return queryset
 
     def filter_mine(self, queryset, name, value):
+        """Assignee or creator — deliberately the same pair
+        `MeActivitiesView.get_queryset` uses, so `?mine=1` and
+        `GET /me/activities/` never disagree about whose work this is.
+
+        Not `performed_by`: that field is only written at completion
+        (`services.complete_activity`), so including it would widen "mine" by
+        nothing for open work and, for finished work, would add rows a
+        reviewer completed on someone else's behalf.
+
+        A falsy value narrows nothing rather than inverting to "not mine" —
+        an unticked checkbox is "no opinion", and the caller's own queryset
+        (`access.visible_activities`) still bounds the result either way.
+        """
         user = getattr(self.request, "user", None)
         if value and user is not None:
             return queryset.filter(Q(assigned_to=user) | Q(created_by=user))

@@ -37,7 +37,9 @@ const TONE: Record<
 
 function WarningRow({ warning }: { warning: StaffWarning }) {
   const [open, setOpen] = useState(false);
-  const tone = TONE[warning.severity];
+  // A severity this file does not know reads as informational rather than
+  // taking down the five dashboards that mount this strip.
+  const tone = TONE[warning.severity] ?? TONE.info;
   const Icon = tone.icon;
   return (
     <li className="py-2.5 first:pt-0 last:pb-0">

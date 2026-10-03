@@ -11,6 +11,8 @@ import {
   ListChecks,
   type LucideIcon,
 } from "lucide-react";
+
+import { NOT_AVAILABLE, type FallbackLabel } from "@/lib/format";
 import type {
   ActivityCategory,
   ActivityKind,
@@ -509,6 +511,30 @@ function titleCaseKind(kind: string): string {
     .filter((word) => word.length > 0)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+/**
+ * A label from one of the maps above for a value the map may not know.
+ *
+ * Every `Record<Enum, string>` in this file is typed against the backend's
+ * declared vocabulary, but the value at a render site is only as trustworthy
+ * as the row it came from: an imported spreadsheet, a legacy enum member, or
+ * a backend release ahead of this frontend all put strings here that the map
+ * has never heard of. Indexing the map directly then yields `undefined` — an
+ * empty badge at best, a `.toLowerCase()` crash at worst. This resolves an
+ * unknown value to itself, humanised ("higher_secondary_2" -> "Higher
+ * Secondary 2"), so the screen still shows what the record actually says,
+ * and to `label` when there is nothing to show at all.
+ */
+export function labelFor(
+  map: Readonly<Record<string, string>>,
+  value: unknown,
+  label: FallbackLabel = NOT_AVAILABLE,
+): string {
+  if (typeof value !== "string") return label;
+  const known = map[value];
+  if (known) return known;
+  return titleCaseKind(value) || label;
 }
 
 /** Never throws and never returns `undefined` — every `kind` string, known
