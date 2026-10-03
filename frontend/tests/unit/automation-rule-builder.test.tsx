@@ -155,6 +155,11 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+/** The WHEN card opens the trigger's side form. */
+function openTrigger() {
+  fireEvent.click(screen.getByRole("button", { name: /^When ·/ }));
+}
+
 describe("RuleBuilder — conditions locked to the selected trigger", () => {
   it("only offers ACTIVITY_COMPLETED's own paths, and clears them on a trigger change", () => {
     mockUseApi(RULE);
@@ -172,6 +177,7 @@ describe("RuleBuilder — conditions locked to the selected trigger", () => {
     expect(screen.getByText("Another form field (by key)…")).toBeInTheDocument();
 
     // "When this record" is Student, then its event: Risk level changed.
+    openTrigger();
     fireEvent.change(screen.getByLabelText("When this record", { exact: false }), {
       target: { value: "student" },
     });
@@ -179,10 +185,11 @@ describe("RuleBuilder — conditions locked to the selected trigger", () => {
       target: { value: "RISK_CHANGED" },
     });
     // Switching trigger clears the condition list built against the old one.
-    expect(screen.queryByLabelText("When")).not.toBeInTheDocument();
-    expect(
-      screen.getByText(/no conditions.*risk level changed/i),
-    ).toBeInTheDocument();
+    // (The side form itself is titled "When" now, so ask for the condition's
+    // own select by role, not by label.)
+    expect(screen.queryByRole("combobox", { name: "When" })).not.toBeInTheDocument();
+    expect(screen.getByText(/no conditions: runs every time/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /When · Student\s*Risk level changed/ })).toBeInTheDocument();
   });
 });
 
@@ -273,6 +280,7 @@ describe("RuleBuilder — Details field-level errors (Phase R7 Target 2)", () =>
     // correctly excludes it (see `activity-types-page.test.tsx` for the
     // same note against the same `Field` component).
     expect(screen.getByRole("textbox", { name: "Name" })).toBeRequired();
+    openTrigger();
     expect(screen.getByRole("combobox", { name: "When this record" })).toBeRequired();
     expect(screen.getByRole("combobox", { name: "Event" })).toBeRequired();
     expect(screen.getByLabelText("Description")).not.toBeRequired();
@@ -340,6 +348,7 @@ describe("RuleBuilder — record, event and enquiry pieces", () => {
   it("picks the record first, then one of its events", () => {
     mockUseApi(RULE);
     render(<RuleBuilder id="rule-1" />);
+    openTrigger();
     const record = screen.getByRole("combobox", { name: "When this record" }) as HTMLSelectElement;
     expect(record.value).toBe("activity");
     fireEvent.change(record, { target: { value: "enquiry" } });
@@ -372,9 +381,9 @@ describe("RuleBuilder — record, event and enquiry pieces", () => {
     });
     fireEvent.change(screen.getByLabelText("Due in (hours)"), { target: { value: "2" } });
 
+    // The side form now shows step 2 only.
     fireEvent.click(screen.getByRole("button", { name: /add action/i }));
-    const actionSelects = screen.getAllByLabelText("Action");
-    fireEvent.change(actionSelects[1]!, { target: { value: "update_enquiry" } });
+    fireEvent.change(screen.getByLabelText("Action"), { target: { value: "update_enquiry" } });
     fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "contacted" } });
 
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
@@ -413,12 +422,14 @@ describe("RuleBuilder — forms", () => {
     getPublishedForm.mockResolvedValue(FOLLOW_UP_FORM);
     render(<RuleBuilder id="rule-forms" />);
 
+    expect(screen.getByRole("button", { name: /When · Form\s*Submitted: Enquiry follow-up/ })).toBeInTheDocument();
+    openTrigger();
     const picker = screen.getByLabelText("Which form") as HTMLSelectElement;
     expect(picker.value).toBe("enquiry-follow-up");
     await waitFor(() => expect(getPublishedForm).toHaveBeenCalledWith("enquiry-follow-up"));
 
     // The picker's own condition is not repeated as a generic row.
-    expect(screen.getByText(/no conditions/i)).toBeInTheDocument();
+    expect(screen.getByText(/no conditions: runs every time/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /add condition/i }));
     const when = (await screen.findByLabelText("When")) as HTMLSelectElement;
@@ -468,6 +479,7 @@ describe("RuleBuilder — forms", () => {
     getPublishedForm.mockResolvedValue(FOLLOW_UP_FORM);
     render(<RuleBuilder id="rule-forms" />);
 
+    openTrigger();
     fireEvent.change(screen.getByLabelText("Which form"), { target: { value: "enquiry" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
     expect(updateAutomationRule).toHaveBeenCalledWith(

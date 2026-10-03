@@ -129,7 +129,7 @@ function StrategyField({
 /** Each branch's `type` is a string literal, so the object it returns is
  *  narrowed to that one member of `AutomationAction` — no cast needed at the
  *  call sites below. */
-function blankActionFor(type: AutomationActionType): AutomationAction {
+export function blankActionFor(type: AutomationActionType): AutomationAction {
   switch (type) {
     case "create_activity":
       return {
@@ -773,7 +773,9 @@ function FlagRiskFields({
   );
 }
 
-function ActionRow({
+/** One action's form — a row in the list editor, and the side panel's form
+ *  in the flow builder. */
+export function ActionRow({
   action,
   activityTypeOptions,
   formOptions,

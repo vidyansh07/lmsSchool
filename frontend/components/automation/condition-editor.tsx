@@ -85,6 +85,17 @@ function blankCondition(paths: string[]): AutomationCondition {
   return { path: paths[0] ?? "", op: "eq", value: "" };
 }
 
+/** A new condition: on the rule's first form question when a form is known,
+ *  otherwise on the trigger's first context path. */
+export function newCondition(formFields: FormField[], paths: string[]): AutomationCondition {
+  const [first] = formFields;
+  if (first) {
+    const op = operatorsForFieldType(first.type)[0] ?? "eq";
+    return { path: `form.${first.key}`, op, value: initialValue(first, op) };
+  }
+  return blankCondition(paths);
+}
+
 /** The value a condition starts with when its question or operator changes. */
 function initialValue(
   field: FormField | undefined,
@@ -185,7 +196,9 @@ function choicePathAsField(path: string, choices: FormFieldOption[]): FormField 
   };
 }
 
-function ConditionRow({
+/** One condition's form — used as a row in the list editor and on its own
+ *  in the flow builder's side panel. */
+export function ConditionRow({
   condition,
   triggerMeta,
   formFields,
@@ -425,13 +438,7 @@ export function ConditionEditor({
   }
 
   function add() {
-    const [first] = formFields;
-    if (first) {
-      const op = operatorsForFieldType(first.type)[0] ?? "eq";
-      onChange([...conditions, { path: `form.${first.key}`, op, value: initialValue(first, op) }]);
-    } else {
-      onChange([...conditions, blankCondition(triggerMeta.paths)]);
-    }
+    onChange([...conditions, newCondition(formFields, triggerMeta.paths)]);
   }
 
   return (

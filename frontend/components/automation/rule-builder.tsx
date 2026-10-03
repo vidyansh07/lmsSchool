@@ -22,8 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import { ActionEditor } from "@/components/automation/action-editor";
-import { ConditionEditor } from "@/components/automation/condition-editor";
+import { FlowBuilder } from "@/components/automation/flow-builder";
 import { usePublishedFields } from "@/components/automation/use-published-fields";
 import { useApi } from "@/hooks/use-api";
 import {
@@ -44,7 +43,6 @@ import {
   AUTOMATION_RECORD_TRIGGERS,
   AUTOMATION_RULE_STATUS_LABEL,
   AUTOMATION_RULE_STATUS_VARIANT,
-  AUTOMATION_TRIGGER_LABEL,
   ENQUIRY_STAGE_LABEL,
   ENQUIRY_STAGES,
   automationRecordOf,
@@ -175,6 +173,13 @@ export function RuleBuilder({ id }: { id: string }) {
       : []),
     ...(isFormTrigger ? ["submission.form"] : []),
   ];
+
+  const formName = pickedForm
+    ? (formOptions.find((option) => option.slug === pickedForm)?.name ?? pickedForm)
+    : "";
+  const triggerSummary = isFormTrigger
+    ? `${AUTOMATION_EVENT_LABEL[trigger]}: ${formName || "any form"}`
+    : AUTOMATION_EVENT_LABEL[trigger];
 
   function changeTrigger(next: AutomationTrigger) {
     setTrigger(next);
@@ -355,55 +360,11 @@ export function RuleBuilder({ id }: { id: string }) {
               }}
             />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field
-              label="When this record"
-              htmlFor="rule-record"
-              error={errors.trigger}
-              required
-              hint={
-                canEditTrigger
-                  ? "Changing this clears the conditions below."
-                  : "Fixed once a rule has been activated."
-              }
-            >
-              <Select
-                id="rule-record"
-                disabled={!mayManage || !canEditTrigger}
-                value={record}
-                onChange={(event) => {
-                  const nextRecord = event.target.value as AutomationRecord;
-                  const first = AUTOMATION_RECORD_TRIGGERS[nextRecord][0];
-                  if (first) changeTrigger(first);
-                }}
-              >
-                {(Object.keys(AUTOMATION_RECORD_TRIGGERS) as AutomationRecord[]).map((value) => (
-                  <option key={value} value={value}>
-                    {AUTOMATION_RECORD_LABEL[value]}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Event" htmlFor="rule-trigger" required>
-              <Select
-                id="rule-trigger"
-                disabled={!mayManage || !canEditTrigger}
-                value={trigger}
-                onChange={(event) => changeTrigger(event.target.value as AutomationTrigger)}
-              >
-                {AUTOMATION_RECORD_TRIGGERS[record].map((value) => (
-                  <option key={value} value={value}>
-                    {AUTOMATION_EVENT_LABEL[value]}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
           <Field
             label="Description"
             htmlFor="rule-description"
             error={errors.description}
-            className="sm:col-span-2"
+            className="sm:col-span-1"
           >
             <Textarea
               id="rule-description"
@@ -421,69 +382,112 @@ export function RuleBuilder({ id }: { id: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Conditions</CardTitle>
+          <CardTitle>Flow</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {isFormTrigger ? (
-            <Field
-              label="Which form"
-              htmlFor="rule-form"
-              hint="The rule runs when this form is submitted. Its answers can be used below."
-            >
-              <Select
-                id="rule-form"
-                disabled={!mayManage}
-                value={pickedForm}
-                onChange={(event) => pickForm(event.target.value)}
-              >
-                <option value="">Any form</option>
-                {pickedForm && !formOptions.some((option) => option.slug === pickedForm) ? (
-                  <option value={pickedForm}>{pickedForm}</option>
+        <CardContent>
+          {errors.trigger ? (
+            <Alert variant="error" className="mb-3">
+              {errors.trigger}
+            </Alert>
+          ) : null}
+          <FlowBuilder
+            triggerKind={`When · ${AUTOMATION_RECORD_LABEL[record]}`}
+            triggerSummary={triggerSummary}
+            renderTriggerForm={() => (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 gap-3">
+                  <Field
+                    label="When this record"
+                    htmlFor="rule-record"
+                    error={errors.trigger}
+                    required
+                    hint={
+                      canEditTrigger
+                        ? "Changing this clears the conditions below."
+                        : "Fixed once a rule has been activated."
+                    }
+                  >
+                    <Select
+                      id="rule-record"
+                      disabled={!mayManage || !canEditTrigger}
+                      value={record}
+                      onChange={(event) => {
+                        const nextRecord = event.target.value as AutomationRecord;
+                        const first = AUTOMATION_RECORD_TRIGGERS[nextRecord][0];
+                        if (first) changeTrigger(first);
+                      }}
+                    >
+                      {(Object.keys(AUTOMATION_RECORD_TRIGGERS) as AutomationRecord[]).map((value) => (
+                        <option key={value} value={value}>
+                          {AUTOMATION_RECORD_LABEL[value]}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Event" htmlFor="rule-trigger" required>
+                    <Select
+                      id="rule-trigger"
+                      disabled={!mayManage || !canEditTrigger}
+                      value={trigger}
+                      onChange={(event) => changeTrigger(event.target.value as AutomationTrigger)}
+                    >
+                      {AUTOMATION_RECORD_TRIGGERS[record].map((value) => (
+                        <option key={value} value={value}>
+                          {AUTOMATION_EVENT_LABEL[value]}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+                {isFormTrigger ? (
+                  <Field
+                    label="Which form"
+                    htmlFor="rule-form"
+                    hint="The rule runs when this form is submitted. Its answers can be used below."
+                  >
+                    <Select
+                      id="rule-form"
+                      disabled={!mayManage}
+                      value={pickedForm}
+                      onChange={(event) => pickForm(event.target.value)}
+                    >
+                      <option value="">Any form</option>
+                      {pickedForm && !formOptions.some((option) => option.slug === pickedForm) ? (
+                        <option value={pickedForm}>{pickedForm}</option>
+                      ) : null}
+                      {formOptions.map((option) => (
+                        <option key={option.slug} value={option.slug}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
                 ) : null}
-                {formOptions.map((option) => (
-                  <option key={option.slug} value={option.slug}>
-                    {option.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          ) : null}
-          {trigger === "ACTIVITY_COMPLETED" && !activityForm ? (
-            <p className="text-2xs text-ink-faint">
-              Add an &ldquo;activity.type is …&rdquo; condition to pick that activity&rsquo;s
-              form answers by name.
-            </p>
-          ) : null}
-          <ConditionEditor
+                {trigger === "ACTIVITY_COMPLETED" && !activityForm ? (
+                  <p className="text-2xs text-ink-faint">
+                    Add an &ldquo;activity.type is …&rdquo; condition to pick that activity&rsquo;s
+                    form answers by name.
+                  </p>
+                ) : null}
+              </div>
+            )}
             conditions={editableConditions}
-            triggerMeta={triggerMeta}
-            triggerLabel={AUTOMATION_TRIGGER_LABEL[trigger]}
-            formFields={formFields}
-            choicePaths={choicePaths}
-            disabled={!mayManage}
-            onChange={(next) => {
+            onConditionsChange={(next) => {
               setConditions([...pickerConditions, ...next]);
               setDirty(true);
             }}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ActionEditor
             actions={actions}
+            onActionsChange={(next) => {
+              setActions(next);
+              setDirty(true);
+            }}
+            triggerMeta={triggerMeta}
+            formFields={formFields}
+            choicePaths={choicePaths}
             activityTypeOptions={activityTypeOptions}
             formOptions={formOptions}
             variables={templateVariables}
             disabled={!mayManage}
-            onChange={(next) => {
-              setActions(next);
-              setDirty(true);
-            }}
           />
         </CardContent>
       </Card>
