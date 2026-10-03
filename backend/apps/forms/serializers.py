@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
-from .models import FormDefinition, FormEntity, FormField, FormFieldType, FormVersion
+from .models import (
+    FormAssignment,
+    FormAssignmentStatus,
+    FormDefinition,
+    FormEntity,
+    FormField,
+    FormFieldType,
+    FormVersion,
+)
 
 
 class FormFieldSerializer(StrictModelSerializer):
@@ -25,6 +34,7 @@ class FormFieldSerializer(StrictModelSerializer):
             "validation",
             "visible_to_student",
             "performance_key",
+            "show_if",
         )
         read_only_fields = ("id",)
 
@@ -41,6 +51,7 @@ class FormFieldWriteSerializer(StrictSerializer):
     validation = serializers.JSONField(default=dict)
     visible_to_student = serializers.BooleanField(default=False)
     performance_key = SafeCharField(max_length=30, required=False, allow_blank=True, default="")
+    show_if = serializers.JSONField(required=False, default=dict)
 
 
 class FormFieldsWriteSerializer(StrictSerializer):
@@ -128,14 +139,149 @@ class FormPreviewSerializer(StrictSerializer):
     values = serializers.JSONField(default=dict)
 
 
+def _person(user) -> dict | None:
+    if user is None:
+        return None
+    return {"id": str(user.pk), "name": user.get_full_name() or user.email, "role": user.role}
+
+
+class FormUploadSerializer(serializers.Serializer):
+    id = serializers.UUIDField(read_only=True)
+    filename = serializers.CharField(source="original_name", read_only=True)
+    content_type = serializers.CharField(read_only=True)
+    size_bytes = serializers.IntegerField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+
+class FormAssignmentSerializer(serializers.Serializer):
+    id = serializers.UUIDField(read_only=True)
+    form = serializers.SerializerMethodField()
+    version = serializers.IntegerField(source="version.number", read_only=True)
+    title = serializers.CharField(read_only=True)
+    message = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    assigned_to = serializers.SerializerMethodField()
+    requested_by = serializers.SerializerMethodField()
+    student = serializers.SerializerMethodField()
+    enquiry = serializers.SerializerMethodField()
+    due_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    submitted_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    cancelled_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    created_at = serializers.DateTimeField(read_only=True)
+    is_overdue = serializers.SerializerMethodField()
+    from_automation = serializers.SerializerMethodField()
+    can_submit = serializers.SerializerMethodField()
+    can_cancel = serializers.SerializerMethodField()
+
+    def get_form(self, assignment: FormAssignment) -> dict:
+        return {
+            "slug": assignment.definition.slug,
+            "name": assignment.definition.name,
+            "entity": assignment.definition.entity,
+        }
+
+    def get_assigned_to(self, assignment: FormAssignment) -> dict | None:
+        return _person(assignment.assigned_to)
+
+    def get_requested_by(self, assignment: FormAssignment) -> dict | None:
+        return _person(assignment.requested_by)
+
+    def get_enquiry(self, assignment: FormAssignment) -> dict | None:
+        enquiry = assignment.enquiry
+        if enquiry is None:
+            return None
+        return {"id": str(enquiry.pk), "name": enquiry.full_name, "stage": enquiry.stage}
+
+    def get_student(self, assignment: FormAssignment) -> dict | None:
+        student = assignment.student
+        if student is None:
+            return None
+        name = student.user.get_full_name() if student.user_id else ""
+        return {"id": str(student.pk), "name": name}
+
+    def get_is_overdue(self, assignment: FormAssignment) -> bool:
+        return bool(
+            assignment.status == FormAssignmentStatus.PENDING
+            and assignment.due_at is not None
+            and assignment.due_at < timezone.now()
+        )
+
+    def get_from_automation(self, assignment: FormAssignment) -> bool:
+        return assignment.automation_run_id is not None
+
+    def _user(self):
+        request = self.context.get("request")
+        return getattr(request, "user", None)
+
+    def get_can_submit(self, assignment: FormAssignment) -> bool:
+        user = self._user()
+        return bool(
+            user is not None
+            and assignment.status == FormAssignmentStatus.PENDING
+            and assignment.assigned_to_id == user.pk
+        )
+
+    def get_can_cancel(self, assignment: FormAssignment) -> bool:
+        from .access import can_cancel_assignment
+
+        user = self._user()
+        return bool(
+            user is not None
+            and assignment.status == FormAssignmentStatus.PENDING
+            and can_cancel_assignment(user, assignment)
+        )
+
+
+class FormAssignmentDetailSerializer(FormAssignmentSerializer):
+    # `method_name` because `get_fields` is DRF's own Serializer method.
+    fields = serializers.SerializerMethodField(method_name="get_version_fields")
+    values = serializers.SerializerMethodField()
+
+    def get_version_fields(self, assignment: FormAssignment) -> list[dict]:
+        return FormFieldSerializer(assignment.version.fields.order_by("order"), many=True).data
+
+    def get_values(self, assignment: FormAssignment) -> dict | None:
+        return assignment.response.values if assignment.response_id else None
+
+
+class FormAssignmentCreateSerializer(StrictSerializer):
+    form = SafeCharField(max_length=60)
+    assigned_to = serializers.UUIDField()
+    student = serializers.UUIDField(required=False, allow_null=True, default=None)
+    enquiry = serializers.UUIDField(required=False, allow_null=True, default=None)
+    due_at = serializers.DateTimeField(required=False, allow_null=True, default=None)
+    title = SafeCharField(max_length=200, required=False, allow_blank=True, default="")
+    message = SafeCharField(max_length=2000, required=False, allow_blank=True, default="")
+
+
+class FormValuesSerializer(StrictSerializer):
+    values = serializers.JSONField(default=dict)
+
+
+class FormFillSerializer(StrictSerializer):
+    values = serializers.JSONField(default=dict)
+    student = serializers.UUIDField(required=False, allow_null=True, default=None)
+
+
+class FormAssignmentCancelSerializer(StrictSerializer):
+    reason = SafeCharField(max_length=500, required=False, allow_blank=True, default="")
+
+
 __all__ = [
+    "FormAssignmentCancelSerializer",
+    "FormAssignmentCreateSerializer",
+    "FormAssignmentDetailSerializer",
+    "FormAssignmentSerializer",
     "FormDefinitionCreateSerializer",
     "FormDefinitionDetailSerializer",
     "FormDefinitionSerializer",
     "FormFieldSerializer",
     "FormFieldWriteSerializer",
     "FormFieldsWriteSerializer",
+    "FormFillSerializer",
     "FormPreviewSerializer",
+    "FormUploadSerializer",
+    "FormValuesSerializer",
     "FormVersionCreateSerializer",
     "FormVersionDetailSerializer",
     "FormVersionSummarySerializer",

@@ -23,6 +23,7 @@ import { ApiError } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_VARIANT } from '@/lib/labels';
 import { listMyActivities } from '@/lib/work';
+import { activitySubject } from '@/lib/activity-subject';
 import type { Activity } from '@/types/api';
 
 function endOfTodayIso(): string {
@@ -108,7 +109,7 @@ export function TodayActivitiesPanel({
                   <Badge variant={ACTIVITY_STATUS_VARIANT[row.status]}>
                     {ACTIVITY_STATUS_LABEL[row.status]}
                   </Badge>
-                  <span className="text-xs text-ink-muted">{row.student.name}</span>
+                  <span className="text-xs text-ink-muted">{activitySubject(row).name}</span>
                   <span className="whitespace-nowrap text-xs text-ink-muted">
                     {formatDateTime(row.due_at)}
                   </span>

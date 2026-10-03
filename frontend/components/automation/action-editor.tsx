@@ -2,7 +2,7 @@
 
 /**
  * The action list editor for one `AutomationRule` (`docs/erp/
- * AUTOMATION_CATALOG.md` "Actions"). Each of the six action types has its
+ * AUTOMATION_CATALOG.md` "Actions"). Each action type has its
  * own fixed parameter shape — this file is the one place a type is mapped to
  * its form, mirroring `components/forms/field-editor.tsx`'s per-field-type
  * switch (`validationKeysFor`/the type-specific rows in `FieldRow`) rather
@@ -20,16 +20,27 @@ import { useId } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
+import { usePublishedFields } from "@/components/automation/use-published-fields";
 import {
   ASSIGN_TO_STRATEGIES,
+  ENQUIRY_OWNER_STRATEGIES,
+  FORM_RECIPIENT_STRATEGIES,
   NOTIFICATION_TO_STRATEGIES,
   REVIEWER_STRATEGIES,
 } from "@/lib/automation";
-import { ACTIVITY_PRIORITY_LABEL, AUTOMATION_ACTION_TYPE_OPTIONS, ROLE_OPTIONS } from "@/lib/labels";
+import {
+  ACTIVITY_PRIORITY_LABEL,
+  AUTOMATION_ACTION_TYPE_OPTIONS,
+  ENQUIRY_STAGE_LABEL,
+  ENQUIRY_STAGES,
+  ROLE_OPTIONS,
+} from "@/lib/labels";
 import type {
   ActivityPriority,
+  AssignFormActionParams,
   AutomationAction,
   AutomationActionType,
   CreateActivityActionParams,
@@ -38,7 +49,17 @@ import type {
   SendEmailActionParams,
   SendNotificationActionParams,
   SendWhatsappActionParams,
+  UpdateEnquiryActionParams,
 } from "@/types/api";
+
+/** An activity type as the action editor needs it: what it is about, and
+ *  the form its completion is answered with (for pre-filled answers). */
+export interface ActivityTypeOption {
+  slug: string;
+  name: string;
+  subject?: "student" | "enquiry";
+  form?: string | null;
+}
 
 const OTHER_STRATEGY = "__other__";
 
@@ -55,6 +76,7 @@ function StrategyField({
   otherLabel,
   onChange,
   disabled,
+  allowOther = true,
 }: {
   id: string;
   label: string;
@@ -64,8 +86,10 @@ function StrategyField({
   otherLabel: string;
   onChange: (value: string) => void;
   disabled: boolean;
+  /** False when the fixed options are the only sensible answers. */
+  allowOther?: boolean;
 }) {
-  const isKnown = options.some((option) => option.value === value);
+  const isKnown = !allowOther || options.some((option) => option.value === value);
   return (
     // `Field` clones its id/aria-* onto a *single* child element; the
     // conditional "Other" input has to sit outside that (as a sibling), not
@@ -86,7 +110,7 @@ function StrategyField({
               {option.label}
             </option>
           ))}
-          <option value={OTHER_STRATEGY}>{otherLabel}</option>
+          {allowOther ? <option value={OTHER_STRATEGY}>{otherLabel}</option> : null}
         </Select>
       </Field>
       {!isKnown ? (
@@ -128,32 +152,67 @@ function blankActionFor(type: AutomationActionType): AutomationAction {
       };
     case "flag_risk":
       return { type: "flag_risk", params: { level: "warning", reason: "" } };
+    case "assign_form":
+      return {
+        type: "assign_form",
+        params: { form: "", to: "submitter", due_in_days: 1, title: "", message: "" },
+      };
+    case "update_enquiry":
+      return { type: "update_enquiry", params: { stage: "", owner: "" } };
   }
 }
 
-function CreateActivityFields({
+/** The `{{path}}` variables a title or message can use for this rule — the
+ *  trigger form's answers first, since those are what a person most often
+ *  wants to quote. */
+function VariableHint({ variables }: { variables: string[] }) {
+  if (variables.length === 0) return null;
+  return (
+    <p className="text-2xs text-ink-faint">
+      You can use:{" "}
+      {variables.map((variable, index) => (
+        <span key={variable}>
+          {index > 0 ? ", " : ""}
+          <code className="rounded bg-sunken px-1 font-mono text-ink-muted">{`{{${variable}}}`}</code>
+        </span>
+      ))}
+    </p>
+  );
+}
+
+function AssignFormFields({
   params,
-  activityTypeOptions,
+  formOptions,
+  variables,
   onChange,
   disabled,
 }: {
-  params: CreateActivityActionParams;
-  activityTypeOptions: { slug: string; name: string }[];
-  onChange: (next: CreateActivityActionParams) => void;
+  params: AssignFormActionParams;
+  formOptions: { slug: string; name: string }[];
+  variables: string[];
+  onChange: (next: AssignFormActionParams) => void;
   disabled: boolean;
 }) {
   const uid = useId();
+  const known = formOptions.some((option) => option.slug === params.form);
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <Field label="Activity type" htmlFor={`${uid}-type`}>
+      <Field
+        label="Form to send"
+        htmlFor={`${uid}-form`}
+        hint="A published enquiry or general form. Activity forms are filled in from their activity."
+      >
         <Select
-          id={`${uid}-type`}
+          id={`${uid}-form`}
           disabled={disabled}
-          value={params.type}
-          onChange={(event) => onChange({ ...params, type: event.target.value })}
+          value={params.form}
+          onChange={(event) => onChange({ ...params, form: event.target.value })}
         >
-          <option value="">Select a type…</option>
-          {activityTypeOptions.map((option) => (
+          <option value="">Select a form…</option>
+          {!known && params.form ? (
+            <option value={params.form}>{params.form} (not available)</option>
+          ) : null}
+          {formOptions.map((option) => (
             <option key={option.slug} value={option.slug}>
               {option.name}
             </option>
@@ -161,15 +220,15 @@ function CreateActivityFields({
         </Select>
       </Field>
       <StrategyField
-        id={`${uid}-assign-to`}
-        label="Assign to"
-        value={params.assign_to}
-        options={ASSIGN_TO_STRATEGIES}
-        otherLabel="Other (user ID)"
+        id={`${uid}-to`}
+        label="Who fills it in"
+        value={params.to}
+        options={FORM_RECIPIENT_STRATEGIES}
+        otherLabel="A specific person (user ID)"
         disabled={disabled}
-        onChange={(value) => onChange({ ...params, assign_to: value })}
+        onChange={(value) => onChange({ ...params, to: value })}
       />
-      <Field label="Due in (days)" htmlFor={`${uid}-due`}>
+      <Field label="Due in (days)" htmlFor={`${uid}-due`} hint="Leave blank for no due date.">
         <Input
           id={`${uid}-due`}
           type="number"
@@ -184,24 +243,7 @@ function CreateActivityFields({
           }
         />
       </Field>
-      <Field label="Priority" htmlFor={`${uid}-priority`} hint="Leave unset for the type's own default.">
-        <Select
-          id={`${uid}-priority`}
-          disabled={disabled}
-          value={params.priority ?? ""}
-          onChange={(event) =>
-            onChange({ ...params, priority: event.target.value as ActivityPriority | "" })
-          }
-        >
-          <option value="">Default</option>
-          {(Object.keys(ACTIVITY_PRIORITY_LABEL) as ActivityPriority[]).map((value) => (
-            <option key={value} value={value}>
-              {ACTIVITY_PRIORITY_LABEL[value]}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      <Field label="Title" htmlFor={`${uid}-title`} hint="Leave blank to use the type's own name." className="sm:col-span-2">
+      <Field label="Title" htmlFor={`${uid}-title`} hint="Leave blank to use the form's name.">
         <Input
           id={`${uid}-title`}
           disabled={disabled}
@@ -209,6 +251,343 @@ function CreateActivityFields({
           onChange={(event) => onChange({ ...params, title: event.target.value })}
         />
       </Field>
+      <Field label="Message" htmlFor={`${uid}-message`} className="sm:col-span-2">
+        <Textarea
+          id={`${uid}-message`}
+          rows={2}
+          disabled={disabled}
+          value={params.message ?? ""}
+          onChange={(event) => onChange({ ...params, message: event.target.value })}
+        />
+      </Field>
+      <div className="sm:col-span-2">
+        <VariableHint variables={variables} />
+      </div>
+    </div>
+  );
+}
+
+function NumberField({
+  id,
+  label,
+  hint,
+  value,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  hint?: string;
+  value: number | null | undefined;
+  disabled: boolean;
+  onChange: (value: number | null) => void;
+}) {
+  return (
+    <Field label={label} htmlFor={id} hint={hint}>
+      <Input
+        id={id}
+        type="number"
+        min={0}
+        disabled={disabled}
+        value={value ?? ""}
+        onChange={(event) =>
+          onChange(event.target.value === "" ? null : Number(event.target.value))
+        }
+      />
+    </Field>
+  );
+}
+
+/** "Create an activity": which kind, who does it, when, and its content —
+ *  title, notes and answers to its form filled in ahead, each one able to
+ *  quote the trigger, e.g. `{{enquiry.full_name}}`. */
+function CreateActivityFields({
+  params,
+  activityTypeOptions,
+  variables,
+  onChange,
+  disabled,
+}: {
+  params: CreateActivityActionParams;
+  activityTypeOptions: ActivityTypeOption[];
+  variables: string[];
+  onChange: (next: CreateActivityActionParams) => void;
+  disabled: boolean;
+}) {
+  const uid = useId();
+  const chosen = activityTypeOptions.find((option) => option.slug === params.type);
+  const formFields = usePublishedFields(chosen?.form ?? null).filter(
+    (field) => field.type !== "file" && field.type !== "image",
+  );
+  const prefill = params.form_prefill ?? {};
+  const byRecord = {
+    enquiry: activityTypeOptions.filter((option) => option.subject === "enquiry"),
+    student: activityTypeOptions.filter((option) => option.subject !== "enquiry"),
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field
+          label="Activity type"
+          htmlFor={`${uid}-type`}
+          hint={
+            chosen
+              ? chosen.subject === "enquiry"
+                ? "About the trigger's enquiry."
+                : "About the trigger's student."
+              : undefined
+          }
+        >
+          <Select
+            id={`${uid}-type`}
+            disabled={disabled}
+            value={params.type}
+            onChange={(event) =>
+              onChange({ ...params, type: event.target.value, form_prefill: {} })
+            }
+          >
+            <option value="">Select a type…</option>
+            {byRecord.enquiry.length > 0 ? (
+              <optgroup label="About an enquiry">
+                {byRecord.enquiry.map((option) => (
+                  <option key={option.slug} value={option.slug}>
+                    {option.name}
+                  </option>
+                ))}
+              </optgroup>
+            ) : null}
+            <optgroup label="About a student">
+              {byRecord.student.map((option) => (
+                <option key={option.slug} value={option.slug}>
+                  {option.name}
+                </option>
+              ))}
+            </optgroup>
+          </Select>
+        </Field>
+        <StrategyField
+          id={`${uid}-assign-to`}
+          label="Assign to"
+          value={params.assign_to}
+          options={ASSIGN_TO_STRATEGIES}
+          otherLabel="Other (user ID)"
+          disabled={disabled}
+          onChange={(value) => onChange({ ...params, assign_to: value })}
+        />
+        <Field
+          label="Title"
+          htmlFor={`${uid}-title`}
+          hint="Leave blank to use the type's own name."
+          className="sm:col-span-2"
+        >
+          <Input
+            id={`${uid}-title`}
+            disabled={disabled}
+            value={params.title ?? ""}
+            onChange={(event) => onChange({ ...params, title: event.target.value })}
+          />
+        </Field>
+        <Field label="Notes" htmlFor={`${uid}-summary`} className="sm:col-span-2">
+          <Textarea
+            id={`${uid}-summary`}
+            rows={2}
+            disabled={disabled}
+            value={params.summary ?? ""}
+            onChange={(event) => onChange({ ...params, summary: event.target.value })}
+          />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <NumberField
+          id={`${uid}-planned`}
+          label="Planned in (hours)"
+          value={params.planned_in_hours}
+          disabled={disabled}
+          onChange={(value) => onChange({ ...params, planned_in_hours: value })}
+        />
+        <NumberField
+          id={`${uid}-due`}
+          label="Due in (days)"
+          value={params.due_in_days}
+          disabled={disabled}
+          onChange={(value) => onChange({ ...params, due_in_days: value })}
+        />
+        <NumberField
+          id={`${uid}-due-hours`}
+          label="Due in (hours)"
+          hint="Added to the days."
+          value={params.due_in_hours}
+          disabled={disabled}
+          onChange={(value) => onChange({ ...params, due_in_hours: value })}
+        />
+        <Field label="Priority" htmlFor={`${uid}-priority`}>
+          <Select
+            id={`${uid}-priority`}
+            disabled={disabled}
+            value={params.priority ?? ""}
+            onChange={(event) =>
+              onChange({ ...params, priority: event.target.value as ActivityPriority | "" })
+            }
+          >
+            <option value="">Default</option>
+            {(Object.keys(ACTIVITY_PRIORITY_LABEL) as ActivityPriority[]).map((value) => (
+              <option key={value} value={value}>
+                {ACTIVITY_PRIORITY_LABEL[value]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+
+      {formFields.length > 0 ? (
+        <fieldset className="space-y-2 rounded-md border border-line p-3">
+          <legend className="px-1 text-xs font-medium text-ink">
+            Answers filled in ahead (optional)
+          </legend>
+          <p className="text-2xs text-ink-faint">
+            The person completing the activity starts from these and can change them.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {formFields.map((field) => (
+              <Field
+                key={field.key}
+                label={field.label || field.key}
+                htmlFor={`${uid}-prefill-${field.key}`}
+              >
+                {Array.isArray(field.options) && field.options.length > 0 ? (
+                  <Select
+                    id={`${uid}-prefill-${field.key}`}
+                    disabled={disabled}
+                    value={prefill[field.key] ?? ""}
+                    onChange={(event) => {
+                      const next = { ...prefill };
+                      if (event.target.value) next[field.key] = event.target.value;
+                      else delete next[field.key];
+                      onChange({ ...params, form_prefill: next });
+                    }}
+                  >
+                    <option value="">Not filled in</option>
+                    {field.options.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label || option.value}
+                      </option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input
+                    id={`${uid}-prefill-${field.key}`}
+                    disabled={disabled}
+                    value={prefill[field.key] ?? ""}
+                    placeholder="Not filled in"
+                    onChange={(event) => {
+                      const next = { ...prefill };
+                      if (event.target.value) next[field.key] = event.target.value;
+                      else delete next[field.key];
+                      onChange({ ...params, form_prefill: next });
+                    }}
+                  />
+                )}
+              </Field>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+
+      <VariableHint variables={variables} />
+    </div>
+  );
+}
+
+/** "Update the enquiry": move it along the pipeline, give it an owner, or
+ *  set when to follow up. Anything left as is stays unchanged. */
+function UpdateEnquiryFields({
+  params,
+  onChange,
+  disabled,
+}: {
+  params: UpdateEnquiryActionParams;
+  onChange: (next: UpdateEnquiryActionParams) => void;
+  disabled: boolean;
+}) {
+  const uid = useId();
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <Field label="Stage" htmlFor={`${uid}-stage`}>
+        <Select
+          id={`${uid}-stage`}
+          disabled={disabled}
+          value={params.stage ?? ""}
+          onChange={(event) =>
+            onChange({ ...params, stage: event.target.value as UpdateEnquiryActionParams["stage"] })
+          }
+        >
+          <option value="">Leave as is</option>
+          {ENQUIRY_STAGES.map((stage) => (
+            <option key={stage} value={stage}>
+              {ENQUIRY_STAGE_LABEL[stage]}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <StrategyField
+        id={`${uid}-owner`}
+        label="Owner"
+        value={params.owner ?? ""}
+        options={[{ value: "", label: "Leave as is" }, ...ENQUIRY_OWNER_STRATEGIES]}
+        otherLabel="A specific person (user ID)"
+        allowOther={false}
+        disabled={disabled}
+        onChange={(value) => onChange({ ...params, owner: value })}
+      />
+      {params.owner ? (
+        <label className="flex items-center gap-2 self-end pb-2 text-sm">
+          <Checkbox
+            checked={Boolean(params.only_if_unowned)}
+            disabled={disabled}
+            onCheckedChange={(checked) => onChange({ ...params, only_if_unowned: checked })}
+          />
+          Only if it has no owner yet
+        </label>
+      ) : null}
+      <NumberField
+        id={`${uid}-follow-up`}
+        label="Next follow-up in (days)"
+        value={params.next_follow_up_in_days}
+        disabled={disabled}
+        onChange={(value) => onChange({ ...params, next_follow_up_in_days: value })}
+      />
+      <Field label="Lead quality" htmlFor={`${uid}-quality`}>
+        <Select
+          id={`${uid}-quality`}
+          disabled={disabled}
+          value={params.lead_quality ? String(params.lead_quality) : ""}
+          onChange={(event) =>
+            onChange({
+              ...params,
+              lead_quality: event.target.value ? Number(event.target.value) : null,
+            })
+          }
+        >
+          <option value="">Leave as is</option>
+          {[1, 2, 3, 4, 5].map((score) => (
+            <option key={score} value={score}>
+              {score} of 5
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {params.stage === "not_interested" || params.stage === "not_eligible" ? (
+        <Field label="Lost reason" htmlFor={`${uid}-lost`} className="sm:col-span-2">
+          <Input
+            id={`${uid}-lost`}
+            disabled={disabled}
+            value={params.lost_reason ?? ""}
+            onChange={(event) => onChange({ ...params, lost_reason: event.target.value })}
+          />
+        </Field>
+      ) : null}
     </div>
   );
 }
@@ -397,12 +776,16 @@ function FlagRiskFields({
 function ActionRow({
   action,
   activityTypeOptions,
+  formOptions,
+  variables,
   onChange,
   onRemove,
   disabled,
 }: {
   action: AutomationAction;
-  activityTypeOptions: { slug: string; name: string }[];
+  activityTypeOptions: ActivityTypeOption[];
+  formOptions: { slug: string; name: string }[];
+  variables: string[];
   onChange: (next: AutomationAction) => void;
   onRemove: () => void;
   disabled: boolean;
@@ -442,6 +825,7 @@ function ActionRow({
         <CreateActivityFields
           params={action.params}
           activityTypeOptions={activityTypeOptions}
+          variables={variables}
           disabled={disabled}
           onChange={(params) => onChange({ type: "create_activity", params })}
         />
@@ -473,6 +857,20 @@ function ActionRow({
           disabled={disabled}
           onChange={(params) => onChange({ type: "create_review", params })}
         />
+      ) : action.type === "update_enquiry" ? (
+        <UpdateEnquiryFields
+          params={action.params}
+          disabled={disabled}
+          onChange={(params) => onChange({ type: "update_enquiry", params })}
+        />
+      ) : action.type === "assign_form" ? (
+        <AssignFormFields
+          params={action.params}
+          formOptions={formOptions}
+          variables={variables}
+          disabled={disabled}
+          onChange={(params) => onChange({ type: "assign_form", params })}
+        />
       ) : (
         <FlagRiskFields
           params={action.params}
@@ -487,11 +885,17 @@ function ActionRow({
 export function ActionEditor({
   actions,
   activityTypeOptions,
+  formOptions = [],
+  variables = [],
   onChange,
   disabled = false,
 }: {
   actions: AutomationAction[];
-  activityTypeOptions: { slug: string; name: string }[];
+  activityTypeOptions: ActivityTypeOption[];
+  /** Forms an `assign_form` action may send. */
+  formOptions?: { slug: string; name: string }[];
+  /** `{{path}}` variables the trigger's context offers, for message hints. */
+  variables?: string[];
   onChange: (next: AutomationAction[]) => void;
   disabled?: boolean;
 }) {
@@ -518,6 +922,8 @@ export function ActionEditor({
             key={index}
             action={action}
             activityTypeOptions={activityTypeOptions}
+            formOptions={formOptions}
+            variables={variables}
             disabled={disabled}
             onChange={(next) => update(index, next)}
             onRemove={() => remove(index)}

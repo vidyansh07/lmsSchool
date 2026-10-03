@@ -44,6 +44,7 @@ from .models import (
     ActivityPriority,
     ActivityResult,
     ActivityStatus,
+    ActivitySubject,
     ActivityType,
     ActivityTypeStatus,
 )
@@ -201,11 +202,25 @@ def _recent_by_client_key(created_by, client_key: str) -> Activity | None:
 # ---------------------------------------------------------------------------
 
 
+def _clean_prefill(form_version, prefill: dict | None) -> dict:
+    """Keep only answers for questions the pinned form actually asks, as
+    plain values. A prefill is a suggestion for the person completing the
+    activity; it is validated with everything else when they submit."""
+    if not prefill or form_version is None:
+        return {}
+    keys = set(form_version.fields.exclude(type="heading").values_list("key", flat=True))
+    return {
+        key: value
+        for key, value in prefill.items()
+        if key in keys and isinstance(value, (str, int, float, bool, list)) and value != ""
+    }
+
+
 @transaction.atomic
 def create_activity(
     *,
     actor,
-    student,
+    student=None,
     activity_type: ActivityType,
     enrollment=None,
     title: str | None = None,
@@ -215,7 +230,14 @@ def create_activity(
     priority: str | None = None,
     student_visible: bool | None = None,
     client_key: str | None = None,
+    enquiry=None,
+    summary: str = "",
+    form_prefill: dict | None = None,
 ) -> Activity:
+    """Create one activity about a student — or, for a type whose subject is
+    an enquiry, about an enquiry (a counselling call, a demo class).
+    ``summary`` is the activity's notes; ``form_prefill`` answers its form in
+    advance, for whoever completes it to confirm or change."""
     if client_key:
         # Serialises identical concurrent retries on this (creator, key)
         # pair before either has read whether the other already won —
@@ -228,7 +250,24 @@ def create_activity(
     if activity_type.status != ActivityTypeStatus.ACTIVE:
         raise ApplicationError({"activity_type": ["This activity type is disabled."]})
 
-    if enrollment is not None:
+    if activity_type.subject == ActivitySubject.ENQUIRY:
+        if enquiry is None:
+            raise ApplicationError({"enquiry": ["This kind of activity is about an enquiry."]})
+        student = None
+        enrollment = None
+    elif student is None:
+        raise ApplicationError({"student": ["This kind of activity is about a student."]})
+    else:
+        enquiry = None
+
+    if enquiry is not None:
+        batch = None
+        branch = enquiry.branch or getattr(actor, "branch", None)
+        if branch is None:
+            from apps.organisation.models import Branch
+
+            branch = Branch.objects.filter(code="MAIN").first() or Branch.objects.first()
+    elif enrollment is not None:
         if enrollment.student_id != student.pk:
             raise ApplicationError(
                 {"enrollment": ["This enrolment does not belong to the student."]}
@@ -246,7 +285,10 @@ def create_activity(
     if not role_allowed:
         raise AuthorityError("Your role may not create this kind of activity.")
     if not access.can_create_for(actor, branch_id=branch.pk, batch_id=batch.pk if batch else None):
-        raise AuthorityError("You do not have authority to create an activity for this student.")
+        raise AuthorityError(
+            "You do not have authority to create an activity for this "
+            + ("enquiry." if enquiry is not None else "student.")
+        )
 
     if assigned_to is not None:
         validate_assignee(
@@ -262,6 +304,8 @@ def create_activity(
     resolved_visible = (
         activity_type.visible_to_student if student_visible is None else student_visible
     )
+    if enquiry is not None:
+        resolved_visible = False
 
     form_version = None
     if activity_type.form_id:
@@ -275,6 +319,7 @@ def create_activity(
 
     activity = Activity.objects.create(
         student=student,
+        enquiry=enquiry,
         enrollment=enrollment,
         batch=batch,
         branch=branch,
@@ -289,6 +334,8 @@ def create_activity(
         form_version=form_version,
         student_visible=resolved_visible,
         client_key=client_key or "",
+        summary=(summary or "")[:4000],
+        form_prefill=_clean_prefill(form_version, form_prefill),
     )
 
     record(
@@ -298,7 +345,8 @@ def create_activity(
         resource_id=activity.pk,
         context={
             "activity_type": activity_type.slug,
-            "student": str(student.pk),
+            "student": str(student.pk) if student is not None else None,
+            "enquiry": str(enquiry.pk) if enquiry is not None else None,
             "assigned_to": str(assigned_to.pk) if assigned_to else None,
         },
         durable=False,
@@ -479,8 +527,15 @@ def complete_activity(
     response = None
     score = max_score = None
     if activity.form_version_id is not None:
+        # `pinned`: the version was fixed when the activity was created, and
+        # may since have been archived by a newer one being published — the
+        # assignee still answers the form they were given.
         response = forms_services.submit_response(
-            actor=actor, version=activity.form_version, values=form_values, content_object=activity
+            actor=actor,
+            version=activity.form_version,
+            values=form_values,
+            content_object=activity,
+            pinned=True,
         )
         score, max_score = _extract_score(activity.form_version, response.values)
     elif form_values:
@@ -537,7 +592,11 @@ def complete_activity(
         durable=False,
     )
 
-    if activity.student_visible and activity.activity_type.visible_to_student:
+    if (
+        activity.student_id
+        and activity.student_visible
+        and activity.activity_type.visible_to_student
+    ):
         notify(
             recipient=activity.student.user,
             kind=NotificationKind.ACTIVITY_COMPLETED,
@@ -566,7 +625,8 @@ def complete_activity(
     # `work_access` use), so importing it back at module load would cycle.
     from apps.students.student_360 import forget_360
 
-    forget_360(activity.student_id)
+    if activity.student_id:
+        forget_360(activity.student_id)
     return activity
 
 
@@ -638,7 +698,8 @@ def review_activity(*, actor, activity: Activity, decision: str, note: str) -> A
 
     from apps.students.student_360 import forget_360
 
-    forget_360(activity.student_id)
+    if activity.student_id:
+        forget_360(activity.student_id)
     return activity
 
 

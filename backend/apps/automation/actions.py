@@ -1,5 +1,5 @@
-"""The six action types `AUTOMATION_CATALOG.md`'s "Actions" table names
-(ERP Phase 14, ADR-13).
+"""The action types `AUTOMATION_CATALOG.md`'s "Actions" table names
+(ERP Phase 14, ADR-13), plus `assign_form` (send a form to someone to fill).
 
 Every function here has the same shape: ``(rule, run, rctx, context,
 params) -> dict``. It returns a small JSON-safe dict describing what
@@ -76,37 +76,68 @@ def _system_actor(rule) -> User | None:
     return User.objects.filter(role=UserRole.SUPERADMIN, is_active=True).order_by("pk").first()
 
 
+def _offset(params: dict[str, Any], *, days: str | None = None, hours: str | None = None):
+    """``now + N days + M hours`` from whichever of the two params is set, or
+    ``None`` when neither is."""
+    total = timedelta()
+    found = False
+    for key, unit in ((days, "days"), (hours, "hours")):
+        if key is None:
+            continue
+        value = params.get(key)
+        if value in (None, ""):
+            continue
+        total += timedelta(**{unit: int(value)})
+        found = True
+    return timezone.now() + total if found else None
+
+
 def create_activity(
     *, rule, run, rctx: RunContext, context: dict[str, Any], params: dict[str, Any], depth: int = 0
 ) -> dict[str, Any]:
-    from apps.work.models import ActivityType, ActivityTypeStatus
+    """Create an activity about this occurrence's student — or, for a type
+    whose subject is an enquiry, about its enquiry — with its content filled
+    in: title, notes, when it is planned and due, and answers to its form.
+    Every text param is a template over the trigger's context."""
+    from apps.work.models import ActivitySubject, ActivityType, ActivityTypeStatus
     from apps.work.services import create_activity as create_activity_service
-
-    if rctx.student is None:
-        return {"skipped": True, "reason": "No student in context for this occurrence."}
 
     slug = params.get("type")
     activity_type = ActivityType.objects.filter(slug=slug, status=ActivityTypeStatus.ACTIVE).first()
     if activity_type is None:
         raise ApplicationError({"type": [f"Unknown or inactive activity type: {slug!r}."]})
 
+    about_enquiry = activity_type.subject == ActivitySubject.ENQUIRY
+    if about_enquiry and rctx.enquiry is None:
+        return {"skipped": True, "reason": "No enquiry in context for this occurrence."}
+    if not about_enquiry and rctx.student is None:
+        return {"skipped": True, "reason": "No student in context for this occurrence."}
+
     actor = _system_actor(rule)
     if actor is None:
         return {"skipped": True, "reason": "No active superadmin available to act as."}
 
     assignee = resolve_user(params.get("assign_to"), rctx=rctx)
-    due_in_days = params.get("due_in_days")
-    due_at = timezone.now() + timedelta(days=int(due_in_days)) if due_in_days is not None else None
+    due_at = _offset(params, days="due_in_days", hours="due_in_hours")
+    planned_at = _offset(params, hours="planned_in_hours")
+    prefill = {
+        key: render_template(value, context) if isinstance(value, str) else value
+        for key, value in (params.get("form_prefill") or {}).items()
+    }
 
     activity = create_activity_service(
         actor=actor,
-        student=rctx.student,
+        student=None if about_enquiry else rctx.student,
+        enquiry=rctx.enquiry if about_enquiry else None,
         activity_type=activity_type,
-        enrollment=rctx.enrollment,
-        title=params.get("title") or None,
+        enrollment=None if about_enquiry else rctx.enrollment,
+        title=render_template(params.get("title") or "", context) or None,
+        summary=render_template(params.get("summary") or "", context),
         assigned_to=assignee,
+        planned_at=planned_at,
         due_at=due_at,
         priority=params.get("priority") or None,
+        form_prefill=prefill,
     )
     # `parent`/`automation_run` are provenance this phase populates (see
     # `Activity`'s own module docstring) — set directly, once, after the
@@ -119,6 +150,68 @@ def create_activity(
         "activity_id": str(activity.pk),
         "assigned_to": str(assignee.pk) if assignee else None,
     }
+
+
+def update_enquiry(
+    *, rule, run, rctx: RunContext, context: dict[str, Any], params: dict[str, Any], depth: int = 0
+) -> dict[str, Any]:
+    """Move the occurrence's enquiry along: its stage, owner, lost reason,
+    lead quality or next follow-up. A change is itself an enquiry event,
+    dispatched here one depth deeper (never through the signal, which would
+    start again at depth 0) — the depth guard bounds a rule that changes the
+    enquiry it was triggered by."""
+    from apps.enquiries.services import update as update_enquiry_service
+
+    if rctx.enquiry is None:
+        return {"skipped": True, "reason": "No enquiry in context for this occurrence."}
+
+    fields: dict[str, Any] = {}
+    if params.get("stage"):
+        fields["stage"] = params["stage"]
+    if params.get("lost_reason"):
+        fields["lost_reason"] = render_template(str(params["lost_reason"]), context)
+    if params.get("lead_quality") not in (None, ""):
+        fields["lead_quality"] = params["lead_quality"]
+    if params.get("next_follow_up_in_days") not in (None, ""):
+        fields["next_follow_up_at"] = timezone.now() + timedelta(
+            days=int(params["next_follow_up_in_days"])
+        )
+    keep_owner = bool(params.get("only_if_unowned")) and rctx.enquiry.owner_id is not None
+    if params.get("owner") and not keep_owner:
+        owner = resolve_user(params["owner"], rctx=rctx)
+        if owner is not None:
+            fields["owner"] = owner
+
+    enquiry, changed, previous_stage = update_enquiry_service(
+        actor=_system_actor(rule), enquiry=rctx.enquiry, fields=fields, emit=False
+    )
+    # Later actions of this same rule (assign the call to `enquiry_owner`)
+    # must see the enquiry as it is now, not as it was when the run began.
+    rctx.enquiry = enquiry
+    result: dict[str, Any] = {"enquiry_id": str(enquiry.pk), "changed": changed}
+    if not changed:
+        return result
+
+    from .models import AutomationTrigger
+    from .services import dispatch
+
+    dispatch(
+        AutomationTrigger.ENQUIRY_UPDATED,
+        enquiry,
+        depth=depth + 1,
+        previous_stage=previous_stage,
+        changed=changed,
+    )
+    if "stage" in changed:
+        dispatch(
+            AutomationTrigger.ENQUIRY_STAGE_CHANGED,
+            enquiry,
+            depth=depth + 1,
+            previous_stage=previous_stage,
+            changed=changed,
+        )
+        result["stage_changed_dispatched"] = True
+    return result
 
 
 def send_notification(
@@ -361,8 +454,51 @@ def flag_risk(
     return result
 
 
+def assign_form(
+    *, rule, run, rctx: RunContext, context: dict[str, Any], params: dict[str, Any], depth: int = 0
+) -> dict[str, Any]:
+    """Send a published form to someone to fill (`apps.forms.services.
+    assign_form`), about this occurrence's student when there is one. The
+    rule author's `form.assign` was checked when the rule was saved; the
+    send itself runs as the system (ADR-13), so the centre-reach check a
+    person sending by hand gets is not repeated here."""
+    from apps.forms.models import FormDefinition
+    from apps.forms.services import assign_form as assign_form_service
+
+    slug = params.get("form")
+    definition = FormDefinition.objects.filter(slug=slug).first()
+    if definition is None:
+        raise ApplicationError({"form": [f"Unknown form: {slug!r}."]})
+
+    recipient = resolve_user(params.get("to"), rctx=rctx)
+    if recipient is None:
+        return {"skipped": True, "reason": f"No one to send the form to for {params.get('to')!r}."}
+
+    actor = _system_actor(rule)
+    due_in_days = params.get("due_in_days")
+    due_at = (
+        timezone.now() + timedelta(days=int(due_in_days)) if due_in_days not in (None, "") else None
+    )
+
+    assignment = assign_form_service(
+        actor=actor,
+        definition=definition,
+        assigned_to=recipient,
+        student=rctx.student,
+        enquiry=rctx.enquiry,
+        due_at=due_at,
+        title=render_template(params.get("title", ""), context),
+        message=render_template(params.get("message", ""), context),
+        automation_run=run,
+        enforce_authority=False,
+    )
+    return {"form_assignment_id": str(assignment.pk), "assigned_to": str(recipient.pk)}
+
+
 ACTIONS = {
     "create_activity": create_activity,
+    "assign_form": assign_form,
+    "update_enquiry": update_enquiry,
     "send_notification": send_notification,
     "send_email": send_email,
     "send_whatsapp": send_whatsapp,

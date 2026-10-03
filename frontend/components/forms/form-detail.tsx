@@ -24,12 +24,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { FieldEditor } from "@/components/forms/field-editor";
+import { FormAssignmentsTable } from "@/components/forms/form-assignments-table";
+import { SendFormDialog } from "@/components/forms/send-form-dialog";
+import { EmptyState } from "@/components/states";
+import { useApi } from "@/hooks/use-api";
 import { ApiError, errorMessage } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
 import { useAuth } from "@/components/auth-provider";
 import {
+  FORM_ENTITY_LABEL,
   FORM_VERSION_STATUS_LABEL,
   FORM_VERSION_STATUS_VARIANT,
 } from "@/lib/labels";
@@ -43,11 +49,41 @@ import {
 } from "@/lib/forms";
 import { formatDateTime } from "@/lib/format";
 import type {
+  FormAssignment,
   FormDefinitionDetail,
   FormFieldInput,
   FormVersionDetail,
   FormVersionSummary,
+  Paginated,
 } from "@/types/api";
+
+/** Who was sent this form, and what came back — newest first. */
+function ResponsesCard({ slug, refreshKey }: { slug: string; refreshKey: number }) {
+  const { data, error, isLoading, reload } = useApi<Paginated<FormAssignment>>(
+    `/api/v1/forms/assignments/?box=all&form=${encodeURIComponent(slug)}&r=${refreshKey}`,
+  );
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Responses</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <LoadingState label="Loading responses…" rows={3} />
+        ) : error ? (
+          <ErrorState message={error.message} onRetry={reload} />
+        ) : !data || data.results.length === 0 ? (
+          <EmptyState
+            title="No responses yet"
+            description="Send the form to someone, fill it in from Forms, or let an automation rule send it."
+          />
+        ) : (
+          <FormAssignmentsTable rows={data.results} showForm={false} showAssignee />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function toInputFields(fields: FormVersionDetail["fields"]): FormFieldInput[] {
   return fields.map((field) => ({ ...field }));
@@ -70,6 +106,10 @@ interface VersionLoadState {
 export function FormDetail({ slug }: { slug: string }) {
   const { user } = useAuth();
   const mayManage = can(user?.capabilities, Capability.formManage);
+  const maySend = can(user?.capabilities, Capability.formAssign);
+  const mayReadResponses = can(user?.capabilities, Capability.formView);
+  const [sending, setSending] = useState(false);
+  const [responsesKey, setResponsesKey] = useState(0);
 
   const [reloadToken, setReloadToken] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
@@ -284,15 +324,26 @@ export function FormDetail({ slug }: { slug: string }) {
   const hasDraft = Boolean(definition.draft_version);
   const isSelectedDraft = version?.status === "draft";
 
+  // Activity forms reach people only through an activity; the rest can be
+  // sent to someone or filled in directly once a version is published.
+  const isSendable = definition.entity !== "activity" && Boolean(definition.published_version);
+
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {definition.name}
-        </h1>
-        <p className="text-sm text-ink-muted">
-          {definition.slug} · {definition.entity}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {definition.name}
+          </h1>
+          <p className="text-sm text-ink-muted">
+            {definition.slug} · {FORM_ENTITY_LABEL[definition.entity] ?? definition.entity}
+          </p>
+        </div>
+        {isSendable && maySend ? (
+          <Button type="button" onClick={() => setSending(true)}>
+            Send to someone
+          </Button>
+        ) : null}
       </div>
 
       {notice ? <Alert variant="success">{notice}</Alert> : null}
@@ -437,6 +488,23 @@ export function FormDetail({ slug }: { slug: string }) {
           </>
         )}
       </div>
+
+      {isSendable && mayReadResponses ? (
+        <ResponsesCard slug={definition.slug} refreshKey={responsesKey} />
+      ) : null}
+
+      {isSendable && maySend ? (
+        <SendFormDialog
+          form={{ slug: definition.slug, name: definition.name }}
+          open={sending}
+          onClose={() => setSending(false)}
+          onSent={(assignment) => {
+            setSending(false);
+            setNotice(`Sent to ${assignment.assigned_to.name}.`);
+            setResponsesKey((key) => key + 1);
+          }}
+        />
+      ) : null}
 
       <Dialog
         open={Boolean(publishTarget)}

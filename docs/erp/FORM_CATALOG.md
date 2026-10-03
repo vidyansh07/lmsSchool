@@ -111,6 +111,63 @@ Alias of `student-custom` with `required` fields enforced at registration
 time; same definition, flagged so the wizard knows which fields block
 submission.
 
+## Enquiry forms (entity: enquiry) — Meritto-style, `forms.0004`
+
+### enquiry
+Lead capture a counsellor fills in for a walk-in or phone enquiry, with the
+fields a Meritto lead form carries.
+
+| Key | Label | Type | Required | Notes |
+| --- | --- | --- | --- | --- |
+| contact_heading | Contact details | heading | — | |
+| full_name | Full name | text | yes | max 120 |
+| mobile | Mobile number | phone | yes | |
+| whatsapp_same | WhatsApp on the same number | boolean | no | |
+| whatsapp_number | WhatsApp number | phone | no | shown when whatsapp_same is not true |
+| email | Email | email | no | |
+| location_heading | Location | heading | — | |
+| state | State | select | yes | 28 states, 8 union territories, outside India |
+| city | City | dependent_select | yes | parent `state`; main cities for the states GRRAS draws from, "Other" for every state |
+| course_heading | Course interest | heading | — | |
+| course | Course | select | yes | Python, Data Analytics, Data Science, Cyber Security, Full Stack, DevOps, AWS, UI/UX, Red Hat, Salesforce, Other |
+| track | Track | dependent_select | no | parent `course` |
+| preferred_centre | Preferred centre | select | yes | Jaipur / Pune / Online only |
+| mode | Mode of study | radio | no | classroom / online / hybrid |
+| batch_timing | Preferred batch timing | select | no | |
+| background_heading | Background | heading | — | |
+| qualification | Highest qualification | select | no | |
+| passing_year | Year of passing | number | no | 1980–2035; shown unless working professional |
+| company | Current company | text | no | shown for working professionals |
+| source | How did they hear about GRRAS? | select | yes | walk-in, phone, website, Google, Facebook/Instagram, LinkedIn, WhatsApp, referral, college seminar, other |
+| referred_by | Referred by | text | no | shown for referrals |
+| utm_source, utm_medium, utm_campaign | UTM values | hidden | no | |
+| remarks | Remarks | textarea | no | max 2000 |
+| consent | Agrees to be contacted by phone, WhatsApp, SMS and email | consent | yes | |
+
+### enquiry-follow-up
+The lead status update recorded after each call.
+
+| Key | Label | Type | Required | Shown when |
+| --- | --- | --- | --- | --- |
+| call_status | Call outcome | select | yes | always |
+| lead_stage | Lead stage | select | yes | call_status = connected |
+| lost_reason | Why not? | select | yes | lead_stage = not_interested (fees, competitor, timing, online preference, location, went silent, chose nothing, other) |
+| competitor | Which institute? | text | no | lost_reason = competitor |
+| demo_at | Demo class date and time | datetime | yes | lead_stage = demo_booked |
+| next_follow_up | Next follow-up | datetime | yes | call_status in not_answered, busy, switched_off, call_back_later |
+| lead_quality | Lead quality | rating (max 5) | no | call_status = connected |
+| notes | Notes | textarea | no | always |
+
+## Sending a form to someone (`FormAssignment`)
+
+A published, non-activity form can be sent to one person to fill — by a
+`form.assign` holder, or by an automation rule's `assign_form` action — or
+filled in directly (an assignment to oneself, submitted at once). The version
+is pinned when the form is sent and stays answerable after a newer version is
+published. Statuses: pending → submitted, or pending → cancelled. The
+assignee is notified when it is sent; the sender when it is submitted. Each
+submission is a `FORM_SUBMITTED` automation occurrence.
+
 ## Validation rules (engine)
 
 | Type | Stored as | Checks |
@@ -124,6 +181,21 @@ submission.
 | email, phone, url | string | format (E.164 for phone; https for url) |
 | file, image | upload id | accept list, max_mb, scanned by the existing upload pipeline |
 | relation | uuid | must resolve through the caller's `visible_*` for that model |
+| time | `HH:MM` string | min/max |
+| rating | integer | 1 to `validation.max` (default 5) |
+| consent | bool | a required consent must be `true` |
+| hidden | string | max 500; `validation.default` fills it when nothing is sent |
+| heading | — | display only; a value is refused |
+| dependent_select | option value | must be in `options.choices[<answer of options.parent>]`; the parent must be an earlier select, radio or dependent select |
+
+**Conditional fields.** `show_if: {field, op, value}` (op `eq`, `ne`, `in`,
+`not_in`, `filled`, `empty`) shows a field only while an earlier field's
+answer matches, and only while that earlier field is itself shown. A hidden
+field is never required, and a value sent for it is dropped.
+
+**Uploads.** A `file`/`image` answer is the id of an upload made through
+`POST /forms/uploads/`, checked against the field's `accept`/`max_mb` using
+the stored metadata; only the uploader can attach it.
 
 A response that fails validation is refused with the field errors in the
 standard envelope (`details: {field: [...]}`); nothing is stored.

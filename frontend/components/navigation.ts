@@ -151,6 +151,8 @@ export const STUDENT_NAV: NavItem[] = [
     icon: MessagesSquare,
     roles: ["student"],
   },
+  // Forms a counsellor or trainer sent them to fill.
+  { href: "/forms", label: "Forms", icon: ClipboardCheck, roles: ["student"] },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/profile", label: "My profile", icon: UserCircle2 },
 ];
@@ -200,6 +202,13 @@ export const STAFF_NAV: NavGroup[] = [
         icon: ListTodo,
         capability: Capability.activityViewAny,
         roles: ["trainer"],
+      },
+      // The admissions pipeline: leads before they are students.
+      {
+        href: "/enquiries",
+        label: "Enquiries",
+        icon: UserPlus,
+        capability: Capability.enquiryViewAny,
       },
       {
         href: "/manage/batches",
@@ -487,6 +496,9 @@ export const STAFF_NAV: NavGroup[] = [
         icon: MessagesSquare,
         roles: ["trainer"],
       },
+      // Forms sent to you to fill — anyone may receive one — and, for those
+      // who send them, the ones you sent and "Fill in a form".
+      { href: "/forms", label: "Forms", icon: ClipboardCheck },
       { href: "/notifications", label: "Notifications", icon: Bell },
       { href: "/profile", label: "My profile", icon: UserCircle2 },
     ],
@@ -808,6 +820,7 @@ export const ADMIN_NAV: NavGroup[] = [
     title: "Everyday",
     items: [
       { href: "/announcements", label: "Announcements", icon: Megaphone },
+      { href: "/forms", label: "Forms", icon: ClipboardCheck },
       { href: "/notifications", label: "Notifications", icon: Bell },
       { href: "/profile", label: "My profile", icon: UserCircle2 },
     ],

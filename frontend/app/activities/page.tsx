@@ -53,6 +53,7 @@ import {
 import { createSavedFilter, deleteSavedFilter, listSavedFilters } from "@/lib/saved-filters";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { listActivities, listActivityTypes } from "@/lib/work";
+import { activitySubject } from "@/lib/activity-subject";
 import type { Activity, ActivityStatus, ActivityType, Paginated, SavedFilter } from "@/types/api";
 
 const SAVED_FILTER_SCREEN = "activities";
@@ -307,11 +308,11 @@ function ActivitiesWorkspace() {
     },
     {
       key: "student",
-      header: "Student",
+      header: "Student / enquiry",
       render: (row) => (
         <>
-          {row.student.name}
-          <span className="block text-xs text-ink-muted">{row.student.student_id}</span>
+          {activitySubject(row).name}
+          <span className="block text-xs text-ink-muted">{activitySubject(row).detail}</span>
         </>
       ),
     },

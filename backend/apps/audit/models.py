@@ -321,6 +321,11 @@ class AuditAction(models.TextChoices):
     FORM_FIELDS_REPLACED = "form.fields_replaced", _("Form version's fields replaced")
     FORM_PUBLISHED = "form.published", _("Form version published")
     FORM_UNPUBLISHED = "form.unpublished", _("Form version unpublished")
+    FORM_ASSIGNED = "form.assigned", _("Form sent to someone to fill")
+    FORM_ASSIGNMENT_SUBMITTED = "form.submitted", _("Form submitted")
+    FORM_ASSIGNMENT_CANCELLED = "form.assignment_cancelled", _("Form request cancelled")
+    ENQUIRY_CREATED = "enquiry.created", _("Enquiry created")
+    ENQUIRY_UPDATED = "enquiry.updated", _("Enquiry updated")
 
     # --- Activity engine (ERP Phase 9)
     #

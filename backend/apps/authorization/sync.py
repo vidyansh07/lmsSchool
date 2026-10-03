@@ -45,6 +45,7 @@ CATEGORY_BY_RESOURCE = {
     "permission": "configuration",
     "policy": "configuration",
     "form": "configuration",
+    "enquiry": "operations",
     "activity_type": "configuration",
     "automation": "configuration",
     "announcement": "communication",

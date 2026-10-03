@@ -11,7 +11,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RuleBuilder } from "@/components/automation/rule-builder";
 import { ApiError } from "@/lib/api";
 import type { ActivityTypeListResponse } from "@/lib/work";
-import type { AutomationDryRunResult, AutomationRuleDetail } from "@/types/api";
+import type {
+  AutomationDryRunResult,
+  AutomationRuleDetail,
+  FillableForm,
+  FormField,
+  PublishedForm,
+} from "@/types/api";
 
 const useApi = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-api", () => ({ useApi }));
@@ -31,6 +37,12 @@ vi.mock("@/lib/automation", async () => {
     pauseAutomationRule,
     updateAutomationRule,
   };
+});
+
+const getPublishedForm = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/forms", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/forms")>("@/lib/forms");
+  return { ...actual, getPublishedForm };
 });
 
 vi.mock("@/components/auth-provider", () => ({
@@ -83,6 +95,46 @@ const ACTIVITY_TYPES: ActivityTypeListResponse = {
   ],
 };
 
+const FILLABLE_FORMS: FillableForm[] = [
+  { slug: "enquiry", name: "Enquiry", entity: "enquiry", version: 1 },
+  { slug: "enquiry-follow-up", name: "Enquiry follow-up", entity: "enquiry", version: 1 },
+];
+
+function formField(overrides: Partial<FormField> & Pick<FormField, "key" | "type">): FormField {
+  return {
+    id: overrides.key,
+    label: overrides.key,
+    help: "",
+    required: false,
+    order: 0,
+    group: "",
+    options: null,
+    validation: {},
+    visible_to_student: false,
+    performance_key: null,
+    show_if: {},
+    ...overrides,
+  };
+}
+
+const FOLLOW_UP_FORM: PublishedForm = {
+  version: 1,
+  fields: [
+    formField({ key: "heading", type: "heading", label: "Call", order: 0 }),
+    formField({
+      key: "lead_stage",
+      type: "select",
+      label: "Lead stage",
+      order: 1,
+      options: [
+        { value: "interested", label: "Interested" },
+        { value: "not_interested", label: "Not interested" },
+      ],
+    }),
+    formField({ key: "notes", type: "textarea", label: "Notes", order: 2 }),
+  ],
+};
+
 function mockUseApi(rule: AutomationRuleDetail, reload = vi.fn()) {
   useApi.mockImplementation((path: string) => {
     if (path === `/api/v1/automation-rules/${rule.id}/`) {
@@ -90,6 +142,9 @@ function mockUseApi(rule: AutomationRuleDetail, reload = vi.fn()) {
     }
     if (path === "/api/v1/activity-types/") {
       return { data: ACTIVITY_TYPES, error: null, isLoading: false, reload: vi.fn() };
+    }
+    if (path === "/api/v1/forms/fillable/") {
+      return { data: FILLABLE_FORMS, error: null, isLoading: false, reload: vi.fn() };
     }
     throw new Error(`Unexpected useApi path: ${path}`);
   });
@@ -106,7 +161,7 @@ describe("RuleBuilder — conditions locked to the selected trigger", () => {
     render(<RuleBuilder id="rule-1" />);
 
     fireEvent.click(screen.getByRole("button", { name: /add condition/i }));
-    const pathSelect = screen.getByLabelText("Path") as HTMLSelectElement;
+    const pathSelect = screen.getByLabelText("When") as HTMLSelectElement;
     const optionValues = Array.from(pathSelect.options).map((option) => option.value);
     expect(optionValues).toEqual(
       expect.arrayContaining(["activity.type", "activity.score", "student.risk_level"]),
@@ -114,13 +169,17 @@ describe("RuleBuilder — conditions locked to the selected trigger", () => {
     expect(optionValues).not.toContain("risk.level");
     expect(optionValues).not.toContain("risk.previous_level");
     // ACTIVITY_COMPLETED allows a custom form.<key> path too.
-    expect(screen.getByText("Custom form field…")).toBeInTheDocument();
+    expect(screen.getByText("Another form field (by key)…")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Trigger", { exact: false }), {
+    // "When this record" is Student, then its event: Risk level changed.
+    fireEvent.change(screen.getByLabelText("When this record", { exact: false }), {
+      target: { value: "student" },
+    });
+    fireEvent.change(screen.getByLabelText("Event", { exact: false }), {
       target: { value: "RISK_CHANGED" },
     });
     // Switching trigger clears the condition list built against the old one.
-    expect(screen.queryByLabelText("Path")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("When")).not.toBeInTheDocument();
     expect(
       screen.getByText(/no conditions.*risk level changed/i),
     ).toBeInTheDocument();
@@ -214,7 +273,8 @@ describe("RuleBuilder — Details field-level errors (Phase R7 Target 2)", () =>
     // correctly excludes it (see `activity-types-page.test.tsx` for the
     // same note against the same `Field` component).
     expect(screen.getByRole("textbox", { name: "Name" })).toBeRequired();
-    expect(screen.getByRole("combobox", { name: "Trigger" })).toBeRequired();
+    expect(screen.getByRole("combobox", { name: "When this record" })).toBeRequired();
+    expect(screen.getByRole("combobox", { name: "Event" })).toBeRequired();
     expect(screen.getByLabelText("Description")).not.toBeRequired();
   });
 
@@ -273,5 +333,186 @@ describe("RuleBuilder — activation", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: /^activate$/i }));
     await waitFor(() => expect(activateAutomationRule).toHaveBeenCalledWith("rule-1"));
+  });
+});
+
+describe("RuleBuilder — record, event and enquiry pieces", () => {
+  it("picks the record first, then one of its events", () => {
+    mockUseApi(RULE);
+    render(<RuleBuilder id="rule-1" />);
+    const record = screen.getByRole("combobox", { name: "When this record" }) as HTMLSelectElement;
+    expect(record.value).toBe("activity");
+    fireEvent.change(record, { target: { value: "enquiry" } });
+    const event = screen.getByRole("combobox", { name: "Event" }) as HTMLSelectElement;
+    expect(Array.from(event.options).map((option) => option.value)).toEqual([
+      "ENQUIRY_CREATED",
+      "ENQUIRY_STAGE_CHANGED",
+      "ENQUIRY_UPDATED",
+    ]);
+    expect(event.value).toBe("ENQUIRY_CREATED");
+  });
+
+  it("offers enquiry stages as the value for an enquiry stage condition", () => {
+    mockUseApi({ ...RULE, trigger: "ENQUIRY_STAGE_CHANGED" });
+    render(<RuleBuilder id="rule-1" />);
+    fireEvent.click(screen.getByRole("button", { name: /add condition/i }));
+    fireEvent.change(screen.getByLabelText("When"), { target: { value: "enquiry.stage" } });
+    const value = screen.getByLabelText("Value") as HTMLSelectElement;
+    expect(Array.from(value.options).map((option) => option.value)).toContain("interested");
+  });
+
+  it("builds a create_activity with notes, timing and an update_enquiry", async () => {
+    mockUseApi({ ...RULE, trigger: "ENQUIRY_CREATED" });
+    render(<RuleBuilder id="rule-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add action/i }));
+    fireEvent.change(screen.getByLabelText("Activity type"), { target: { value: "mock-interview" } });
+    fireEvent.change(screen.getByLabelText("Notes"), {
+      target: { value: "Wants {{enquiry.course}}" },
+    });
+    fireEvent.change(screen.getByLabelText("Due in (hours)"), { target: { value: "2" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /add action/i }));
+    const actionSelects = screen.getAllByLabelText("Action");
+    fireEvent.change(actionSelects[1]!, { target: { value: "update_enquiry" } });
+    fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "contacted" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    await waitFor(() =>
+      expect(updateAutomationRule).toHaveBeenCalledWith(
+        "rule-1",
+        expect.objectContaining({
+          trigger: "ENQUIRY_CREATED",
+          actions: [
+            {
+              type: "create_activity",
+              params: expect.objectContaining({
+                type: "mock-interview",
+                summary: "Wants {{enquiry.course}}",
+                due_in_hours: 2,
+              }),
+            },
+            { type: "update_enquiry", params: { stage: "contacted", owner: "" } },
+          ],
+        }),
+      ),
+    );
+  });
+});
+
+describe("RuleBuilder — forms", () => {
+  const FORM_RULE: AutomationRuleDetail = {
+    ...RULE,
+    id: "rule-forms",
+    trigger: "FORM_SUBMITTED",
+    conditions: [{ path: "submission.form", op: "eq", value: "enquiry-follow-up" }],
+  };
+
+  it("names the form with a picker, and offers that form's answers as conditions", async () => {
+    mockUseApi(FORM_RULE);
+    getPublishedForm.mockResolvedValue(FOLLOW_UP_FORM);
+    render(<RuleBuilder id="rule-forms" />);
+
+    const picker = screen.getByLabelText("Which form") as HTMLSelectElement;
+    expect(picker.value).toBe("enquiry-follow-up");
+    await waitFor(() => expect(getPublishedForm).toHaveBeenCalledWith("enquiry-follow-up"));
+
+    // The picker's own condition is not repeated as a generic row.
+    expect(screen.getByText(/no conditions/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /add condition/i }));
+    const when = (await screen.findByLabelText("When")) as HTMLSelectElement;
+    const values = Array.from(when.options).map((option) => option.value);
+    expect(values).toEqual(expect.arrayContaining(["form.lead_stage", "form.notes"]));
+    // Headings never carry an answer.
+    expect(values).not.toContain("form.heading");
+
+    fireEvent.change(when, { target: { value: "form.lead_stage" } });
+    const value = screen.getByLabelText("Value") as HTMLSelectElement;
+    expect(Array.from(value.options).map((option) => option.value)).toEqual([
+      "",
+      "interested",
+      "not_interested",
+    ]);
+    fireEvent.change(value, { target: { value: "not_interested" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(updateAutomationRule).toHaveBeenCalledWith(
+        "rule-forms",
+        expect.objectContaining({
+          conditions: [
+            { path: "submission.form", op: "eq", value: "enquiry-follow-up" },
+            { path: "form.lead_stage", op: "eq", value: "not_interested" },
+          ],
+        }),
+      ),
+    );
+  });
+
+  it("hides the value for an emptiness check", async () => {
+    mockUseApi(FORM_RULE);
+    getPublishedForm.mockResolvedValue(FOLLOW_UP_FORM);
+    render(<RuleBuilder id="rule-forms" />);
+    await waitFor(() => expect(getPublishedForm).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: /add condition/i }));
+    fireEvent.change(await screen.findByLabelText("When"), { target: { value: "form.notes" } });
+    expect(screen.getByLabelText("Value")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Operator"), { target: { value: "is_empty" } });
+    expect(screen.queryByLabelText("Value")).not.toBeInTheDocument();
+  });
+
+  it("changing the form writes the submission.form condition", () => {
+    mockUseApi(FORM_RULE);
+    getPublishedForm.mockResolvedValue(FOLLOW_UP_FORM);
+    render(<RuleBuilder id="rule-forms" />);
+
+    fireEvent.change(screen.getByLabelText("Which form"), { target: { value: "enquiry" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    expect(updateAutomationRule).toHaveBeenCalledWith(
+      "rule-forms",
+      expect.objectContaining({
+        conditions: [{ path: "submission.form", op: "eq", value: "enquiry" }],
+      }),
+    );
+  });
+
+  it("builds an assign_form action", async () => {
+    mockUseApi(FORM_RULE);
+    getPublishedForm.mockResolvedValue(FOLLOW_UP_FORM);
+    render(<RuleBuilder id="rule-forms" />);
+    await waitFor(() => expect(getPublishedForm).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: /add action/i }));
+    fireEvent.change(screen.getByLabelText("Action"), { target: { value: "assign_form" } });
+    fireEvent.change(screen.getByLabelText("Form to send"), {
+      target: { value: "enquiry-follow-up" },
+    });
+    fireEvent.change(screen.getByLabelText("Title"), {
+      target: { value: "Follow up {{form.notes}}" },
+    });
+    expect(screen.getByText("{{form.lead_stage}}")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(updateAutomationRule).toHaveBeenCalledWith(
+        "rule-forms",
+        expect.objectContaining({
+          actions: [
+            {
+              type: "assign_form",
+              params: {
+                form: "enquiry-follow-up",
+                to: "submitter",
+                due_in_days: 1,
+                title: "Follow up {{form.notes}}",
+                message: "",
+              },
+            },
+          ],
+        }),
+      ),
+    );
   });
 });

@@ -2218,13 +2218,22 @@ export interface SessionRow {
 // --- Forms / form builder (ERP Phase 8) --------------------------------------
 
 /** The entity a `FormDefinition` attaches to (`DATA_MODEL.md` §4). */
-export type FormEntity = "activity" | "student" | "registration" | "review";
+export type FormEntity =
+  | "activity"
+  | "student"
+  | "registration"
+  | "review"
+  | "enquiry"
+  | "general";
 
 export type FormDefinitionStatus = "active" | "archived";
 
 export type FormVersionStatus = "draft" | "published" | "archived";
 
-/** The 17 field types a `FormField` may take. */
+/** The field types a `FormField` may take. The last six are the Meritto-style
+ *  additions: time, star rating, consent tick box, hidden value (UTM, source),
+ *  display-only heading, and a dropdown whose choices depend on another
+ *  field's answer (state → city). */
 export type FormFieldType =
   | "text"
   | "textarea"
@@ -2243,7 +2252,13 @@ export type FormFieldType =
   | "file"
   | "image"
   | "richtext"
-  | "relation";
+  | "relation"
+  | "time"
+  | "rating"
+  | "consent"
+  | "hidden"
+  | "heading"
+  | "dependent_select";
 
 /** One choice for a `select`/`multiselect`/`radio` field. */
 export interface FormFieldOption {
@@ -2258,15 +2273,39 @@ export interface FormFieldRelationOptions {
   model: FormFieldRelationModel;
 }
 
-/** `options` on a field: a choice list for select-like types, or a relation
- *  target for `relation`. Every other type leaves this empty. */
-export type FormFieldOptions = FormFieldOption[] | FormFieldRelationOptions | null;
+/** `options` on a `dependent_select`: the field it depends on, and the
+ *  choices offered for each of that field's answers. */
+export interface FormFieldDependentOptions {
+  parent: string;
+  choices: Record<string, FormFieldOption[]>;
+}
+
+/** `options` on a field: a choice list for select-like types, a relation
+ *  target for `relation`, or a parent and per-answer choices for
+ *  `dependent_select`. Every other type leaves this empty. */
+export type FormFieldOptions =
+  | FormFieldOption[]
+  | FormFieldRelationOptions
+  | FormFieldDependentOptions
+  | null;
+
+export type FormShowIfOperator = "eq" | "ne" | "in" | "not_in" | "filled" | "empty";
+
+/** Show a field only while another field's answer matches. An empty object
+ *  means the field is always shown. */
+export interface FormFieldShowIf {
+  field?: string;
+  op?: FormShowIfOperator;
+  value?: string | number | boolean | string[];
+}
 
 /** `validation` on a field — which keys apply depends on `type`
  *  (`FORM_CATALOG.md` "Validation rules"). Every key is optional. */
 export interface FormFieldValidation {
-  min?: number;
-  max?: number;
+  /** A number for number/decimal/rating, an `HH:MM` string for time, an ISO
+   *  date for date/datetime. */
+  min?: number | string;
+  max?: number | string;
   min_length?: number;
   max_length?: number;
   min_items?: number;
@@ -2275,6 +2314,11 @@ export interface FormFieldValidation {
   /** File/image types: an allow-list of extensions or MIME types. */
   accept?: string[];
   max_mb?: number;
+  /** Hidden fields: the value stored when the form sends none. */
+  default?: string;
+  /** Date/datetime fields. */
+  not_past?: boolean;
+  not_future?: boolean;
 }
 
 export interface FormField {
@@ -2292,6 +2336,7 @@ export interface FormField {
   /** When set, this field's numeric value feeds the activity score
    *  (e.g. `"score"`). Null on every field that does not. */
   performance_key: string | null;
+  show_if?: FormFieldShowIf;
 }
 
 /** A field as sent back to the server on a full replace — no `id` for a new
@@ -2309,6 +2354,7 @@ export interface FormFieldInput {
   validation: FormFieldValidation;
   visible_to_student: boolean;
   performance_key: string | null;
+  show_if?: FormFieldShowIf;
 }
 
 /** The summary embedded in `FormDefinition.published_version` /
@@ -2382,6 +2428,63 @@ export interface FormPreviewResult {
 export interface PublishedForm {
   version: number;
   fields: FormField[];
+}
+
+/** `POST /forms/uploads/` — a stored file a `file`/`image` answer refers to
+ *  by `id`. */
+export interface FormUpload {
+  id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export type FormAssignmentStatus = "pending" | "submitted" | "cancelled";
+
+export interface FormPersonBrief {
+  id: string;
+  name: string;
+  role: string;
+}
+
+/** `GET /forms/assignments/` row: a form sent to someone to fill (or filled
+ *  in directly, when `assigned_to` and `requested_by` are the same person). */
+export interface FormAssignment {
+  id: string;
+  form: { slug: string; name: string; entity: FormEntity };
+  version: number;
+  title: string;
+  message: string;
+  status: FormAssignmentStatus;
+  assigned_to: FormPersonBrief;
+  requested_by: FormPersonBrief | null;
+  student: { id: string; name: string } | null;
+  enquiry?: { id: string; name: string; stage: EnquiryStage } | null;
+  due_at: string | null;
+  submitted_at: string | null;
+  cancelled_at: string | null;
+  created_at: string;
+  is_overdue: boolean;
+  from_automation: boolean;
+  can_submit: boolean;
+  can_cancel: boolean;
+}
+
+/** `GET /forms/assignments/{id}/` — the pinned version's fields, and the
+ *  answers once submitted. */
+export interface FormAssignmentDetail extends FormAssignment {
+  fields: FormField[];
+  values: Record<string, unknown> | null;
+}
+
+/** `GET /forms/fillable/` row: a published form that can be sent to someone
+ *  or filled in directly (activity forms are not listed). */
+export interface FillableForm {
+  slug: string;
+  name: string;
+  entity: FormEntity;
+  version: number;
 }
 
 // --- Activities / the work engine (ERP Phase 9) ------------------------------
@@ -2466,12 +2569,18 @@ export interface ActivityNextAction {
 /** `GET /activity-types/` row, `POST` body/response, `PATCH
  *  /activity-types/{slug}/` body/response. `slug` is immutable after
  *  creation — every other column may change. */
+/** What an activity of a type is about: a student, or an enquiry (a lead
+ *  who is not a student yet). */
+export type ActivitySubject = "student" | "enquiry";
+
 export interface ActivityType {
   id: string;
   slug: string;
   name: string;
   description: string;
   category: ActivityCategory;
+  /** Optional only so older fixtures keep typechecking; the API sends it. */
+  subject?: ActivitySubject;
   allowed_creator_roles: UserRole[];
   allowed_assignee_roles: UserRole[];
   visible_to_student: boolean;
@@ -2499,6 +2608,15 @@ export interface ActivityTypeBrief {
   slug: string;
   name: string;
   category: ActivityCategory;
+  subject?: ActivitySubject;
+}
+
+/** The enquiry an activity is about (`serializers._enquiry_summary`). */
+export interface ActivityEnquiryBrief {
+  id: string;
+  name: string;
+  mobile: string;
+  stage: EnquiryStage;
 }
 
 /** A person reference embedded in an activity or a history row — assignee,
@@ -2534,7 +2652,9 @@ export interface Activity {
   due_at: string | null;
   completed_at: string | null;
   created_at: string;
-  student: ActivityStudentBrief;
+  /** Null for an activity about an enquiry — then `enquiry` is set. */
+  student: ActivityStudentBrief | null;
+  enquiry?: ActivityEnquiryBrief | null;
   type: ActivityTypeBrief;
   batch: ActivityBatchBrief | null;
   assigned_to: ActivityPersonBrief | null;
@@ -2573,6 +2693,9 @@ export interface ActivityDetail extends Activity {
    *  every field, a student caller sees only `visible_to_student` fields
    *  (filtered server-side, never by this client). */
   form_values: Record<string, unknown>;
+  /** Answers suggested by whoever (or whichever rule) created the activity,
+   *  to start the completion form from. Staff only; `{}` for a student. */
+  form_prefill?: Record<string, unknown>;
   history: ActivityHistoryEntry[];
   parent: string | null;
   /** Ids only (`get_children`) — a follow-on activity a `next_action` rule
@@ -2890,7 +3013,11 @@ export type AutomationTrigger =
   | "ATTENDANCE_THRESHOLD"
   | "PROJECT_OVERDUE"
   | "ASSIGNMENT_OVERDUE"
-  | "RISK_CHANGED";
+  | "RISK_CHANGED"
+  | "FORM_SUBMITTED"
+  | "ENQUIRY_CREATED"
+  | "ENQUIRY_STAGE_CHANGED"
+  | "ENQUIRY_UPDATED";
 
 export type AutomationConditionOperator =
   | "eq"
@@ -2901,7 +3028,9 @@ export type AutomationConditionOperator =
   | "gte"
   | "in"
   | "not_in"
-  | "contains";
+  | "contains"
+  | "is_empty"
+  | "is_not_empty";
 
 /** A condition's `value` is always a literal per the catalog: a scalar for
  *  every operator except `in`/`not_in`, which take a list. */
@@ -2915,6 +3044,8 @@ export interface AutomationCondition {
 
 export type AutomationActionType =
   | "create_activity"
+  | "assign_form"
+  | "update_enquiry"
   | "send_notification"
   | "send_email"
   | "send_whatsapp"
@@ -2925,8 +3056,39 @@ export interface CreateActivityActionParams {
   type: string;
   assign_to: string;
   due_in_days?: number | null;
+  /** Added to `due_in_days` — "due in 2 hours" for a call. */
+  due_in_hours?: number | null;
+  /** When the activity is planned for, from now. */
+  planned_in_hours?: number | null;
   priority?: ActivityPriority | "";
   title?: string;
+  /** The activity's notes. Templated, like the title. */
+  summary?: string;
+  /** Answers to the type's form, suggested in advance. Templated. */
+  form_prefill?: Record<string, string>;
+}
+
+/** Move the occurrence's enquiry along. Every key is optional; a rule must
+ *  set at least one. `owner` is a strategy or a user id. */
+export interface UpdateEnquiryActionParams {
+  stage?: EnquiryStage | "";
+  owner?: string;
+  /** Set the owner only when the enquiry has none — keep a walk-in with the
+   *  counsellor who took it. */
+  only_if_unowned?: boolean;
+  lost_reason?: string;
+  lead_quality?: number | null;
+  next_follow_up_in_days?: number | null;
+}
+
+/** Send a published form to someone to fill. `to` is a strategy
+ *  (`submitter`, `student`, `batch_trainer`, …) or a user id. */
+export interface AssignFormActionParams {
+  form: string;
+  to: string;
+  due_in_days?: number | null;
+  title?: string;
+  message?: string;
 }
 
 export interface SendNotificationActionParams {
@@ -2961,6 +3123,8 @@ export interface FlagRiskActionParams {
  *  code reading `.params`) gets the right shape without a cast. */
 export type AutomationAction =
   | { type: "create_activity"; params: CreateActivityActionParams }
+  | { type: "assign_form"; params: AssignFormActionParams }
+  | { type: "update_enquiry"; params: UpdateEnquiryActionParams }
   | { type: "send_notification"; params: SendNotificationActionParams }
   | { type: "send_email"; params: SendEmailActionParams }
   | { type: "send_whatsapp"; params: SendWhatsappActionParams }
@@ -3136,4 +3300,78 @@ export interface CommunicationRecipientSpec {
   students?: string[];
   batch?: string;
   role?: string;
+}
+
+// --- Enquiries (leads before admission) --------------------------------------
+//
+// `apps/enquiries` — the Meritto-style lead pipeline. Created by submitting the
+// enquiry form, moved along by follow-ups, calls and automation rules.
+
+export type EnquiryStage =
+  | "new"
+  | "contacted"
+  | "interested"
+  | "counselling_booked"
+  | "demo_booked"
+  | "registered"
+  | "not_interested"
+  | "not_eligible";
+
+export interface EnquiryPersonBrief {
+  id: string;
+  name: string;
+}
+
+/** `GET /enquiries/` row. */
+export interface Enquiry {
+  id: string;
+  full_name: string;
+  mobile: string;
+  email: string;
+  whatsapp_number: string;
+  state: string;
+  city: string;
+  course: string;
+  track: string;
+  preferred_centre: string;
+  mode: string;
+  batch_timing: string;
+  qualification: string;
+  source: string;
+  utm_source: string;
+  utm_medium: string;
+  utm_campaign: string;
+  remarks: string;
+  stage: EnquiryStage;
+  stage_changed_at: string | null;
+  lost_reason: string;
+  lead_quality: number | null;
+  next_follow_up_at: string | null;
+  last_contacted_at: string | null;
+  owner: EnquiryPersonBrief | null;
+  created_by: EnquiryPersonBrief | null;
+  branch: { id: string; name: string } | null;
+  student: { id: string; name: string } | null;
+  created_at: string;
+  updated_at: string;
+  can_manage: boolean;
+}
+
+export interface EnquiryHistoryEntry {
+  id: string;
+  action: string;
+  actor: string;
+  context: Record<string, unknown>;
+  created_at: string;
+}
+
+/** `GET /enquiries/{id}/`. */
+export interface EnquiryDetail extends Enquiry {
+  history: EnquiryHistoryEntry[];
+}
+
+/** `GET /enquiries/summary/`. */
+export interface EnquirySummary {
+  stages: Record<EnquiryStage, number>;
+  total: number;
 }

@@ -31,6 +31,19 @@ profile (D-130).
 | communication-practice | Communication Practice | mentoring | communication-practice | trainer, manager, automation | trainer | yes | 30 min | no | 0.5 | score < threshold | score ≥ 7 → none; score < 5 after 2 sessions → notify manager |
 | attendance-counselling | Attendance Counselling | counselling | counselling-note | automation, manager, counsellor | counsellor | no | 20 min | no | 0 | no | created by the ATTENDANCE_THRESHOLD automation |
 
+### About an enquiry (`work.0007`, subject `enquiry`)
+
+| Slug | Name | Category | Form | Creators | Assignees | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| enquiry-call | Counselling call | counselling | enquiry-follow-up | counsellor, manager, automation | counsellor, manager | completing it writes the follow-up answers onto the enquiry (stage, lost reason, lead quality, next follow-up) |
+| demo-class | Demo class | other | — | counsellor, manager, automation | counsellor, manager, trainer | |
+
+An activity is about exactly one of a student or an enquiry (database
+constraint), matching its type's `subject`. Enquiry activities are never
+shown to a student. Any activity may carry `form_prefill`: answers suggested
+by whoever, or whichever rule, created it, which the completion form starts
+from.
+
 ## Lifecycle (§25)
 
 Statuses: DRAFT, PLANNED, ASSIGNED, IN_PROGRESS, COMPLETED, MISSED, OVERDUE,

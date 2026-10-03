@@ -9,13 +9,19 @@
  */
 
 import { apiFetch, apiMutate } from "./api";
+import { apiBaseUrl } from "./env";
 import type {
+  FillableForm,
+  FormAssignment,
+  FormAssignmentDetail,
   FormDefinitionDetail,
   FormDefinitionSummary,
   FormEntity,
   FormFieldInput,
   FormPreviewResult,
+  FormUpload,
   FormVersionDetail,
+  Paginated,
   PublishedForm,
 } from "@/types/api";
 
@@ -132,4 +138,98 @@ export function slugifyFormKey(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+}
+
+// --- Uploads, assignments and direct filling ---------------------------------
+
+/** Uploads one file for a `file`/`image` answer. The answer then carries the
+ *  returned `id`; only the uploader can attach it to a submission. */
+export async function uploadFormFile(file: File): Promise<FormUpload> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiMutate<FormUpload>("/api/v1/forms/uploads/", { method: "POST", formData });
+}
+
+/** Where a stored upload downloads from (uploader, or `form.view` holders). */
+export function formUploadUrl(id: string): string {
+  return `${apiBaseUrl()}/api/v1/forms/uploads/${id}/`;
+}
+
+export type FormAssignmentBox = "inbox" | "sent" | "all";
+
+export async function listFormAssignments(
+  params: { box?: FormAssignmentBox; status?: string; form?: string; page?: number } = {},
+): Promise<Paginated<FormAssignment>> {
+  const query = new URLSearchParams();
+  if (params.box) query.set("box", params.box);
+  if (params.status) query.set("status", params.status);
+  if (params.form) query.set("form", params.form);
+  if (params.page) query.set("page", String(params.page));
+  const suffix = query.toString();
+  return apiFetch<Paginated<FormAssignment>>(
+    `/api/v1/forms/assignments/${suffix ? `?${suffix}` : ""}`,
+  );
+}
+
+export async function getFormAssignment(id: string): Promise<FormAssignmentDetail> {
+  return apiFetch<FormAssignmentDetail>(`/api/v1/forms/assignments/${id}/`);
+}
+
+export interface SendFormPayload {
+  form: string;
+  assigned_to: string;
+  student?: string | null;
+  /** The enquiry the form is about — a follow-up's answers update it. */
+  enquiry?: string | null;
+  due_at?: string | null;
+  title?: string;
+  message?: string;
+}
+
+/** Sends a published form to someone to fill (`form.assign`). */
+export async function sendForm(payload: SendFormPayload): Promise<FormAssignmentDetail> {
+  return apiMutate<FormAssignmentDetail>("/api/v1/forms/assignments/", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+/** The assignee submits their answers. A `400` carries `{field: [...]}`
+ *  details, read with `fieldErrors()`. */
+export async function submitFormAssignment(
+  id: string,
+  values: Record<string, unknown>,
+): Promise<FormAssignmentDetail> {
+  return apiMutate<FormAssignmentDetail>(`/api/v1/forms/assignments/${id}/submit/`, {
+    method: "POST",
+    body: { values },
+  });
+}
+
+export async function cancelFormAssignment(
+  id: string,
+  reason = "",
+): Promise<FormAssignmentDetail> {
+  return apiMutate<FormAssignmentDetail>(`/api/v1/forms/assignments/${id}/cancel/`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
+/** Fills in a published form directly (`form.assign`) — recorded as a
+ *  submitted assignment to oneself. */
+export async function fillForm(
+  slug: string,
+  values: Record<string, unknown>,
+  student?: string | null,
+): Promise<FormAssignmentDetail> {
+  return apiMutate<FormAssignmentDetail>(`/api/v1/forms/${slug}/fill/`, {
+    method: "POST",
+    body: { values, student: student ?? null },
+  });
+}
+
+/** Published forms that can be sent or filled directly (not activity forms). */
+export async function listFillableForms(): Promise<FillableForm[]> {
+  return apiFetch<FillableForm[]>("/api/v1/forms/fillable/");
 }

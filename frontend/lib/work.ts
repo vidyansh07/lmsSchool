@@ -78,6 +78,7 @@ export interface ActivityFilters {
   type?: string;
   category?: ActivityCategory;
   student?: string;
+  enquiry?: string;
   batch?: string;
   assigned_to?: string;
   created_by?: string;
@@ -125,7 +126,13 @@ export async function listMyActivities(
 }
 
 export interface CreateActivityPayload {
-  student: string;
+  /** One of `student`/`enquiry`, matching the type's subject. */
+  student?: string;
+  enquiry?: string;
+  /** The activity's notes. */
+  summary?: string;
+  /** Answers to its form, suggested in advance. */
+  form_prefill?: Record<string, unknown>;
   enrollment?: string;
   activity_type: string;
   title?: string;
@@ -274,3 +281,4 @@ const LEGAL_TRANSITIONS: Partial<Record<ActivityStatus, ActivityStatus[]>> = {
 export function legalTransitions(status: ActivityStatus): ActivityStatus[] {
   return LEGAL_TRANSITIONS[status] ?? [];
 }
+

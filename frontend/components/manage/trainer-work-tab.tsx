@@ -33,6 +33,7 @@ import { formatDateTime } from '@/lib/format';
 import { ACTIVITY_PRIORITY_LABEL, ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_VARIANT } from '@/lib/labels';
 import { getTrainer } from '@/lib/people';
 import { listActivities } from '@/lib/work';
+import { activitySubject } from '@/lib/activity-subject';
 import type { Activity, ActivityStatus, Paginated } from '@/types/api';
 
 const STATUSES: ActivityStatus[] = [
@@ -133,11 +134,11 @@ export function TrainerWorkTab({ trainerId }: { trainerId: string }) {
     },
     {
       key: 'student',
-      header: 'Student',
+      header: 'Student / enquiry',
       render: (row) => (
         <>
-          {row.student.name}
-          <span className="block text-xs text-ink-muted">{row.student.student_id}</span>
+          {activitySubject(row).name}
+          <span className="block text-xs text-ink-muted">{activitySubject(row).detail}</span>
         </>
       ),
     },

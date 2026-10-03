@@ -21,6 +21,9 @@ answer keeps showing what was actually submitted then.
 
 from __future__ import annotations
 
+import uuid
+from typing import Any
+
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -40,6 +43,10 @@ class FormEntity(models.TextChoices):
     STUDENT = "student", _("Student")
     REGISTRATION = "registration", _("Registration")
     REVIEW = "review", _("Review")
+    #: A lead captured before admission (the Meritto-style enquiry form).
+    ENQUIRY = "enquiry", _("Enquiry")
+    #: Any other form a person is sent to fill, or fills in directly.
+    GENERAL = "general", _("General")
 
 
 class FormDefinitionStatus(models.TextChoices):
@@ -53,10 +60,16 @@ class FormVersionStatus(models.TextChoices):
     ARCHIVED = "archived", _("Archived")
 
 
-#: The 17 field types the validator in `validation.py` knows about. Kept
-#: here, not just there, so the model's `choices` and the validator's
-#: dispatch table cannot drift silently — a type absent from one but not the
-#: other is exactly the kind of gap a migration review should catch.
+#: Every field type the validator in `validation.py` knows about. Kept here,
+#: not just there, so the model's `choices` and the validator's dispatch table
+#: cannot drift silently — a type absent from one but not the other is exactly
+#: the kind of gap a migration review should catch.
+#:
+#: The last six match what a Meritto lead or application form offers beyond
+#: the basic inputs: a time, a star rating, a consent tick box, a hidden value
+#: carried along with the submission (UTM source, campaign), a heading that
+#: only structures the form, and a dropdown whose choices depend on another
+#: field's answer (state → city, course → specialisation).
 class FormFieldType(models.TextChoices):
     TEXT = "text", _("Text")
     TEXTAREA = "textarea", _("Textarea")
@@ -76,6 +89,16 @@ class FormFieldType(models.TextChoices):
     IMAGE = "image", _("Image")
     RICHTEXT = "richtext", _("Rich text")
     RELATION = "relation", _("Relation")
+    TIME = "time", _("Time")
+    RATING = "rating", _("Rating")
+    CONSENT = "consent", _("Consent")
+    HIDDEN = "hidden", _("Hidden value")
+    HEADING = "heading", _("Heading")
+    DEPENDENT_SELECT = "dependent_select", _("Dependent select")
+
+
+#: Types that only structure the form and never carry a value.
+DISPLAY_ONLY_FIELD_TYPES = frozenset({FormFieldType.HEADING})
 
 
 class FormDefinitionQuerySet(SoftDeleteQuerySet):
@@ -197,6 +220,10 @@ class FormField(BaseModel):
     # empty string so the column stays a plain CharField (DJ001, the same
     # choice `RolePermission.scope` makes).
     performance_key = models.CharField(_("performance key"), max_length=30, blank=True, default="")
+    #: ``{"field": "<key>", "op": "eq", "value": ...}`` — show this field only
+    #: when another field's answer matches. Empty means always shown. A field
+    #: hidden this way is never required and never stores a value.
+    show_if = models.JSONField(_("show if"), default=dict, blank=True)
 
     class Meta:
         verbose_name = _("form field")
@@ -243,3 +270,164 @@ class FormResponse(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.version_id}:{self.pk}"
+
+
+def form_upload_to(instance: Any, filename: str) -> str:
+    """Stored path for a form upload. The client's filename is discarded —
+    only the validated extension survives — the same rule
+    `apps.common.uploads.resource_upload_to` applies to course resources."""
+    name = uuid.uuid4().hex
+    extension = instance.extension or ".bin"
+    return f"form-uploads/{name[:2]}/{name[2:4]}/{name}{extension}"
+
+
+class FormUpload(BaseModel):
+    """One file a person uploaded while filling a `file`/`image` field.
+
+    A form response stores only this row's id; `validation.UPLOAD_RESOLVER`
+    turns the id back into the metadata the field's `accept`/`max_mb` rules
+    are checked against. An upload belongs to whoever sent it, and only that
+    person can attach it to a response.
+    """
+
+    file = models.FileField(_("file"), upload_to=form_upload_to, max_length=255)
+    original_name = models.CharField(_("original name"), max_length=255, blank=True)
+    extension = models.CharField(_("extension"), max_length=10, blank=True)
+    content_type = models.CharField(_("content type"), max_length=120, blank=True)
+    size_bytes = models.PositiveBigIntegerField(_("size in bytes"), default=0)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    class Meta:
+        verbose_name = _("form upload")
+        verbose_name_plural = _("form uploads")
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:
+        return self.original_name or str(self.pk)
+
+
+class FormAssignmentStatus(models.TextChoices):
+    PENDING = "pending", _("Waiting to be filled")
+    SUBMITTED = "submitted", _("Submitted")
+    CANCELLED = "cancelled", _("Cancelled")
+
+
+class FormAssignmentQuerySet(models.QuerySet):
+    def with_related(self):
+        return self.select_related(
+            "definition",
+            "version",
+            "assigned_to",
+            "requested_by",
+            "student",
+            "student__user",
+            "enquiry",
+            "branch",
+            "response",
+        )
+
+    def open(self):
+        return self.filter(status=FormAssignmentStatus.PENDING)
+
+
+class FormAssignment(BaseModel):
+    """A form sent to one person to fill — by a colleague, or by an
+    automation rule's `assign_form` action — or filled in directly by the
+    person themselves (an assignment to self that is submitted at once).
+
+    The version is pinned when the form is sent, so the person fills in the
+    shape they were asked for even if the form is edited and republished
+    before they get to it. The submitted answers are a `FormResponse` whose
+    owner is this row, which keeps "who asked, who answered, when, about
+    which student" in one place for the automation engine's
+    `FORM_SUBMITTED` trigger to read.
+    """
+
+    definition = models.ForeignKey(
+        FormDefinition, on_delete=models.PROTECT, related_name="assignments"
+    )
+    version = models.ForeignKey(FormVersion, on_delete=models.PROTECT, related_name="assignments")
+    status = models.CharField(
+        _("status"),
+        max_length=12,
+        choices=FormAssignmentStatus.choices,
+        default=FormAssignmentStatus.PENDING,
+    )
+    title = models.CharField(_("title"), max_length=200, blank=True)
+    message = models.TextField(_("message"), blank=True)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="form_assignments",
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    #: The student the form is about, when there is one — an enquiry
+    #: follow-up has none yet; an attendance commitment form does.
+    student = models.ForeignKey(
+        "students.StudentProfile",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="form_assignments",
+    )
+    #: The enquiry the form is about (a follow-up), or the enquiry its
+    #: answers created (the enquiry form itself).
+    enquiry = models.ForeignKey(
+        "enquiries.Enquiry",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="form_assignments",
+    )
+    branch = models.ForeignKey(
+        "organisation.Branch",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    due_at = models.DateTimeField(_("due at"), null=True, blank=True)
+    submitted_at = models.DateTimeField(_("submitted at"), null=True, blank=True)
+    cancelled_at = models.DateTimeField(_("cancelled at"), null=True, blank=True)
+    response = models.OneToOneField(
+        FormResponse,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assignment",
+    )
+    automation_run = models.ForeignKey(
+        "automation.AutomationRun",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="form_assignments",
+    )
+
+    objects = models.Manager.from_queryset(FormAssignmentQuerySet)()
+
+    class Meta:
+        verbose_name = _("form assignment")
+        verbose_name_plural = _("form assignments")
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(
+                fields=["assigned_to", "status", "due_at"], name="form_assignment_inbox_idx"
+            ),
+            models.Index(fields=["definition", "status"], name="form_assignment_form_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.definition_id}:{self.assigned_to_id}:{self.status}"

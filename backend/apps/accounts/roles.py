@@ -260,6 +260,20 @@ class Capability(models.TextChoices):
     # administrator rung.
     FORM_VIEW = "form.view", _("View form definitions")
     FORM_MANAGE = "form.manage", _("Build, publish and unpublish forms")
+    # Sending a published form to somebody to fill, or filling one in
+    # directly (a counsellor entering a walk-in enquiry). Day-to-day work,
+    # not configuration, so it sits with the manager rung (and therefore the
+    # counsellor's), unlike `form.manage`. Filling in a form that was sent to
+    # you needs no capability at all: being its assignee is the authority.
+    FORM_ASSIGN = "form.assign", _("Send a form to someone, or fill one in directly")
+
+    # --- Enquiries (leads before admission)
+    #
+    # The admissions desk's own pipeline: the manager rung, so the counsellor
+    # holds both (D-130), the trainer and student neither. An enquiry's owner
+    # may always work their own enquiry, capability or not.
+    ENQUIRY_VIEW_ANY = "enquiry.view_any", _("View enquiries at the centre")
+    ENQUIRY_MANAGE = "enquiry.manage", _("Change enquiries: stage, owner, follow-up")
 
     # --- Reporting and data tools
     #
@@ -437,6 +451,9 @@ _MANAGER_CAPABILITIES = frozenset(
         Capability.DATA_IMPORT,
         Capability.POLICY_VIEW,
         Capability.FORM_VIEW,
+        Capability.FORM_ASSIGN,
+        Capability.ENQUIRY_VIEW_ANY,
+        Capability.ENQUIRY_MANAGE,
         Capability.ACTIVITY_VIEW_ANY,
         Capability.ACTIVITY_CREATE,
         Capability.ACTIVITY_ASSIGN,

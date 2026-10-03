@@ -475,7 +475,14 @@ def test_delete_activity_refuses_without_authority(admin_user, student_profile, 
 
 
 def test_the_seed_migration_created_18_system_types():
-    assert ActivityType.objects.filter(is_system=True).count() == 18
+    # Plus the two enquiry types (`work.0007`): a counselling call and a
+    # demo class, both about an enquiry rather than a student.
+    assert ActivityType.objects.filter(is_system=True, subject="student").count() == 18
+    assert set(
+        ActivityType.objects.filter(is_system=True, subject="enquiry").values_list(
+            "slug", flat=True
+        )
+    ) == {"enquiry-call", "demo-class"}
 
 
 def test_a_seeded_type_carries_its_catalog_fields():

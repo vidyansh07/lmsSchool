@@ -29,16 +29,43 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import { FieldControl, type FormValues } from "@/components/forms/field-renderer";
+import {
+  FieldRenderer,
+  allChoices,
+  relationModel,
+  valuesForSubmit,
+  type FormValues,
+} from "@/components/forms/field-renderer";
 import { fieldErrors } from "@/lib/api";
 import { FORM_FIELD_CHOICE_TYPES, FORM_FIELD_TYPE_OPTIONS } from "@/lib/labels";
 import { previewForm } from "@/lib/forms";
 import type {
+  FormFieldDependentOptions,
   FormFieldInput,
   FormFieldOption,
   FormFieldRelationModel,
+  FormFieldShowIf,
   FormFieldType,
+  FormShowIfOperator,
 } from "@/types/api";
+
+/** Types a dependent dropdown may hang off. */
+const PARENT_TYPES: readonly FormFieldType[] = ["select", "radio", "dependent_select"];
+
+const SHOW_IF_OPERATORS: { value: FormShowIfOperator; label: string }[] = [
+  { value: "eq", label: "is" },
+  { value: "ne", label: "is not" },
+  { value: "in", label: "is one of" },
+  { value: "not_in", label: "is none of" },
+  { value: "filled", label: "is filled in" },
+  { value: "empty", label: "is empty" },
+];
+
+function dependentOptionsOf(field: FormFieldInput): FormFieldDependentOptions {
+  const options = field.options;
+  if (options && !Array.isArray(options) && "parent" in options) return options;
+  return { parent: "", choices: {} };
+}
 
 const RELATION_MODELS: FormFieldRelationModel[] = ["student", "trainer", "batch"];
 
@@ -61,6 +88,7 @@ function blankField(order: number): FormFieldInput {
     validation: {},
     visible_to_student: false,
     performance_key: null,
+    show_if: {},
   };
 }
 
@@ -141,15 +169,211 @@ function validationKeysFor(type: FormFieldType): string[] {
     case "file":
     case "image":
       return ["accept", "max_mb"];
+    case "rating":
+      return ["max"];
+    case "time":
+      return ["min_time", "max_time"];
+    case "hidden":
+      return ["default"];
     default:
       return [];
   }
+}
+
+/** "Show only when" — another, earlier field's answer this one depends on. */
+function ShowIfEditor({
+  uid,
+  field,
+  earlier,
+  onChange,
+}: {
+  uid: string;
+  field: FormFieldInput;
+  earlier: FormFieldInput[];
+  onChange: (next: FormFieldShowIf) => void;
+}) {
+  const rule = field.show_if ?? {};
+  const candidates = earlier.filter((other) => other.key && other.type !== "heading");
+  const parent = candidates.find((other) => other.key === rule.field);
+  const op = rule.op ?? "eq";
+  const needsValue = op !== "filled" && op !== "empty";
+  const choices = parent ? allChoices(parent) : [];
+  const isBoolean = parent?.type === "boolean" || parent?.type === "consent";
+  const isList = op === "in" || op === "not_in";
+  const listValue = Array.isArray(rule.value) ? rule.value.map(String) : [];
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Field label="Show only when" htmlFor={`${uid}-show-if-field`} hint="Leave as Always to show it every time.">
+          <Select
+            id={`${uid}-show-if-field`}
+            value={rule.field ?? ""}
+            onChange={(event) =>
+              onChange(event.target.value ? { field: event.target.value, op: "eq", value: "" } : {})
+            }
+          >
+            <option value="">Always</option>
+            {candidates.map((other) => (
+              <option key={other.key} value={other.key}>
+                {other.label || other.key}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        {rule.field ? (
+          <Field label="Condition" htmlFor={`${uid}-show-if-op`}>
+            <Select
+              id={`${uid}-show-if-op`}
+              value={op}
+              onChange={(event) => {
+                const nextOp = event.target.value as FormShowIfOperator;
+                const nextValue =
+                  nextOp === "in" || nextOp === "not_in"
+                    ? []
+                    : nextOp === "filled" || nextOp === "empty"
+                      ? undefined
+                      : isBoolean
+                        ? true
+                        : "";
+                onChange({ field: rule.field, op: nextOp, value: nextValue });
+              }}
+            >
+              {SHOW_IF_OPERATORS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        ) : null}
+        {rule.field && needsValue && !isList ? (
+          <Field label="Answer" htmlFor={`${uid}-show-if-value`}>
+            {isBoolean ? (
+              <Select
+                id={`${uid}-show-if-value`}
+                value={rule.value === true ? "true" : rule.value === false ? "false" : ""}
+                onChange={(event) =>
+                  onChange({ ...rule, value: event.target.value === "true" })
+                }
+              >
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </Select>
+            ) : choices.length > 0 ? (
+              <Select
+                id={`${uid}-show-if-value`}
+                value={typeof rule.value === "string" ? rule.value : ""}
+                onChange={(event) => onChange({ ...rule, value: event.target.value })}
+              >
+                <option value="">Choose…</option>
+                {choices.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label || option.value}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <Input
+                id={`${uid}-show-if-value`}
+                value={rule.value === undefined ? "" : String(rule.value)}
+                onChange={(event) => onChange({ ...rule, value: event.target.value })}
+              />
+            )}
+          </Field>
+        ) : null}
+      </div>
+      {rule.field && isList ? (
+        <div className="flex flex-wrap gap-x-4 gap-y-2" role="group" aria-label="Answers">
+          {choices.length === 0 ? (
+            <p className="text-2xs text-ink-faint">
+              The field this depends on has no options to pick from.
+            </p>
+          ) : (
+            choices.map((option) => (
+              <label key={option.value} className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={listValue.includes(option.value)}
+                  onCheckedChange={(checked) => {
+                    const next = new Set(listValue);
+                    if (checked) next.add(option.value);
+                    else next.delete(option.value);
+                    onChange({ ...rule, value: Array.from(next) });
+                  }}
+                />
+                {option.label || option.value}
+              </label>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** A dependent dropdown's settings: which earlier field it follows, and the
+ *  choices offered for each of that field's answers. */
+function DependentChoicesEditor({
+  uid,
+  field,
+  earlier,
+  onChange,
+}: {
+  uid: string;
+  field: FormFieldInput;
+  earlier: FormFieldInput[];
+  onChange: (next: FormFieldDependentOptions) => void;
+}) {
+  const options = dependentOptionsOf(field);
+  const parents = earlier.filter((other) => other.key && PARENT_TYPES.includes(other.type));
+  const parent = parents.find((other) => other.key === options.parent);
+  const parentAnswers = parent ? allChoices(parent) : [];
+
+  return (
+    <div className="space-y-3">
+      <Field
+        label="Depends on"
+        htmlFor={`${uid}-dependent-parent`}
+        hint="A dropdown or radio field above this one."
+      >
+        <Select
+          id={`${uid}-dependent-parent`}
+          value={options.parent}
+          onChange={(event) => onChange({ parent: event.target.value, choices: {} })}
+        >
+          <option value="">Choose a field…</option>
+          {parents.map((other) => (
+            <option key={other.key} value={other.key}>
+              {other.label || other.key}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {parent && parentAnswers.length === 0 ? (
+        <p className="text-2xs text-ink-faint">Add options to that field first.</p>
+      ) : null}
+      {parentAnswers.map((answer) => (
+        <div key={answer.value} className="space-y-1.5 rounded-control border border-line p-3">
+          <p className="text-xs font-medium text-ink">
+            When “{answer.label || answer.value}” is chosen, offer:
+          </p>
+          <OptionsEditor
+            options={options.choices[answer.value] ?? []}
+            onChange={(next) =>
+              onChange({ ...options, choices: { ...options.choices, [answer.value]: next } })
+            }
+          />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function FieldRow({
   field,
   index,
   total,
+  earlier,
   onChange,
   onRemove,
   onMove,
@@ -157,6 +381,8 @@ function FieldRow({
   field: FormFieldInput;
   index: number;
   total: number;
+  /** The fields above this one — the only ones it may depend on. */
+  earlier: FormFieldInput[];
   onChange: (next: FormFieldInput) => void;
   onRemove: () => void;
   onMove: (direction: -1 | 1) => void;
@@ -164,6 +390,7 @@ function FieldRow({
   const uid = useId();
   const validationKeys = validationKeysFor(field.type);
   const isChoiceType = FORM_FIELD_CHOICE_TYPES.includes(field.type);
+  const isHeading = field.type === "heading";
 
   return (
     <Card>
@@ -233,8 +460,11 @@ function FieldRow({
                     ? []
                     : type === "relation"
                       ? { model: "student" }
-                      : null,
-                  validation: {},
+                      : type === "dependent_select"
+                        ? { parent: "", choices: {} }
+                        : null,
+                  validation: type === "rating" ? { max: 5 } : {},
+                  required: type === "heading" ? false : type === "consent" ? true : field.required,
                 });
               }}
             >
@@ -264,13 +494,15 @@ function FieldRow({
         </Field>
 
         <div className="flex flex-wrap gap-6">
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={field.required}
-              onCheckedChange={(checked) => onChange({ ...field, required: checked })}
-            />
-            Required
-          </label>
+          {!isHeading ? (
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={field.required}
+                onCheckedChange={(checked) => onChange({ ...field, required: checked })}
+              />
+              Required
+            </label>
+          ) : null}
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={field.visible_to_student}
@@ -282,6 +514,7 @@ function FieldRow({
           </label>
         </div>
 
+        {!isHeading ? (
         <Field
           label="Performance key"
           htmlFor={`${uid}-performance-key`}
@@ -298,16 +531,20 @@ function FieldRow({
             }
           />
         </Field>
+        ) : null}
+
+        <ShowIfEditor
+          uid={uid}
+          field={field}
+          earlier={earlier}
+          onChange={(show_if) => onChange({ ...field, show_if })}
+        />
 
         {field.type === "relation" ? (
           <Field label="Related model" htmlFor={`${uid}-relation-model`}>
             <Select
               id={`${uid}-relation-model`}
-              value={
-                field.options && !Array.isArray(field.options)
-                  ? field.options.model
-                  : "student"
-              }
+              value={relationModel(field.options) ?? "student"}
               onChange={(event) =>
                 onChange({
                   ...field,
@@ -324,6 +561,15 @@ function FieldRow({
               ))}
             </Select>
           </Field>
+        ) : null}
+
+        {field.type === "dependent_select" ? (
+          <DependentChoicesEditor
+            uid={uid}
+            field={field}
+            earlier={earlier}
+            onChange={(options) => onChange({ ...field, options })}
+          />
         ) : null}
 
         {isChoiceType ? (
@@ -415,7 +661,7 @@ function FieldRow({
               </Field>
             ) : null}
             {validationKeys.includes("max") ? (
-              <Field label="Max" htmlFor={`${uid}-max`}>
+              <Field label={field.type === "rating" ? "Number of stars" : "Max"} htmlFor={`${uid}-max`}>
                 <Input
                   id={`${uid}-max`}
                   type="number"
@@ -429,6 +675,54 @@ function FieldRow({
                           ? Number(event.target.value)
                           : undefined,
                       },
+                    })
+                  }
+                />
+              </Field>
+            ) : null}
+            {validationKeys.includes("min_time") ? (
+              <Field label="Earliest time" htmlFor={`${uid}-min-time`}>
+                <Input
+                  id={`${uid}-min-time`}
+                  type="time"
+                  value={typeof field.validation.min === "string" ? field.validation.min : ""}
+                  onChange={(event) =>
+                    onChange({
+                      ...field,
+                      validation: { ...field.validation, min: event.target.value || undefined },
+                    })
+                  }
+                />
+              </Field>
+            ) : null}
+            {validationKeys.includes("max_time") ? (
+              <Field label="Latest time" htmlFor={`${uid}-max-time`}>
+                <Input
+                  id={`${uid}-max-time`}
+                  type="time"
+                  value={typeof field.validation.max === "string" ? field.validation.max : ""}
+                  onChange={(event) =>
+                    onChange({
+                      ...field,
+                      validation: { ...field.validation, max: event.target.value || undefined },
+                    })
+                  }
+                />
+              </Field>
+            ) : null}
+            {validationKeys.includes("default") ? (
+              <Field
+                label="Default value"
+                htmlFor={`${uid}-default`}
+                hint="Stored when the form sends nothing, e.g. walk-in."
+              >
+                <Input
+                  id={`${uid}-default`}
+                  value={field.validation.default ?? ""}
+                  onChange={(event) =>
+                    onChange({
+                      ...field,
+                      validation: { ...field.validation, default: event.target.value || undefined },
                     })
                   }
                 />
@@ -548,6 +842,8 @@ export function FieldEditor({
   const [previewFailure, setPreviewFailure] = useState<string | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
 
+  const sorted = fields.slice().sort((a, b) => a.order - b.order);
+
   function updateAt(index: number, next: FormFieldInput) {
     const copy = fields.slice();
     copy[index] = next;
@@ -578,7 +874,10 @@ export function FieldEditor({
     setPreviewFailure(null);
     setPreviewErrors({});
     try {
-      const result = await previewForm(slug, previewValues);
+      const shaped = sorted
+        .filter((field) => field.key)
+        .map((field) => ({ ...field, id: field.id ?? field.key }));
+      const result = await previewForm(slug, valuesForSubmit(shaped, previewValues));
       const flattened: Record<string, string> = {};
       for (const [key, messages] of Object.entries(result.errors)) {
         const [first] = messages;
@@ -614,15 +913,13 @@ export function FieldEditor({
             No fields yet. Add the first one below.
           </p>
         ) : (
-          fields
-            .slice()
-            .sort((a, b) => a.order - b.order)
-            .map((field, index) => (
+          sorted.map((field, index) => (
               <fieldset key={field.id ?? index} disabled={disabled} className="contents">
                 <FieldRow
                   field={field}
                   index={index}
                   total={fields.length}
+                  earlier={sorted.slice(0, index)}
                   onChange={(next) => updateAt(index, next)}
                   onRemove={() => removeAt(index)}
                   onMove={(direction) => moveAt(index, direction)}
@@ -651,30 +948,17 @@ export function FieldEditor({
             </p>
           ) : (
             <div className="space-y-4">
-              {fields
-                .slice()
-                .sort((a, b) => a.order - b.order)
-                .filter((field) => field.key)
-                .map((field) => (
-                  <Field
-                    key={field.key}
-                    label={field.label || field.key}
-                    htmlFor={`preview-${field.key}`}
-                    error={previewErrors[field.key]}
-                  >
-                    <FieldControl
-                      // The preview only needs shape, not the server's id.
-                      field={{ ...field, id: field.id ?? field.key }}
-                      value={previewValues[field.key]}
-                      onChange={(value) =>
-                        setPreviewValues((current) => ({
-                          ...current,
-                          [field.key]: value,
-                        }))
-                      }
-                    />
-                  </Field>
-                ))}
+              <FieldRenderer
+                // The preview only needs shape, not the server's id.
+                fields={sorted
+                  .filter((field) => field.key)
+                  .map((field) => ({ ...field, id: field.id ?? field.key }))}
+                values={previewValues}
+                errors={previewErrors}
+                onChange={(key, value) =>
+                  setPreviewValues((current) => ({ ...current, [key]: value }))
+                }
+              />
               <Button
                 type="button"
                 variant="outline"

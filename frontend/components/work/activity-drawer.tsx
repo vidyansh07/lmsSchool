@@ -13,6 +13,7 @@
  * assignee, mirroring the server's own refusal.
  */
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/components/auth-provider";
@@ -205,7 +206,12 @@ export function ActivityDrawer({
   const [completeErrors, setCompleteErrors] = useState<Record<string, string>>({});
 
   if (detail && formValuesForKey !== detail.id) {
-    setFormValues(detail.form_values);
+    // Nothing submitted yet: start from the answers whoever created the
+    // activity (or the automation rule that did) suggested.
+    const submitted = detail.form_values ?? {};
+    setFormValues(
+      Object.keys(submitted).length > 0 ? submitted : { ...(detail.form_prefill ?? {}) },
+    );
     setSummary(detail.summary);
     setDurationMinutes(
       detail.duration_minutes !== null ? String(detail.duration_minutes) : "",
@@ -401,10 +407,21 @@ export function ActivityDrawer({
             <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
               <div>
                 <dt className="text-xs uppercase tracking-wide text-ink-muted">
-                  Student
+                  {detail.enquiry ? "Enquiry" : "Student"}
                 </dt>
                 <dd className="text-sm">
-                  {detail.student.name} · {detail.student.student_id}
+                  {detail.enquiry ? (
+                    <Link
+                      href={`/enquiries/${detail.enquiry.id}`}
+                      className="text-action underline-offset-2 hover:underline"
+                    >
+                      {detail.enquiry.name} · {detail.enquiry.mobile}
+                    </Link>
+                  ) : detail.student ? (
+                    `${detail.student.name} · ${detail.student.student_id}`
+                  ) : (
+                    "—"
+                  )}
                 </dd>
               </div>
               <div>

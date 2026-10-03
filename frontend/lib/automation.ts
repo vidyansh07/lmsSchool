@@ -70,6 +70,31 @@ const STUDENT_PATHS = [
   "student.risk_level",
 ];
 
+/** `enquiry.*`: the lead an occurrence is about. Mirrors
+ *  `apps/automation/evaluator.py::_ENQUIRY_PATHS`. */
+const ENQUIRY_PATHS = [
+  "enquiry.stage",
+  "enquiry.previous_stage",
+  "enquiry.changed",
+  "enquiry.course",
+  "enquiry.track",
+  "enquiry.source",
+  "enquiry.city",
+  "enquiry.state",
+  "enquiry.preferred_centre",
+  "enquiry.mode",
+  "enquiry.qualification",
+  "enquiry.lead_quality",
+  "enquiry.lost_reason",
+  "enquiry.has_owner",
+  "enquiry.owner",
+  "enquiry.full_name",
+  "enquiry.mobile",
+  "enquiry.email",
+  "enquiry.branch",
+  "enquiry.id",
+];
+
 export interface TriggerPathInfo {
   paths: string[];
   /** `ACTIVITY_COMPLETED` only: any `form.<key>` path is additionally legal
@@ -92,6 +117,7 @@ export const AUTOMATION_TRIGGER_PATHS: Record<AutomationTrigger, TriggerPathInfo
       "student.batch",
       "student.branch",
       "student.risk_level",
+      ...ENQUIRY_PATHS,
     ],
     allowsFormPaths: true,
   },
@@ -102,6 +128,7 @@ export const AUTOMATION_TRIGGER_PATHS: Record<AutomationTrigger, TriggerPathInfo
       "activity.assigned_to_role",
       "activity.days_overdue",
       ...STUDENT_PATHS,
+      ...ENQUIRY_PATHS,
     ],
     allowsFormPaths: false,
   },
@@ -131,7 +158,39 @@ export const AUTOMATION_TRIGGER_PATHS: Record<AutomationTrigger, TriggerPathInfo
     paths: ["risk.level", "risk.previous_level", "risk.triggered", "risk.newly_triggered", ...STUDENT_PATHS],
     allowsFormPaths: false,
   },
+  FORM_SUBMITTED: {
+    paths: [
+      "submission.form",
+      "submission.submitted_by_role",
+      "submission.self_filled",
+      "submission.on_time",
+      "submission.from_automation",
+      "submission.assigned_to",
+      "submission.requested_by",
+      "submission.id",
+      ...STUDENT_PATHS,
+      ...ENQUIRY_PATHS,
+    ],
+    allowsFormPaths: true,
+  },
+  ENQUIRY_CREATED: { paths: ENQUIRY_PATHS, allowsFormPaths: false },
+  ENQUIRY_STAGE_CHANGED: { paths: ENQUIRY_PATHS, allowsFormPaths: false },
+  ENQUIRY_UPDATED: { paths: ENQUIRY_PATHS, allowsFormPaths: false },
 };
+
+/** Condition paths whose answer is an enquiry stage — the builder offers the
+ *  stage list as the value instead of free text. */
+export const ENQUIRY_STAGE_PATHS = ["enquiry.stage", "enquiry.previous_stage"];
+
+/** The condition a `FORM_SUBMITTED` rule uses to name its form. The builder
+ *  shows it as a "Which form" picker rather than a generic condition row. */
+export const FORM_SUBMITTED_FORM_PATH = "submission.form";
+
+/** Operators that test the answer alone; the builder hides the value input
+ *  and sends an empty value. */
+export function operatorTakesNoValue(op: AutomationCondition["op"]): boolean {
+  return op === "is_empty" || op === "is_not_empty";
+}
 
 export async function listAutomationRules(page = 1): Promise<Paginated<AutomationRule>> {
   return apiFetch<Paginated<AutomationRule>>(`/api/v1/automation-rules/?page=${page}`);
@@ -300,10 +359,34 @@ export function parseConditionList(raw: string): (string | number)[] {
  * bare address) every one of them also allows through free text.
  */
 export const ASSIGN_TO_STRATEGIES = [
+  { value: "enquiry_owner", label: "The enquiry's owner" },
+  { value: "least_busy_counsellor", label: "The counsellor with the least open work" },
   { value: "same_assignee", label: "The same person already assigned" },
   { value: "batch_trainer", label: "The batch's trainer" },
   { value: "counsellor", label: "The enrolment's counsellor" },
   { value: "creator", label: "Whoever created the triggering activity" },
+];
+
+/** `update_enquiry.owner`: who the enquiry should belong to. */
+export const ENQUIRY_OWNER_STRATEGIES = [
+  { value: "least_busy_counsellor", label: "The counsellor with the least open work" },
+  { value: "same_assignee", label: "The triggering activity's assignee" },
+  { value: "submitter", label: "Whoever filled in the triggering form" },
+  { value: "manager", label: "A manager at the centre" },
+];
+
+/** `assign_form.to`: who fills the form. `submitter`/`creator` resolve on a
+ *  `FORM_SUBMITTED` rule (the person who filled the triggering form, and the
+ *  person who sent it); the rest resolve through the occurrence's student. */
+export const FORM_RECIPIENT_STRATEGIES = [
+  { value: "submitter", label: "Whoever filled in the triggering form" },
+  { value: "enquiry_owner", label: "The enquiry's owner" },
+  { value: "creator", label: "Whoever sent the triggering form or created the activity" },
+  { value: "same_assignee", label: "The triggering activity's assignee" },
+  { value: "student", label: "The student" },
+  { value: "batch_trainer", label: "The batch's trainer" },
+  { value: "counsellor", label: "The enrolment's counsellor" },
+  { value: "manager", label: "A manager at the centre" },
 ];
 
 /** `send_notification`/`send_email`/`send_whatsapp`'s `to` also accepts any

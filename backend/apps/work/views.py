@@ -148,6 +148,8 @@ class ActivityFilterSet(django_filters.FilterSet):
     type = django_filters.CharFilter(field_name="activity_type__slug")
     category = django_filters.CharFilter(field_name="activity_type__category")
     student = django_filters.UUIDFilter(field_name="student_id")
+    enquiry = django_filters.UUIDFilter(field_name="enquiry_id")
+    subject = django_filters.CharFilter(field_name="activity_type__subject")
     batch = django_filters.UUIDFilter(field_name="batch_id")
     assigned_to = django_filters.UUIDFilter(field_name="assigned_to_id")
     created_by = django_filters.UUIDFilter(field_name="created_by_id")
@@ -163,6 +165,8 @@ class ActivityFilterSet(django_filters.FilterSet):
             "type",
             "category",
             "student",
+            "enquiry",
+            "subject",
             "batch",
             "assigned_to",
             "created_by",
@@ -213,11 +217,20 @@ class ActivityListCreateView(ListAPIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        student = get_object_or_404(
-            students_access.visible_students(request.user), pk=data["student"]
-        )
+        student = None
+        enquiry = None
+        if data.get("enquiry"):
+            from apps.enquiries.access import visible_enquiries
+
+            enquiry = get_object_or_404(visible_enquiries(request.user), pk=data["enquiry"])
+        elif data.get("student"):
+            student = get_object_or_404(
+                students_access.visible_students(request.user), pk=data["student"]
+            )
+        else:
+            raise ApplicationError({"student": ["Choose the student or enquiry this is about."]})
         enrollment = None
-        if data.get("enrollment"):
+        if data.get("enrollment") and student is not None:
             enrollment = get_object_or_404(
                 Enrollment.objects.filter(student=student), pk=data["enrollment"]
             )
@@ -240,6 +253,9 @@ class ActivityListCreateView(ListAPIView):
             priority=data.get("priority"),
             student_visible=data.get("student_visible"),
             client_key=data.get("client_key") or None,
+            enquiry=enquiry,
+            summary=data.get("summary") or "",
+            form_prefill=data.get("form_prefill") or {},
         )
         detail = get_object_or_404(access.visible_activities(request.user), pk=activity.pk)
         return Response(

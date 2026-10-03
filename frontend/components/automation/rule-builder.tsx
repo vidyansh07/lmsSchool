@@ -24,10 +24,13 @@ import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { ActionEditor } from "@/components/automation/action-editor";
 import { ConditionEditor } from "@/components/automation/condition-editor";
+import { usePublishedFields } from "@/components/automation/use-published-fields";
 import { useApi } from "@/hooks/use-api";
 import {
   activateAutomationRule,
   AUTOMATION_TRIGGER_PATHS,
+  ENQUIRY_STAGE_PATHS,
+  FORM_SUBMITTED_FORM_PATH,
   getAutomationActivationPreview,
   pauseAutomationRule,
   testAutomationRule,
@@ -36,10 +39,16 @@ import {
 import { errorMessage, fieldErrors } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
 import {
+  AUTOMATION_EVENT_LABEL,
+  AUTOMATION_RECORD_LABEL,
+  AUTOMATION_RECORD_TRIGGERS,
   AUTOMATION_RULE_STATUS_LABEL,
   AUTOMATION_RULE_STATUS_VARIANT,
   AUTOMATION_TRIGGER_LABEL,
-  AUTOMATION_TRIGGER_OPTIONS,
+  ENQUIRY_STAGE_LABEL,
+  ENQUIRY_STAGES,
+  automationRecordOf,
+  type AutomationRecord,
 } from "@/lib/labels";
 import { formatDateTime } from "@/lib/format";
 import type { ActivityTypeListResponse } from "@/lib/work";
@@ -49,7 +58,13 @@ import type {
   AutomationDryRunResult,
   AutomationRuleDetail,
   AutomationTrigger,
+  FillableForm,
 } from "@/types/api";
+
+/** A `FORM_SUBMITTED` rule's "which form" condition, shown as its own picker. */
+function isFormPickerCondition(condition: AutomationCondition): boolean {
+  return condition.path === FORM_SUBMITTED_FORM_PATH && condition.op === "eq";
+}
 
 export function RuleBuilder({ id }: { id: string }) {
   const { user } = useAuth();
@@ -59,6 +74,7 @@ export function RuleBuilder({ id }: { id: string }) {
     `/api/v1/automation-rules/${id}/`,
   );
   const { data: activityTypeData } = useApi<ActivityTypeListResponse>("/api/v1/activity-types/");
+  const { data: fillableForms } = useApi<FillableForm[]>("/api/v1/forms/fillable/");
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -109,7 +125,71 @@ export function RuleBuilder({ id }: { id: string }) {
   const triggerMeta = AUTOMATION_TRIGGER_PATHS[trigger];
   const activityTypeOptions = (activityTypeData?.results ?? [])
     .filter((type) => type.status === "active")
-    .map((type) => ({ slug: type.slug, name: type.name }));
+    .map((type) => ({
+      slug: type.slug,
+      name: type.name,
+      subject: type.subject ?? "student",
+      form: type.form?.slug ?? null,
+    }));
+  const record = automationRecordOf(trigger);
+  // Enquiry stages are a fixed list: offer them as the value to compare to.
+  const stageChoices = ENQUIRY_STAGES.map((stage) => ({
+    value: stage,
+    label: ENQUIRY_STAGE_LABEL[stage],
+  }));
+  const choicePaths = Object.fromEntries(ENQUIRY_STAGE_PATHS.map((path) => [path, stageChoices]));
+  const formOptions = (fillableForms ?? []).map((form) => ({ slug: form.slug, name: form.name }));
+
+  // Which form this rule reads answers from: the picked form of a
+  // `FORM_SUBMITTED` rule, or the form of the activity type an
+  // `ACTIVITY_COMPLETED` rule names in an `activity.type is …` condition.
+  const isFormTrigger = trigger === "FORM_SUBMITTED";
+  const pickerConditions = isFormTrigger ? conditions.filter(isFormPickerCondition) : [];
+  const editableConditions = isFormTrigger
+    ? conditions.filter((condition) => !isFormPickerCondition(condition))
+    : conditions;
+  const pickedForm =
+    pickerConditions[0] && typeof pickerConditions[0].value === "string"
+      ? pickerConditions[0].value
+      : "";
+  const namedActivityType =
+    trigger === "ACTIVITY_COMPLETED"
+      ? conditions.find((condition) => condition.path === "activity.type" && condition.op === "eq")
+          ?.value
+      : undefined;
+  const activityForm =
+    typeof namedActivityType === "string"
+      ? ((activityTypeData?.results ?? []).find((type) => type.slug === namedActivityType)?.form
+          ?.slug ?? null)
+      : null;
+  const formSlug = isFormTrigger ? pickedForm || null : activityForm;
+  const formFields = usePublishedFields(formSlug);
+  const templateVariables = [
+    ...formFields.map((field) => `form.${field.key}`),
+    "student.name",
+    ...(record === "enquiry" ||
+    trigger === "ACTIVITY_COMPLETED" ||
+    trigger === "ACTIVITY_OVERDUE" ||
+    isFormTrigger
+      ? ["enquiry.full_name", "enquiry.mobile", "enquiry.course", "enquiry.source"]
+      : []),
+    ...(isFormTrigger ? ["submission.form"] : []),
+  ];
+
+  function changeTrigger(next: AutomationTrigger) {
+    setTrigger(next);
+    setConditions([]);
+    setDirty(true);
+  }
+
+  function pickForm(slug: string) {
+    // Answers of the old form mean nothing against the new one.
+    const kept = editableConditions.filter((condition) => !condition.path.startsWith("form."));
+    setConditions(
+      slug ? [{ path: FORM_SUBMITTED_FORM_PATH, op: "eq", value: slug }, ...kept] : kept,
+    );
+    setDirty(true);
+  }
 
   // A rule's trigger governs which condition paths are even legal, so
   // changing it invalidates whatever conditions were written against the
@@ -275,34 +355,50 @@ export function RuleBuilder({ id }: { id: string }) {
               }}
             />
           </Field>
-          <Field
-            label="Trigger"
-            htmlFor="rule-trigger"
-            error={errors.trigger}
-            required
-            hint={
-              canEditTrigger
-                ? "Changing this clears the conditions below."
-                : "Fixed once a rule has been activated."
-            }
-          >
-            <Select
-              id="rule-trigger"
-              disabled={!mayManage || !canEditTrigger}
-              value={trigger}
-              onChange={(event) => {
-                setTrigger(event.target.value as AutomationTrigger);
-                setConditions([]);
-                setDirty(true);
-              }}
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              label="When this record"
+              htmlFor="rule-record"
+              error={errors.trigger}
+              required
+              hint={
+                canEditTrigger
+                  ? "Changing this clears the conditions below."
+                  : "Fixed once a rule has been activated."
+              }
             >
-              {AUTOMATION_TRIGGER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
-          </Field>
+              <Select
+                id="rule-record"
+                disabled={!mayManage || !canEditTrigger}
+                value={record}
+                onChange={(event) => {
+                  const nextRecord = event.target.value as AutomationRecord;
+                  const first = AUTOMATION_RECORD_TRIGGERS[nextRecord][0];
+                  if (first) changeTrigger(first);
+                }}
+              >
+                {(Object.keys(AUTOMATION_RECORD_TRIGGERS) as AutomationRecord[]).map((value) => (
+                  <option key={value} value={value}>
+                    {AUTOMATION_RECORD_LABEL[value]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Event" htmlFor="rule-trigger" required>
+              <Select
+                id="rule-trigger"
+                disabled={!mayManage || !canEditTrigger}
+                value={trigger}
+                onChange={(event) => changeTrigger(event.target.value as AutomationTrigger)}
+              >
+                {AUTOMATION_RECORD_TRIGGERS[record].map((value) => (
+                  <option key={value} value={value}>
+                    {AUTOMATION_EVENT_LABEL[value]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
           <Field
             label="Description"
             htmlFor="rule-description"
@@ -327,14 +423,46 @@ export function RuleBuilder({ id }: { id: string }) {
         <CardHeader>
           <CardTitle>Conditions</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {isFormTrigger ? (
+            <Field
+              label="Which form"
+              htmlFor="rule-form"
+              hint="The rule runs when this form is submitted. Its answers can be used below."
+            >
+              <Select
+                id="rule-form"
+                disabled={!mayManage}
+                value={pickedForm}
+                onChange={(event) => pickForm(event.target.value)}
+              >
+                <option value="">Any form</option>
+                {pickedForm && !formOptions.some((option) => option.slug === pickedForm) ? (
+                  <option value={pickedForm}>{pickedForm}</option>
+                ) : null}
+                {formOptions.map((option) => (
+                  <option key={option.slug} value={option.slug}>
+                    {option.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
+          {trigger === "ACTIVITY_COMPLETED" && !activityForm ? (
+            <p className="text-2xs text-ink-faint">
+              Add an &ldquo;activity.type is …&rdquo; condition to pick that activity&rsquo;s
+              form answers by name.
+            </p>
+          ) : null}
           <ConditionEditor
-            conditions={conditions}
+            conditions={editableConditions}
             triggerMeta={triggerMeta}
             triggerLabel={AUTOMATION_TRIGGER_LABEL[trigger]}
+            formFields={formFields}
+            choicePaths={choicePaths}
             disabled={!mayManage}
             onChange={(next) => {
-              setConditions(next);
+              setConditions([...pickerConditions, ...next]);
               setDirty(true);
             }}
           />
@@ -349,6 +477,8 @@ export function RuleBuilder({ id }: { id: string }) {
           <ActionEditor
             actions={actions}
             activityTypeOptions={activityTypeOptions}
+            formOptions={formOptions}
+            variables={templateVariables}
             disabled={!mayManage}
             onChange={(next) => {
               setActions(next);

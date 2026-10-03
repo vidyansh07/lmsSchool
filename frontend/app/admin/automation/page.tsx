@@ -39,8 +39,11 @@ import { Capability, can } from "@/lib/capabilities";
 import {
   AUTOMATION_RULE_STATUS_LABEL,
   AUTOMATION_RULE_STATUS_VARIANT,
+  AUTOMATION_RECORD_LABEL,
+  AUTOMATION_RECORD_TRIGGERS,
   AUTOMATION_TRIGGER_LABEL,
   AUTOMATION_TRIGGER_OPTIONS,
+  type AutomationRecord,
 } from "@/lib/labels";
 import { formatDateTime } from "@/lib/format";
 import type { AutomationRule, AutomationTrigger, Paginated } from "@/types/api";
@@ -114,10 +117,14 @@ function NewRuleDialog({
               value={trigger}
               onChange={(event) => setTrigger(event.target.value as AutomationTrigger)}
             >
-              {AUTOMATION_TRIGGER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+              {(Object.keys(AUTOMATION_RECORD_TRIGGERS) as AutomationRecord[]).map((record) => (
+                <optgroup key={record} label={AUTOMATION_RECORD_LABEL[record]}>
+                  {AUTOMATION_RECORD_TRIGGERS[record].map((value) => (
+                    <option key={value} value={value}>
+                      {AUTOMATION_TRIGGER_LABEL[value]}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </Select>
           </Field>

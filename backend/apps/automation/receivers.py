@@ -81,3 +81,45 @@ def on_risk_changed(
             )
 
     transaction.on_commit(_enqueue)
+
+
+def on_form_submitted(sender, *, assignment, actor=None, **kwargs) -> None:
+    """A submitted form assignment is a ``FORM_SUBMITTED`` occurrence."""
+    assignment_id = str(assignment.pk)
+
+    def _enqueue() -> None:
+        try:
+            from .tasks import dispatch_form_submitted
+
+            dispatch_form_submitted.delay(assignment_id)
+        except Exception:
+            logger.exception(
+                "Failed to enqueue FORM_SUBMITTED automation dispatch for assignment %s",
+                assignment_id,
+            )
+
+    transaction.on_commit(_enqueue)
+
+
+def on_enquiry_changed(
+    sender, *, enquiry, event, changed=None, previous_stage="", actor=None, **kwargs
+) -> None:
+    """An enquiry created is `ENQUIRY_CREATED`; any change is
+    `ENQUIRY_UPDATED`, and a stage change is also `ENQUIRY_STAGE_CHANGED`."""
+    enquiry_id = str(enquiry.pk)
+    changed = list(changed or [])
+    if event == "created":
+        triggers = ["ENQUIRY_CREATED"]
+    else:
+        triggers = ["ENQUIRY_UPDATED"] + (["ENQUIRY_STAGE_CHANGED"] if "stage" in changed else [])
+
+    def _enqueue() -> None:
+        try:
+            from .tasks import dispatch_enquiry_event
+
+            for trigger in triggers:
+                dispatch_enquiry_event.delay(enquiry_id, trigger, previous_stage or "", changed)
+        except Exception:
+            logger.exception("Failed to enqueue enquiry automation dispatch for %s", enquiry_id)
+
+    transaction.on_commit(_enqueue)

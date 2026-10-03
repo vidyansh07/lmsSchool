@@ -24,30 +24,38 @@ file/image               an existing upload id; accept/max_mb checked
                          against the upload's stored metadata
 relation                 uuid resolving through the caller's own
                          ``visible_*`` for that model
+time                     ``HH:MM`` (or ``HH:MM:SS``); min/max
+rating                   whole number from 1 to ``validation.max``
+                         (default 5)
+consent                  bool; a required consent must be ``true``
+hidden                   string up to 500 characters; ``validation.
+                         default`` fills it when nothing is sent
+heading                  never takes a value (display only)
+dependent_select         a value from ``options.choices[<parent
+                         answer>]``, where ``options.parent`` names
+                         the field it depends on
 ======================== ============================================
 
-Upload resolution — a known gap, not an oversight
---------------------------------------------------
-The phase prompt for this module assumes ``apps/common/uploads.py`` already
-exposes a generic upload record with an id. It does not: every
-``FileField``/``ImageField`` in this codebase (``apps.assignments``,
-``apps.courses``, ``apps.exams``, ``apps.projects``, ``apps.reporting``)
-belongs to its own owning entity, and ``apps.common.uploads`` is a bundle of
-validators and ``upload_to`` functions, not a model with a queryable id.
-Phase 8 itself has no owning entity for a form response yet (the prompt
-says so explicitly), so there is nothing for a generic upload id to be
-attached to in this phase either.
+Conditional fields
+------------------
+A field with ``show_if`` (``{"field": key, "op": op, "value": v}``, ``op``
+one of eq, ne, in, not_in, filled, empty) is shown only while that other
+field's answer matches. A field that is not shown is never required, and any
+value sent for it is dropped rather than stored — the person filling the
+form could not see it, so whatever the client left in it is not an answer.
+A field depending on a hidden field is itself hidden.
 
-Rather than invent a generic upload store the phase did not ask for and no
-consumer yet needs, ``file``/``image`` fields validate against an
-injectable seam, :data:`UPLOAD_RESOLVER`. It resolves an upload id to
-``{"content_type": str, "size_bytes": int, "filename": str}`` or ``None``
-if the id does not resolve. The default implementation always returns
-``None`` (nothing resolves, so nothing is silently trusted) until a later
-phase's real upload endpoint registers a resolver here. Tests exercise both
-branches by monkeypatching this attribute — the validation *logic* (accept
-list, max size, image content-type) is fully implemented and tested; only
-the existence check is stubbed pending that generic store.
+Upload resolution
+-----------------
+A ``file``/``image`` value is the id of a :class:`~apps.forms.models.
+FormUpload` row, created by ``POST /api/v1/forms/uploads/`` before the form
+is submitted. :data:`UPLOAD_RESOLVER` turns that id into
+``{"content_type", "size_bytes", "filename", "uploaded_by"}`` (or ``None``
+when it does not resolve), and the field's ``accept``/``max_mb`` rules are
+checked against that stored metadata, never against anything the client
+claims. An upload can only be attached by the person who uploaded it, so
+one person cannot submit another person's file by guessing its id. The
+resolver stays a module-level seam so tests can substitute it.
 """
 
 from __future__ import annotations
@@ -61,7 +69,7 @@ from uuid import UUID
 
 from apps.common.exceptions import ApplicationError
 
-from .models import FormField, FormFieldType, FormVersion
+from .models import DISPLAY_ONLY_FIELD_TYPES, FormField, FormFieldType, FormVersion
 
 # ---------------------------------------------------------------------------
 # Upload resolution seam (see module docstring)
@@ -69,11 +77,23 @@ from .models import FormField, FormFieldType, FormVersion
 
 
 def _default_upload_resolver(upload_id: str) -> dict[str, Any] | None:
-    return None
+    from .models import FormUpload
+
+    try:
+        upload = FormUpload.objects.filter(pk=UUID(str(upload_id))).first()
+    except (ValueError, TypeError, AttributeError):
+        return None
+    if upload is None:
+        return None
+    return {
+        "content_type": upload.content_type,
+        "size_bytes": upload.size_bytes,
+        "filename": upload.original_name or f"upload{upload.extension}",
+        "uploaded_by": str(upload.uploaded_by_id) if upload.uploaded_by_id else None,
+    }
 
 
-#: Replaced by a real generic-upload lookup once one exists. Module-level so
-#: tests (and a future phase) can monkeypatch it without changing call sites.
+#: Module-level so tests can monkeypatch it without changing call sites.
 UPLOAD_RESOLVER = _default_upload_resolver
 
 
@@ -366,11 +386,19 @@ def _validate_url(value: Any) -> tuple[Any, list[str]]:
     return value, []
 
 
-def _validate_upload(value: Any, rules: dict[str, Any], *, image: bool) -> tuple[Any, list[str]]:
+def _validate_upload(
+    value: Any, rules: dict[str, Any], *, image: bool, actor: Any
+) -> tuple[Any, list[str]]:
     if not isinstance(value, str) or not value:
         return None, ["An uploaded file is required."]
     metadata = UPLOAD_RESOLVER(value)
     if metadata is None:
+        return None, ["The uploaded file could not be found."]
+    owner = metadata.get("uploaded_by")
+    actor_id = getattr(actor, "pk", None)
+    if owner and actor_id is not None and str(actor_id) != str(owner):
+        # Same message as "not found": whether somebody else's upload with
+        # this id exists is not something to confirm.
         return None, ["The uploaded file could not be found."]
     errors: list[str] = []
     content_type = str(metadata.get("content_type", ""))
@@ -406,6 +434,72 @@ def _validate_relation(value: Any, options: Any, *, actor: Any) -> tuple[Any, li
     return uuid_value, []
 
 
+_TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$")
+
+
+def _validate_time(value: Any, rules: dict[str, Any]) -> tuple[Any, list[str]]:
+    if not isinstance(value, str) or not _TIME_RE.match(value):
+        return None, ["Enter a time as HH:MM."]
+    errors: list[str] = []
+    # Zero-padded HH:MM[:SS] strings order the same way the times do.
+    minimum = rules.get("min")
+    maximum = rules.get("max")
+    if minimum and value < str(minimum):
+        errors.append(f"Must be {minimum} or later.")
+    if maximum and value > str(maximum):
+        errors.append(f"Must be {maximum} or earlier.")
+    return value, errors
+
+
+def _validate_rating(value: Any, rules: dict[str, Any]) -> tuple[Any, list[str]]:
+    maximum = rules.get("max") or 5
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None, ["Choose a rating."]
+    if value < 1 or value > maximum:
+        return None, [f"Rating must be between 1 and {maximum}."]
+    return value, []
+
+
+def _validate_consent(value: Any, field: FormField) -> tuple[Any, list[str]]:
+    if not isinstance(value, bool):
+        return None, ["Must be true or false."]
+    if field.required and value is not True:
+        return None, ["You must agree to continue."]
+    return value, []
+
+
+def _validate_hidden(value: Any) -> tuple[Any, list[str]]:
+    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        return None, ["Must be text."]
+    text = str(value)
+    if len(text) > 500:
+        return None, ["Must be at most 500 characters."]
+    return text, []
+
+
+def dependent_choices(options: Any, parent_value: Any) -> list[dict[str, Any]]:
+    """The options a `dependent_select` offers for one answer of its parent
+    field — an empty list when the parent is unanswered or has no mapping."""
+    if not isinstance(options, dict) or parent_value in (None, ""):
+        return []
+    choices = options.get("choices")
+    if not isinstance(choices, dict):
+        return []
+    found = choices.get(str(parent_value))
+    return found if isinstance(found, list) else []
+
+
+def _validate_dependent_choice(
+    value: Any, options: Any, parent_value: Any
+) -> tuple[Any, list[str]]:
+    if parent_value in (None, ""):
+        return None, ["Answer the field this one depends on first."]
+    allowed = _option_values(dependent_choices(options, parent_value))
+    if not isinstance(value, str) or value not in allowed:
+        return None, ["Must be one of the allowed options."]
+    return value, []
+
+
 _DISPATCH: dict[str, Any] = {
     FormFieldType.TEXT: lambda v, f, a: _validate_text(v, f.validation, richtext=False),
     FormFieldType.TEXTAREA: lambda v, f, a: _validate_text(v, f.validation, richtext=False),
@@ -426,10 +520,87 @@ _DISPATCH: dict[str, Any] = {
     FormFieldType.EMAIL: lambda v, f, a: _validate_email(v),
     FormFieldType.PHONE: lambda v, f, a: _validate_phone(v),
     FormFieldType.URL: lambda v, f, a: _validate_url(v),
-    FormFieldType.FILE: lambda v, f, a: _validate_upload(v, f.validation, image=False),
-    FormFieldType.IMAGE: lambda v, f, a: _validate_upload(v, f.validation, image=True),
+    FormFieldType.FILE: lambda v, f, a: _validate_upload(v, f.validation, image=False, actor=a),
+    FormFieldType.IMAGE: lambda v, f, a: _validate_upload(v, f.validation, image=True, actor=a),
     FormFieldType.RELATION: lambda v, f, a: _validate_relation(v, f.options, actor=a),
+    FormFieldType.TIME: lambda v, f, a: _validate_time(v, f.validation),
+    FormFieldType.RATING: lambda v, f, a: _validate_rating(v, f.validation),
+    FormFieldType.CONSENT: lambda v, f, a: _validate_consent(v, f),
+    FormFieldType.HIDDEN: lambda v, f, a: _validate_hidden(v),
+    # `dependent_select` is dispatched in `validate_payload` itself: it needs
+    # the parent field's cleaned answer, which no single-value handler sees.
 }
+
+
+# ---------------------------------------------------------------------------
+# Conditional visibility
+# ---------------------------------------------------------------------------
+
+SHOW_IF_OPERATORS = frozenset({"eq", "ne", "in", "not_in", "filled", "empty"})
+
+
+def _is_blank(value: Any) -> bool:
+    return value is None or value == "" or value == [] or value is False
+
+
+def _show_if_matches(rule: dict[str, Any], parent_value: Any) -> bool:
+    op = rule.get("op", "eq")
+    target = rule.get("value")
+    if op == "filled":
+        return not _is_blank(parent_value)
+    if op == "empty":
+        return _is_blank(parent_value)
+    if isinstance(parent_value, list):
+        # A multi-choice parent matches when any of its picks matches.
+        if op == "eq":
+            return target in parent_value
+        if op == "ne":
+            return target not in parent_value
+        if op == "in":
+            return isinstance(target, list) and any(item in target for item in parent_value)
+        if op == "not_in":
+            return isinstance(target, list) and not any(item in target for item in parent_value)
+        return False
+    if op == "eq":
+        return parent_value == target
+    if op == "ne":
+        return parent_value != target
+    if op == "in":
+        return isinstance(target, list) and parent_value in target
+    if op == "not_in":
+        return isinstance(target, list) and parent_value not in target
+    return False
+
+
+def visible_field_keys(fields: list[FormField], values: dict[str, Any]) -> set[str]:
+    """The keys of every field shown for these answers.
+
+    A field is shown when it has no ``show_if``, or when the field it names
+    is itself shown and that field's answer matches. Resolved by walking the
+    chain with a memo, so field order does not matter and a cycle (refused
+    at save time anyway) resolves to hidden instead of recursing for ever.
+    """
+    by_key = {field.key: field for field in fields}
+    memo: dict[str, bool] = {}
+
+    def _visible(key: str, trail: frozenset[str]) -> bool:
+        if key in memo:
+            return memo[key]
+        field = by_key.get(key)
+        if field is None or key in trail:
+            return False
+        rule = field.show_if or {}
+        parent_key = rule.get("field") if isinstance(rule, dict) else None
+        if not parent_key:
+            result = True
+        else:
+            result = _visible(parent_key, trail | {key}) and _show_if_matches(
+                rule, values.get(parent_key)
+            )
+        memo[key] = result
+        return result
+
+    return {field.key for field in fields if _visible(field.key, frozenset())}
 
 
 def validate_payload(*, version: FormVersion, values: dict[str, Any], actor: Any) -> dict[str, Any]:
@@ -445,6 +616,7 @@ def validate_payload(*, version: FormVersion, values: dict[str, Any], actor: Any
 
     fields: list[FormField] = list(version.fields.all())
     by_key = {field.key: field for field in fields}
+    shown = visible_field_keys(fields, values)
 
     errors: dict[str, list[str]] = {}
     cleaned: dict[str, Any] = {}
@@ -452,19 +624,37 @@ def validate_payload(*, version: FormVersion, values: dict[str, Any], actor: Any
     for key in values:
         if key not in by_key:
             errors[key] = ["This field is not part of the form."]
+        elif by_key[key].type in DISPLAY_ONLY_FIELD_TYPES and values[key] not in (None, ""):
+            errors[key] = ["This field does not take a value."]
 
     for field in fields:
+        if field.type in DISPLAY_ONLY_FIELD_TYPES or field.key not in shown:
+            continue
         present = field.key in values
         value = values.get(field.key)
+        if field.type == FormFieldType.HIDDEN and (not present or value in (None, "")):
+            default = (field.validation or {}).get("default")
+            if default not in (None, ""):
+                value, present = default, True
         if not present or value is None or value == "":
             if field.required:
                 errors.setdefault(field.key, []).append("This field is required.")
             continue
-        handler = _DISPATCH.get(field.type)
-        if handler is None:  # pragma: no cover - defensive, every type is dispatched
-            errors.setdefault(field.key, []).append("Unsupported field type.")
-            continue
-        field_cleaned, field_errors = handler(value, field, actor)
+        if field.type == FormFieldType.DEPENDENT_SELECT:
+            options = field.options if isinstance(field.options, dict) else {}
+            parent_key = options.get("parent")
+            # The parent's *cleaned* answer: fields are validated in order and
+            # a parent always comes first (enforced when fields are saved), so
+            # an invalid or hidden parent leaves nothing to depend on.
+            field_cleaned, field_errors = _validate_dependent_choice(
+                value, field.options, cleaned.get(parent_key) if parent_key else None
+            )
+        else:
+            handler = _DISPATCH.get(field.type)
+            if handler is None:  # pragma: no cover - defensive, every type is dispatched
+                errors.setdefault(field.key, []).append("Unsupported field type.")
+                continue
+            field_cleaned, field_errors = handler(value, field, actor)
         if field_errors:
             errors.setdefault(field.key, []).extend(field_errors)
         else:
@@ -475,4 +665,12 @@ def validate_payload(*, version: FormVersion, values: dict[str, Any], actor: Any
     return cleaned
 
 
-__all__ = ["UPLOAD_RESOLVER", "is_snake_case", "sanitise_richtext", "validate_payload"]
+__all__ = [
+    "SHOW_IF_OPERATORS",
+    "UPLOAD_RESOLVER",
+    "dependent_choices",
+    "is_snake_case",
+    "sanitise_richtext",
+    "validate_payload",
+    "visible_field_keys",
+]

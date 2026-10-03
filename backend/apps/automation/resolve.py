@@ -3,7 +3,8 @@
 `create_activity.assign_to`, `send_notification.to` and `create_review.reviewer`
 each take a *strategy* — a named role in the story just played out
 (`same_assignee`, `batch_trainer`, `counsellor`, `creator`, `manager`,
-`assignee`, `student`) or a literal user id — and this module is the one
+`assignee`, `submitter`, `student`, `enquiry_owner`, `least_busy_counsellor`)
+or a literal user id — and this module is the one
 place a strategy turns into an actual `User`. `services.py`'s ALLOWLIST
 (one set of these per action) enumerates which of the two it accepts.
 
@@ -39,6 +40,13 @@ class RunContext:
     enrollment: Any = None
     activity: Any = None
     branch: Any = None
+    #: The submitted `FormAssignment` (`FORM_SUBMITTED` only). For that
+    #: trigger `assignee`/`same_assignee`/`submitter` resolve to the person
+    #: who filled the form, and `creator` to whoever sent it.
+    form_assignment: Any = None
+    #: The enquiry the occurrence is about: the enquiry of an enquiry event,
+    #: or of an activity or form about one. `enquiry_owner` resolves here.
+    enquiry: Any = None
 
 
 def _first_manager(rctx: RunContext) -> User | None:
@@ -57,6 +65,37 @@ def _first_manager(rctx: RunContext) -> User | None:
     return qs.order_by("pk").first()
 
 
+def _least_busy_counsellor(rctx: RunContext) -> User | None:
+    """The active counsellor at the occurrence's centre with the fewest open
+    activities assigned to them — a fair way to spread new enquiries
+    without anyone keeping a queue. Ties go to the earliest account."""
+    from django.db.models import Count, Q
+
+    from apps.work.models import OPEN_STATUSES
+
+    branch = rctx.branch
+    if branch is None and rctx.enquiry is not None:
+        branch = rctx.enquiry.branch
+    if branch is None and rctx.student is not None:
+        branch = getattr(rctx.student, "branch", None)
+    qs = User.objects.filter(role=UserRole.COUNSELLOR, is_active=True)
+    if branch is not None:
+        qs = qs.filter(branch_id=branch.pk)
+    return (
+        qs.annotate(
+            open_work=Count(
+                "assigned_activities",
+                filter=Q(
+                    assigned_activities__status__in=list(OPEN_STATUSES),
+                    assigned_activities__deleted_at__isnull=True,
+                ),
+            )
+        )
+        .order_by("open_work", "pk")
+        .first()
+    )
+
+
 def _is_uuid(value: str) -> bool:
     try:
         uuid.UUID(str(value))
@@ -70,10 +109,18 @@ def resolve_user(strategy: Any, *, rctx: RunContext) -> User | None:
     (string or `UUID`), or (for `send_notification.to` only — checked by
     the caller, not here) a role slug, in which case this returns `None`
     and the caller falls back to a role-wide broadcast."""
-    if strategy == "same_assignee" or strategy == "assignee":
-        return rctx.activity.assigned_to if rctx.activity is not None else None
+    if strategy in ("same_assignee", "assignee", "submitter"):
+        if rctx.activity is not None and strategy != "submitter":
+            return rctx.activity.assigned_to
+        if rctx.form_assignment is not None:
+            return rctx.form_assignment.assigned_to
+        return None
     if strategy == "creator":
-        return rctx.activity.created_by if rctx.activity is not None else None
+        if rctx.activity is not None:
+            return rctx.activity.created_by
+        if rctx.form_assignment is not None:
+            return rctx.form_assignment.requested_by
+        return None
     if strategy == "batch_trainer" or strategy == "trainer":
         batch = rctx.enrollment.batch if rctx.enrollment is not None else None
         if batch is None and rctx.activity is not None:
@@ -85,6 +132,11 @@ def resolve_user(strategy: Any, *, rctx: RunContext) -> User | None:
         return rctx.student.user if rctx.student is not None and rctx.student.user_id else None
     if strategy == "manager":
         return _first_manager(rctx)
+    if strategy == "enquiry_owner":
+        enquiry = rctx.enquiry
+        return enquiry.owner if enquiry is not None and enquiry.owner_id else None
+    if strategy == "least_busy_counsellor":
+        return _least_busy_counsellor(rctx)
     if _is_uuid(strategy):
         return User.objects.filter(pk=strategy, is_active=True).first()
     return None

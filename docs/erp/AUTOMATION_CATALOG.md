@@ -19,22 +19,46 @@ of the listed keys; anything else is refused when the rule is saved.
 | PROJECT_OVERDUE | beat `work.mark_overdue` | project.id, project.days_overdue, student.* |
 | ASSIGNMENT_OVERDUE | beat `work.mark_overdue` | assignment.id, assignment.days_overdue, student.* |
 | RISK_CHANGED | `risk.recompute` when level or triggered set changes | risk.level, risk.previous_level, risk.triggered (list), risk.newly_triggered (list), student.* |
+| ENQUIRY_CREATED | `enquiries.services.capture` (on commit) — the enquiry form created a lead | enquiry.* |
+| ENQUIRY_STAGE_CHANGED | any change of an enquiry's stage (a person, a follow-up form, a call's form, or `update_enquiry` one depth deeper) | enquiry.*, including enquiry.previous_stage |
+| ENQUIRY_UPDATED | any change to an enquiry | enquiry.*, including enquiry.changed (list of field names) |
+| FORM_SUBMITTED | `forms.services.submit_assignment` (on commit) — a form sent to someone was submitted, or someone filled one in directly | submission.form (slug), submission.submitted_by_role, submission.self_filled, submission.on_time, submission.from_automation, submission.assigned_to, submission.requested_by, submission.id, form.<key> for every answer-carrying field, student.* when the form is about a student |
 
 `student.*` always means: id, name, batch, branch, trainer (user id),
 counsellor (user id of `created_by` on the profile), risk_level.
+
+`enquiry.*` means: id, full_name, mobile, email, stage, previous_stage,
+changed, source, course, track, city, state, preferred_centre, mode,
+qualification, owner, has_owner, lead_quality, lost_reason, branch. It is
+present on the three enquiry triggers, and on `ACTIVITY_COMPLETED`,
+`ACTIVITY_OVERDUE` and `FORM_SUBMITTED` when the activity or form is about an
+enquiry.
+
+The builder picks a **record** (Enquiry, Activity, Form, Student) and then one
+of its events — the Meritto workflow shape — but a rule stores only the
+trigger.
 
 ## Conditions
 
 `[{ "path": "form.communication", "op": "lt", "value": 6 }]` — all must
 hold. Operators: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `in`, `not_in`,
-`contains` (list or string). Values are literals only. Missing path → the
-condition is false (never an error).
+`contains` (list or string), `is_empty`, `is_not_empty` (no value). Values
+are literals only. Missing path → the condition is false (never an error),
+except `is_empty`, for which a missing answer is empty.
+
+`form.<key>` is allowed on `ACTIVITY_COMPLETED` and `FORM_SUBMITTED`, for
+every field type except `heading`: text compares with `eq`/`contains`, a
+multi-choice answer is a list for `contains`, yes/no and consent are booleans,
+number/decimal/rating compare as numbers, an unanswered field is `null`. A
+`FORM_SUBMITTED` rule names its form with `submission.form eq <slug>`.
 
 ## Actions
 
 | Action | Params | Permission the rule's author must hold | Notes |
 | --- | --- | --- | --- |
-| create_activity | type (slug), assign_to (`same_assignee` / `batch_trainer` / `counsellor` / `creator` / user id), due_in_days, priority, title | activity.create | `parent` = triggering activity; `automation_run` set |
+| create_activity | type (slug), assign_to (`same_assignee` / `batch_trainer` / `counsellor` / `creator` / `enquiry_owner` / `least_busy_counsellor` / user id), due_in_days, due_in_hours, planned_in_hours, priority, title, summary (notes), form_prefill ({question key: value}); title, summary and prefill values are templated | activity.create | about the occurrence's enquiry when the type's subject is `enquiry`, else its student; `parent` = triggering activity; `automation_run` set. Type and offsets checked at save time |
+| update_enquiry | stage, owner (strategy or user id), only_if_unowned, lost_reason, lead_quality, next_follow_up_in_days — at least one | enquiry.manage | the change dispatches `ENQUIRY_UPDATED` (and `ENQUIRY_STAGE_CHANGED` for a stage) inline, one depth deeper — never through the signal — so the depth guard bounds a rule that changes its own trigger |
+| assign_form | form (slug of a published, non-activity form), to (`submitter` / `creator` / `same_assignee` / `student` / `batch_trainer` / `counsellor` / `manager` / user id), due_in_days, title, message (both templated) | form.assign | creates a `FormAssignment` pinned to the published version, about the occurrence's student; `automation_run` set; the assignee is notified. Form slug, recipient and due days are checked at save time |
 | send_notification | to (`student` / `trainer` / `counsellor` / `manager` / `assignee` / role slug), kind (a NotificationKind), title, body (variables `{{student.name}}` etc. from the context) | communication.send | in-app, email by preference |
 | send_email | to (as above or address), template (published key) | communication.send | through `Delivery`, channel email |
 | send_whatsapp | to, template (published key with provider id) | communication.send | requires an approved template and a configured provider; otherwise the run is `skipped` with reason |
@@ -68,6 +92,15 @@ such in the builder.
 | Project overdue | PROJECT_OVERDUE | project.days_overdue gte 3 | send_notification(student, project.overdue); send_notification(trainer) | student, trainer | |
 
 Every seeded rule can be paused from the builder; none is locked.
+
+### Seeded as drafts (`automation.0005`, not active until an administrator activates them)
+
+| Name | Trigger | Conditions | Actions |
+| --- | --- | --- | --- |
+| Call a new enquiry within 2 hours | ENQUIRY_CREATED | — | update_enquiry(owner least_busy_counsellor, only if unowned); create_activity(enquiry-call, enquiry_owner, due 2 h, high, title "Call {{enquiry.full_name}}", notes, prefill call_status = connected) |
+| Book a demo class for an interested enquiry | ENQUIRY_STAGE_CHANGED | enquiry.stage eq interested | create_activity(demo-class, enquiry_owner, planned in 24 h, due 3 d) |
+| Follow up an unanswered call next day | ACTIVITY_COMPLETED | activity.type eq enquiry-call; form.call_status in not_answered, busy, switched_off | create_activity(enquiry-call, same_assignee, due 1 d) |
+| Tell the manager about a lost enquiry | ENQUIRY_STAGE_CHANGED | enquiry.stage eq not_interested | send_notification(manager, form.submitted, "Enquiry lost: {{enquiry.full_name}}") |
 
 ## Builder screen contract (see DESIGN_DECISIONS §Automation Builder)
 

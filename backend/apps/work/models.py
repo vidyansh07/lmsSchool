@@ -74,6 +74,14 @@ class ActivityTypeQuerySet(SoftDeleteQuerySet):
         return self.select_related("form")
 
 
+class ActivitySubject(models.TextChoices):
+    """What an activity of a type is about: a student, or an enquiry (a lead
+    who is not a student yet — a counselling call, a demo class)."""
+
+    STUDENT = "student", _("Student")
+    ENQUIRY = "enquiry", _("Enquiry")
+
+
 class ActivityTypeStatus(models.TextChoices):
     ACTIVE = "active", _("Active")
     DISABLED = "disabled", _("Disabled")
@@ -88,6 +96,12 @@ class ActivityType(SoftDeleteBaseModel):
     slug = models.CharField(_("slug"), max_length=60)
     name = models.CharField(_("name"), max_length=150)
     description = models.TextField(_("description"), blank=True)
+    subject = models.CharField(
+        _("subject"),
+        max_length=10,
+        choices=ActivitySubject.choices,
+        default=ActivitySubject.STUDENT,
+    )
     category = models.CharField(_("category"), max_length=30, choices=ActivityCategory.choices)
     # Role *slugs* (``apps.accounts.roles.UserRole`` values), plus the literal
     # string ``"automation"`` for the handful of catalog rows an automation
@@ -218,6 +232,7 @@ class ActivityQuerySet(SoftDeleteQuerySet):
         return self.select_related(
             "student",
             "student__user",
+            "enquiry",
             "enrollment",
             "batch",
             "branch",
@@ -235,8 +250,21 @@ class ActivityQuerySet(SoftDeleteQuerySet):
 class Activity(SoftDeleteBaseModel):
     """One scheduled/worked/reviewed instance of an :class:`ActivityType`."""
 
+    #: Exactly one of `student`/`enquiry` is set (checked by a constraint),
+    #: matching the type's `subject`.
     student = models.ForeignKey(
-        "students.StudentProfile", on_delete=models.PROTECT, related_name="activities"
+        "students.StudentProfile",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="activities",
+    )
+    enquiry = models.ForeignKey(
+        "enquiries.Enquiry",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="activities",
     )
     enrollment = models.ForeignKey(
         "enrollments.Enrollment",
@@ -350,6 +378,11 @@ class Activity(SoftDeleteBaseModel):
     #: so the column stays a plain CharField (DJ001 — the same choice
     #: `FormField.performance_key` makes).
     client_key = models.CharField(_("client key"), max_length=100, blank=True, default="")
+    #: Answers to fill the activity's form in with when it is opened for
+    #: completion — set by whoever (or whichever automation rule) created it,
+    #: e.g. the course the enquiry asked about. The person completing it can
+    #: change any of them; nothing here is a submitted answer.
+    form_prefill = models.JSONField(_("form prefill"), default=dict, blank=True)
 
     objects, all_objects = soft_delete_managers(ActivityQuerySet)
 
@@ -358,6 +391,7 @@ class Activity(SoftDeleteBaseModel):
         verbose_name_plural = _("activities")
         indexes = [
             models.Index(fields=["student", "-created_at"], name="activity_student_created_idx"),
+            models.Index(fields=["enquiry", "-created_at"], name="activity_enquiry_created_idx"),
             models.Index(
                 fields=["assigned_to", "status", "due_at"], name="activity_assignee_status_idx"
             ),
@@ -377,6 +411,16 @@ class Activity(SoftDeleteBaseModel):
                         ActivityStatus.IN_PROGRESS,
                     ]
                 ),
+            ),
+        ]
+
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(student__isnull=False, enquiry__isnull=True)
+                    | models.Q(student__isnull=True, enquiry__isnull=False)
+                ),
+                name="activity_has_one_subject",
             ),
         ]
 

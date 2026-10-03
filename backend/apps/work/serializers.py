@@ -29,6 +29,7 @@ from .models import (
     ActivityPriority,
     ActivityResult,
     ActivityStatus,
+    ActivitySubject,
     ActivityType,
     ActivityTypeStatus,
     RiskEffect,
@@ -45,6 +46,7 @@ class ActivityTypeSerializer(serializers.Serializer):
     name = serializers.CharField(read_only=True)
     description = serializers.CharField(read_only=True)
     category = serializers.CharField(read_only=True)
+    subject = serializers.CharField(read_only=True)
     allowed_creator_roles = serializers.ListField(read_only=True)
     allowed_assignee_roles = serializers.ListField(read_only=True)
     visible_to_student = serializers.BooleanField(read_only=True)
@@ -69,6 +71,9 @@ class ActivityTypeCreateSerializer(StrictSerializer):
     name = SafeCharField(max_length=150)
     description = SafeCharField(required=False, allow_blank=True, default="")
     category = serializers.ChoiceField(choices=ActivityCategory.choices)
+    subject = serializers.ChoiceField(
+        choices=ActivitySubject.choices, required=False, default=ActivitySubject.STUDENT
+    )
     allowed_creator_roles = serializers.ListField(
         child=serializers.CharField(), required=False, default=list
     )
@@ -128,7 +133,11 @@ class ActivityTypePatchSerializer(StrictSerializer):
 
 
 class ActivityCreateSerializer(StrictSerializer):
-    student = serializers.UUIDField()
+    #: One of `student`/`enquiry`, matching the type's subject.
+    student = serializers.UUIDField(required=False, allow_null=True, default=None)
+    enquiry = serializers.UUIDField(required=False, allow_null=True, default=None)
+    summary = SafeCharField(max_length=4000, required=False, allow_blank=True, default="")
+    form_prefill = serializers.JSONField(required=False, default=dict)
     enrollment = serializers.UUIDField(required=False, allow_null=True, default=None)
     #: The `ActivityType`'s *slug* — its natural key everywhere else in this
     #: API (`/activity-types/{slug}/`, the list endpoint's `type` filter).
@@ -204,6 +213,18 @@ def _type_summary(activity_type: ActivityType) -> dict:
         "slug": activity_type.slug,
         "name": activity_type.name,
         "category": activity_type.category,
+        "subject": activity_type.subject,
+    }
+
+
+def _enquiry_summary(enquiry) -> dict | None:
+    if enquiry is None:
+        return None
+    return {
+        "id": str(enquiry.pk),
+        "name": enquiry.full_name,
+        "mobile": enquiry.mobile,
+        "stage": enquiry.stage,
     }
 
 
@@ -225,14 +246,18 @@ class ActivityListSerializer(serializers.Serializer):
     completed_at = serializers.DateTimeField(read_only=True, allow_null=True)
     created_at = serializers.DateTimeField(read_only=True)
     student = serializers.SerializerMethodField()
+    enquiry = serializers.SerializerMethodField()
     type = serializers.SerializerMethodField()
     batch = serializers.SerializerMethodField()
     assigned_to = serializers.SerializerMethodField()
     created_by = serializers.SerializerMethodField()
     counts = serializers.SerializerMethodField()
 
-    def get_student(self, activity: Activity) -> dict:
-        return _student_summary(activity.student)
+    def get_student(self, activity: Activity) -> dict | None:
+        return _student_summary(activity.student) if activity.student_id else None
+
+    def get_enquiry(self, activity: Activity) -> dict | None:
+        return _enquiry_summary(activity.enquiry) if activity.enquiry_id else None
 
     def get_type(self, activity: Activity) -> dict:
         return _type_summary(activity.activity_type)
@@ -307,6 +332,7 @@ class ActivityDetailSerializer(ActivityListSerializer):
     reviewed_by = serializers.SerializerMethodField()
     form = serializers.SerializerMethodField()
     form_values = serializers.SerializerMethodField()
+    form_prefill = serializers.SerializerMethodField()
     history = serializers.SerializerMethodField()
     parent = serializers.SerializerMethodField()
     children = serializers.SerializerMethodField()
@@ -379,6 +405,10 @@ class ActivityDetailSerializer(ActivityListSerializer):
         )
         return {key: value for key, value in values.items() if key in visible_keys}
 
+    def get_form_prefill(self, activity: Activity) -> dict:
+        # Suggested answers are staff working notes, never shown to a student.
+        return {} if self._as_student() else (activity.form_prefill or {})
+
     def get_history(self, activity: Activity) -> list[dict]:
         return ActivityHistorySerializer(
             activity.history.select_related("actor"), many=True, context=self.context
@@ -394,9 +424,7 @@ class ActivityDetailSerializer(ActivityListSerializer):
         return ActivityListSerializer(activity.children.with_related(), many=True).data
 
     def get_automation_run(self, activity: Activity) -> str | None:
-        # The FK does not exist until Phase 14 adds it additively. Explicit
-        # `null` keeps the contract shape stable for the frontend today.
-        return None
+        return str(activity.automation_run_id) if activity.automation_run_id else None
 
     def get_available_transitions(self, activity: Activity) -> list[str]:
         """The `to` values currently legal from `POST .../transition/` for

@@ -191,6 +191,10 @@ STUDENT_REACHABLE = frozenset(
         "/api/v1/certificates/",
         "/api/v1/certificates/mine/",
         "/api/v1/progress/mine/",
+        # Forms sent to them to fill. The list is the caller's own inbox
+        # (`apps.forms.access.visible_assignments`: assignee or sender), so a
+        # student sees only what was sent to them.
+        "/api/v1/forms/assignments/",
         # Their own performance picture, and the feedback written about them.
         # `visible_reviews` and `visible_feedback` scope to the subject, so a
         # student sees what was written about *them* and nothing else — which is

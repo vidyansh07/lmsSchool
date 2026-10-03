@@ -105,6 +105,9 @@ record (D-015) and unchanged.
 | session.revoke_any | System | all, branch | ✓ | ✓ | | | | ✓ | 6 |
 | form.view | Configuration | all | ✓ | ✓ | ✓ | ✓ | | | 8 |
 | form.manage | Configuration | all | ✓ | ✓ | | | | ✓ | 8 |
+| form.assign | Configuration | all, branch | ✓ | ✓ | ✓ | ✓ | | | forms in automation |
+| enquiry.view_any | Operations | all, branch | ✓ | ✓ | ✓ | ✓ | | | enquiries |
+| enquiry.manage | Operations | all, branch | ✓ | ✓ | ✓ | ✓ | | | enquiries |
 | activity_type.manage | Configuration | all | ✓ | ✓ | | | | ✓ | 9 |
 | activity.view_any | Operations | all, branch, assigned | ✓ | ✓ | ✓ | ✓ | (assigned) | | 9 |
 | activity.create | Operations | all, branch, assigned | ✓ | ✓ | ✓ | ✓ | (assigned) | | 9 |

@@ -36,8 +36,8 @@ from apps.common.models import (
 
 
 class AutomationTrigger(models.TextChoices):
-    """The seven values ``AUTOMATION_CATALOG.md``'s "Triggers and their
-    context" table names. Nothing else is a legal ``AutomationRule.trigger``
+    """The values ``AUTOMATION_CATALOG.md``'s "Triggers and their context"
+    table names. Nothing else is a legal ``AutomationRule.trigger``
     — enforced in ``services.py`` at save time, not here, the same split
     ``apps.forms`` draws between "what shape can this column hold" and "what
     value is actually allowed right now"."""
@@ -49,6 +49,17 @@ class AutomationTrigger(models.TextChoices):
     PROJECT_OVERDUE = "PROJECT_OVERDUE", _("Project overdue")
     ASSIGNMENT_OVERDUE = "ASSIGNMENT_OVERDUE", _("Assignment overdue")
     RISK_CHANGED = "RISK_CHANGED", _("Risk level or triggered rules changed")
+    #: A form sent to someone was submitted, or someone filled one in
+    #: directly (`apps.forms.services.submit_assignment`). Conditions can read
+    #: every answer on the form as `form.<key>`.
+    FORM_SUBMITTED = "FORM_SUBMITTED", _("Form submitted")
+    #: An enquiry (a lead) was captured — from the enquiry form, or a repeat
+    #: enquiry updated an open one (that one is `ENQUIRY_UPDATED`).
+    ENQUIRY_CREATED = "ENQUIRY_CREATED", _("Enquiry created")
+    #: An enquiry moved to another stage of the pipeline.
+    ENQUIRY_STAGE_CHANGED = "ENQUIRY_STAGE_CHANGED", _("Enquiry stage changed")
+    #: Any field of an enquiry changed; `enquiry.changed` lists which.
+    ENQUIRY_UPDATED = "ENQUIRY_UPDATED", _("Enquiry updated")
 
 
 class AutomationRuleStatus(models.TextChoices):

@@ -214,3 +214,34 @@ def sync_rule_authors() -> int:
     from .services import sync_rule_authors as _sync
 
     return _sync()
+
+
+@shared_task(name="automation.dispatch_form_submitted", ignore_result=True)
+def dispatch_form_submitted(assignment_id: str) -> None:
+    from apps.forms.models import FormAssignment, FormAssignmentStatus
+
+    from .models import AutomationTrigger
+    from .services import dispatch
+
+    assignment = (
+        FormAssignment.objects.with_related()
+        .filter(pk=assignment_id, status=FormAssignmentStatus.SUBMITTED)
+        .first()
+    )
+    if assignment is None:
+        return
+    dispatch(AutomationTrigger.FORM_SUBMITTED, assignment, depth=0)
+
+
+@shared_task(name="automation.dispatch_enquiry_event", ignore_result=True)
+def dispatch_enquiry_event(
+    enquiry_id: str, trigger: str, previous_stage: str = "", changed: list | None = None
+) -> None:
+    from apps.enquiries.models import Enquiry
+
+    from .services import dispatch
+
+    enquiry = Enquiry.objects.with_related().filter(pk=enquiry_id).first()
+    if enquiry is None:
+        return
+    dispatch(trigger, enquiry, depth=0, previous_stage=previous_stage, changed=changed or [])

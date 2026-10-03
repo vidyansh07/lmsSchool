@@ -373,7 +373,7 @@ def _activity_events(user, start: date, end: date) -> list[CalendarEvent]:
                     "activity_id": str(activity.pk),
                     "activity_type": activity.activity_type.slug,
                     "status": activity.status,
-                    "student_id": str(activity.student_id),
+                    "student_id": str(activity.student_id) if activity.student_id else None,
                 },
             )
         )

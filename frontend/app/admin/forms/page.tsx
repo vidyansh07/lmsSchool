@@ -35,12 +35,20 @@ import { Capability, can } from "@/lib/capabilities";
 import {
   FORM_DEFINITION_STATUS_LABEL,
   FORM_DEFINITION_STATUS_VARIANT,
+  FORM_ENTITY_LABEL,
 } from "@/lib/labels";
 import { createFormDefinition, slugifyFormKey } from "@/lib/forms";
 import type { FormDefinitionListResponse } from "@/lib/forms";
 import type { FormEntity } from "@/types/api";
 
-const ENTITIES: FormEntity[] = ["activity", "student", "registration", "review"];
+const ENTITIES: FormEntity[] = [
+  "activity",
+  "enquiry",
+  "general",
+  "student",
+  "registration",
+  "review",
+];
 
 function NewFormDialog({
   open,
@@ -141,7 +149,7 @@ function NewFormDialog({
             >
               {ENTITIES.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {FORM_ENTITY_LABEL[value]}
                 </option>
               ))}
             </Select>
@@ -176,9 +184,10 @@ function FormsList() {
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Forms</h1>
           <p className="text-sm text-ink-muted">
-            The dynamic schema behind activities, student profiles and
-            registration. A published version is what the rest of the app
-            renders; a draft is where you make the next change.
+            The dynamic schema behind activities, enquiries, student profiles
+            and registration. A published version is what the rest of the app
+            renders; a draft is where you make the next change. Enquiry and
+            general forms can be sent to someone to fill, or filled in directly.
           </p>
         </div>
         {mayManage ? (
@@ -235,7 +244,7 @@ function FormsList() {
                     </Link>
                     <p className="text-xs text-ink-muted">{row.slug}</p>
                   </Td>
-                  <Td className="capitalize">{row.entity}</Td>
+                  <Td>{FORM_ENTITY_LABEL[row.entity] ?? row.entity}</Td>
                   <Td>
                     <Badge variant={FORM_DEFINITION_STATUS_VARIANT[row.status]}>
                       {FORM_DEFINITION_STATUS_LABEL[row.status]}

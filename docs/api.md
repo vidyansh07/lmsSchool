@@ -799,12 +799,44 @@ version 1.
 | `POST` | `<slug>/versions/<n>/publish/` \| `.../unpublish/` | `form.manage` — publishing archives whatever was published before it; refused 409 if nothing about the field schema actually changed |
 | `POST` | `<slug>/preview/` | `form.manage` — validates a sample response against a version's fields without storing anything |
 | `GET` | `published/<slug>/` | any signed-in caller — the currently published version, cached |
+| `GET` | `fillable/` | `form.assign` — published forms that can be sent or filled directly (every entity except `activity`) |
+| `POST` | `uploads/` | any signed-in caller — multipart `file`; checked like a course resource against `file_upload.max_mb`; answers `{id, filename, content_type, size_bytes}`. A `file`/`image` answer is this `id`, usable only by its uploader |
+| `GET` | `uploads/<id>/` | the uploader or a `form.view` holder — the file as an attachment |
+| `GET` | `assignments/` | `?box=inbox` (default: sent to me) \| `sent` (I sent; `form.assign`) \| `all` (`form.view`, centre-scoped); filters `status`, `form`, `student` |
+| `POST` | `assignments/` | `form.assign` — `{form, assigned_to, student?, due_at?, title?, message?}`; pins the published version, notifies the assignee. A centre-bounded sender reaches only their own centre |
+| `GET` | `assignments/<id>/` | assignee, sender, or a centre-scoped `form.view` holder — the pinned version's fields and, once submitted, the answers |
+| `POST` | `assignments/<id>/submit/` | the assignee only — `{values}`; once (409 after) |
+| `POST` | `assignments/<id>/cancel/` | the sender, or a centre-scoped `form.assign` holder — while still pending |
+| `POST` | `<slug>/fill/` | `form.assign` — `{values, student?}`; fill a form in directly, recorded as a submitted assignment to oneself |
 
-Answering a form is never a form-app endpoint of its own: `apps.work
-.services.complete_activity` (below) is the one caller that submits a
-response, against whichever version was pinned when the activity was
-planned — never the latest, so a form edited mid-course cannot rewrite
-history under an already-completed activity.
+An activity's form is still answered through `apps.work.services
+.complete_activity` (below), against the version pinned when the activity
+was planned — never the latest, so a form edited mid-course cannot rewrite
+history under an already-completed activity. A pinned version stays
+answerable after a newer one is published; unpublishing a version that an
+open activity or a pending assignment uses is refused (409). Every other
+form is answered through an assignment, and each submission is a
+`FORM_SUBMITTED` automation occurrence.
+
+### Enquiries — `/api/v1/enquiries/`
+
+The Meritto-style lead pipeline. An enquiry is created by submitting the
+`enquiry` form (`POST /forms/enquiry/fill/`, or an enquiry-entity form sent to
+someone); a repeat enquiry from the same mobile at the same centre updates the
+open one. Answers whose keys match enquiry fields (`ANSWER_FIELDS` in
+`apps/enquiries/services.py`) are written onto it — the follow-up form and a
+counselling call's form move its stage this way.
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `GET` | `` | own and entered enquiries, plus the centre's with `enquiry.view_any`; filters `stage`, `owner` (`me`, `none`, id), `source`, `course`, `q`, `open`; students 403 |
+| `GET` | `summary/` | counts per stage over the same set |
+| `GET` | `<id>/` | the enquiry with its history (audit entries) |
+| `PATCH` | `<id>/` | its owner, or `enquiry.manage` at its centre — stage, owner, lost_reason, lead_quality, next_follow_up_at, contact and course fields; a stage change starts `ENQUIRY_STAGE_CHANGED` rules |
+
+Activities about an enquiry use the activities API with `enquiry` instead of
+`student` (and `?enquiry=` to list them); forms about one use
+`POST /forms/assignments/` with `enquiry`.
 
 ### Activities and work — `/api/v1/activities/`, `/api/v1/activity-types/` (ERP Phase 9)
 

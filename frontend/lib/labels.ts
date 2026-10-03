@@ -32,7 +32,10 @@ import type {
   PermissionScope,
   FeePlanStatus,
   FeeStatus,
+  EnquiryStage,
+  FormAssignmentStatus,
   FormDefinitionStatus,
+  FormEntity,
   FormFieldType,
   FormVersionStatus,
   InstitutionKind,
@@ -269,7 +272,40 @@ export const FORM_FIELD_TYPE_LABEL: Record<FormFieldType, string> = {
   image: "Image",
   richtext: "Rich text",
   relation: "Relation",
+  time: "Time",
+  rating: "Star rating",
+  consent: "Consent tick box",
+  hidden: "Hidden value",
+  heading: "Heading",
+  dependent_select: "Dependent dropdown",
 };
+
+export const FORM_ENTITY_LABEL: Record<FormEntity, string> = {
+  activity: "Activity",
+  student: "Student",
+  registration: "Registration",
+  review: "Review",
+  enquiry: "Enquiry",
+  general: "General",
+};
+
+export const FORM_ASSIGNMENT_STATUS_LABEL: Record<FormAssignmentStatus, string> = {
+  pending: "To fill",
+  submitted: "Submitted",
+  cancelled: "Cancelled",
+};
+
+export const FORM_ASSIGNMENT_STATUS_VARIANT: Record<
+  FormAssignmentStatus,
+  "neutral" | "success" | "warning"
+> = {
+  pending: "warning",
+  submitted: "success",
+  cancelled: "neutral",
+};
+
+/** Field types that only structure a form and never carry an answer. */
+export const FORM_DISPLAY_ONLY_TYPES: readonly FormFieldType[] = ["heading"];
 
 export const FORM_FIELD_TYPE_OPTIONS: { value: FormFieldType; label: string }[] =
   (Object.keys(FORM_FIELD_TYPE_LABEL) as FormFieldType[]).map((value) => ({
@@ -502,7 +538,97 @@ export const AUTOMATION_TRIGGER_LABEL: Record<AutomationTrigger, string> = {
   PROJECT_OVERDUE: "Project overdue",
   ASSIGNMENT_OVERDUE: "Assignment overdue",
   RISK_CHANGED: "Risk level changed",
+  FORM_SUBMITTED: "Form submitted",
+  ENQUIRY_CREATED: "Enquiry created",
+  ENQUIRY_STAGE_CHANGED: "Enquiry stage changed",
+  ENQUIRY_UPDATED: "Enquiry updated",
 };
+
+/** The record a trigger is about — the builder's "When" picks the record
+ *  first, then one of its events, the way a Meritto workflow does. */
+export type AutomationRecord = "enquiry" | "activity" | "form" | "student";
+
+export const AUTOMATION_RECORD_LABEL: Record<AutomationRecord, string> = {
+  enquiry: "Enquiry",
+  activity: "Activity",
+  form: "Form",
+  student: "Student",
+};
+
+export const AUTOMATION_RECORD_TRIGGERS: Record<AutomationRecord, AutomationTrigger[]> = {
+  enquiry: ["ENQUIRY_CREATED", "ENQUIRY_STAGE_CHANGED", "ENQUIRY_UPDATED"],
+  activity: ["ACTIVITY_COMPLETED", "ACTIVITY_OVERDUE"],
+  form: ["FORM_SUBMITTED"],
+  student: [
+    "ATTENDANCE_THRESHOLD",
+    "ASSESSMENT_FAILED",
+    "RISK_CHANGED",
+    "PROJECT_OVERDUE",
+    "ASSIGNMENT_OVERDUE",
+  ],
+};
+
+/** The event's own name once its record is already chosen ("Stage changed",
+ *  not "Enquiry stage changed"). */
+export const AUTOMATION_EVENT_LABEL: Record<AutomationTrigger, string> = {
+  ENQUIRY_CREATED: "Created",
+  ENQUIRY_STAGE_CHANGED: "Stage changed",
+  ENQUIRY_UPDATED: "Any field changed",
+  ACTIVITY_COMPLETED: "Completed",
+  ACTIVITY_OVERDUE: "Overdue",
+  FORM_SUBMITTED: "Submitted",
+  ATTENDANCE_THRESHOLD: "Attendance crossed a threshold",
+  ASSESSMENT_FAILED: "Failed an assessment",
+  RISK_CHANGED: "Risk level changed",
+  PROJECT_OVERDUE: "Project overdue",
+  ASSIGNMENT_OVERDUE: "Assignment overdue",
+};
+
+export function automationRecordOf(trigger: AutomationTrigger): AutomationRecord {
+  const found = (Object.keys(AUTOMATION_RECORD_TRIGGERS) as AutomationRecord[]).find((record) =>
+    AUTOMATION_RECORD_TRIGGERS[record].includes(trigger),
+  );
+  return found ?? "student";
+}
+
+// --- Enquiries ----------------------------------------------------------------
+
+export const ENQUIRY_STAGE_LABEL: Record<EnquiryStage, string> = {
+  new: "New",
+  contacted: "Contacted",
+  interested: "Interested",
+  counselling_booked: "Counselling booked",
+  demo_booked: "Demo booked",
+  registered: "Registered",
+  not_interested: "Not interested",
+  not_eligible: "Not eligible",
+};
+
+export const ENQUIRY_STAGE_VARIANT: Record<
+  EnquiryStage,
+  "neutral" | "info" | "success" | "warning" | "error"
+> = {
+  new: "info",
+  contacted: "neutral",
+  interested: "warning",
+  counselling_booked: "warning",
+  demo_booked: "warning",
+  registered: "success",
+  not_interested: "error",
+  not_eligible: "neutral",
+};
+
+/** Pipeline order, open stages first. */
+export const ENQUIRY_STAGES: EnquiryStage[] = [
+  "new",
+  "contacted",
+  "interested",
+  "counselling_booked",
+  "demo_booked",
+  "registered",
+  "not_interested",
+  "not_eligible",
+];
 
 export const AUTOMATION_TRIGGER_OPTIONS: { value: AutomationTrigger; label: string }[] = (
   Object.keys(AUTOMATION_TRIGGER_LABEL) as AutomationTrigger[]
@@ -533,6 +659,8 @@ export const AUTOMATION_OPERATOR_LABEL: Record<AutomationConditionOperator, stri
   in: "is one of",
   not_in: "is none of",
   contains: "contains",
+  is_empty: "is empty",
+  is_not_empty: "is filled in",
 };
 
 export const AUTOMATION_OPERATOR_OPTIONS: {
@@ -545,6 +673,8 @@ export const AUTOMATION_OPERATOR_OPTIONS: {
 
 export const AUTOMATION_ACTION_TYPE_LABEL: Record<AutomationActionType, string> = {
   create_activity: "Create an activity",
+  assign_form: "Send a form to fill",
+  update_enquiry: "Update the enquiry",
   send_notification: "Send a notification",
   send_email: "Send an email",
   send_whatsapp: "Send a WhatsApp message",

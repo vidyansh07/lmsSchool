@@ -38,12 +38,38 @@ _STUDENT_PATHS = frozenset(
     }
 )
 
+#: `enquiry.*`: the lead an occurrence is about, when there is one.
+_ENQUIRY_PATHS = frozenset(
+    {
+        "enquiry.id",
+        "enquiry.full_name",
+        "enquiry.mobile",
+        "enquiry.email",
+        "enquiry.stage",
+        "enquiry.previous_stage",
+        "enquiry.changed",
+        "enquiry.source",
+        "enquiry.course",
+        "enquiry.track",
+        "enquiry.city",
+        "enquiry.state",
+        "enquiry.preferred_centre",
+        "enquiry.mode",
+        "enquiry.qualification",
+        "enquiry.owner",
+        "enquiry.has_owner",
+        "enquiry.lead_quality",
+        "enquiry.lost_reason",
+        "enquiry.branch",
+    }
+)
+
 #: The literal allowlist from `AUTOMATION_CATALOG.md`'s "Triggers and their
 #: context" table — the single source of truth for which condition paths a
-#: rule may reference per trigger. `ACTIVITY_COMPLETED` additionally allows
-#: any `form.<key>` path (checked by prefix, below) since the set of keys
-#: depends on whichever form is pinned to whichever activity type a rule is
-#: written against — there is no fixed list to enumerate.
+#: rule may reference per trigger. `ACTIVITY_COMPLETED` and `FORM_SUBMITTED`
+#: additionally allow any `form.<key>` path (checked by prefix, below) since
+#: the set of keys depends on which form the rule is written against — there
+#: is no fixed list to enumerate.
 ALLOWED_PATHS: dict[str, frozenset[str]] = {
     "ACTIVITY_COMPLETED": frozenset(
         {
@@ -58,10 +84,12 @@ ALLOWED_PATHS: dict[str, frozenset[str]] = {
             "student.branch",
             "student.risk_level",
         }
+        | _ENQUIRY_PATHS
     ),
     "ACTIVITY_OVERDUE": frozenset(
         {"activity.id", "activity.type", "activity.assigned_to_role", "activity.days_overdue"}
         | _STUDENT_PATHS
+        | _ENQUIRY_PATHS
     ),
     "ASSESSMENT_FAILED": frozenset(
         {"assessment.id", "assessment.percent", "assessment.attempt_number", "batch.trainer"}
@@ -76,11 +104,32 @@ ALLOWED_PATHS: dict[str, frozenset[str]] = {
         {"risk.level", "risk.previous_level", "risk.triggered", "risk.newly_triggered"}
         | _STUDENT_PATHS
     ),
+    "FORM_SUBMITTED": frozenset(
+        {
+            "submission.id",
+            "submission.form",
+            "submission.submitted_by_role",
+            "submission.assigned_to",
+            "submission.requested_by",
+            "submission.self_filled",
+            "submission.on_time",
+            "submission.from_automation",
+        }
+        | _STUDENT_PATHS
+        | _ENQUIRY_PATHS
+    ),
+    "ENQUIRY_CREATED": _ENQUIRY_PATHS,
+    "ENQUIRY_STAGE_CHANGED": _ENQUIRY_PATHS,
+    "ENQUIRY_UPDATED": _ENQUIRY_PATHS,
 }
+
+#: Triggers whose context carries the answers of a form as `form.<key>` —
+#: any key, since which keys exist depends on the form the rule is about.
+FORM_PATH_TRIGGERS = frozenset({"ACTIVITY_COMPLETED", "FORM_SUBMITTED"})
 
 
 def path_allowed(trigger: str, path: str) -> bool:
-    if trigger == "ACTIVITY_COMPLETED" and path.startswith("form."):
+    if trigger in FORM_PATH_TRIGGERS and path.startswith("form.") and len(path) > len("form."):
         return True
     return path in ALLOWED_PATHS.get(trigger, frozenset())
 
@@ -146,6 +195,18 @@ def _op_contains(value, target) -> bool:
     return False
 
 
+def _is_empty(value) -> bool:
+    return value is None or value == "" or value == [] or value == {}
+
+
+def _op_is_empty(value, target) -> bool:
+    return _is_empty(value)
+
+
+def _op_is_not_empty(value, target) -> bool:
+    return not _is_empty(value)
+
+
 OPERATORS = {
     "eq": _op_eq,
     "ne": _op_ne,
@@ -156,7 +217,12 @@ OPERATORS = {
     "in": _op_in,
     "not_in": _op_not_in,
     "contains": _op_contains,
+    "is_empty": _op_is_empty,
+    "is_not_empty": _op_is_not_empty,
 }
+
+#: Operators that test the answer alone and take no comparison value.
+VALUELESS_OPERATORS = frozenset({"is_empty", "is_not_empty"})
 
 
 def evaluate_condition(condition: Condition, context: dict[str, Any]) -> bool:
@@ -165,6 +231,11 @@ def evaluate_condition(condition: Condition, context: dict[str, Any]) -> bool:
     target = condition.get("value")
     value = _get_path(context, path)
     if value is MISSING:
+        # A form question nobody answered is still a question: for the two
+        # emptiness checks, "not there" is an answer. Every other operator
+        # keeps the catalog's rule — a missing path is a false condition.
+        if op == "is_empty":
+            return True
         return False
     handler = OPERATORS.get(op)
     if handler is None:
@@ -195,13 +266,10 @@ get_path = _get_path
 # Context
 # ---------------------------------------------------------------------------
 
-#: Form field types the catalog's "numeric/select field of the pinned form"
-#: covers — a number/decimal is numeric, a select/radio is a single-choice
-#: field. Multi-select and free text are not: a condition operator here
-#: (`eq`, `lt`, …) has no useful meaning against either.
-_FORM_CONTEXT_FIELD_TYPES = frozenset({"number", "decimal", "select", "radio"})
+#: Form field types that never carry an answer, so never appear as `form.<key>`.
+_FORM_CONTEXT_SKIPPED_TYPES = frozenset({"heading"})
 
-#: Of those, the two whose stored value must be compared as a number.
+#: The field types whose stored value must be compared as a number.
 #: `apps.forms.validation._validate_decimal` persists a `decimal` field's
 #: cleaned value as a `str` (so `FormResponse.values`, a plain `JSONField`,
 #: never carries a `Decimal` Python cannot serialise) — read back verbatim,
@@ -215,7 +283,7 @@ _FORM_CONTEXT_FIELD_TYPES = frozenset({"number", "decimal", "select", "radio"})
 #: never once matched. Coercing back to `float` here, the one place this
 #: context is built, is the fix; `number` fields are already a Python
 #: `int`/`float` from `_validate_number` and pass through unchanged.
-_FORM_CONTEXT_NUMERIC_FIELD_TYPES = frozenset({"number", "decimal"})
+_FORM_CONTEXT_NUMERIC_FIELD_TYPES = frozenset({"number", "decimal", "rating"})
 
 
 def _student_context(*, student=None, enrollment=None) -> dict[str, Any]:
@@ -258,6 +326,35 @@ def _student_context(*, student=None, enrollment=None) -> dict[str, Any]:
     }
 
 
+def _enquiry_context(enquiry, *, previous_stage: str = "", changed=None) -> dict[str, Any]:
+    """`enquiry.*`: the lead's own fields, plus — for an enquiry event — the
+    stage it left and which fields changed."""
+    if enquiry is None:
+        return {}
+    return {
+        "id": str(enquiry.pk),
+        "full_name": enquiry.full_name,
+        "mobile": enquiry.mobile,
+        "email": enquiry.email or None,
+        "stage": enquiry.stage,
+        "previous_stage": previous_stage or None,
+        "changed": list(changed or []),
+        "source": enquiry.source or None,
+        "course": enquiry.course or None,
+        "track": enquiry.track or None,
+        "city": enquiry.city or None,
+        "state": enquiry.state or None,
+        "preferred_centre": enquiry.preferred_centre or None,
+        "mode": enquiry.mode or None,
+        "qualification": enquiry.qualification or None,
+        "owner": str(enquiry.owner_id) if enquiry.owner_id else None,
+        "has_owner": enquiry.owner_id is not None,
+        "lead_quality": enquiry.lead_quality,
+        "lost_reason": enquiry.lost_reason or None,
+        "branch": str(enquiry.branch_id) if enquiry.branch_id else None,
+    }
+
+
 def _activity_context(activity, *, days_overdue: int | None = None) -> dict[str, Any]:
     context = {
         "id": str(activity.pk),
@@ -280,15 +377,19 @@ def _normalised_score(score, max_score) -> float | None:
 
 
 def _form_context(form_version, form_response) -> dict[str, Any]:
-    """`form.<key>` for every numeric/select field of the pinned form —
-    reads `FormVersion.fields`/`FormResponse.values` (Phase 8), never a
-    second copy of what a form field or a response looks like. A `decimal`
-    field's value is coerced back to a `float` here — see
+    """`form.<key>` for every answer-carrying field of the form — reads
+    `FormVersion.fields`/`FormResponse.values` (Phase 8), never a second copy
+    of what a form field or a response looks like. Every field is present,
+    an unanswered one as ``None``, so `is_empty` can see it was skipped.
+
+    Text compares with `eq`/`contains`, a multi-choice answer is a list for
+    `contains`, a yes/no or consent is a bool for `eq`. A `decimal` field's
+    value is coerced back to a `float` here — see
     `_FORM_CONTEXT_NUMERIC_FIELD_TYPES`'s own docstring for why a condition
     against one would otherwise never match."""
     if form_version is None or form_response is None:
         return {}
-    fields = form_version.fields.filter(type__in=_FORM_CONTEXT_FIELD_TYPES)
+    fields = form_version.fields.exclude(type__in=_FORM_CONTEXT_SKIPPED_TYPES)
     values = form_response.values or {}
     context: dict[str, Any] = {}
     for field in fields:
@@ -306,6 +407,7 @@ def context_for_activity_completed(activity) -> dict[str, Any]:
     context = {"activity": _activity_context(activity)}
     context["form"] = _form_context(activity.form_version, activity.form_response)
     context["student"] = _student_context(student=activity.student, enrollment=activity.enrollment)
+    context["enquiry"] = _enquiry_context(activity.enquiry if activity.enquiry_id else None)
     return context
 
 
@@ -317,6 +419,7 @@ def context_for_activity_overdue(activity, *, days_overdue: int) -> dict[str, An
     return {
         "activity": activity_ctx,
         "student": _student_context(student=activity.student, enrollment=activity.enrollment),
+        "enquiry": _enquiry_context(activity.enquiry if activity.enquiry_id else None),
     }
 
 
@@ -376,6 +479,32 @@ def context_for_risk_changed(
     }
 
 
+def context_for_form_submitted(assignment, *, enrollment=None) -> dict[str, Any]:
+    submitted_at = assignment.submitted_at
+    on_time = assignment.due_at is None or (
+        submitted_at is not None and submitted_at <= assignment.due_at
+    )
+    return {
+        "submission": {
+            "id": str(assignment.pk),
+            "form": assignment.definition.slug,
+            "submitted_by_role": assignment.assigned_to.role,
+            "assigned_to": str(assignment.assigned_to_id),
+            "requested_by": str(assignment.requested_by_id) if assignment.requested_by_id else None,
+            "self_filled": assignment.requested_by_id == assignment.assigned_to_id,
+            "on_time": on_time,
+            "from_automation": assignment.automation_run_id is not None,
+        },
+        "form": _form_context(assignment.version, assignment.response),
+        "student": _student_context(student=assignment.student, enrollment=enrollment),
+        "enquiry": _enquiry_context(assignment.enquiry if assignment.enquiry_id else None),
+    }
+
+
+def context_for_enquiry_event(enquiry, *, previous_stage: str = "", changed=None) -> dict[str, Any]:
+    return {"enquiry": _enquiry_context(enquiry, previous_stage=previous_stage, changed=changed)}
+
+
 def context_for(trigger: str, obj, **extra: Any) -> dict[str, Any]:
     """Route to the trigger-specific builder above.
 
@@ -414,5 +543,17 @@ def context_for(trigger: str, obj, **extra: Any) -> dict[str, Any]:
             previous_level=extra["previous_level"],
             triggered=extra["triggered"],
             previous_triggered=extra["previous_triggered"],
+        )
+    if trigger == AutomationTrigger.FORM_SUBMITTED:
+        return context_for_form_submitted(obj, enrollment=extra.get("enrollment"))
+    if trigger in (
+        AutomationTrigger.ENQUIRY_CREATED,
+        AutomationTrigger.ENQUIRY_STAGE_CHANGED,
+        AutomationTrigger.ENQUIRY_UPDATED,
+    ):
+        return context_for_enquiry_event(
+            obj,
+            previous_stage=extra.get("previous_stage", ""),
+            changed=extra.get("changed"),
         )
     raise ValueError(f"Unknown trigger: {trigger!r}")

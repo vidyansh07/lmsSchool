@@ -22,7 +22,13 @@ from apps.common.exceptions import ApplicationError, AuthorityError
 from apps.policies.resolver import policy
 
 from .actions import ACTIONS
-from .evaluator import OPERATORS, context_for, evaluate_conditions, path_allowed
+from .evaluator import (
+    OPERATORS,
+    VALUELESS_OPERATORS,
+    context_for,
+    evaluate_conditions,
+    path_allowed,
+)
 from .models import AutomationRule, AutomationRuleStatus, AutomationRun, AutomationRunStatus
 from .resolve import RunContext
 
@@ -42,6 +48,8 @@ MAX_DEPTH = 3
 #: ships) was never saved by someone who could not have authorized it.
 ACTION_PERMISSIONS: dict[str, str] = {
     "create_activity": Capability.ACTIVITY_CREATE,
+    "assign_form": Capability.FORM_ASSIGN,
+    "update_enquiry": Capability.ENQUIRY_MANAGE,
     "send_notification": Capability.COMMUNICATION_SEND,
     "send_email": Capability.COMMUNICATION_SEND,
     "send_whatsapp": Capability.COMMUNICATION_SEND,
@@ -52,6 +60,9 @@ ACTION_PERMISSIONS: dict[str, str] = {
     # the capability that actually authorizes writing a performance verdict.
     "flag_risk": Capability.REVIEW_MANAGE_ANY,
 }
+
+#: The three enquiry events, which share one context builder.
+ENQUIRY_TRIGGERS = frozenset({"ENQUIRY_CREATED", "ENQUIRY_STAGE_CHANGED", "ENQUIRY_UPDATED"})
 
 RULE_EDITABLE_FIELDS = frozenset(
     {"name", "description", "trigger", "conditions", "actions", "branch"}
@@ -83,7 +94,7 @@ def _validate_rule_shape(trigger: str, conditions: list[dict], actions: list[dic
             continue
         path = condition.get("path")
         op = condition.get("op")
-        if "value" not in condition:
+        if "value" not in condition and op not in VALUELESS_OPERATORS:
             errors.append(f"Condition {index}: missing 'value'.")
         if op not in OPERATORS:
             errors.append(f"Condition {index}: unknown operator {op!r}.")
@@ -97,11 +108,104 @@ def _validate_rule_shape(trigger: str, conditions: list[dict], actions: list[dic
         action_type = action.get("type")
         if action_type not in ACTIONS:
             errors.append(f"Action {index}: unknown action type {action_type!r}.")
-        if not isinstance(action.get("params") or {}, dict):
+        params = action.get("params") or {}
+        if not isinstance(params, dict):
             errors.append(f"Action {index}: 'params' must be an object.")
+        elif action_type == "assign_form":
+            errors.extend(_assign_form_problems(index, params))
+        elif action_type == "update_enquiry":
+            errors.extend(_update_enquiry_problems(index, params))
+        elif action_type == "create_activity":
+            errors.extend(_create_activity_problems(index, params))
 
     if errors:
         raise ApplicationError({"conditions_actions": errors})
+
+
+def _whole_days_or_hours(index: int, params: dict, *keys: str) -> list[str]:
+    problems: list[str] = []
+    for key in keys:
+        value = params.get(key)
+        if value in (None, ""):
+            continue
+        try:
+            if int(value) < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            problems.append(f"Action {index}: {key} must be a whole number, 0 or more.")
+    return problems
+
+
+def _create_activity_problems(index: int, params: dict) -> list[str]:
+    """The activity type must exist; prefilled answers must be a mapping of
+    question key to text. Time offsets are whole numbers."""
+    from apps.work.models import ActivityType
+
+    problems = _whole_days_or_hours(
+        index, params, "due_in_days", "due_in_hours", "planned_in_hours"
+    )
+    slug = params.get("type")
+    if not slug or not ActivityType.objects.filter(slug=slug).exists():
+        problems.append(f"Action {index}: choose an activity type.")
+    prefill = params.get("form_prefill") or {}
+    if not isinstance(prefill, dict) or not all(
+        isinstance(key, str) and isinstance(value, (str, int, float, bool))
+        for key, value in prefill.items()
+    ):
+        problems.append(
+            f"Action {index}: prefilled answers must be question keys with text values."
+        )
+    return problems
+
+
+def _update_enquiry_problems(index: int, params: dict) -> list[str]:
+    from apps.enquiries.models import EnquiryStage
+
+    problems = _whole_days_or_hours(index, params, "next_follow_up_in_days")
+    stage = params.get("stage")
+    if stage not in (None, "") and stage not in EnquiryStage.values:
+        problems.append(f"Action {index}: unknown enquiry stage {stage!r}.")
+    quality = params.get("lead_quality")
+    if quality not in (None, ""):
+        try:
+            if not 1 <= int(quality) <= 5:
+                raise ValueError
+        except (TypeError, ValueError):
+            problems.append(f"Action {index}: lead quality must be 1 to 5.")
+    if not any(
+        params.get(key) not in (None, "")
+        for key in ("stage", "owner", "lost_reason", "lead_quality", "next_follow_up_in_days")
+    ):
+        problems.append(f"Action {index}: choose at least one thing to change on the enquiry.")
+    return problems
+
+
+def _assign_form_problems(index: int, params: dict) -> list[str]:
+    """`assign_form` names a form by slug; one that does not exist, or that
+    only reaches people through an activity, would fail on every run, so it
+    is refused when the rule is saved instead."""
+    from apps.forms.models import FormDefinition, FormEntity
+
+    problems: list[str] = []
+    slug = params.get("form")
+    definition = FormDefinition.objects.filter(slug=slug).first() if slug else None
+    if definition is None:
+        problems.append(f"Action {index}: choose a form to send.")
+    elif definition.entity == FormEntity.ACTIVITY:
+        problems.append(
+            f"Action {index}: {slug!r} is an activity form; "
+            "create an activity of that type instead."
+        )
+    if not params.get("to"):
+        problems.append(f"Action {index}: choose who should fill in the form.")
+    due = params.get("due_in_days")
+    if due not in (None, ""):
+        try:
+            if int(due) < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            problems.append(f"Action {index}: due_in_days must be a whole number of days.")
+    return problems
 
 
 def _require_author_permissions(actor, actions: list[dict]) -> None:
@@ -327,6 +431,7 @@ def _build(trigger: str, obj: Any, extra: dict[str, Any]) -> tuple[dict[str, Any
             enrollment=activity.enrollment,
             activity=activity,
             branch=activity.branch,
+            enquiry=activity.enquiry if activity.enquiry_id else None,
         )
         return context, rctx, activity
 
@@ -338,6 +443,7 @@ def _build(trigger: str, obj: Any, extra: dict[str, Any]) -> tuple[dict[str, Any
             enrollment=activity.enrollment,
             activity=activity,
             branch=activity.branch,
+            enquiry=activity.enquiry if activity.enquiry_id else None,
         )
         return context, rctx, activity
 
@@ -399,7 +505,49 @@ def _build(trigger: str, obj: Any, extra: dict[str, Any]) -> tuple[dict[str, Any
         )
         return context, rctx, risk_state
 
+    if trigger == AutomationTrigger.FORM_SUBMITTED:
+        assignment = obj
+        enrollment = _current_enrollment(assignment.student)
+        context = context_for(trigger, assignment, enrollment=enrollment)
+        branch = assignment.branch or _batch_branch(enrollment)
+        rctx = RunContext(
+            student=assignment.student,
+            enrollment=enrollment,
+            branch=branch,
+            form_assignment=assignment,
+            enquiry=assignment.enquiry if assignment.enquiry_id else None,
+        )
+        return context, rctx, assignment
+
+    if trigger in ENQUIRY_TRIGGERS:
+        enquiry = obj
+        context = context_for(
+            trigger,
+            enquiry,
+            previous_stage=extra.get("previous_stage", ""),
+            changed=extra.get("changed"),
+        )
+        rctx = RunContext(enquiry=enquiry, branch=enquiry.branch)
+        return context, rctx, enquiry
+
     raise ValueError(f"Unknown trigger: {trigger!r}")
+
+
+def _current_enrollment(student) -> Any:
+    """The enrolment a form about ``student`` is read against: the active
+    one, else the most recent. `batch_trainer`/`counsellor` resolve through
+    it; a form about no student has none."""
+    if student is None:
+        return None
+    from apps.enrollments.models import Enrollment, EnrollmentStatus
+
+    rows = Enrollment.objects.filter(student=student).select_related(
+        "batch", "batch__branch", "batch__trainer", "student", "student__user"
+    )
+    return (
+        rows.filter(status=EnrollmentStatus.ACTIVE).order_by("-created_at").first()
+        or rows.order_by("-created_at").first()
+    )
 
 
 def _compact_date(moment=None) -> str:
@@ -457,6 +605,21 @@ def _occurrence_for(trigger: str, target: Any, extra: dict[str, Any], depth: int
         computed_at = getattr(target, "computed_at", None)
         stamp = _compact_datetime(computed_at) if computed_at else _compact_datetime(timezone.now())
         return f"{stamp}-{depth}"
+
+    if trigger == AutomationTrigger.FORM_SUBMITTED:
+        submitted_at = getattr(target, "submitted_at", None)
+        return _compact_datetime(submitted_at) if submitted_at else str(target.pk)[:8]
+
+    if trigger == AutomationTrigger.ENQUIRY_CREATED:
+        return "created"
+
+    if trigger == AutomationTrigger.ENQUIRY_STAGE_CHANGED:
+        moment = getattr(target, "stage_changed_at", None) or timezone.now()
+        return f"{_compact_datetime(moment)}-{depth}"
+
+    if trigger == AutomationTrigger.ENQUIRY_UPDATED:
+        moment = getattr(target, "updated_at", None) or timezone.now()
+        return f"{_compact_datetime(moment)}-{depth}"
 
     raise ValueError(f"Unknown trigger: {trigger!r}")
 
@@ -761,6 +924,27 @@ def _recent_events(trigger: str, *, limit: int = 20) -> list[tuple[Any, dict[str
                     },
                 )
             )
+
+    elif trigger in ENQUIRY_TRIGGERS:
+        from apps.enquiries.models import Enquiry
+
+        order = (
+            "-stage_changed_at"
+            if trigger == AutomationTrigger.ENQUIRY_STAGE_CHANGED
+            else "-updated_at"
+        )
+        for enquiry in Enquiry.objects.with_related().order_by(order)[:limit]:
+            events.append((enquiry, {"previous_stage": "", "changed": []}))
+
+    elif trigger == AutomationTrigger.FORM_SUBMITTED:
+        from apps.forms.models import FormAssignment, FormAssignmentStatus
+
+        for assignment in (
+            FormAssignment.objects.with_related()
+            .filter(status=FormAssignmentStatus.SUBMITTED)
+            .order_by("-submitted_at")[:limit]
+        ):
+            events.append((assignment, {}))
 
     return events[:limit]
 
