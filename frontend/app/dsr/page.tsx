@@ -1,50 +1,32 @@
 'use client';
 
 /**
- * The manager's review queue — `/dsr`, fixing the "Daily reports" 404 in the
- * Review group of the sidebar.
+ * Class reports across every batch the caller can see — `/dsr`.
  *
- * One table, not two screens for "what's waiting" and "everything else"
- * -------------------------------------------------------------------------
- * `components/manage/dsr-review-queue.tsx` already owns "a batch's reports
- * awaiting review, approved inline with a visible rollback" — it is reused
- * as-is on the batch detail page and is not rebuilt here, because it cannot
- * be: it is hard-wired to one `batchId` (`listBatchDsr`), with no filters, a
- * ten-row cap and no reject or revision path, which is exactly right for a
- * widget inside one batch's page and exactly wrong for an institution-wide
- * queue. Rather than bolt a second, parallel "awaiting review" widget on top
- * of a full filterable table underneath — two components fetching
- * overlapping data, two empty states to keep in sync — this page is *one*
- * `DataTable` + `useList`, exactly the `BatchesHub` pairing, defaulted to
- * `status=submitted`. That default *is* "lead with what awaits review": it
- * is the same definition of "awaiting review" `DsrReviewQueue` itself uses,
- * just answered at full institution scale with the extra filters and the
- * reject/revision path that scale requires. Widening the status filter is
- * how "the rest is filterable history" stops being a separate screen.
+ * Submitted is done: no manager has to approve a class report (the owner's
+ * call, 3 October 2026). So this page opens on every report, newest first,
+ * not on a review queue, and its second tab is the list that does need
+ * action — classes that ended without a report (`GET /dsr/missing/`).
+ *
+ * A manager may still read a report in full (the side sheet), mark it seen,
+ * ask for changes, or reject it. Asking for changes or rejecting needs a
+ * reason server-side (`apps.dsr.services.review_dsr` refuses either with a
+ * blank comment), so both open a small comment field in place rather than
+ * firing immediately. Marking seen fires at once, hiding the row until the
+ * reload and rolling back visibly if the request fails.
  *
  * Why there is no search box and no sortable column headers
  * ------------------------------------------------------------
  * `DSRListView` (`GET /api/v1/dsr/`) declares only `DjangoFilterBackend` with
  * `batch`, `trainer`, `status`, `date_after` and `date_before` — no search
- * filter, no ordering filter. `ListToolbar` and a sortable `Th` both exist
- * elsewhere in this app for endpoints that support them; wiring either up
- * here would be a control that visibly does nothing when used, which is a
- * worse failure than not offering it. Results come back newest-first because
- * that is `DSR`'s own model ordering, not because this page asked for it.
- *
- * Approve is inline; reject and revision are not
- * ------------------------------------------------
- * Approving calls `reviewDsr` (from `lib/manage.ts`, the same function and
- * the same optimistic-hide-then-roll-back-on-failure behaviour
- * `DsrReviewQueue` established) the moment the button is pressed. Rejecting
- * or asking for a revision needs a reason server-side
- * (`apps.dsr.services.review_dsr` refuses either with a blank comment), so
- * clicking either one opens a small comment field in place rather than
- * firing immediately — the "fuller control" the brief asks for, sized to
- * what actually differs (one required field), not a second page.
+ * filter, no ordering filter. Wiring either up here would be a control that
+ * visibly does nothing when used. Results come back newest-first because
+ * that is `DSR`'s own model ordering.
  */
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+
+import { DsrReportSheet } from '@/components/manage/dsr-report-sheet';
 
 import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
@@ -56,12 +38,19 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, Textarea } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useList } from '@/hooks/use-list';
 import { ApiError } from '@/lib/api';
 import { listBatches } from '@/lib/batches';
 import { Capability } from '@/lib/capabilities';
-import { listDsr, type DSRListItem } from '@/lib/dsr';
-import { fallback, formatDate, formatNumber, NO_DATA, UNKNOWN } from '@/lib/format';
+import {
+  formatClassTime,
+  listDsr,
+  listMissingReports,
+  type DSRListItem,
+  type MissingReportRow,
+} from '@/lib/dsr';
+import { fallback, formatDate, formatDateTime, formatNumber, NO_DATA, UNKNOWN } from '@/lib/format';
 import {
   DSR_STATUS_LABEL,
   DSR_STATUS_VARIANT,
@@ -71,10 +60,10 @@ import {
 import { listTrainers } from '@/lib/people';
 import type { BatchListRow, TrainerListRow } from '@/types/api';
 
-const DSR_STATUS_OPTIONS = Object.entries(DSR_STATUS_LABEL).map(([value, label]) => ({
-  value,
-  label,
-}));
+const DSR_STATUS_OPTIONS = Object.entries(DSR_STATUS_LABEL)
+  // `under_review` is a legacy state that reads as "Submitted"; one entry for it.
+  .filter(([value]) => value !== 'under_review')
+  .map(([value, label]) => ({ value, label }));
 
 /** A row's in-progress reject/revision comment. Approve carries none, so it
  *  never needs this — it fires straight from `decide`. */
@@ -89,10 +78,10 @@ const REVIEWABLE_STATUSES = new Set<DSRListItem['status']>(['submitted', 'under_
 export function DsrQueue() {
   const { can } = useAuth();
   const list = useList<DSRListItem>(listDsr, {
-    status: 'submitted',
     ordering: '-report_date',
     page_size: 20,
   });
+  const [readingId, setReadingId] = useState<string | null>(null);
 
   const [batchOptions, setBatchOptions] = useState<BatchListRow[]>([]);
   const [trainerOptions, setTrainerOptions] = useState<TrainerListRow[]>([]);
@@ -215,8 +204,23 @@ export function DsrQueue() {
       ),
     },
     {
+      key: 'read',
+      header: 'Report',
+      render: (row) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label={`Read the ${row.batch_code} report for ${formatDate(row.report_date)}`}
+          onClick={() => setReadingId(row.id)}
+        >
+          Read
+        </Button>
+      ),
+    },
+    {
       key: 'review',
-      header: 'Review',
+      header: 'Follow up',
       render: (row) => {
         if (!can(Capability.dsrReview) || !REVIEWABLE_STATUSES.has(row.status)) return null;
 
@@ -227,7 +231,7 @@ export function DsrQueue() {
               <label htmlFor={commentId} className="block text-xs font-medium">
                 {pending.kind === 'rejected'
                   ? 'Why is this being rejected?'
-                  : 'What needs to change?'}
+                  : 'What should the trainer change?'}
               </label>
               <Textarea
                 id={commentId}
@@ -253,7 +257,7 @@ export function DsrQueue() {
                     ? 'Saving…'
                     : pending.kind === 'rejected'
                       ? 'Reject'
-                      : 'Request revision'}
+                      : 'Ask for changes'}
                 </Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => setPending(null)}>
                   Cancel
@@ -273,11 +277,12 @@ export function DsrQueue() {
             <div className="flex flex-wrap gap-1.5">
               <Button
                 type="button"
+                variant="outline"
                 size="sm"
                 disabled={busyId === row.id}
                 onClick={() => void decide(row, 'approved', '')}
               >
-                {busyId === row.id ? 'Approving…' : 'Approve'}
+                {busyId === row.id ? 'Saving…' : 'Mark seen'}
               </Button>
               <Button
                 type="button"
@@ -285,7 +290,7 @@ export function DsrQueue() {
                 size="sm"
                 onClick={() => setPending({ id: row.id, kind: 'revision_required', comment: '' })}
               >
-                Request revision
+                Ask for changes
               </Button>
               <Button
                 type="button"
@@ -308,112 +313,218 @@ export function DsrQueue() {
   ];
 
   const visibleRows = (list.data?.results ?? []).filter((row) => !hiddenIds.has(row.id));
-  const isAwaitingReviewView = (list.query.status ?? '') === 'submitted';
+  const isUnfiltered = !list.query.status && !list.query.batch && !list.query.trainer && !dateRange.start;
+  const reading = visibleRows.find((row) => row.id === readingId) ?? null;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Daily reports</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Class reports</h1>
           <p className="text-sm text-ink-muted">
-            Opens on what is waiting for your review, newest first. Approve inline; rejecting or
-            asking for a revision needs a word about why. Change the filters below to browse the
-            rest as history.
+            What each class covered, as its trainer reported it. A submitted report is done — no
+            approval needed. Ask for changes if something is wrong.
           </p>
         </div>
         <ExportMenu reportKey="daily_reports" count={list.data?.count ?? null} size="md" />
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label htmlFor="dsr-filter-status" className="mb-1.5 block text-sm font-medium">
-            Status
-          </label>
-          <Select
-            id="dsr-filter-status"
-            className="sm:w-48"
-            value={String(list.query.status ?? '')}
-            onChange={(event) => list.setQuery({ status: event.target.value })}
-          >
-            <option value="">All statuses</option>
-            {DSR_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <label htmlFor="dsr-filter-batch" className="mb-1.5 block text-sm font-medium">
-            Batch
-          </label>
-          <Select
-            id="dsr-filter-batch"
-            className="sm:w-56"
-            value={String(list.query.batch ?? '')}
-            onChange={(event) => list.setQuery({ batch: event.target.value })}
-          >
-            <option value="">All batches</option>
-            {batchOptions.map((batch) => (
-              <option key={batch.id} value={batch.id}>
-                {batch.code} · {batch.name}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <label htmlFor="dsr-filter-trainer" className="mb-1.5 block text-sm font-medium">
-            Trainer
-          </label>
-          <Select
-            id="dsr-filter-trainer"
-            className="sm:w-56"
-            value={String(list.query.trainer ?? '')}
-            onChange={(event) => list.setQuery({ trainer: event.target.value })}
-          >
-            <option value="">All trainers</option>
-            {trainerOptions.map((trainer) => (
-              <option key={trainer.id} value={trainer.id}>
-                {trainer.full_name} ({trainer.trainer_id})
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div>
-          <p className="mb-1.5 text-sm font-medium">Report date</p>
-          <DateRangePicker value={dateRange} onChange={onDateRangeChange} />
-        </div>
-      </div>
+      <Tabs defaultValue="reports">
+        <TabsList aria-label="Class reports">
+          <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="missing">Missing</TabsTrigger>
+        </TabsList>
+        <TabsContent value="missing" className="pt-4">
+          <MissingReports />
+        </TabsContent>
+        <TabsContent value="reports" className="space-y-6 pt-4">
 
-      <DataTable
-        columns={columns}
-        rows={visibleRows}
-        getRowId={(row) => row.id}
-        isLoading={list.isLoading}
-        error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}
-        onRetry={list.reload}
-        emptyTitle={
-          isAwaitingReviewView ? 'Nothing awaiting review' : 'No reports match these filters'
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label htmlFor="dsr-filter-status" className="mb-1.5 block text-sm font-medium">
+                Status
+              </label>
+              <Select
+                id="dsr-filter-status"
+                className="sm:w-48"
+                value={String(list.query.status ?? '')}
+                onChange={(event) => list.setQuery({ status: event.target.value })}
+              >
+                <option value="">All statuses</option>
+                {DSR_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label htmlFor="dsr-filter-batch" className="mb-1.5 block text-sm font-medium">
+                Batch
+              </label>
+              <Select
+                id="dsr-filter-batch"
+                className="sm:w-56"
+                value={String(list.query.batch ?? '')}
+                onChange={(event) => list.setQuery({ batch: event.target.value })}
+              >
+                <option value="">All batches</option>
+                {batchOptions.map((batch) => (
+                  <option key={batch.id} value={batch.id}>
+                    {batch.code} · {batch.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label htmlFor="dsr-filter-trainer" className="mb-1.5 block text-sm font-medium">
+                Trainer
+              </label>
+              <Select
+                id="dsr-filter-trainer"
+                className="sm:w-56"
+                value={String(list.query.trainer ?? '')}
+                onChange={(event) => list.setQuery({ trainer: event.target.value })}
+              >
+                <option value="">All trainers</option>
+                {trainerOptions.map((trainer) => (
+                  <option key={trainer.id} value={trainer.id}>
+                    {trainer.full_name} ({trainer.trainer_id})
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <p className="mb-1.5 text-sm font-medium">Report date</p>
+              <DateRangePicker value={dateRange} onChange={onDateRangeChange} />
+            </div>
+          </div>
+
+          <DataTable
+            columns={columns}
+            rows={visibleRows}
+            getRowId={(row) => row.id}
+            isLoading={list.isLoading}
+            error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}
+            onRetry={list.reload}
+            emptyTitle={isUnfiltered ? 'No class reports yet' : 'No reports match these filters'}
+            emptyDescription={
+              isUnfiltered
+                ? 'Reports appear here as trainers submit them after class.'
+                : 'Try a different status, batch, trainer or date range.'
+            }
+            caption="Class reports"
+            densityStorageKey="grras.dsr-queue-density"
+          />
+
+          {list.data ? (
+            <Pagination
+              page={list.data.page}
+              totalPages={list.data.total_pages}
+              count={list.data.count}
+              pageSize={list.data.page_size}
+              onPageChange={list.setPage}
+            />
+          ) : null}
+        </TabsContent>
+      </Tabs>
+
+      <DsrReportSheet
+        dsrId={readingId}
+        heading={
+          reading
+            ? {
+                batchCode: reading.batch_code,
+                date: reading.report_date,
+                startTime: reading.start_time,
+                trainerName: reading.trainer_name,
+              }
+            : undefined
         }
-        emptyDescription={
-          isAwaitingReviewView
-            ? 'Every submitted daily status report has been reviewed.'
-            : 'Try a different status, batch, trainer or date range.'
-        }
-        caption="Daily status reports"
-        densityStorageKey="grras.dsr-queue-density"
+        onClose={() => setReadingId(null)}
       />
-
-      {list.data ? (
-        <Pagination
-          page={list.data.page}
-          totalPages={list.data.total_pages}
-          count={list.data.count}
-          pageSize={list.data.page_size}
-          onPageChange={list.setPage}
-        />
-      ) : null}
     </div>
+  );
+}
+
+/** Classes that ended without a submitted report, in the caller's reach. */
+function MissingReports() {
+  const [rows, setRows] = useState<MissingReportRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    listMissingReports()
+      .then((result) => {
+        if (!cancelled) {
+          setRows(result);
+          setError(null);
+        }
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setError(cause instanceof ApiError ? cause.message : 'The request failed.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  const columns: DataTableColumn<MissingReportRow>[] = [
+    { key: 'date', header: 'Date', width: '7rem', render: (row) => formatDate(row.date) },
+    {
+      key: 'time',
+      header: 'Class',
+      render: (row) => `${formatClassTime(row.start_time)}–${formatClassTime(row.end_time)}`,
+    },
+    {
+      key: 'batch_code',
+      header: 'Batch',
+      render: (row) => (
+        <Link
+          href={`/manage/batches/${row.batch}`}
+          className="font-mono text-xs text-ink hover:text-action hover:underline"
+        >
+          {fallback(row.batch_code, NO_DATA)}
+        </Link>
+      ),
+    },
+    { key: 'trainer_name', header: 'Trainer', render: (row) => fallback(row.trainer_name, UNKNOWN) },
+    {
+      key: 'state',
+      header: 'Report',
+      render: (row) =>
+        row.dsr_status === 'revision_required' ? (
+          <Badge variant="warning">Changes asked for</Badge>
+        ) : row.dsr ? (
+          <Badge variant="neutral">Draft</Badge>
+        ) : (
+          <Badge variant="warning">Not started</Badge>
+        ),
+    },
+    {
+      key: 'due_at',
+      header: 'Due',
+      render: (row) => (row.due_at ? formatDateTime(row.due_at) : NO_DATA),
+    },
+  ];
+
+  return (
+    <DataTable
+      columns={columns}
+      rows={rows ?? []}
+      getRowId={(row) => row.session}
+      isLoading={rows === null && error === null}
+      error={error ? { message: error } : null}
+      onRetry={() => {
+        setError(null);
+        setRows(null);
+        setAttempt((value) => value + 1);
+      }}
+      emptyTitle="Nothing missing"
+      emptyDescription="Every class in the last two weeks has its report."
+      caption="Classes without a submitted report"
+    />
   );
 }
 

@@ -11,8 +11,8 @@ vi.mock('@/lib/manage', async () => {
   return { ...actual, getBatchOverview };
 });
 
-vi.mock('@/components/manage/dsr-review-queue', () => ({
-  DsrReviewQueue: ({ batchId }: { batchId: string }) => <div data-testid="dsr-queue-stub">{batchId}</div>,
+vi.mock('@/components/manage/batch-class-reports', () => ({
+  BatchClassReports: ({ batchId }: { batchId: string }) => <div data-testid="class-reports-stub">{batchId}</div>,
 }));
 
 function overview(overrides: Partial<BatchOverview> = {}): BatchOverview {
@@ -123,7 +123,7 @@ describe('BatchDetail', () => {
     );
     render(<BatchDetail batchId="batch-1" />);
     await waitFor(() => expect(screen.getByTestId('batch-attention-banner')).toBeInTheDocument());
-    expect(screen.getByText(/2 daily status report\(s\) overdue/)).toBeInTheDocument();
+    expect(screen.getByText(/2 class report\(s\) overdue/)).toBeInTheDocument();
   });
 
   it('shows no attention banner when nothing is wrong', async () => {
@@ -217,9 +217,22 @@ describe('BatchDetail', () => {
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
 
-  it('passes the batch id through to the inline DSR review queue', async () => {
+  it('passes the batch id through to the class reports summary', async () => {
     getBatchOverview.mockResolvedValue(overview());
     render(<BatchDetail batchId="batch-1" />);
-    await waitFor(() => expect(screen.getByTestId('dsr-queue-stub')).toHaveTextContent('batch-1'));
+    await waitFor(() => expect(screen.getByTestId('class-reports-stub')).toHaveTextContent('batch-1'));
+  });
+
+  it('does not flag submitted reports as waiting on a manager', async () => {
+    getBatchOverview.mockResolvedValue(
+      overview({
+        timeline: { ...overview().timeline, status: 'on_track' },
+        dsr: { expected: 5, submitted: 5, approved: 0, pending_review: 5, overdue: 0 },
+        students: { total: 10, active: 10, at_risk: 0 },
+      }),
+    );
+    render(<BatchDetail batchId="batch-1" />);
+    await waitFor(() => expect(screen.getByText('Morning Linux batch')).toBeInTheDocument());
+    expect(screen.queryByTestId('batch-attention-banner')).not.toBeInTheDocument();
   });
 });

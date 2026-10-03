@@ -519,6 +519,23 @@ def _build(trigger: str, obj: Any, extra: dict[str, Any]) -> tuple[dict[str, Any
         )
         return context, rctx, assignment
 
+    if trigger in (AutomationTrigger.DSR_SUBMITTED, AutomationTrigger.DSR_MISSING):
+        dsr = obj
+        context = context_for(trigger, dsr)
+        rctx = RunContext(branch=dsr.batch.branch, dsr=dsr)
+        return context, rctx, dsr
+
+    if trigger == AutomationTrigger.DSR_STUDENT_FLAGGED:
+        note = obj
+        context = context_for(trigger, note)
+        rctx = RunContext(
+            student=note.enrollment.student,
+            enrollment=note.enrollment,
+            branch=note.dsr.batch.branch,
+            dsr=note.dsr,
+        )
+        return context, rctx, note
+
     if trigger in ENQUIRY_TRIGGERS:
         enquiry = obj
         context = context_for(
@@ -612,6 +629,16 @@ def _occurrence_for(trigger: str, target: Any, extra: dict[str, Any], depth: int
 
     if trigger == AutomationTrigger.ENQUIRY_CREATED:
         return "created"
+
+    if trigger == AutomationTrigger.DSR_SUBMITTED:
+        moment = getattr(target, "submitted_at", None) or timezone.now()
+        return f"{_compact_datetime(moment)}-{depth}"
+
+    if trigger == AutomationTrigger.DSR_MISSING:
+        return "missing"
+
+    if trigger == AutomationTrigger.DSR_STUDENT_FLAGGED:
+        return "flag"
 
     if trigger == AutomationTrigger.ENQUIRY_STAGE_CHANGED:
         moment = getattr(target, "stage_changed_at", None) or timezone.now()
@@ -924,6 +951,26 @@ def _recent_events(trigger: str, *, limit: int = 20) -> list[tuple[Any, dict[str
                     },
                 )
             )
+
+    elif trigger in (AutomationTrigger.DSR_SUBMITTED, AutomationTrigger.DSR_MISSING):
+        from apps.dsr.models import DONE_STATUSES, DSR
+
+        rows = DSR.objects.select_related("batch", "trainer")
+        rows = (
+            rows.filter(status__in=list(DONE_STATUSES)).order_by("-submitted_at")
+            if trigger == AutomationTrigger.DSR_SUBMITTED
+            else rows.filter(overdue_notified_at__isnull=False).order_by("-due_at")
+        )
+        for dsr in rows[:limit]:
+            events.append((dsr, {}))
+
+    elif trigger == AutomationTrigger.DSR_STUDENT_FLAGGED:
+        from apps.dsr.models import DSRStudentNote
+
+        for note in DSRStudentNote.objects.select_related(
+            "dsr", "dsr__batch", "enrollment", "enrollment__student"
+        ).order_by("-created_at")[:limit]:
+            events.append((note, {}))
 
     elif trigger in ENQUIRY_TRIGGERS:
         from apps.enquiries.models import Enquiry

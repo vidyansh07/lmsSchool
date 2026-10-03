@@ -13,10 +13,8 @@
  * layout rearranges itself around whatever is broken today is one nobody can
  * build a mental map of.
  *
- * DSR approval is the one inline, undoable action on this page; see
- * `components/manage/dsr-review-queue.tsx` for why "undo" means rollback on
- * failure rather than a literal undo button. Everything else here is read —
- * the roster, the trainer assignment and the timetable already have their own
+ * Everything here is read — class reports included: a submitted report is
+ * done, with no approval step (the owner's call, 3 October 2026). The roster, the trainer assignment and the timetable already have their own
  * editing screens under `/admin/batches`, and duplicating that here would be
  * a second place for the same edit to go stale against.
  */
@@ -24,7 +22,7 @@ import Link from 'next/link';
 import { use, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
-import { DsrReviewQueue } from '@/components/manage/dsr-review-queue';
+import { BatchClassReports } from '@/components/manage/batch-class-reports';
 import { Stat, StatGrid } from '@/components/manage/stat';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
@@ -52,10 +50,7 @@ function attentionReasons(overview: BatchOverview): string[] {
   }
   if (!overview.trainer) reasons.push('No trainer is assigned to this batch.');
   if (overview.dsr.overdue > 0) {
-    reasons.push(`${formatNumber(overview.dsr.overdue)} daily status report(s) overdue.`);
-  }
-  if (overview.dsr.pending_review > 0) {
-    reasons.push(`${formatNumber(overview.dsr.pending_review)} report(s) awaiting review.`);
+    reasons.push(`${formatNumber(overview.dsr.overdue)} class report(s) overdue.`);
   }
   if (overview.students.at_risk > 0) {
     reasons.push(`${formatNumber(overview.students.at_risk)} student(s) flagged at risk.`);
@@ -248,18 +243,18 @@ export function BatchDetail({ batchId }: { batchId: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Daily status reports</CardTitle>
-          <CardDescription>Approving a submitted report happens right here.</CardDescription>
+          <CardTitle>Class reports</CardTitle>
+          <CardDescription>
+            What each class covered, as its trainer reported it. A submitted report is done.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <StatGrid>
             <Stat label="Expected" value={formatNumber(dsr.expected)} />
             <Stat label="Submitted" value={formatNumber(dsr.submitted)} />
-            <Stat label="Approved" value={formatNumber(dsr.approved)} />
-            <Stat label="Awaiting review" value={formatNumber(dsr.pending_review)} tone={dsr.pending_review > 0 ? 'warning' : 'default'} />
             <Stat label="Overdue" value={formatNumber(dsr.overdue)} tone={dsr.overdue > 0 ? 'error' : 'default'} />
           </StatGrid>
-          <DsrReviewQueue batchId={batchId} onReviewed={load} />
+          <BatchClassReports batchId={batchId} />
         </CardContent>
       </Card>
 

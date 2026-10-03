@@ -123,3 +123,33 @@ def on_enquiry_changed(
             logger.exception("Failed to enqueue enquiry automation dispatch for %s", enquiry_id)
 
     transaction.on_commit(_enqueue)
+
+
+def on_dsr_submitted(sender, *, dsr, actor=None, **kwargs) -> None:
+    """A submitted class report is `DSR_SUBMITTED`, and each of its student
+    notes a `DSR_STUDENT_FLAGGED`."""
+    dsr_id = str(dsr.pk)
+
+    def _enqueue() -> None:
+        try:
+            from .tasks import dispatch_dsr_submitted
+
+            dispatch_dsr_submitted.delay(dsr_id)
+        except Exception:
+            logger.exception("Failed to enqueue DSR_SUBMITTED dispatch for %s", dsr_id)
+
+    transaction.on_commit(_enqueue)
+
+
+def on_dsr_missing(sender, *, dsr, **kwargs) -> None:
+    dsr_id = str(dsr.pk)
+
+    def _enqueue() -> None:
+        try:
+            from .tasks import dispatch_dsr_missing
+
+            dispatch_dsr_missing.delay(dsr_id)
+        except Exception:
+            logger.exception("Failed to enqueue DSR_MISSING dispatch for %s", dsr_id)
+
+    transaction.on_commit(_enqueue)

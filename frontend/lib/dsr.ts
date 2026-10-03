@@ -29,6 +29,7 @@
 
 import { getSession, recordSessionTopic, type SessionTopicStatus } from './academics';
 import { apiFetch, apiMutate, queryString } from './api';
+import { apiBaseUrl } from './env';
 import { NOT_AVAILABLE } from './format';
 import type { ListQuery } from './people';
 import type {
@@ -37,6 +38,7 @@ import type {
   ClassSession,
   CreateActivityFromDsrPayload,
   DsrHistoryEntry,
+  FormField,
   Paginated,
 } from '@/types/api';
 
@@ -97,6 +99,31 @@ export type DSRStatus =
  * request either way. That is the one signal this screen uses to tell "an
  * existing draft" from "nothing written yet".
  */
+/** A lesson as a report names it. */
+export interface DSRLessonBrief {
+  id: string;
+  title: string;
+  module: string;
+}
+
+export type DSRStudentFlag = 'doubt' | 'needs_attention' | 'did_well' | 'absent_reason' | 'other';
+
+export interface DSRStudentNote {
+  enrollment: string;
+  student_name?: string;
+  flag: DSRStudentFlag;
+  note: string;
+}
+
+export interface DSRAttachment {
+  upload: string;
+  filename?: string;
+  caption: string;
+}
+
+/** Whether the planned lesson got finished. */
+export type DSRTopicStatus = 'completed' | 'in_progress' | 'skipped';
+
 export interface DSR {
   id: string | null;
   session: string;
@@ -123,6 +150,24 @@ export interface DSR {
   student_concerns: string;
   assignment_given: boolean;
   assessment_conducted: boolean;
+  /** Older payloads may lack the class-report fields below; read them with a
+   *  fallback. */
+  topic_status?: DSRTopicStatus | '';
+  lessons_covered?: DSRLessonBrief[];
+  planned_lesson?: DSRLessonBrief | null;
+  homework?: string;
+  homework_due_on?: string | null;
+  homework_assignment?: string | null;
+  homework_assignment_title?: string | null;
+  student_notes?: DSRStudentNote[];
+  attachments?: DSRAttachment[];
+  /** The institution's own extra questions, when it has any. */
+  extra_form?: { version: number; fields: FormField[] } | null;
+  extra_answers?: Record<string, unknown>;
+  due_at?: string | null;
+  is_overdue?: boolean;
+  /** Submitted is done — no manager approval is needed. */
+  is_done?: boolean;
   status: DSRStatus;
   is_editable: boolean;
   submitted_at: string | null;
@@ -148,6 +193,17 @@ export interface DSRWritePayload {
   student_concerns?: string;
   assignment_given?: boolean;
   assessment_conducted?: boolean;
+  topic_status?: DSRTopicStatus;
+  homework?: string;
+  homework_due_on?: string | null;
+  homework_assignment?: string | null;
+  extra_answers?: Record<string, unknown>;
+  /** Lesson ids; replaces the report's list when sent. */
+  lessons_covered?: string[];
+  /** Replaces the report's student notes when sent. */
+  student_notes?: { enrollment: string; flag: DSRStudentFlag; note: string }[];
+  /** Replaces the report's attachments when sent. */
+  attachments?: { upload: string; caption: string }[];
   /** Hand straight to the reviewer in the same request — see
    *  `SessionDSRView.post` / `DSRDetailView.patch` on the backend. */
   submit?: boolean;
@@ -167,6 +223,38 @@ export function toWritePayload(dsr: DSR): DSRWritePayload {
     student_concerns: dsr.student_concerns,
     assignment_given: dsr.assignment_given,
     assessment_conducted: dsr.assessment_conducted,
+    topic_status: dsr.topic_status || 'completed',
+    homework: dsr.homework ?? '',
+    homework_due_on: dsr.homework_due_on ?? null,
+    extra_answers: { ...(dsr.extra_answers ?? {}) },
+    lessons_covered: (dsr.lessons_covered ?? []).map((lesson) => lesson.id),
+    student_notes: (dsr.student_notes ?? []).map(({ enrollment, flag, note }) => ({
+      enrollment,
+      flag,
+      note,
+    })),
+    attachments: (dsr.attachments ?? []).map(({ upload, caption }) => ({ upload, caption })),
+  };
+}
+
+/**
+ * Fold the class header's "what was actually covered" choice into the report:
+ * a lesson joins `lessons_covered`, and the skip choice marks the planned
+ * lesson not covered. `skipValue` is the header's skip sentinel, passed in so
+ * this module does not import a component. An empty choice changes nothing.
+ */
+export function withTopicChoice(
+  draft: DSRWritePayload,
+  choice: string,
+  skipValue: string,
+): DSRWritePayload {
+  if (!choice) return draft;
+  if (choice === skipValue) return { ...draft, topic_status: 'skipped' };
+  const covered = draft.lessons_covered ?? [];
+  return {
+    ...draft,
+    lessons_covered: covered.includes(choice) ? covered : [choice, ...covered],
+    topic_status: draft.topic_status === 'skipped' ? 'completed' : draft.topic_status,
   };
 }
 
@@ -328,4 +416,97 @@ export function clearDsrDraft(sessionId: string): void {
   } catch {
     // Nothing to clean up if storage was never reachable.
   }
+}
+
+// --- After class: what students see, what is missing, a batch at a glance --
+
+/** `GET /dsr/mine/` row — what a student sees of a submitted class report:
+ *  what was covered and the homework, never the trainer's notes. */
+export interface StudentClassNote {
+  id: string;
+  report_date: string;
+  start_time: string;
+  batch_code: string;
+  trainer_name: string;
+  topic: string;
+  lessons_covered: DSRLessonBrief[];
+  homework: string;
+  homework_due_on: string | null;
+  homework_assignment: string | null;
+  homework_assignment_title: string | null;
+}
+
+/** `GET /dsr/missing/` row — a class that ended without a submitted report. */
+export interface MissingReportRow {
+  session: string;
+  date: string;
+  start_time: string;
+  end_time: string;
+  batch: string;
+  batch_code: string;
+  trainer_name: string;
+  dsr: string | null;
+  dsr_status: DSRStatus | null;
+  due_at: string | null;
+}
+
+export type ClassReportState =
+  | 'upcoming'
+  | 'missing'
+  | 'overdue'
+  | 'draft'
+  | 'submitted'
+  | 'approved'
+  | 'changes_requested';
+
+/** `GET /batches/<id>/dsr-summary/`. */
+export interface BatchReportSummary {
+  batch: { id: string; code: string };
+  days: number;
+  classes: {
+    session: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+    trainer_name: string;
+    state: ClassReportState;
+    dsr: string | null;
+    topic: string;
+    lessons: string[];
+    topic_status: DSRTopicStatus | '' | null;
+    present: number | null;
+    absent: number | null;
+    student_notes: number;
+    homework: boolean;
+  }[];
+  counts: { held: number; submitted: number; on_time: number; missing: number; overdue: number };
+  coverage: {
+    lessons_total: number;
+    lessons_covered: number;
+    percent: number | null;
+    next_lesson: { id: string; title: string } | null;
+  };
+}
+
+/** Where the batch's report export downloads from. */
+export function batchReportExportUrl(batchId: string, days = 7): string {
+  return `${apiBaseUrl()}/api/v1/batches/${batchId}/dsr-export/?days=${days}`;
+}
+
+/** Classes in the caller's reach that ended in the last two weeks without a
+ *  submitted report: a trainer's own, or every class a manager can see. */
+export async function listMissingReports(): Promise<MissingReportRow[]> {
+  return apiFetch<MissingReportRow[]>('/api/v1/dsr/missing/');
+}
+
+/** A student's view of their classes: what was covered and the homework. */
+export async function listMyClassNotes(page = 1): Promise<Paginated<StudentClassNote>> {
+  return apiFetch<Paginated<StudentClassNote>>(`/api/v1/dsr/mine/?page=${page}`);
+}
+
+export async function getBatchReportSummary(
+  batchId: string,
+  days = 30,
+): Promise<BatchReportSummary> {
+  return apiFetch<BatchReportSummary>(`/api/v1/batches/${batchId}/dsr-summary/?days=${days}`);
 }

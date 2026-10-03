@@ -322,11 +322,12 @@ def test_comms_stage_builds_every_state_and_is_idempotent(django_capture_on_comm
     assert drafted.status == AutomationRuleStatus.DRAFT
     assert drafted.actions[0]["params"]["template"] == "email.project_overdue"
     assert AutomationRule.objects.filter(status=AutomationRuleStatus.ACTIVE).count() == 9
-    # The 9 catalogue rules, plus the 4 enquiry examples `automation.0005`
-    # seeds as drafts; the showcase leaves every one of them as it found it.
+    # The 9 catalogue rules, plus the example drafts (4 enquiry rules from
+    # `automation.0005`, 1 class-report rule from `automation.0007`); the
+    # showcase leaves every one of them as it found it.
     unauthored = AutomationRule.objects.filter(created_by__isnull=True)
     assert unauthored.filter(status=AutomationRuleStatus.ACTIVE).count() == 9
-    assert unauthored.filter(status=AutomationRuleStatus.DRAFT).count() == 4
+    assert unauthored.filter(status=AutomationRuleStatus.DRAFT).count() == 5
     assert "runs on record" in first
 
     # --- Nothing this stage does touches an account -------------------------

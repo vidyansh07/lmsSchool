@@ -10,6 +10,7 @@ import {
   GraduationCap,
   ListChecks,
   type LucideIcon,
+  MessageSquareText,
 } from "lucide-react";
 
 import { NOT_AVAILABLE, type FallbackLabel } from "@/lib/format";
@@ -288,6 +289,7 @@ export const FORM_ENTITY_LABEL: Record<FormEntity, string> = {
   registration: "Registration",
   review: "Review",
   enquiry: "Enquiry",
+  dsr: "Class report",
   general: "General",
 };
 
@@ -496,7 +498,8 @@ export interface TimelineKindMeta {
 export const TIMELINE_KIND_META: Record<string, TimelineKindMeta> = {
   enrollment_started: { icon: GraduationCap, label: "Enrolment started" },
   attendance_day: { icon: CalendarCheck, label: "Attendance" },
-  dsr_submitted: { icon: ClipboardCheck, label: "Daily report submitted" },
+  dsr_submitted: { icon: ClipboardCheck, label: "Class report submitted" },
+  class_note: { icon: MessageSquareText, label: "Note from class" },
   assessment_result: { icon: FileCheck2, label: "Assessment result" },
   assignment_submitted: { icon: ListChecks, label: "Assignment submitted" },
   project_state_changed: { icon: FolderKanban, label: "Project update" },
@@ -568,16 +571,20 @@ export const AUTOMATION_TRIGGER_LABEL: Record<AutomationTrigger, string> = {
   ENQUIRY_CREATED: "Enquiry created",
   ENQUIRY_STAGE_CHANGED: "Enquiry stage changed",
   ENQUIRY_UPDATED: "Enquiry updated",
+  DSR_SUBMITTED: "Class report submitted",
+  DSR_MISSING: "Class report missing",
+  DSR_STUDENT_FLAGGED: "Student flagged in a class report",
 };
 
 /** The record a trigger is about — the builder's "When" picks the record
  *  first, then one of its events, the way a Meritto workflow does. */
-export type AutomationRecord = "enquiry" | "activity" | "form" | "student";
+export type AutomationRecord = "enquiry" | "activity" | "form" | "class_report" | "student";
 
 export const AUTOMATION_RECORD_LABEL: Record<AutomationRecord, string> = {
   enquiry: "Enquiry",
   activity: "Activity",
   form: "Form",
+  class_report: "Class report",
   student: "Student",
 };
 
@@ -585,6 +592,7 @@ export const AUTOMATION_RECORD_TRIGGERS: Record<AutomationRecord, AutomationTrig
   enquiry: ["ENQUIRY_CREATED", "ENQUIRY_STAGE_CHANGED", "ENQUIRY_UPDATED"],
   activity: ["ACTIVITY_COMPLETED", "ACTIVITY_OVERDUE"],
   form: ["FORM_SUBMITTED"],
+  class_report: ["DSR_SUBMITTED", "DSR_MISSING", "DSR_STUDENT_FLAGGED"],
   student: [
     "ATTENDANCE_THRESHOLD",
     "ASSESSMENT_FAILED",
@@ -608,6 +616,9 @@ export const AUTOMATION_EVENT_LABEL: Record<AutomationTrigger, string> = {
   RISK_CHANGED: "Risk level changed",
   PROJECT_OVERDUE: "Project overdue",
   ASSIGNMENT_OVERDUE: "Assignment overdue",
+  DSR_SUBMITTED: "Submitted",
+  DSR_MISSING: "Missing after the deadline",
+  DSR_STUDENT_FLAGGED: "A student was flagged",
 };
 
 export function automationRecordOf(trigger: AutomationTrigger): AutomationRecord {

@@ -64,6 +64,28 @@ _ENQUIRY_PATHS = frozenset(
     }
 )
 
+#: `dsr.*`: one class report.
+_DSR_PATHS = frozenset(
+    {
+        "dsr.id",
+        "dsr.batch",
+        "dsr.batch_code",
+        "dsr.trainer",
+        "dsr.topic_status",
+        "dsr.present_count",
+        "dsr.absent_count",
+        "dsr.attendance_percent",
+        "dsr.homework_given",
+        "dsr.lessons_covered_count",
+        "dsr.student_notes_count",
+        "dsr.flagged_count",
+        "dsr.has_issues",
+        "dsr.has_concerns",
+        "dsr.submitted_late",
+        "dsr.hours_late",
+    }
+)
+
 #: The literal allowlist from `AUTOMATION_CATALOG.md`'s "Triggers and their
 #: context" table — the single source of truth for which condition paths a
 #: rule may reference per trigger. `ACTIVITY_COMPLETED` and `FORM_SUBMITTED`
@@ -121,6 +143,9 @@ ALLOWED_PATHS: dict[str, frozenset[str]] = {
     "ENQUIRY_CREATED": _ENQUIRY_PATHS,
     "ENQUIRY_STAGE_CHANGED": _ENQUIRY_PATHS,
     "ENQUIRY_UPDATED": _ENQUIRY_PATHS,
+    "DSR_SUBMITTED": _DSR_PATHS,
+    "DSR_MISSING": _DSR_PATHS,
+    "DSR_STUDENT_FLAGGED": frozenset({"note.flag", "note.text"}) | _DSR_PATHS | _STUDENT_PATHS,
 }
 
 #: Triggers whose context carries the answers of a form as `form.<key>` —
@@ -505,6 +530,48 @@ def context_for_enquiry_event(enquiry, *, previous_stage: str = "", changed=None
     return {"enquiry": _enquiry_context(enquiry, previous_stage=previous_stage, changed=changed)}
 
 
+def _dsr_context(dsr, *, now=None) -> dict[str, Any]:
+    from django.utils import timezone
+
+    now = now or timezone.now()
+    notes = list(dsr.student_notes.all())
+    held = dsr.present_count + dsr.absent_count
+    late_reference = dsr.submitted_at or now
+    hours_late = 0.0
+    if dsr.due_at is not None and late_reference > dsr.due_at:
+        hours_late = round((late_reference - dsr.due_at).total_seconds() / 3600, 1)
+    return {
+        "id": str(dsr.pk),
+        "batch": str(dsr.batch_id),
+        "batch_code": dsr.batch.code,
+        "trainer": str(dsr.trainer.user_id) if dsr.trainer.user_id else None,
+        "topic_status": dsr.topic_status or None,
+        "present_count": dsr.present_count,
+        "absent_count": dsr.absent_count,
+        "attendance_percent": round(dsr.present_count * 100 / held, 1) if held else None,
+        "homework_given": bool(dsr.homework or dsr.homework_assignment_id),
+        "lessons_covered_count": dsr.lessons_covered.count(),
+        "student_notes_count": len(notes),
+        "flagged_count": sum(1 for note in notes if note.flag == "needs_attention"),
+        "has_issues": bool(dsr.issues.strip()),
+        "has_concerns": bool(dsr.student_concerns.strip()),
+        "submitted_late": hours_late > 0 and dsr.submitted_at is not None,
+        "hours_late": hours_late,
+    }
+
+
+def context_for_dsr(dsr) -> dict[str, Any]:
+    return {"dsr": _dsr_context(dsr)}
+
+
+def context_for_dsr_note(note) -> dict[str, Any]:
+    return {
+        "note": {"flag": note.flag, "text": note.note},
+        "dsr": _dsr_context(note.dsr),
+        "student": _student_context(student=note.enrollment.student, enrollment=note.enrollment),
+    }
+
+
 def context_for(trigger: str, obj, **extra: Any) -> dict[str, Any]:
     """Route to the trigger-specific builder above.
 
@@ -556,4 +623,8 @@ def context_for(trigger: str, obj, **extra: Any) -> dict[str, Any]:
             previous_stage=extra.get("previous_stage", ""),
             changed=extra.get("changed"),
         )
+    if trigger in (AutomationTrigger.DSR_SUBMITTED, AutomationTrigger.DSR_MISSING):
+        return context_for_dsr(obj)
+    if trigger == AutomationTrigger.DSR_STUDENT_FLAGGED:
+        return context_for_dsr_note(obj)
     raise ValueError(f"Unknown trigger: {trigger!r}")

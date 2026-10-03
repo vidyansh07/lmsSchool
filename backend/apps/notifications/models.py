@@ -90,6 +90,9 @@ class NotificationKind(models.TextChoices):
 
     # --- Daily status reports (ERP Phase 15)
     DSR_REJECTED = "dsr.rejected", _("Daily status report rejected")
+    DSR_DUE = "dsr.due", _("Class report to fill in")
+    DSR_REMINDER = "dsr.reminder", _("Class report still to fill in")
+    DSR_OVERDUE = "dsr.overdue", _("Class report overdue")
 
     # --- Form assignments (automation forms)
     FORM_ASSIGNED = "form.assigned", _("Form sent to you to fill")
@@ -140,6 +143,9 @@ KIND_CATEGORY: dict[str, str] = {
     NotificationKind.ACTIVITY_OVERDUE: NotificationCategory.SCHEDULE,
     NotificationKind.PROJECT_OVERDUE: NotificationCategory.SCHEDULE,
     NotificationKind.DSR_REJECTED: NotificationCategory.ACADEMIC,
+    NotificationKind.DSR_DUE: NotificationCategory.SCHEDULE,
+    NotificationKind.DSR_REMINDER: NotificationCategory.SCHEDULE,
+    NotificationKind.DSR_OVERDUE: NotificationCategory.SCHEDULE,
     NotificationKind.FORM_ASSIGNED: NotificationCategory.SCHEDULE,
     NotificationKind.FORM_SUBMITTED: NotificationCategory.ACADEMIC,
 }

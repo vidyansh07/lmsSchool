@@ -35,11 +35,11 @@ import type { DsrHistoryEntry } from '@/types/api';
 const ACTION_LABEL: Record<string, string> = {
   'dsr.created': 'Report started',
   'dsr.updated': 'Report updated',
-  'dsr.submitted': 'Submitted for review',
+  'dsr.submitted': 'Submitted',
   'dsr.review.started': 'Review started',
-  'dsr.approved': 'Approved',
+  'dsr.approved': 'Marked seen by a manager',
   'dsr.rejected': 'Rejected',
-  'dsr.revision_requested': 'Revision requested',
+  'dsr.revision_requested': 'Changes asked for',
 };
 
 function humanize(value: string): string {

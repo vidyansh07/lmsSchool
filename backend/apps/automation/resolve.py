@@ -47,6 +47,9 @@ class RunContext:
     #: The enquiry the occurrence is about: the enquiry of an enquiry event,
     #: or of an activity or form about one. `enquiry_owner` resolves here.
     enquiry: Any = None
+    #: The class report an occurrence is about (`DSR_*` triggers). The
+    #: `dsr_trainer` strategy resolves to the trainer who wrote it.
+    dsr: Any = None
 
 
 def _first_manager(rctx: RunContext) -> User | None:
@@ -137,6 +140,9 @@ def resolve_user(strategy: Any, *, rctx: RunContext) -> User | None:
         return enquiry.owner if enquiry is not None and enquiry.owner_id else None
     if strategy == "least_busy_counsellor":
         return _least_busy_counsellor(rctx)
+    if strategy == "dsr_trainer":
+        dsr = rctx.dsr
+        return dsr.trainer.user if dsr is not None and dsr.trainer.user_id else None
     if _is_uuid(strategy):
         return User.objects.filter(pk=strategy, is_active=True).first()
     return None

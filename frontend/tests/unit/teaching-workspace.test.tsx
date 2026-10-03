@@ -339,7 +339,7 @@ describe('ClassWorkspace', () => {
     );
     render(<ClassWorkspace sessionId="session-1" />);
 
-    await waitFor(() => expect(screen.getByText("The day's report is not available")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("The class report is not available")).toBeInTheDocument());
     expect(screen.getByText('No report exists for a cancelled class.')).toBeInTheDocument();
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /finish class/i })).not.toBeInTheDocument();

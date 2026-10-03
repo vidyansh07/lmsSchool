@@ -57,6 +57,7 @@ import { ClassPicker } from '@/components/teaching/class-picker';
 import { ClassWorkPanel } from '@/components/teaching/class-work-panel';
 import { DsrPanel } from '@/components/teaching/dsr-panel';
 import { RegisterEditor } from '@/components/teaching/register-editor';
+import { ReportsToFill } from '@/components/teaching/reports-to-fill';
 import { TodayActivitiesPanel } from '@/components/teaching/today-activities-panel';
 import { ActivityDrawer } from '@/components/work/activity-drawer';
 import { Alert } from '@/components/ui/alert';
@@ -87,6 +88,7 @@ import {
   recordTopic,
   startDsr,
   toWritePayload,
+  withTopicChoice,
   updateDsr,
   writeDsrDraft,
   type DSR,
@@ -133,7 +135,7 @@ function ClassCompleteSummary({
       </CardHeader>
       <CardContent className="space-y-4">
         <Alert variant="success" role="status">
-          The register is saved and the report has been sent for review.
+          The register is saved and the class report is submitted. Nothing else to do.
         </Alert>
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
           <span>
@@ -421,6 +423,7 @@ export function ClassWorkspace({
   function changeTopicSelection(value: string) {
     setIsDirty(true);
     setTopicSelection(value);
+    setDraft((current) => withTopicChoice(current, value, SKIP_TOPIC_VALUE));
   }
 
   function buildRegisterEntries() {
@@ -485,7 +488,7 @@ export function ClassWorkspace({
 
     try {
       const payload: DSRWritePayload = {
-        ...draft,
+        ...withTopicChoice(draft, topicSelection, SKIP_TOPIC_VALUE),
         present_count: liveCounts.present,
         absent_count: liveCounts.absent,
         student_count: liveCounts.student,
@@ -563,6 +566,7 @@ export function ClassWorkspace({
           {topicError}
         </Alert>
       ) : null}
+      <ReportsToFill exceptSessionId={sessionId} />
 
       {register ? (
         <Card>
@@ -616,6 +620,8 @@ export function ClassWorkspace({
           dsr={dsr}
           draft={draft}
           onChange={updateDraft}
+          modules={modules}
+          roster={register?.entries ?? []}
           presentCount={liveCounts.present}
           absentCount={liveCounts.absent}
           studentCount={liveCounts.student}
@@ -627,11 +633,11 @@ export function ClassWorkspace({
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle as="h2">Daily report</CardTitle>
+            <CardTitle as="h2">Class report</CardTitle>
           </CardHeader>
           <CardContent>
             <ErrorState
-              title="The day's report is not available"
+              title="The class report is not available"
               message={dsrLoadError ?? "The day's report for this class could not be loaded."}
             />
           </CardContent>
@@ -667,8 +673,8 @@ export function ClassWorkspace({
         </div>
       ) : (
         <p className="border-t border-line pt-4 text-sm text-ink-muted">
-          This report has moved to review — the register above can still be corrected, but the report
-          itself is closed to further edits here.
+          This class&rsquo;s report is submitted. A manager can still correct the register; ask
+          them if something in it is wrong.
         </p>
       )}
     </div>
@@ -904,6 +910,8 @@ export function TodayWorkspace() {
           </GridItem>
         </Grid>
       </Section>
+
+      <ReportsToFill />
 
       <ClassPicker
         todayIso={today}

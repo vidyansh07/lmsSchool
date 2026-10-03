@@ -44,6 +44,7 @@ import type { FormEntity } from "@/types/api";
 const ENTITIES: FormEntity[] = [
   "activity",
   "enquiry",
+  "dsr",
   "general",
   "student",
   "registration",

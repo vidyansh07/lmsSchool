@@ -374,22 +374,26 @@ def test_manager_dashboard_attention_is_empty_when_nothing_needs_it(
 
 
 @pytest.mark.django_db
-def test_manager_dashboard_attention_lists_dsr_pending_review(
+def test_manager_dashboard_attention_lists_overdue_class_reports_only(
     api_client_no_csrf, manager_user, admin_user, trainer_profile, batch
 ):
     from apps.dsr.services import start_dsr, submit_dsr
 
-    session = _completed_session(admin_user, batch, offset_days=1, topic="Needs review")
-    dsr = start_dsr(session=session, actor=trainer_profile.user)
-    submit_dsr(dsr=dsr, actor=trainer_profile.user)
+    _completed_session(admin_user, batch, offset_days=1, topic="Never reported")
+    reported = _completed_session(admin_user, batch, offset_days=2, topic="Reported")
+    submit_dsr(
+        dsr=start_dsr(session=reported, actor=trainer_profile.user), actor=trainer_profile.user
+    )
 
     api_client_no_csrf.force_login(manager_user)
     body = api_client_no_csrf.get(MANAGER_URL).json()
 
-    item = next(row for row in body["attention"] if row["kind"] == "dsr_pending_review")
+    # Submitted is done: nothing is "awaiting review".
+    assert not [row for row in body["attention"] if row["kind"] == "dsr_pending_review"]
+    item = next(row for row in body["attention"] if row["kind"] == "dsr_overdue")
     assert item["count"] == 1
     assert item["severity"] == "low"
-    assert "dsr" in item["href"]
+    assert item["href"] == "/dsr"
 
 
 @pytest.mark.django_db

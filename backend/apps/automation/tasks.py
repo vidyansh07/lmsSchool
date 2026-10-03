@@ -245,3 +245,37 @@ def dispatch_enquiry_event(
     if enquiry is None:
         return
     dispatch(trigger, enquiry, depth=0, previous_stage=previous_stage, changed=changed or [])
+
+
+def _dsr(dsr_id: str):
+    from apps.dsr.models import DSR
+
+    return (
+        DSR.objects.select_related("batch", "batch__branch", "trainer", "trainer__user")
+        .filter(pk=dsr_id)
+        .first()
+    )
+
+
+@shared_task(name="automation.dispatch_dsr_submitted", ignore_result=True)
+def dispatch_dsr_submitted(dsr_id: str) -> None:
+    from .models import AutomationTrigger
+    from .services import dispatch
+
+    dsr = _dsr(dsr_id)
+    if dsr is None:
+        return
+    dispatch(AutomationTrigger.DSR_SUBMITTED, dsr, depth=0)
+    for note in dsr.student_notes.select_related("enrollment", "enrollment__student"):
+        dispatch(AutomationTrigger.DSR_STUDENT_FLAGGED, note, depth=0)
+
+
+@shared_task(name="automation.dispatch_dsr_missing", ignore_result=True)
+def dispatch_dsr_missing(dsr_id: str) -> None:
+    from .models import AutomationTrigger
+    from .services import dispatch
+
+    dsr = _dsr(dsr_id)
+    if dsr is None:
+        return
+    dispatch(AutomationTrigger.DSR_MISSING, dsr, depth=0)

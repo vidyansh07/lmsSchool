@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { RequireAuth } from '@/components/require-auth';
 import { ScheduleList } from '@/components/schedule-list';
+import { ClassNotesPanel } from '@/components/student/class-notes-panel';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -76,6 +77,8 @@ function MyBatches() {
           Every batch you have been enrolled on, including finished ones.
         </p>
       </div>
+
+      {enrollments.length > 0 ? <ClassNotesPanel /> : null}
 
       {enrollments.length === 0 ? (
         <EmptyState

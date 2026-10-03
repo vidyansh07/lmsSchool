@@ -8,9 +8,10 @@ import type { DSRListItem } from '@/lib/dsr';
 import type { BatchListRow, Paginated, TrainerListRow } from '@/types/api';
 
 const listDsr = vi.hoisted(() => vi.fn());
+const listMissingReports = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/dsr', async () => {
   const actual = await vi.importActual<typeof import('@/lib/dsr')>('@/lib/dsr');
-  return { ...actual, listDsr };
+  return { ...actual, listDsr, listMissingReports };
 });
 
 const reviewDsr = vi.hoisted(() => vi.fn());
@@ -124,6 +125,7 @@ function today(): string {
 
 beforeEach(() => {
   listDsr.mockReset();
+  listMissingReports.mockReset().mockResolvedValue([]);
   reviewDsr.mockReset();
   listBatches.mockReset().mockResolvedValue(page<BatchListRow>([]));
   listTrainers.mockReset().mockResolvedValue(page<TrainerListRow>([]));
@@ -148,11 +150,10 @@ describe('DsrQueue loading, error and empty states', () => {
     await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
   });
 
-  it('reads an empty default queue as good news', async () => {
+  it('reads an empty default list as "no reports yet"', async () => {
     listDsr.mockResolvedValue(page([]));
     render(<DsrQueue />);
-    await waitFor(() => expect(screen.getByText('Nothing awaiting review')).toBeInTheDocument());
-    expect(screen.getByText('Every submitted daily status report has been reviewed.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('No class reports yet')).toBeInTheDocument());
   });
 
   it('reads an empty filtered view as plain "no results", not as good news', async () => {
@@ -163,7 +164,7 @@ describe('DsrQueue loading, error and empty states', () => {
 
     await user.selectOptions(screen.getByLabelText('Status'), 'approved');
     await waitFor(() => expect(screen.getByText('No reports match these filters')).toBeInTheDocument());
-    expect(screen.queryByText('Nothing awaiting review')).not.toBeInTheDocument();
+    expect(screen.queryByText('No class reports yet')).not.toBeInTheDocument();
   });
 });
 
@@ -207,15 +208,16 @@ describe('DsrQueue row rendering and null handling', () => {
 });
 
 describe('DsrQueue filters', () => {
-  it('opens on the newest-first, awaiting-review default', async () => {
+  it('opens on every report, newest first — submitted is done, nothing awaits review', async () => {
     listDsr.mockResolvedValue(page([]));
     render(<DsrQueue />);
     await waitFor(() =>
       expect(listDsr).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'submitted', ordering: '-report_date' }),
+        expect.objectContaining({ ordering: '-report_date' }),
         expect.anything(),
       ),
     );
+    expect(listDsr.mock.calls[0]?.[0]?.status ?? '').toBe('');
   });
 
   it('sends a status filter to the server', async () => {
@@ -284,8 +286,8 @@ describe('DsrQueue filters', () => {
   });
 });
 
-describe('DsrQueue inline approval', () => {
-  it('approves inline with no comment, and the row clears once the server confirms it', async () => {
+describe('DsrQueue mark seen', () => {
+  it('marks a report seen with no comment, and reloads once the server confirms it', async () => {
     listDsr.mockResolvedValueOnce(page([dsrRow()]));
     listDsr.mockResolvedValueOnce(page([]));
     reviewDsr.mockResolvedValue(dsrRow({ status: 'approved' }));
@@ -293,9 +295,9 @@ describe('DsrQueue inline approval', () => {
     render(<DsrQueue />);
     await waitFor(() => expect(screen.getByText('Tina Trainer')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /^approve$/i }));
+    await user.click(screen.getByRole('button', { name: /^mark seen$/i }));
     expect(reviewDsr).toHaveBeenCalledWith('dsr-1', 'approved', '');
-    await waitFor(() => expect(screen.getByText('Nothing awaiting review')).toBeInTheDocument());
+    await waitFor(() => expect(listDsr).toHaveBeenCalledTimes(2));
   });
 
   it('rolls back visibly when the approval fails, without reloading the list', async () => {
@@ -305,7 +307,7 @@ describe('DsrQueue inline approval', () => {
     render(<DsrQueue />);
     await waitFor(() => expect(screen.getByText('Tina Trainer')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /^approve$/i }));
+    await user.click(screen.getByRole('button', { name: /^mark seen$/i }));
     await waitFor(() => expect(screen.getByText('This report was already reviewed.')).toBeInTheDocument());
     expect(screen.getByText('Tina Trainer')).toBeInTheDocument();
     expect(listDsr).toHaveBeenCalledTimes(1);
@@ -316,7 +318,7 @@ describe('DsrQueue inline approval', () => {
     listDsr.mockResolvedValue(page([dsrRow()]));
     render(<DsrQueue />);
     await waitFor(() => expect(screen.getByText('Tina Trainer')).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /^approve$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^mark seen$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /reject/i })).not.toBeInTheDocument();
   });
 
@@ -324,8 +326,8 @@ describe('DsrQueue inline approval', () => {
     listDsr.mockResolvedValue(page([dsrRow({ status: 'approved' })]));
     render(<DsrQueue />);
     await waitFor(() => expect(screen.getByText('Tina Trainer')).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /^approve$/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /request revision/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^mark seen$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /ask for changes/i })).not.toBeInTheDocument();
   });
 });
 
@@ -374,8 +376,8 @@ describe('DsrQueue reject and revision', () => {
     render(<DsrQueue />);
     await waitFor(() => expect(screen.getByText('Tina Trainer')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /request revision/i }));
-    expect(screen.getByText('What needs to change?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /ask for changes/i }));
+    expect(screen.getByText('What should the trainer change?')).toBeInTheDocument();
     expect(reviewDsr).not.toHaveBeenCalled();
   });
 
@@ -387,9 +389,9 @@ describe('DsrQueue reject and revision', () => {
     render(<DsrQueue />);
     await waitFor(() => expect(screen.getByText('Tina Trainer')).toBeInTheDocument());
 
-    await user.click(screen.getByRole('button', { name: /request revision/i }));
-    await user.type(screen.getByLabelText('What needs to change?'), 'Please add the assignment note.');
-    await user.click(screen.getByRole('button', { name: /request revision/i }));
+    await user.click(screen.getByRole('button', { name: /ask for changes/i }));
+    await user.type(screen.getByLabelText('What should the trainer change?'), 'Please add the assignment note.');
+    await user.click(screen.getByRole('button', { name: /ask for changes/i }));
 
     expect(reviewDsr).toHaveBeenCalledWith('dsr-1', 'revision_required', 'Please add the assignment note.');
   });
@@ -404,7 +406,7 @@ describe('DsrQueue reject and revision', () => {
     await user.click(screen.getByRole('button', { name: /cancel/i }));
 
     expect(reviewDsr).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /^approve$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^mark seen$/i })).toBeInTheDocument();
   });
 
   it('rolls back visibly when a rejection fails, keeping the row and its error together', async () => {
@@ -420,5 +422,39 @@ describe('DsrQueue reject and revision', () => {
 
     await waitFor(() => expect(screen.getByText('Say why, so the trainer knows what to change.')).toBeInTheDocument());
     expect(screen.getByText('Tina Trainer')).toBeInTheDocument();
+  });
+});
+
+describe('DsrQueue reading and missing reports', () => {
+  it('opens the full report in a side sheet', async () => {
+    listDsr.mockResolvedValue(page([dsrRow()]));
+    const user = userEvent.setup();
+    render(<DsrQueue />);
+    await waitFor(() => expect(screen.getByText('Tina Trainer')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /^read the/i }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('lists classes without a submitted report on the Missing tab', async () => {
+    listDsr.mockResolvedValue(page([]));
+    listMissingReports.mockResolvedValue([
+      {
+        session: 'session-9',
+        date: '2026-10-02',
+        start_time: '09:00:00',
+        end_time: '11:00:00',
+        batch: 'batch-1',
+        batch_code: 'GRS-B-009',
+        trainer_name: 'Tina Trainer',
+        dsr: null,
+        dsr_status: null,
+        due_at: null,
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<DsrQueue />);
+    await user.click(screen.getByRole('tab', { name: 'Missing' }));
+    await waitFor(() => expect(screen.getByText('GRS-B-009')).toBeInTheDocument());
+    expect(screen.getByText('Not started')).toBeInTheDocument();
   });
 });

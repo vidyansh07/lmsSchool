@@ -44,7 +44,35 @@ def roster_for(session: ClassSession):
     )
 
 
-@transaction.atomic
+def register_locked(session: ClassSession, actor: User) -> bool:
+    """Once the class report is submitted the register is part of it: the
+    trainer can no longer change it, and a holder of
+    `attendance.correct_any` (a manager) still can — the owner's call,
+    3 October 2026."""
+    from apps.accounts.roles import Capability, has_capability
+    from apps.dsr.models import DONE_STATUSES, DSR
+
+    report = DSR.objects.filter(session=session).only("status").first()
+    if report is None or report.status not in DONE_STATUSES:
+        return False
+    return not has_capability(actor, Capability.ATTENDANCE_CORRECT_ANY)
+
+
+def _guard_report_lock(session: ClassSession, actor: User) -> None:
+    from apps.common.exceptions import ConflictError
+
+    if not register_locked(session, actor):
+        return
+    raise ConflictError(
+        {
+            "session": [
+                "The class report for this class is submitted, so its attendance is locked. "
+                "Ask a manager to correct it."
+            ]
+        }
+    )
+
+
 def mark_attendance(
     *, session: ClassSession, actor: User, entries: list[dict[str, Any]]
 ) -> dict[str, int]:
@@ -62,6 +90,7 @@ def mark_attendance(
         )
     if not session.can_take_attendance:
         raise ApplicationError({"session": ["This class has not started yet."]})
+    _guard_report_lock(session, actor)
 
     valid_statuses = set(AttendanceStatus.values)
     roster = {str(row.pk): row for row in roster_for(session)}
@@ -213,6 +242,7 @@ def correct_record(
     """
     if status not in set(AttendanceStatus.values):
         raise ApplicationError({"status": ["Unknown attendance status."]})
+    _guard_report_lock(record_row.session, actor)
     if record_row.status == status:
         raise ApplicationError({"status": ["That is already the recorded status."]})
 

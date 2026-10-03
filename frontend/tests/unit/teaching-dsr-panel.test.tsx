@@ -4,8 +4,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DsrPanel } from '@/components/teaching/dsr-panel';
 import { ApiError } from '@/lib/api';
-import type { DSR, DSRWritePayload } from '@/lib/dsr';
-import type { ActivityDetail, DsrHistoryEntry, RosterEntry } from '@/types/api';
+import { withTopicChoice, type DSR, type DSRWritePayload } from '@/lib/dsr';
+import type {
+  ActivityDetail,
+  DsrHistoryEntry,
+  FormField,
+  Module,
+  RegisterEntry,
+  RosterEntry,
+} from '@/types/api';
 
 const getBatchRoster = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/batches', async () => {
@@ -90,6 +97,8 @@ function renderPanel(overrides: {
   isDirty?: boolean;
   isSavingDraft?: boolean;
   lastSavedAt?: string | null;
+  modules?: Module[];
+  roster?: RegisterEntry[];
 } = {}) {
   const record = dsr(overrides.dsrOverrides);
   const onChange = overrides.onChange ?? vi.fn();
@@ -98,6 +107,8 @@ function renderPanel(overrides: {
       dsr={record}
       draft={overrides.draftOverrides ?? draftFrom(record)}
       onChange={onChange}
+      modules={overrides.modules ?? []}
+      roster={overrides.roster ?? []}
       presentCount={overrides.presentCount ?? 0}
       absentCount={overrides.absentCount ?? 0}
       studentCount={overrides.studentCount ?? 0}
@@ -260,7 +271,7 @@ describe('DsrPanel — editable draft', () => {
 describe('DsrPanel — no longer editable', () => {
   it('renders a read-only summary instead of a form once the report has moved past draft', () => {
     renderPanel({ dsrOverrides: { status: 'approved', is_editable: false } });
-    expect(screen.getByText('Approved')).toBeInTheDocument();
+    expect(screen.getByText('Seen by a manager')).toBeInTheDocument();
     expect(screen.queryByLabelText('Topic for the report')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'All in person' })).not.toBeInTheDocument();
   });
@@ -275,6 +286,172 @@ describe('DsrPanel — no longer editable', () => {
   it('falls back cleanly when a locked report has no topic recorded', () => {
     renderPanel({ dsrOverrides: { status: 'submitted', is_editable: false, actual_topic: '' } });
     expect(screen.getByText('No data')).toBeInTheDocument();
+  });
+});
+
+function moduleWith(lessons: { id: string; title: string; status?: 'published' | 'draft' }[]): Module {
+  return {
+    id: 'module-1',
+    title: 'Linux basics',
+    description: '',
+    position: 1,
+    status: 'published',
+    is_visible: true,
+    lessons: lessons.map((lesson, index) => ({
+      id: lesson.id,
+      title: lesson.title,
+      slug: lesson.id,
+      description: '',
+      content_type: 'video',
+      duration_minutes: null,
+      position: index + 1,
+      status: lesson.status ?? 'published',
+      is_preview: false,
+      is_required: true,
+      resource_count: 0,
+    })),
+  } as Module;
+}
+
+function registerEntry(overrides: Partial<RegisterEntry> = {}): RegisterEntry {
+  return {
+    enrollment_id: 'enrollment-1',
+    student_code: 'GRS-S-001',
+    full_name: 'Sam Student',
+    enrollment_status: 'active',
+    status: 'present',
+    note: '',
+    was_corrected: false,
+    ...overrides,
+  } as RegisterEntry;
+}
+
+describe('DsrPanel — after-class details', () => {
+  it('lists only published lessons and ticks one into lessons_covered', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderPanel({
+      draftOverrides: { lessons_covered: [] },
+      modules: [
+        moduleWith([
+          { id: 'lesson-1', title: 'Files and folders' },
+          { id: 'lesson-2', title: 'Unfinished draft', status: 'draft' },
+        ]),
+      ],
+    });
+    expect(screen.queryByText('Unfinished draft')).not.toBeInTheDocument();
+    await user.click(screen.getByLabelText('Files and folders'));
+    expect(onChange).toHaveBeenCalledWith({ lessons_covered: ['lesson-1'] });
+  });
+
+  it('records whether the planned lesson was finished', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderPanel({ draftOverrides: { topic_status: 'completed' } });
+    await user.click(screen.getByLabelText('Partly'));
+    expect(onChange).toHaveBeenCalledWith({ topic_status: 'in_progress' });
+  });
+
+  it('adds a note about a student from the register', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderPanel({
+      draftOverrides: { student_notes: [] },
+      roster: [registerEntry()],
+    });
+    await user.selectOptions(screen.getByLabelText('Student'), 'enrollment-1');
+    await user.selectOptions(screen.getByLabelText('Note'), 'doubt');
+    await user.type(screen.getByLabelText('Details (optional)'), 'Pipes');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      student_notes: [{ enrollment: 'enrollment-1', flag: 'doubt', note: 'Pipes' }],
+    });
+  });
+
+  it('removes a note', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderPanel({
+      draftOverrides: {
+        student_notes: [{ enrollment: 'enrollment-1', flag: 'did_well', note: '' }],
+      },
+      roster: [registerEntry()],
+    });
+    await user.click(screen.getByRole('button', { name: 'Remove the note about Sam Student' }));
+    expect(onChange).toHaveBeenCalledWith({ student_notes: [] });
+  });
+
+  it('sets homework and its due date', async () => {
+    const user = userEvent.setup();
+    const { onChange } = renderPanel({ draftOverrides: {} });
+    await user.type(screen.getByLabelText('What to do'), 'R');
+    expect(onChange).toHaveBeenCalledWith({ homework: 'R' });
+  });
+
+  it('asks the institute’s own questions only when there are some', async () => {
+    const field = {
+      id: 'field-1',
+      key: 'energy',
+      label: 'How was the room’s energy?',
+      type: 'text',
+      required: false,
+      order: 1,
+      group: '',
+      help: '',
+      options: {},
+      validation: {},
+      visible_to_student: false,
+      performance_key: null,
+    } as unknown as FormField;
+    const user = userEvent.setup();
+    const { onChange } = renderPanel({
+      dsrOverrides: { extra_form: { version: 1, fields: [field] } },
+      draftOverrides: { extra_answers: {} },
+    });
+    expect(screen.getByText('More questions')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('How was the room’s energy?'), 'G');
+    expect(onChange).toHaveBeenCalledWith({ extra_answers: { energy: 'G' } });
+  });
+
+  it('has no extra-questions section without a form', () => {
+    renderPanel({ dsrOverrides: { extra_form: null } });
+    expect(screen.queryByText('More questions')).not.toBeInTheDocument();
+  });
+
+  it('shows covered lessons, homework and notes once submitted', () => {
+    renderPanel({
+      dsrOverrides: {
+        status: 'submitted',
+        is_editable: false,
+        submitted_at: '2026-10-03T12:00:00Z',
+        lessons_covered: [{ id: 'lesson-1', title: 'Files and folders', module: 'module-1' }],
+        homework: 'Read chapter 4',
+        student_notes: [
+          { enrollment: 'enrollment-1', student_name: 'Sam Student', flag: 'doubt', note: 'Pipes' },
+        ],
+      },
+    });
+    expect(screen.getByText('Submitted')).toBeInTheDocument();
+    expect(screen.getByText(/Nothing else to do/)).toBeInTheDocument();
+    expect(screen.getByText('Files and folders')).toBeInTheDocument();
+    expect(screen.getByText('Read chapter 4')).toBeInTheDocument();
+    expect(screen.getByText('Sam Student')).toBeInTheDocument();
+  });
+});
+
+describe('withTopicChoice', () => {
+  const SKIP = '__skipped__';
+
+  it('adds the chosen lesson to the lessons covered, once', () => {
+    expect(withTopicChoice({ lessons_covered: ['b'] }, 'a', SKIP).lessons_covered).toEqual(['a', 'b']);
+    expect(withTopicChoice({ lessons_covered: ['a'] }, 'a', SKIP).lessons_covered).toEqual(['a']);
+  });
+
+  it('marks the planned lesson not covered on skip, and undoes that on a lesson', () => {
+    const skipped = withTopicChoice({ topic_status: 'completed' }, SKIP, SKIP);
+    expect(skipped.topic_status).toBe('skipped');
+    expect(withTopicChoice(skipped, 'a', SKIP).topic_status).toBe('completed');
+  });
+
+  it('changes nothing for an empty choice', () => {
+    const draft = { lessons_covered: ['b'] };
+    expect(withTopicChoice(draft, '', SKIP)).toBe(draft);
   });
 });
 

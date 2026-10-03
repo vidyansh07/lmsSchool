@@ -98,7 +98,8 @@ class SessionRegisterView(APIView):
                 "session_id": session.pk,
                 "session_date": session.session_date,
                 "batch_code": session.batch.code,
-                "can_mark": session.can_take_attendance,
+                "can_mark": session.can_take_attendance
+                and not services.register_locked(session, request.user),
                 "attendance_taken_at": session.attendance_taken_at,
                 "entries": entries,
             }

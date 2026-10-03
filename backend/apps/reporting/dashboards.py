@@ -510,8 +510,6 @@ def manager_dashboard(user) -> dict[str, Any]:
     """
     from apps.accounts.roles import Capability, has_capability
     from apps.batches.models import BatchStatus
-    from apps.dsr import access as dsr_access
-    from apps.dsr.models import DSRStatus
     from apps.enrollments.models import EnrollmentStatus
     from apps.performance import access as performance_access
     from apps.performance.models import PerformanceReview, PerformanceSubjectType, ReviewStatus
@@ -555,23 +553,22 @@ def manager_dashboard(user) -> dict[str, Any]:
 
     attention: list[dict[str, Any]] = []
 
+    # A submitted class report is done — nothing waits on a manager's review
+    # (the owner's call, 3 October 2026). What needs a manager's attention is
+    # a class whose report is past its deadline and still not submitted.
     if has_capability(user, Capability.DSR_VIEW_ANY):
-        pending_dsr = (
-            dsr_access.visible_dsrs(user)
-            .filter(status__in=(DSRStatus.SUBMITTED, DSRStatus.UNDER_REVIEW))
-            .count()
-        )
-        if pending_dsr:
+        from apps.dsr.services import due_at_for, missing_sessions
+
+        now = timezone.now()
+        overdue_dsr = sum(1 for session in missing_sessions(user) if due_at_for(session) <= now)
+        if overdue_dsr:
             attention.append(
                 {
-                    "kind": "dsr_pending_review",
-                    "label": (
-                        f"{pending_dsr} {_plural(pending_dsr, 'daily status report')} "
-                        "awaiting review"
-                    ),
-                    "count": pending_dsr,
-                    "href": "/dsr?status=pending_review",
-                    "severity": _severity(pending_dsr),
+                    "kind": "dsr_overdue",
+                    "label": f"{overdue_dsr} {_plural(overdue_dsr, 'class report')} overdue",
+                    "count": overdue_dsr,
+                    "href": "/dsr",
+                    "severity": _severity(overdue_dsr),
                 }
             )
 

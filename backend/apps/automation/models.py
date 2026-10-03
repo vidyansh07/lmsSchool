@@ -60,6 +60,12 @@ class AutomationTrigger(models.TextChoices):
     ENQUIRY_STAGE_CHANGED = "ENQUIRY_STAGE_CHANGED", _("Enquiry stage changed")
     #: Any field of an enquiry changed; `enquiry.changed` lists which.
     ENQUIRY_UPDATED = "ENQUIRY_UPDATED", _("Enquiry updated")
+    #: A trainer handed in a class report (`apps.dsr.services.submit_dsr`).
+    DSR_SUBMITTED = "DSR_SUBMITTED", _("Class report submitted")
+    #: A class report went past its due time without being submitted.
+    DSR_MISSING = "DSR_MISSING", _("Class report missing")
+    #: A submitted class report carries a note about one student.
+    DSR_STUDENT_FLAGGED = "DSR_STUDENT_FLAGGED", _("Student flagged in a class report")
 
 
 class AutomationRuleStatus(models.TextChoices):

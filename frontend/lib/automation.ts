@@ -95,6 +95,27 @@ const ENQUIRY_PATHS = [
   "enquiry.id",
 ];
 
+/** `dsr.*`: one class report. Mirrors
+ *  `apps/automation/evaluator.py::_DSR_PATHS`. */
+const DSR_PATHS = [
+  "dsr.topic_status",
+  "dsr.attendance_percent",
+  "dsr.present_count",
+  "dsr.absent_count",
+  "dsr.homework_given",
+  "dsr.lessons_covered_count",
+  "dsr.student_notes_count",
+  "dsr.flagged_count",
+  "dsr.has_issues",
+  "dsr.has_concerns",
+  "dsr.submitted_late",
+  "dsr.hours_late",
+  "dsr.batch",
+  "dsr.batch_code",
+  "dsr.trainer",
+  "dsr.id",
+];
+
 export interface TriggerPathInfo {
   paths: string[];
   /** `ACTIVITY_COMPLETED` only: any `form.<key>` path is additionally legal
@@ -176,6 +197,12 @@ export const AUTOMATION_TRIGGER_PATHS: Record<AutomationTrigger, TriggerPathInfo
   ENQUIRY_CREATED: { paths: ENQUIRY_PATHS, allowsFormPaths: false },
   ENQUIRY_STAGE_CHANGED: { paths: ENQUIRY_PATHS, allowsFormPaths: false },
   ENQUIRY_UPDATED: { paths: ENQUIRY_PATHS, allowsFormPaths: false },
+  DSR_SUBMITTED: { paths: DSR_PATHS, allowsFormPaths: false },
+  DSR_MISSING: { paths: DSR_PATHS, allowsFormPaths: false },
+  DSR_STUDENT_FLAGGED: {
+    paths: ["note.flag", "note.text", ...DSR_PATHS, ...STUDENT_PATHS],
+    allowsFormPaths: false,
+  },
 };
 
 /** Condition paths whose answer is an enquiry stage — the builder offers the
@@ -363,6 +390,7 @@ export const ASSIGN_TO_STRATEGIES = [
   { value: "least_busy_counsellor", label: "The counsellor with the least open work" },
   { value: "same_assignee", label: "The same person already assigned" },
   { value: "batch_trainer", label: "The batch's trainer" },
+  { value: "dsr_trainer", label: "The trainer who wrote the class report" },
   { value: "counsellor", label: "The enrolment's counsellor" },
   { value: "creator", label: "Whoever created the triggering activity" },
 ];
@@ -394,6 +422,7 @@ export const FORM_RECIPIENT_STRATEGIES = [
  *  (`lib/labels.ts`); this is only the one strategy that is not also a role. */
 export const NOTIFICATION_TO_STRATEGIES = [
   { value: "assignee", label: "The activity's assignee" },
+  { value: "dsr_trainer", label: "The trainer who wrote the class report" },
 ];
 
 export const REVIEWER_STRATEGIES = [{ value: "manager", label: "A manager at the branch" }];

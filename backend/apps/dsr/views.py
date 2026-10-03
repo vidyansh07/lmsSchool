@@ -17,6 +17,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import django_filters
+from django.http import HttpResponse
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -46,6 +47,7 @@ from .serializers import (
     DSRReviewSerializer,
     DSRSerializer,
     DSRWriteSerializer,
+    StudentClassNoteSerializer,
 )
 
 DSR_TAG = ["dsr"]
@@ -79,6 +81,28 @@ def _resolve_module(batch, fields: dict) -> dict:
     else:
         fields["module"] = get_object_or_404(Module.objects.filter(course=batch.course), pk=value)
     return fields
+
+
+#: Write-payload keys that are not columns on the report: they replace the
+#: report's related rows through `services.set_details`.
+_DETAIL_KEYS = ("lessons_covered", "student_notes", "attachments")
+
+
+def _split_details(batch, validated: dict) -> tuple[dict, dict]:
+    """Pull the related-row lists off a write payload, and turn a homework
+    assignment id into the batch course's own assignment."""
+    details = {key: validated.pop(key) for key in _DETAIL_KEYS if key in validated}
+    if "homework_assignment" in validated:
+        value = validated.pop("homework_assignment")
+        if value is None:
+            validated["homework_assignment"] = None
+        else:
+            from apps.assignments.models import Assignment
+
+            validated["homework_assignment"] = get_object_or_404(
+                Assignment.objects.filter(course_id=batch.course_id), pk=value
+            )
+    return validated, details
 
 
 def _dsr_for(request, dsr_id) -> DSR:
@@ -167,9 +191,11 @@ class DSRDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         validated = dict(serializer.validated_data)
         should_submit = validated.pop("submit", False)
-        fields = _resolve_module(dsr.batch, validated)
+        fields, details = _split_details(dsr.batch, _resolve_module(dsr.batch, validated))
         force = has_capability(request.user, Capability.DSR_MANAGE_ANY)
         dsr = services.update_dsr(dsr=dsr, actor=request.user, force=force, **fields)
+        if details:
+            dsr = services.set_details(dsr=dsr, actor=request.user, force=force, **details)
         if should_submit:
             dsr = services.submit_dsr(dsr=dsr, actor=request.user)
         return Response(DSRSerializer(dsr).data)
@@ -355,8 +381,10 @@ class SessionDSRView(APIView):
         serializer.is_valid(raise_exception=True)
         validated = dict(serializer.validated_data)
         should_submit = validated.pop("submit", False)
-        fields = _resolve_module(session.batch, validated)
+        fields, details = _split_details(session.batch, _resolve_module(session.batch, validated))
         dsr = services.start_dsr(session=session, actor=request.user, **fields)
+        if details:
+            dsr = services.set_details(dsr=dsr, actor=request.user, **details)
         if should_submit:
             dsr = services.submit_dsr(dsr=dsr, actor=request.user)
         return Response(DSRSerializer(dsr).data, status=http_status.HTTP_201_CREATED)
@@ -484,3 +512,127 @@ class DSRHistoryView(APIView):
             .order_by("-created_at")
         )
         return Response(DSRHistorySerializer(rows, many=True).data)
+
+
+class StudentClassNotesView(ListAPIView):
+    """``GET /dsr/mine/`` — for a student: what each class covered, and the
+    homework, from the submitted reports of the batches they are in."""
+
+    permission_classes = (IsActiveUser,)
+    serializer_class = StudentClassNoteSerializer
+    queryset = DSR.objects.none()
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return DSR.objects.none()
+        from apps.enrollments.models import Enrollment, EnrollmentStatus
+
+        from .models import DONE_STATUSES
+
+        profile = batch_access.student_profile(self.request.user)
+        if profile is None:
+            return DSR.objects.none()
+        batch_ids = Enrollment.objects.filter(
+            student=profile,
+            status__in=[EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED],
+            batch__isnull=False,
+        ).values("batch_id")
+        return (
+            DSR.objects.with_related()
+            .select_related("homework_assignment")
+            .prefetch_related("lessons_covered__module")
+            .filter(batch_id__in=batch_ids, status__in=list(DONE_STATUSES))
+            .order_by("-report_date", "-start_time")
+        )
+
+    @extend_schema(summary="What my classes covered, and the homework", tags=DSR_TAG)
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+def _session_row(session) -> dict:
+    report = getattr(session, "dsr", None) if hasattr(session, "dsr") else None
+    trainer = session.trainer or session.batch.trainer
+    return {
+        "session": str(session.pk),
+        "date": session.session_date.isoformat(),
+        "start_time": session.start_time.strftime("%H:%M"),
+        "end_time": session.end_time.strftime("%H:%M"),
+        "batch": str(session.batch_id),
+        "batch_code": session.batch.code,
+        "trainer_name": trainer.user.get_full_name() if trainer and trainer.user_id else "",
+        "dsr": str(report.pk) if report is not None else None,
+        "dsr_status": report.status if report is not None else None,
+        "due_at": report.due_at.isoformat() if report is not None and report.due_at else None,
+    }
+
+
+class MissingDSRView(APIView):
+    """``GET /dsr/missing/`` — classes in the caller's reach that ended in the
+    last 14 days without a submitted report. Staff only."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Classes without a submitted report",
+        responses={
+            200: OpenApiResponse(description="[{session, date, batch_code, dsr_status, ...}]")
+        },
+        tags=DSR_TAG,
+    )
+    def get(self, request):
+        if not access.can_read_dsrs(request.user):
+            return _forbidden(request, "Class reports are for staff.")
+        return Response(
+            [_session_row(session) for session in services.missing_sessions(request.user)]
+        )
+
+
+class BatchDSRSummaryView(APIView):
+    """``GET /batches/<id>/dsr-summary/`` — the batch's classes over a window
+    with each one's report status, and how much of the course is covered."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="A batch's class reports at a glance",
+        responses={200: OpenApiResponse(description="{classes, coverage, counts}")},
+        tags=DSR_TAG,
+    )
+    def get(self, request, batch_id):
+        if not access.can_read_dsrs(request.user):
+            return _forbidden(request, "Class reports are for staff.")
+        batch = get_object_or_404(batch_access.visible_batches(request.user), pk=batch_id)
+        days = _int_param(request, "days", default=30, low=1, high=180)
+        return Response(services.batch_summary(batch, days=days))
+
+
+class BatchDSRExportView(APIView):
+    """``GET /batches/<id>/dsr-export/`` — the batch's class reports for a
+    window, as CSV."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Export a batch's class reports",
+        responses={200: OpenApiResponse(description="text/csv")},
+        tags=DSR_TAG,
+    )
+    def get(self, request, batch_id):
+        if not access.can_read_dsrs(request.user):
+            return _forbidden(request, "Class reports are for staff.")
+        batch = get_object_or_404(batch_access.visible_batches(request.user), pk=batch_id)
+        days = _int_param(request, "days", default=7, low=1, high=180)
+        body = services.batch_export_csv(batch, days=days)
+        response = HttpResponse(body, content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="class-reports-{batch.code}.csv"'
+        response["Cache-Control"] = "private, no-store"
+        return response
+
+
+def _int_param(request, name: str, *, default: int, low: int, high: int) -> int:
+    try:
+        value = int(request.query_params.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, value))

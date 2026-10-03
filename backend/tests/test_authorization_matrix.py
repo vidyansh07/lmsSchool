@@ -195,6 +195,9 @@ STUDENT_REACHABLE = frozenset(
         # (`apps.forms.access.visible_assignments`: assignee or sender), so a
         # student sees only what was sent to them.
         "/api/v1/forms/assignments/",
+        # What their own classes covered, and the homework (submitted class
+        # reports of the batches they are in; never the trainer's notes).
+        "/api/v1/dsr/mine/",
         # Their own performance picture, and the feedback written about them.
         # `visible_reviews` and `visible_feedback` scope to the subject, so a
         # student sees what was written about *them* and nothing else — which is

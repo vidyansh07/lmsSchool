@@ -445,22 +445,25 @@ export function describeTimelineVariance(
   return `Plan-versus-actual status is recorded as "${describeRiskFlag(status)}".`;
 }
 
+/** Submitted is done — no manager has to approve a class report (the
+ *  owner's call, 3 October 2026). `approved` now only means a manager marked
+ *  it seen, and `under_review` is a legacy state that reads as submitted. */
 export const DSR_STATUS_LABEL: Record<DsrStatus, string> = {
   draft: 'Draft',
   submitted: 'Submitted',
-  under_review: 'Under review',
-  approved: 'Approved',
+  under_review: 'Submitted',
+  approved: 'Seen by a manager',
   rejected: 'Rejected',
-  revision_required: 'Revision required',
+  revision_required: 'Changes asked for',
 };
 
 export const DSR_STATUS_VARIANT: Record<DsrStatus, 'neutral' | 'success' | 'warning' | 'error'> = {
   draft: 'neutral',
-  submitted: 'warning',
-  under_review: 'warning',
+  submitted: 'success',
+  under_review: 'success',
   approved: 'success',
   rejected: 'error',
-  revision_required: 'error',
+  revision_required: 'warning',
 };
 
 /**

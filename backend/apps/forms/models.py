@@ -47,6 +47,8 @@ class FormEntity(models.TextChoices):
     ENQUIRY = "enquiry", _("Enquiry")
     #: Any other form a person is sent to fill, or fills in directly.
     GENERAL = "general", _("General")
+    #: The institution's own extra questions on every class report.
+    DSR = "dsr", _("Class report")
 
 
 class FormDefinitionStatus(models.TextChoices):

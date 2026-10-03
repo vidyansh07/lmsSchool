@@ -448,7 +448,10 @@ def test_the_list_endpoint_costs_a_bounded_number_of_queries(
     # minutes; that cost is the scope resolver's, not this endpoint's, so it
     # is paid once before the measurement.
     api_client_no_csrf.get(_list_url())
-    with django_assert_max_num_queries(12):
+    # 12 for the report rows themselves, plus three flat prefetches the class
+    # report details need (lessons covered, student notes, attachments) — a
+    # fixed cost, not one per row: the same budget holds at 5 rows or 50.
+    with django_assert_max_num_queries(15):
         response = api_client_no_csrf.get(_list_url())
     assert response.json()["count"] == 5
 

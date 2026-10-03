@@ -230,7 +230,7 @@ export const STAFF_NAV: NavGroup[] = [
       },
       {
         href: "/dsr",
-        label: "Daily reports",
+        label: "Class reports",
         icon: FileText,
         capability: Capability.dsrViewAny,
       },
@@ -547,7 +547,7 @@ export const ADMIN_NAV: NavGroup[] = [
       },
       {
         href: "/dsr",
-        label: "Daily reports",
+        label: "Class reports",
         icon: FileText,
         capability: Capability.dsrViewAny,
       },

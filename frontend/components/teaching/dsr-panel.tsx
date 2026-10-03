@@ -21,10 +21,16 @@
  * A report outside `EDITABLE_STATUSES` (submitted and beyond) renders as a
  * read summary, never a disabled form: a disabled input still looks like
  * something the trainer could fix if only they tried harder, where the truth
- * is that editing here is simply over.
+ * is that editing here is simply over. Submitted is done — no manager has to
+ * approve it (the owner's call, 3 October 2026); a manager may still send it
+ * back with a comment.
  */
 import { useId } from 'react';
 
+import {
+  DsrClassDetails,
+  DsrClassDetailsSummary,
+} from '@/components/teaching/dsr-class-details';
 import { DsrCreateActivity } from '@/components/teaching/dsr-create-activity';
 import { DsrHistory } from '@/components/teaching/dsr-history';
 import { Alert } from '@/components/ui/alert';
@@ -33,26 +39,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input, Textarea } from '@/components/ui/input';
-import type { DSR, DSRStatus, DSRWritePayload } from '@/lib/dsr';
+import type { DSR, DSRWritePayload } from '@/lib/dsr';
 import { fallback, formatDateTime, formatNumber, NO_DATA } from '@/lib/format';
-
-const DSR_STATUS_LABEL: Record<DSRStatus, string> = {
-  draft: 'Draft',
-  submitted: 'Submitted',
-  under_review: 'Under review',
-  approved: 'Approved',
-  rejected: 'Rejected',
-  revision_required: 'Revision requested',
-};
-
-const DSR_STATUS_VARIANT: Record<DSRStatus, 'neutral' | 'success' | 'warning' | 'error'> = {
-  draft: 'neutral',
-  submitted: 'neutral',
-  under_review: 'warning',
-  approved: 'success',
-  rejected: 'error',
-  revision_required: 'warning',
-};
+import { DSR_STATUS_LABEL, DSR_STATUS_VARIANT } from '@/lib/manage';
+import type { Module, RegisterEntry } from '@/types/api';
 
 function DraftStatus({
   isDirty,
@@ -95,6 +85,10 @@ export interface DsrPanelProps {
   dsr: DSR;
   draft: DSRWritePayload;
   onChange: (patch: DSRWritePayload) => void;
+  /** The batch's course, for ticking off the lessons covered. */
+  modules: Module[];
+  /** The class's register, for notes about individual students. */
+  roster: RegisterEntry[];
   presentCount: number;
   absentCount: number;
   studentCount: number;
@@ -108,6 +102,8 @@ export function DsrPanel({
   dsr,
   draft,
   onChange,
+  modules,
+  roster,
   presentCount,
   absentCount,
   studentCount,
@@ -127,12 +123,14 @@ export function DsrPanel({
     return (
       <Card>
         <CardHeader className="flex-row items-center justify-between gap-2">
-          <CardTitle>Daily status report</CardTitle>
+          <CardTitle>Class report</CardTitle>
           <Badge variant={DSR_STATUS_VARIANT[dsr.status]}>{DSR_STATUS_LABEL[dsr.status]}</Badge>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p className="text-ink-muted">
-            This report has moved on to review and can no longer be edited here.
+            {dsr.submitted_at
+              ? `Submitted ${formatDateTime(dsr.submitted_at)}. Nothing else to do.`
+              : 'This report can no longer be edited here.'}
           </p>
           {dsr.manager_comments ? (
             <Alert variant={dsr.status === 'rejected' ? 'error' : 'warning'}>
@@ -140,6 +138,7 @@ export function DsrPanel({
             </Alert>
           ) : null}
           <p>{fallback(dsr.actual_topic, NO_DATA)}</p>
+          <DsrClassDetailsSummary dsr={dsr} />
           <DsrFollowUp dsrId={dsr.id} batchId={dsr.batch} />
         </CardContent>
       </Card>
@@ -149,13 +148,18 @@ export function DsrPanel({
   return (
     <Card>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-2">
-        <CardTitle>Daily status report</CardTitle>
+        <CardTitle>Class report</CardTitle>
         <DraftStatus isDirty={isDirty} isSaving={isSavingDraft} lastSavedAt={lastSavedAt} />
       </CardHeader>
       <CardContent className="space-y-4">
         {dsr.status === 'revision_required' && dsr.manager_comments ? (
           <Alert variant="warning" role="alert">
-            <strong>Sent back for revision:</strong> {dsr.manager_comments}
+            <strong>Changes asked for:</strong> {dsr.manager_comments}
+          </Alert>
+        ) : null}
+        {dsr.is_overdue ? (
+          <Alert variant="warning">
+            This report was due {formatDateTime(dsr.due_at)}. Submit it as soon as you can.
           </Alert>
         ) : null}
 
@@ -228,6 +232,15 @@ export function DsrPanel({
             Not tracked automatically yet — confirm the split for this class.
           </p>
         </div>
+
+        <DsrClassDetails
+          dsr={dsr}
+          draft={draft}
+          onChange={onChange}
+          modules={modules}
+          roster={roster}
+          fieldErrors={fieldErrors}
+        />
 
         <Field label="Teaching notes" htmlFor={notesId} error={fieldErrors.teaching_notes} hint="Optional.">
           <Textarea

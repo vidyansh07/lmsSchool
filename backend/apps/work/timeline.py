@@ -384,7 +384,9 @@ def _dsr_events(user, student, since, until, cursor_bound, limit) -> list[Timeli
     if cursor_bound is not None:
         qs = qs.filter(submitted_at__lte=cursor_bound)
 
-    rows = qs.order_by("-submitted_at")[:limit]
+    # Only the batch and trainer are read here; the report's lessons, notes,
+    # files and form that `with_related` prefetches are not.
+    rows = qs.prefetch_related(None).order_by("-submitted_at")[:limit]
     entries: list[TimelineEntry] = []
     for dsr in rows:
         entries.append(
@@ -402,6 +404,48 @@ def _dsr_events(user, student, since, until, cursor_bound, limit) -> list[Timeli
 
 
 DSR_KINDS = frozenset({"dsr_submitted"})
+
+_FLAG_TITLE = {
+    "doubt": "Had a doubt in class",
+    "needs_attention": "Needs attention",
+    "did_well": "Did well in class",
+    "absent_reason": "Absence noted",
+    "other": "Class note",
+}
+
+
+def _class_note_events(user, student, since, until, cursor_bound, limit) -> list[TimelineEntry]:
+    """What a trainer noted about this student in a submitted class report.
+    Same reach as the reports themselves (`visible_dsrs`: staff only)."""
+    from apps.dsr import access as dsr_access
+    from apps.dsr.models import DSRStudentNote
+
+    qs = DSRStudentNote.objects.filter(
+        enrollment__student=student,
+        dsr__in=dsr_access.visible_dsrs(user),
+        dsr__submitted_at__isnull=False,
+        dsr__submitted_at__gte=since,
+        dsr__submitted_at__lte=until,
+    ).select_related("dsr", "dsr__batch", "dsr__trainer__user")
+    if cursor_bound is not None:
+        qs = qs.filter(dsr__submitted_at__lte=cursor_bound)
+    entries: list[TimelineEntry] = []
+    for note in qs.order_by("-dsr__submitted_at")[:limit]:
+        entries.append(
+            TimelineEntry(
+                id=f"class_note:{note.pk}",
+                occurred_at=note.dsr.submitted_at,
+                kind="class_note",
+                title=f"{_FLAG_TITLE.get(note.flag, 'Class note')} — {note.dsr.batch.code}",
+                summary=note.note,
+                href=f"/dsr?id={note.dsr_id}",
+                actor=_actor(note.dsr.trainer.user) if note.dsr.trainer_id else None,
+            )
+        )
+    return entries
+
+
+CLASS_NOTE_KINDS = frozenset({"class_note"})
 
 
 def _assessment_result_events(
@@ -638,6 +682,7 @@ TIMELINE_SOURCES: list[_Source] = [
     _Source("enrolment", ENROLMENT_KINDS, _enrolment_events),
     _Source("attendance_day", ATTENDANCE_KINDS, _attendance_day_events),
     _Source("dsr", DSR_KINDS, _dsr_events),
+    _Source("class_note", CLASS_NOTE_KINDS, _class_note_events),
     _Source("assessment_result", ASSESSMENT_RESULT_KINDS, _assessment_result_events),
     _Source("assignment_submission", ASSIGNMENT_SUBMISSION_KINDS, _assignment_submission_events),
     _Source("project_state", PROJECT_STATE_KINDS, _project_state_events),

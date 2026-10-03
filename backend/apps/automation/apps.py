@@ -12,6 +12,7 @@ class AutomationConfig(AppConfig):
         # `apps.work.signals.activity_changed` (Phase 9) and
         # `apps.performance.signals.RISK_CHANGED` (Phase 13). Neither of
         # those apps imports anything back from this one.
+        from apps.dsr.signals import dsr_missing, dsr_submitted
         from apps.enquiries.signals import enquiry_changed
         from apps.forms.signals import form_submitted
         from apps.performance.signals import RISK_CHANGED
@@ -19,6 +20,8 @@ class AutomationConfig(AppConfig):
 
         from .receivers import (
             on_activity_changed,
+            on_dsr_missing,
+            on_dsr_submitted,
             on_enquiry_changed,
             on_form_submitted,
             on_risk_changed,
@@ -32,3 +35,6 @@ class AutomationConfig(AppConfig):
         # `apps.enquiries.signals.enquiry_changed`: a lead was captured or
         # changed — the three `ENQUIRY_*` triggers.
         enquiry_changed.connect(on_enquiry_changed, dispatch_uid="automation.on_enquiry_changed")
+        # `apps.dsr.signals`: a class report handed in, or gone missing.
+        dsr_submitted.connect(on_dsr_submitted, dispatch_uid="automation.on_dsr_submitted")
+        dsr_missing.connect(on_dsr_missing, dispatch_uid="automation.on_dsr_missing")

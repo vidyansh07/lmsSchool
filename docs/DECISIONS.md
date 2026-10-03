@@ -1249,3 +1249,34 @@ flag off on the admin listing — the API's `is_current` there compares
 against the *admin's* session, not the row it would sit beside, so it is
 never computed for that purpose and must never render as if it were.
 
+### D-139 · The class report is filled after class, and submitted is done — no manager approval (3 October 2026)
+The owner asked for a DSR "for batch which trainer will fill after class",
+approved a seven-part plan, and corrected one part of it: "Must a manager
+approve every report — no need." So the existing `apps/dsr` report (one per
+class session) keeps its statuses, but `submitted` is now terminal for the
+trainer's work: nothing waits on a manager, the batch page and dashboard no
+longer count "awaiting review", and `/dsr` opens on every report rather than
+a review queue. A manager can still read a report, mark it seen
+(`approved`), ask for changes (`revision_required`) or reject it.
+
+What a report now carries, besides the prefilled counts and notes: the
+lessons covered (from the batch's course) and whether the planned one was
+finished, which sync back to the class session so course progress counts
+what was reported; homework and its due date; notes about individual
+students (doubt, needs attention, did well, absence reason), which appear on
+each student's timeline; attached files (`forms.FormUpload`); and the
+institution's own questions from the `dsr-extra` form, built in the form
+builder (published empty, so nothing is asked until someone adds a field).
+
+After class: a beat task drafts the report when the class ends, tells the
+trainer, reminds them before the deadline (policy
+`notification.dsr_due_hours`, default 4 hours after the class ends) and tells
+a manager once it is overdue. Attendance locks for the trainer once the
+report is submitted; a holder of `attendance.correct_any` can still correct
+it. Students see only what was covered and the homework (`GET /dsr/mine/`).
+Three automation triggers — `DSR_SUBMITTED`, `DSR_MISSING`,
+`DSR_STUDENT_FLAGGED` — and a `dsr_trainer` recipient let rules act on
+reports; one example rule (counselling for a flagged student) is seeded as a
+draft. A batch's reports summarise into coverage, a class strip and a CSV
+export (`GET /batches/<id>/dsr-summary/`, `/dsr-export/`).
+

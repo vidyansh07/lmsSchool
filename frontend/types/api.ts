@@ -2251,6 +2251,7 @@ export type FormEntity =
   | "registration"
   | "review"
   | "enquiry"
+  | "dsr"
   | "general";
 
 export type FormDefinitionStatus = "active" | "archived";
@@ -3047,7 +3048,10 @@ export type AutomationTrigger =
   | "FORM_SUBMITTED"
   | "ENQUIRY_CREATED"
   | "ENQUIRY_STAGE_CHANGED"
-  | "ENQUIRY_UPDATED";
+  | "ENQUIRY_UPDATED"
+  | "DSR_SUBMITTED"
+  | "DSR_MISSING"
+  | "DSR_STUDENT_FLAGGED";
 
 export type AutomationConditionOperator =
   | "eq"

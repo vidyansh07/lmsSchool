@@ -340,6 +340,13 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": env.int("WORK_REMINDER_INTERVAL_SECONDS", default=600),
         "options": {"expires": 540},
     },
+    # Class reports: a draft for every class that just ended, one reminder,
+    # and the overdue notice to the centre's managers.
+    "dsr-sweep": {
+        "task": "dsr.sweep",
+        "schedule": env.int("DSR_SWEEP_INTERVAL_SECONDS", default=600),
+        "options": {"expires": 540},
+    },
     # Announcements scheduling (ERP Phase 19): every minute, so a scheduled
     # notice reaches the board within roughly a minute of its `publish_at`
     # rather than on the next hourly-or-slower sweep.

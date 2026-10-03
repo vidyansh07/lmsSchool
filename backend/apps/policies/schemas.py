@@ -327,6 +327,28 @@ POLICY_SCHEMAS: dict[str, dict[str, dict[str, Any]]] = {
         },
     },
     "notification": {
+        "dsr_reminder_hours": {
+            "type": "integer",
+            "default": 2,
+            "min": 0,
+            "max": 48,
+            "critical": False,
+            "description": (
+                "Hours after a class ends to remind its trainer that the class report is not "
+                "submitted yet. 0 turns the reminder off."
+            ),
+        },
+        "dsr_due_hours": {
+            "type": "integer",
+            "default": 4,
+            "min": 1,
+            "max": 72,
+            "critical": False,
+            "description": (
+                "Hours after a class ends by which its class report is due. Past this the "
+                "report is overdue and the centre's managers are told."
+            ),
+        },
         "digest_frequency": {
             "type": "choice",
             "default": "immediate",
