@@ -23,6 +23,7 @@ import {
 import { Grid, GridItem } from '@/components/ui/layout';
 import { StatCard } from '@/components/ui/stat';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
+import { PresentNowStrip } from '@/components/academics/present-now';
 import { WarningsStrip } from '@/components/warnings-strip';
 import { ApiError } from '@/lib/api';
 import { formatNumber, formatPercent, NO_DATA } from '@/lib/format';
@@ -269,6 +270,8 @@ function Overview() {
       </div>
 
       <WarningsStrip />
+
+      <PresentNowStrip />
 
       <Grid>
         {headline.map((figure) => (

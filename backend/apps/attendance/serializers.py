@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from apps.common.serializers import SafeCharField, StrictSerializer
 
-from .models import AttendanceCorrection, AttendanceRecord, AttendanceStatus
+from .models import AttendanceCorrection, AttendanceMode, AttendanceRecord, AttendanceStatus
 
 
 class RegisterEntrySerializer(serializers.Serializer):
@@ -21,6 +21,8 @@ class RegisterEntrySerializer(serializers.Serializer):
     full_name = serializers.CharField(read_only=True)
     enrollment_status = serializers.CharField(read_only=True)
     status = serializers.CharField(read_only=True, allow_null=True)
+    #: In person or online — the saved value, or the default for this student.
+    mode = serializers.ChoiceField(choices=AttendanceMode.choices, read_only=True)
     note = serializers.CharField(read_only=True)
     was_corrected = serializers.BooleanField(read_only=True)
 
@@ -29,6 +31,7 @@ class RegisterSerializer(serializers.Serializer):
     session_id = serializers.UUIDField(read_only=True)
     session_date = serializers.DateField(read_only=True)
     batch_code = serializers.CharField(read_only=True)
+    delivery_mode = serializers.CharField(read_only=True)
     can_mark = serializers.BooleanField(read_only=True)
     attendance_taken_at = serializers.DateTimeField(read_only=True, allow_null=True)
     entries = RegisterEntrySerializer(many=True, read_only=True)
@@ -37,7 +40,22 @@ class RegisterSerializer(serializers.Serializer):
 class MarkEntrySerializer(StrictSerializer):
     enrollment_id = serializers.UUIDField()
     status = serializers.ChoiceField(choices=AttendanceStatus.choices)
+    #: Left out: the student's default (online for an online student, in
+    #: person otherwise) on a new mark, unchanged on a re-mark.
+    mode = serializers.ChoiceField(choices=AttendanceMode.choices, required=False)
     note = SafeCharField(max_length=255, required=False, allow_blank=True, default="")
+
+
+class PresentNowSerializer(serializers.Serializer):
+    """Who is in class today, by how they joined."""
+
+    date = serializers.DateField(read_only=True)
+    online = serializers.IntegerField(read_only=True)
+    offline = serializers.IntegerField(read_only=True)
+    total = serializers.IntegerField(read_only=True)
+    absent = serializers.IntegerField(read_only=True)
+    sessions_today = serializers.IntegerField(read_only=True)
+    registers_taken = serializers.IntegerField(read_only=True)
 
 
 class MarkAttendanceSerializer(StrictSerializer):

@@ -18,7 +18,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
-import { Input, Select } from '@/components/ui/input';
+import { Input, Select, Textarea } from '@/components/ui/input';
 import { isoToday } from '@/lib/batch-labels';
 import { fieldErrors } from '@/lib/api';
 import { ACTIVITY_PRIORITY_LABEL } from '@/lib/labels';
@@ -48,6 +48,7 @@ function PlanFollowUpForm({
 }) {
   const [dueAt, setDueAt] = useState(defaultDueAt());
   const [priority, setPriority] = useState<ActivityPriority>('normal');
+  const [note, setNote] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
@@ -63,6 +64,7 @@ function PlanFollowUpForm({
       const activity = await createFollowUp(studentId, {
         due_at: new Date(dueAt).toISOString(),
         priority,
+        note: note.trim(),
       });
       onCreated(activity);
     } catch (cause) {
@@ -101,6 +103,21 @@ function PlanFollowUpForm({
               </option>
             ))}
           </Select>
+        </Field>
+        <Field
+          label="Note"
+          htmlFor="follow-up-note"
+          error={errors.note}
+          hint="What this follow-up is for — one line is enough."
+        >
+          <Textarea
+            id="follow-up-note"
+            rows={2}
+            maxLength={1000}
+            placeholder="e.g. Ask about the education loan"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+          />
         </Field>
       </div>
       <DialogFooter>

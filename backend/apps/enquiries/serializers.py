@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from apps.common.serializers import SafeCharField, StrictSerializer
 
-from .models import Enquiry, EnquiryStage
+from .models import Enquiry, EnquiryStage, LeadChannel
 
 
 def _person(user) -> dict | None:
@@ -30,6 +30,7 @@ class EnquirySerializer(serializers.Serializer):
     batch_timing = serializers.CharField(read_only=True)
     qualification = serializers.CharField(read_only=True)
     source = serializers.CharField(read_only=True)
+    channel = serializers.CharField(read_only=True)
     utm_source = serializers.CharField(read_only=True)
     utm_medium = serializers.CharField(read_only=True)
     utm_campaign = serializers.CharField(read_only=True)
@@ -116,6 +117,7 @@ class EnquiryUpdateSerializer(StrictSerializer):
     batch_timing = SafeCharField(max_length=20, required=False, allow_blank=True)
     qualification = SafeCharField(max_length=40, required=False, allow_blank=True)
     source = SafeCharField(max_length=40, required=False, allow_blank=True)
+    channel = serializers.ChoiceField(choices=LeadChannel.choices, required=False)
     remarks = SafeCharField(max_length=4000, required=False, allow_blank=True)
     stage = serializers.ChoiceField(choices=EnquiryStage.choices, required=False)
     lost_reason = SafeCharField(max_length=40, required=False, allow_blank=True)

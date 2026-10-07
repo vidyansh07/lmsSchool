@@ -124,6 +124,17 @@ for the screen covers the six states.
 
 ## Confirmation behaviour
 
+**Owner's call, 7 October 2026:** every status change on a course or a
+batch — activate, deactivate, submit for review, complete, cancel,
+archive, restore — asks first, through `components/status-actions.tsx`.
+The dialog says in plain words what will happen to students and to the
+catalogue, the confirming button carries the verb, and the way out is
+"Go back". This widens the earlier rule that confirmations were for
+irreversible actions only: the people using these screens are counsellors,
+and a wrong click on "Archive" costs more than a second click on
+"Activate". Confirmations elsewhere (unpublishing a lesson, clearing a
+filter) are unchanged.
+
 `ConfirmDialog intent="mutation" | "destructive" | "expensive"`:
 - mutation: title, one sentence, Cancel / verb.
 - destructive: plus a reason field (required) and, for purge, the typed

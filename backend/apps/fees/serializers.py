@@ -12,7 +12,14 @@ from rest_framework import serializers
 
 from apps.common.serializers import SafeCharField, StrictSerializer
 
-from .models import FeePayment, FeePlan, PaymentMethod
+from .models import (
+    MAX_INSTALLMENTS,
+    FeePayment,
+    FeePlan,
+    InstallmentStatus,
+    PaymentMethod,
+    installment_rows,
+)
 
 MONEY = {"max_digits": 10, "decimal_places": 2}
 
@@ -31,6 +38,7 @@ class FeePaymentSerializer(serializers.ModelSerializer):
             "paid_on",
             "method",
             "reference",
+            "reference_name",
             "note",
             "recorded_by",
             "created_at",
@@ -50,6 +58,18 @@ class FeePaymentSerializer(serializers.ModelSerializer):
         return obj.voided_by.full_name or obj.voided_by.email if obj.voided_by else None
 
 
+class FeeInstallmentSerializer(serializers.Serializer):
+    """One row of a schedule, with its derived state."""
+
+    id = serializers.UUIDField(read_only=True)
+    sequence = serializers.IntegerField(read_only=True)
+    amount = serializers.DecimalField(read_only=True, **MONEY)
+    due_on = serializers.DateField(read_only=True)
+    paid_amount = serializers.DecimalField(read_only=True, **MONEY)
+    balance = serializers.DecimalField(read_only=True, **MONEY)
+    status = serializers.ChoiceField(choices=InstallmentStatus.choices, read_only=True)
+
+
 class FeePlanSerializer(serializers.ModelSerializer):
     enrollment_id = serializers.UUIDField(source="enrollment.pk", read_only=True)
     enrollment_code = serializers.CharField(source="enrollment.code", read_only=True)
@@ -65,6 +85,7 @@ class FeePlanSerializer(serializers.ModelSerializer):
     created_by = serializers.SerializerMethodField()
     updated_by = serializers.SerializerMethodField()
     payments = FeePaymentSerializer(many=True, read_only=True)
+    installments = serializers.SerializerMethodField()
 
     class Meta:
         model = FeePlan
@@ -91,9 +112,14 @@ class FeePlanSerializer(serializers.ModelSerializer):
             "updated_by",
             "created_at",
             "updated_at",
+            "installments",
             "payments",
         )
         read_only_fields = fields
+
+    @extend_schema_field(FeeInstallmentSerializer(many=True))
+    def get_installments(self, obj: FeePlan) -> list[dict]:
+        return FeeInstallmentSerializer(installment_rows(obj), many=True).data
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_created_by(self, obj: FeePlan) -> str | None:
@@ -112,11 +138,30 @@ class FeePlanBriefSerializer(FeePlanSerializer):
         read_only_fields = fields
 
 
+class InstallmentInputSerializer(StrictSerializer):
+    amount = serializers.DecimalField(min_value=0, **MONEY)
+    due_on = serializers.DateField()
+
+
+class SetInstallmentsSerializer(StrictSerializer):
+    """The schedule, as the counsellor shaped it. Empty means ad hoc."""
+
+    installments = InstallmentInputSerializer(many=True, max_length=MAX_INSTALLMENTS)
+
+
 class SetFeePlanSerializer(StrictSerializer):
     agreed_amount = serializers.DecimalField(min_value=0, **MONEY)
     discount_amount = serializers.DecimalField(min_value=0, required=False, default=0, **MONEY)
     discount_reason = SafeCharField(max_length=200, required=False, allow_blank=True, default="")
     notes = SafeCharField(max_length=1000, required=False, allow_blank=True)
+    # Left out: a new fee gets the default schedule, an existing one keeps its
+    # dates. Sent (even empty): this is the schedule.
+    installments = InstallmentInputSerializer(
+        many=True, required=False, max_length=MAX_INSTALLMENTS
+    )
+    installment_count = serializers.IntegerField(
+        required=False, min_value=0, max_value=MAX_INSTALLMENTS
+    )
 
 
 class SetNextDueSerializer(StrictSerializer):
@@ -129,6 +174,7 @@ class RecordPaymentSerializer(StrictSerializer):
     paid_on = serializers.DateField(required=False)
     method = serializers.ChoiceField(choices=PaymentMethod.choices, default=PaymentMethod.CASH)
     reference = SafeCharField(max_length=100, required=False, allow_blank=True, default="")
+    reference_name = SafeCharField(max_length=120, required=False, allow_blank=True, default="")
     note = SafeCharField(max_length=300, required=False, allow_blank=True, default="")
 
 

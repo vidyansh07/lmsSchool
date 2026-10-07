@@ -4,6 +4,7 @@ from django.urls import path
 
 from .views import (
     EnrollmentFeeHistoryView,
+    EnrollmentFeeInstallmentsView,
     EnrollmentFeeNextDueView,
     EnrollmentFeePaymentsView,
     EnrollmentFeeView,
@@ -27,6 +28,11 @@ urlpatterns = [
         "enrollments/<uuid:enrollment_id>/next-due/",
         EnrollmentFeeNextDueView.as_view(),
         name="next-due",
+    ),
+    path(
+        "enrollments/<uuid:enrollment_id>/installments/",
+        EnrollmentFeeInstallmentsView.as_view(),
+        name="installments",
     ),
     path(
         "enrollments/<uuid:enrollment_id>/payments/",

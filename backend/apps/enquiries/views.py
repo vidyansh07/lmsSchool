@@ -24,7 +24,7 @@ from apps.common.exceptions import ApplicationError, AuthorityError
 from apps.common.permissions import IsActiveUser
 
 from . import access, services
-from .models import Enquiry, EnquiryStage
+from .models import SOURCE_CHOICES, Enquiry, EnquiryStage, LeadChannel
 from .serializers import EnquiryDetailSerializer, EnquirySerializer, EnquiryUpdateSerializer
 
 TAG = ["Enquiries"]
@@ -42,13 +42,34 @@ class EnquiryFilterSet(django_filters.FilterSet):
     stage = django_filters.ChoiceFilter(choices=EnquiryStage.choices)
     owner = django_filters.CharFilter(method="filter_owner")
     source = django_filters.CharFilter(field_name="source")
+    channel = django_filters.ChoiceFilter(choices=LeadChannel.choices)
     course = django_filters.CharFilter(field_name="course")
     q = django_filters.CharFilter(method="filter_search")
     open = django_filters.BooleanFilter(method="filter_open")
+    created_after = django_filters.DateFilter(field_name="created_at", lookup_expr="date__gte")
+    created_before = django_filters.DateFilter(field_name="created_at", lookup_expr="date__lte")
+    #: `overdue`: an open enquiry whose follow-up time has passed.
+    #: `today`: follow-up due today. `none`: open with no follow-up planned.
+    follow_up = django_filters.ChoiceFilter(
+        choices=(("overdue", "Overdue"), ("today", "Today"), ("none", "None planned")),
+        method="filter_follow_up",
+    )
 
     class Meta:
         model = Enquiry
-        fields = ("stage", "owner", "source", "course")
+        fields = ("stage", "owner", "source", "channel", "course")
+
+    def filter_follow_up(self, queryset, name, value):
+        from django.utils import timezone
+
+        now = timezone.now()
+        if value == "overdue":
+            return queryset.open().filter(next_follow_up_at__lt=now)
+        if value == "today":
+            return queryset.filter(next_follow_up_at__date=timezone.localdate())
+        if value == "none":
+            return queryset.open().filter(next_follow_up_at__isnull=True)
+        return queryset
 
     def filter_owner(self, queryset, name, value):
         if value == "me":
@@ -106,7 +127,21 @@ class EnquirySummaryView(APIView):
             .annotate(count=Count("id"))
         )
         stages = {stage: counts.get(stage, 0) for stage in EnquiryStage.values}
-        return Response({"stages": stages, "total": sum(stages.values())})
+        by_channel = dict(
+            access.visible_enquiries(request.user)
+            .order_by()
+            .values_list("channel")
+            .annotate(count=Count("id"))
+        )
+        channels = {channel: by_channel.get(channel, 0) for channel in LeadChannel.values}
+        return Response(
+            {
+                "stages": stages,
+                "channels": channels,
+                "total": sum(stages.values()),
+                "sources": [{"value": value, "label": label} for value, label in SOURCE_CHOICES],
+            }
+        )
 
 
 class EnquiryDetailView(APIView):

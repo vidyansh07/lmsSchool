@@ -81,6 +81,15 @@ COUNSELLOR_FIGURE_DEFINITIONS: dict[str, str] = {
         "Enrolments still awaiting confirmation (status 'pending'). Counted per "
         "enrolment, so a student pending on two courses counts twice."
     ),
+    "open_leads_online": (
+        "Open enquiries (not yet registered, lost or ruled out) that came in "
+        "online — website, Google, social media, WhatsApp — at the centres you can see."
+    ),
+    "open_leads_offline": (
+        "Open enquiries that came in offline — walk-ins, phone calls, referrals, "
+        "seminars — at the centres you can see."
+    ),
+    "open_leads_total": "Every open enquiry you can see, online and offline together.",
     "follow_ups_due": (
         "Follow-up activities assigned to or created by you that are still "
         "open and not yet overdue."
@@ -455,10 +464,25 @@ def _counsellor_dashboard(user) -> dict:
         overdue=Count("id", filter=Q(status=ActivityStatus.OVERDUE)),
     )
 
+    from apps.enquiries import access as enquiry_access
+    from apps.enquiries.models import LeadChannel
+
+    leads = (
+        enquiry_access.visible_enquiries(user)
+        .open()
+        .aggregate(
+            online=Count("id", filter=Q(channel=LeadChannel.ONLINE)),
+            offline=Count("id", filter=Q(channel=LeadChannel.OFFLINE)),
+        )
+    )
+
     return {
         "new_students_today": new_students_today,
         "new_students_this_week": new_students_this_week,
         "pending_registrations": pending_registrations,
+        "open_leads_online": leads["online"] or 0,
+        "open_leads_offline": leads["offline"] or 0,
+        "open_leads_total": (leads["online"] or 0) + (leads["offline"] or 0),
         "follow_ups_due": follow_up_counts["due"] or 0,
         "follow_ups_overdue": follow_up_counts["overdue"] or 0,
         "unassigned_batch": unassigned_batch,

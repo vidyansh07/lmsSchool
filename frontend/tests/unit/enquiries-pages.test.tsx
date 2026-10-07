@@ -51,6 +51,7 @@ function enquiry(overrides: Partial<EnquiryDetail> = {}): EnquiryDetail {
     batch_timing: "evening",
     qualification: "graduate",
     source: "walk_in",
+    channel: "offline",
     utm_source: "",
     utm_medium: "",
     utm_campaign: "",
@@ -96,7 +97,13 @@ const SUMMARY = {
     not_interested: 0,
     not_eligible: 0,
   },
-  total: 1,
+  channels: { online: 3, offline: 4 },
+  total: 7,
+  sources: [
+    { value: "walk_in", label: "Walk-in" },
+    { value: "website", label: "Website" },
+    { value: "google", label: "Google" },
+  ],
 };
 
 beforeEach(() => {
@@ -104,11 +111,13 @@ beforeEach(() => {
 });
 
 describe("EnquiriesPage", () => {
+  const reloadList = vi.fn();
+  const reloadSummary = vi.fn();
   function mockList(list: Partial<{ data: unknown; error: unknown; isLoading: boolean }>) {
     useApi.mockImplementation((path: string) =>
       path === "/api/v1/enquiries/summary/"
-        ? { data: SUMMARY, error: null, isLoading: false, reload: vi.fn() }
-        : { data: null, error: null, isLoading: false, reload: vi.fn(), ...list },
+        ? { data: SUMMARY, error: null, isLoading: false, reload: reloadSummary }
+        : { data: null, error: null, isLoading: false, reload: reloadList, ...list },
     );
   }
 
@@ -142,6 +151,63 @@ describe("EnquiriesPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Interested/ }));
     expect(useApi).toHaveBeenCalledWith("/api/v1/enquiries/?stage=interested");
   });
+
+  it("shows online, offline and total leads and filters by channel", () => {
+    mockList({ data: page<Enquiry>([enquiry()]) });
+    render(<EnquiriesPage />);
+    const strip = screen.getByText("Online leads").closest("div")!.parentElement!;
+    expect(strip).toHaveTextContent("Online leads");
+    expect(strip).toHaveTextContent("3");
+    expect(strip).toHaveTextContent("Offline leads");
+    expect(strip).toHaveTextContent("4");
+    expect(strip).toHaveTextContent("Total leads");
+    expect(strip).toHaveTextContent("7");
+
+    fireEvent.click(screen.getByRole("button", { name: /^Online/ }));
+    expect(useApi).toHaveBeenCalledWith("/api/v1/enquiries/?channel=online");
+    fireEvent.click(screen.getByRole("button", { name: /^Offline/ }));
+    expect(useApi).toHaveBeenCalledWith("/api/v1/enquiries/?channel=offline");
+  });
+
+  it("filters by source, follow-up and date", () => {
+    mockList({ data: page<Enquiry>([enquiry()]) });
+    render(<EnquiriesPage />);
+    fireEvent.change(screen.getByLabelText("Filter by source"), { target: { value: "google" } });
+    expect(useApi).toHaveBeenCalledWith("/api/v1/enquiries/?source=google");
+    fireEvent.change(screen.getByLabelText("Filter by follow-up"), { target: { value: "overdue" } });
+    expect(useApi).toHaveBeenCalledWith("/api/v1/enquiries/?source=google&follow_up=overdue");
+    fireEvent.change(screen.getByLabelText("Created from"), { target: { value: "2026-10-01" } });
+    expect(useApi).toHaveBeenCalledWith(
+      "/api/v1/enquiries/?source=google&follow_up=overdue&created_after=2026-10-01",
+    );
+  });
+
+  it("changes the stage and the source from the row", async () => {
+    mockList({ data: page<Enquiry>([enquiry()]) });
+    updateEnquiry.mockResolvedValue(enquiry({ stage: "contacted" }));
+    render(<EnquiriesPage />);
+    expect(screen.getByTestId("enquiry-e-1")).toHaveTextContent("Offline");
+
+    fireEvent.change(screen.getByLabelText("Stage of Ravi Sharma"), {
+      target: { value: "contacted" },
+    });
+    await waitFor(() => expect(updateEnquiry).toHaveBeenCalledWith("e-1", { stage: "contacted" }));
+    await waitFor(() => expect(reloadList).toHaveBeenCalled());
+    expect(reloadSummary).toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("Source of Ravi Sharma"), {
+      target: { value: "website" },
+    });
+    await waitFor(() => expect(updateEnquiry).toHaveBeenCalledWith("e-1", { source: "website" }));
+  });
+
+  it("shows stage and source read-only when the row cannot be managed", () => {
+    mockList({ data: page<Enquiry>([enquiry({ can_manage: false })]) });
+    render(<EnquiriesPage />);
+    expect(screen.queryByLabelText("Stage of Ravi Sharma")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Source of Ravi Sharma")).not.toBeInTheDocument();
+    expect(screen.getByTestId("enquiry-e-1")).toHaveTextContent("Walk-in");
+  });
 });
 
 describe("EnquiryScreen", () => {
@@ -158,6 +224,9 @@ describe("EnquiryScreen", () => {
       }
       if (path === "/api/v1/activity-types/") {
         return { data: { results: [] }, error: null, isLoading: false, reload: vi.fn() };
+      }
+      if (path === "/api/v1/enquiries/summary/") {
+        return { data: SUMMARY, error: null, isLoading: false, reload: vi.fn() };
       }
       throw new Error(`Unexpected useApi path: ${path}`);
     });
@@ -184,6 +253,22 @@ describe("EnquiryScreen", () => {
     );
     expect(await screen.findByText("Saved.")).toBeInTheDocument();
     expect(reload).toHaveBeenCalled();
+  });
+
+  it("moves the lead online when its source is changed to a web source", async () => {
+    mockDetail(enquiry());
+    updateEnquiry.mockResolvedValue(enquiry({ source: "google", channel: "online" }));
+    render(<EnquiryScreen id="e-1" />);
+    expect(screen.getByLabelText("Online or offline")).toHaveValue("offline");
+    fireEvent.change(screen.getByLabelText("Source"), { target: { value: "google" } });
+    expect(screen.getByLabelText("Online or offline")).toHaveValue("online");
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(updateEnquiry).toHaveBeenCalledWith(
+        "e-1",
+        expect.objectContaining({ source: "google", channel: "online" }),
+      ),
+    );
   });
 
   it("asks for a lost reason only for a lost stage", () => {

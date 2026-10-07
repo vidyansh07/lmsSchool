@@ -685,6 +685,9 @@ def _ensure_plans(ctx: Context, plan: Plan) -> dict[Any, FeePlan]:
             discount_amount=spec.discount,
             discount_reason=spec.discount_reason,
             notes=ctx.note(PLAN_NOTE),
+            # Ad hoc collection: this stage ages the plans itself with
+            # ``set_next_due`` below, which a schedule would overwrite.
+            installments=[],
         )
         ctx.created("fee_plan")
         plan.created_plans.append((row, spec))

@@ -28,13 +28,13 @@
  * here would also mean a fifth tab stop per row, which is the one thing this
  * screen exists to avoid.
  *
- * Online/offline counts are not shown here despite belonging next to the
- * P/A/L/E tally in spirit: no endpoint this screen can reach reports how a
- * student joined (see `lib/dsr.ts` and the DSR panel for where that number is
- * actually confirmed). Rendering a guess would violate the one rule that
- * matters more than density — never show a number that was not really
- * computed — so the slot renders the app's standard "not available" fallback
- * instead of inventing one.
+ * Each row also says how the student joined — in person or online. The row
+ * starts on the student's default (online for an online student, in person
+ * otherwise; a hybrid batch starts everyone in person) and `O` / `I` on the
+ * focused row flips it, the same blind-keypress motion as the mark itself.
+ * The online / in-person tally beside P/A/L/E counts the present and late
+ * rows by that mode, and is the number the present-now figure on the
+ * dashboards is built from once the register is saved.
  */
 import {
   useMemo,
@@ -47,11 +47,15 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
-import { ATTENDANCE_OPTIONS, ATTENDANCE_STATUS_LABEL } from '@/lib/academic-labels';
+import {
+  ATTENDANCE_MODE_LABEL,
+  ATTENDANCE_OPTIONS,
+  ATTENDANCE_STATUS_LABEL,
+} from '@/lib/academic-labels';
 import { ENROLLMENT_STATUS_LABEL, ENROLLMENT_STATUS_VARIANT } from '@/lib/batch-labels';
 import { fallback, formatNumber, UNKNOWN } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { AttendanceStatus, RegisterEntry } from '@/types/api';
+import type { AttendanceMode, AttendanceStatus, RegisterEntry } from '@/types/api';
 
 /** First-letter chord per status — the whole point of this screen. */
 const KEY_TO_STATUS: Record<string, AttendanceStatus> = {
@@ -61,11 +65,21 @@ const KEY_TO_STATUS: Record<string, AttendanceStatus> = {
   e: 'excused',
 };
 
+const KEY_TO_MODE: Record<string, AttendanceMode> = {
+  o: 'online',
+  i: 'offline',
+};
+
+const MODE_OPTIONS: AttendanceMode[] = ['offline', 'online'];
+
 export interface RegisterEditorProps {
   entries: RegisterEntry[];
   marks: Record<string, AttendanceStatus>;
   onMark: (enrollmentId: string, status: AttendanceStatus) => void;
   onMarkAllPresent: () => void;
+  /** How each student joined. Left out, each row shows its server default and cannot be flipped. */
+  modes?: Record<string, AttendanceMode>;
+  onMode?: (enrollmentId: string, mode: AttendanceMode) => void;
   canMark: boolean;
   isLoading?: boolean;
   error?: { message: string; requestId?: string } | null;
@@ -81,6 +95,8 @@ export function RegisterEditor({
   marks,
   onMark,
   onMarkAllPresent,
+  modes,
+  onMode,
   canMark,
   isLoading = false,
   error = null,
@@ -94,15 +110,19 @@ export function RegisterEditor({
   const focusedIndex = entries.length === 0 ? 0 : Math.min(rawFocusedIndex, entries.length - 1);
   if (focusedIndex !== rawFocusedIndex) setFocusedIndex(focusedIndex);
 
+  const modeOf = (entry: RegisterEntry): AttendanceMode => modes?.[entry.enrollment_id] ?? entry.mode;
+
   const counts = useMemo(() => {
-    const tally = { present: 0, absent: 0, late: 0, excused: 0, unmarked: 0 };
+    const tally = { present: 0, absent: 0, late: 0, excused: 0, unmarked: 0, online: 0, offline: 0 };
     for (const entry of entries) {
       const status = marks[entry.enrollment_id];
       if (status) tally[status] += 1;
       else tally.unmarked += 1;
+      if (status === 'present' || status === 'late') tally[modeOf(entry)] += 1;
     }
     return tally;
-  }, [entries, marks]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, marks, modes]);
 
   function focusRow(index: number) {
     setFocusedIndex(index);
@@ -123,6 +143,13 @@ export function RegisterEditor({
       if (!canMark) return;
       event.preventDefault();
       onMark(enrollmentId, status);
+      return;
+    }
+    const mode = KEY_TO_MODE[event.key.toLowerCase()];
+    if (mode) {
+      if (!canMark || !onMode) return;
+      event.preventDefault();
+      onMode(enrollmentId, mode);
       return;
     }
 
@@ -180,6 +207,13 @@ export function RegisterEditor({
           <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[0.65rem]">A</kbd>
           <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[0.65rem]">L</kbd>
           <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[0.65rem]">E</kbd>
+          {onMode ? (
+            <>
+              <span className="ml-2">Joined:</span>
+              <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[0.65rem]">I</kbd>
+              <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[0.65rem]">O</kbd>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -205,8 +239,9 @@ export function RegisterEditor({
             <strong className="tabular-nums">{formatNumber(counts.unmarked)}</strong> unmarked
           </span>
         ) : null}
-        <span className="text-ink-muted" title="Not reported by the API this screen can reach — see the DSR section below.">
-          Online: {fallback(undefined)} · Offline: {fallback(undefined)}
+        <span className="text-ink-muted" title="Present and late students, by how they joined.">
+          Online: <strong className="tabular-nums">{formatNumber(counts.online)}</strong> · In person:{' '}
+          <strong className="tabular-nums">{formatNumber(counts.offline)}</strong>
         </span>
       </div>
 
@@ -223,6 +258,7 @@ export function RegisterEditor({
             <tr>
               <Th className="sticky top-0 z-10 bg-sunken">Student</Th>
               <Th className="sticky top-0 z-10 bg-sunken">Attendance</Th>
+              <Th className="sticky top-0 z-10 bg-sunken">Joined</Th>
             </tr>
           </thead>
           <tbody className="">
@@ -238,7 +274,9 @@ export function RegisterEditor({
                   tabIndex={isFocused ? 0 : -1}
                   aria-label={`${studentLabel(entry)}, ${
                     status ? ATTENDANCE_STATUS_LABEL[status] : 'unmarked'
-                  }. Press P for present, A for absent, L for late, E for excused.`}
+                  }, ${ATTENDANCE_MODE_LABEL[modeOf(entry)].toLowerCase()}. Press P for present, A for absent, L for late, E for excused${
+                    onMode ? ', I for in person, O for online' : ''
+                  }.`}
                   onFocus={() => setFocusedIndex(index)}
                   onKeyDown={(event) => handleRowKeyDown(event, index, entry.enrollment_id)}
                   className={cn(
@@ -283,6 +321,36 @@ export function RegisterEditor({
                         );
                       })}
                     </div>
+                  </Td>
+                  <Td>
+                    {onMode ? (
+                      <div
+                        role="radiogroup"
+                        aria-label={`How ${studentLabel(entry)} joined`}
+                        className="flex flex-wrap gap-1"
+                      >
+                        {MODE_OPTIONS.map((option) => {
+                          const active = modeOf(entry) === option;
+                          return (
+                            <Button
+                              key={option}
+                              type="button"
+                              role="radio"
+                              aria-checked={active}
+                              tabIndex={-1}
+                              size="sm"
+                              variant={active ? 'secondary' : 'ghost'}
+                              disabled={!canMark}
+                              onClick={() => onMode(entry.enrollment_id, option)}
+                            >
+                              {ATTENDANCE_MODE_LABEL[option]}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-ink-muted">{ATTENDANCE_MODE_LABEL[modeOf(entry)]}</span>
+                    )}
                   </Td>
                 </tr>
               );

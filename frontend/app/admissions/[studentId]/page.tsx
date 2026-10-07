@@ -16,6 +16,7 @@ import { use, useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 
 import { PlanFollowUp } from '@/components/admissions/plan-follow-up';
+import { FollowUpsPanel } from '@/components/students/follow-ups-panel';
 import { SearchPicker, type PickerOption } from '@/components/admissions/search-picker';
 import { FeeLedger, useStudentFees } from '@/components/fees/fee-ledger';
 import { useAuth } from '@/components/auth-provider';
@@ -301,6 +302,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [followUpsVersion, setFollowUpsVersion] = useState(0);
   const fees = useStudentFees(() => getStudentFees(studentId), [studentId, reloadToken]);
   const [enrollments, setEnrollments] = useState<Enrollment[] | null>(null);
 
@@ -380,7 +382,6 @@ export function StudentDetail({ studentId }: { studentId: string }) {
           {FEE_STATUS_LABEL[student.fee_status]}
         </Badge>
         <div className="ml-auto flex items-center gap-2">
-          <PlanFollowUp studentId={student.id} />
           {/* This record keeps its own fee ledger below and never redirects
               (DESIGN_DECISIONS.md, "Student 360") — it only links out to the
               full cross-role profile: activities, timeline, progress, risk. */}
@@ -392,6 +393,18 @@ export function StudentDetail({ studentId }: { studentId: string }) {
           </Button>
         </div>
       </div>
+
+      <FollowUpsPanel
+        studentId={student.id}
+        mayComplete
+        refreshKey={followUpsVersion}
+        action={
+          <PlanFollowUp
+            studentId={student.id}
+            onCreated={() => setFollowUpsVersion((value) => value + 1)}
+          />
+        }
+      />
 
       <FeeLedger
         studentId={studentId}

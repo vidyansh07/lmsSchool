@@ -32,6 +32,24 @@ from apps.common.models import BaseModel
 from apps.common.validators import validate_no_control_characters
 
 
+class AttendanceMode(models.TextChoices):
+    """How the student attended: in the room, or over a link."""
+
+    OFFLINE = "offline", _("In person")
+    ONLINE = "online", _("Online")
+
+
+def default_mode_for(enrollment) -> str:
+    """The mode a register row starts on: online for an online student, in
+    person otherwise (a hybrid batch's rows start in person and the trainer
+    flips the ones who joined over a link)."""
+    return (
+        AttendanceMode.ONLINE
+        if enrollment.effective_delivery_mode == "online"
+        else AttendanceMode.OFFLINE
+    )
+
+
 class AttendanceStatus(models.TextChoices):
     PRESENT = "present", _("Present")
     ABSENT = "absent", _("Absent")
@@ -68,6 +86,13 @@ class AttendanceRecord(BaseModel):
     )
     status = models.CharField(
         _("status"), max_length=20, choices=AttendanceStatus.choices, db_index=True
+    )
+    mode = models.CharField(
+        _("mode"),
+        max_length=10,
+        choices=AttendanceMode.choices,
+        default=AttendanceMode.OFFLINE,
+        help_text=_("Whether the student was in the room or joined online."),
     )
     note = models.CharField(
         _("note"), max_length=255, blank=True, validators=[validate_no_control_characters]

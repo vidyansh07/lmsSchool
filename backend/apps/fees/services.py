@@ -11,6 +11,12 @@ Rules, and the reason for each:
   wrong and that is what should change.
 * **A first payment is at least ₹1,000** — the registration payment — unless
   the whole fee is smaller than that.
+* **A schedule must add up.** The instalments of a plan always sum to the
+  fee after discount, so "what is still owed" and "what is still scheduled"
+  are the same number. The plan's "next expected" fields are kept in step
+  with the schedule after every change, so the overdue flag, the counsellor's
+  fees panel and the student's fee status keep reading the one field they
+  always read.
 * **Nothing is deleted.** A payment is voided with a reason; a plan is edited
   with the old and new values written to the audit log.
 * **The student's coarse `fee_status` follows the ledger.** It stays on the
@@ -37,7 +43,19 @@ from apps.common.identifiers import next_receipt_number
 from apps.enrollments.models import LIVE_STATUSES, Enrollment
 from apps.students.models import FeeStatus, StudentProfile
 
-from .models import MIN_FIRST_PAYMENT, ZERO, FeePayment, FeePlan, PaymentMethod
+from .models import (
+    DEFAULT_INSTALLMENT_COUNT,
+    DEFAULT_INSTALLMENT_GAP_DAYS,
+    MAX_INSTALLMENTS,
+    MIN_FIRST_PAYMENT,
+    ZERO,
+    FeeInstallment,
+    FeePayment,
+    FeePlan,
+    InstallmentStatus,
+    PaymentMethod,
+    installment_rows,
+)
 
 RESOURCE_PLAN = "fee_plan"
 RESOURCE_PAYMENT = "fee_payment"
@@ -84,8 +102,18 @@ def set_fee_plan(
     discount_amount: Any = ZERO,
     discount_reason: str = "",
     notes: str | None = None,
+    installments: list[dict[str, Any]] | None = None,
+    installment_count: int | None = None,
 ) -> FeePlan:
-    """Create the fee for an enrolment, or change it. Audited with old and new."""
+    """Create the fee for an enrolment, or change it. Audited with old and new.
+
+    `installments` is the schedule the counsellor shaped: a list of
+    `{"amount", "due_on"}`; an empty list means "collect ad hoc, no schedule".
+    Left out, a new plan gets the default schedule (`installment_count`
+    instalments, default six, thirty days apart from today), and an existing
+    plan keeps its dates with the amounts re-spread over them if the fee
+    changed.
+    """
     _require_manage(actor)
     agreed = _money(agreed_amount, "agreed_amount")
     discount = _money(discount_amount, "discount_amount")
@@ -128,6 +156,11 @@ def set_fee_plan(
                 "discount_reason": plan.discount_reason,
             },
         )
+        if installments is None:
+            installments = default_installments(
+                plan.payable, count=installment_count, start=timezone.localdate()
+            )
+        _replace_installments(plan, actor=actor, items=installments)
         sync_student_fee_status(enrollment.student, actor=actor)
         return plan
 
@@ -156,6 +189,8 @@ def set_fee_plan(
             changes[field] = {"from": str(old_value), "to": str(new_value)}
             setattr(plan, field, new_value)
     if not changes:
+        if installments is not None:
+            _replace_installments(plan, actor=actor, items=installments)
         return plan
 
     plan.updated_by = actor
@@ -168,8 +203,149 @@ def set_fee_plan(
         resource_id=plan.pk,
         context={**_plan_context(plan), "changes": changes},
     )
+    if installments is not None:
+        _replace_installments(plan, actor=actor, items=installments)
+    elif "agreed_amount" in changes or "discount_amount" in changes:
+        existing = list(plan.installments.all())
+        if existing:
+            respread = default_installments(
+                plan.payable, count=len(existing), dates=[item.due_on for item in existing]
+            )
+            _replace_installments(plan, actor=actor, items=respread)
     sync_student_fee_status(enrollment.student, actor=actor)
     return plan
+
+
+# ---------------------------------------------------------------------------
+# The schedule
+# ---------------------------------------------------------------------------
+
+
+def default_installments(
+    payable: Decimal,
+    *,
+    count: int | None = None,
+    start: date | None = None,
+    dates: list[date] | None = None,
+    gap_days: int = DEFAULT_INSTALLMENT_GAP_DAYS,
+) -> list[dict[str, Any]]:
+    """Split `payable` evenly into `count` instalments, the odd paisa on the first.
+
+    Dates are `start`, then every `gap_days`, unless `dates` are given
+    (which is how an existing schedule keeps its dates when the fee changes).
+    Nothing to collect, or a count of zero, is an empty schedule.
+    """
+    if dates is not None:
+        count = len(dates)
+    if count is None:
+        count = DEFAULT_INSTALLMENT_COUNT
+    if count <= 0 or payable <= ZERO:
+        return []
+    count = min(count, MAX_INSTALLMENTS)
+    first_day = start or timezone.localdate()
+    each = (payable / count).quantize(Decimal("0.01"))
+    remainder = payable - each * count
+    items: list[dict[str, Any]] = []
+    for index in range(count):
+        amount = each + remainder if index == 0 else each
+        due_on = dates[index] if dates is not None else first_day + timedelta(days=gap_days * index)
+        items.append({"amount": amount, "due_on": due_on})
+    return items
+
+
+def _clean_installments(plan: FeePlan, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if len(items) > MAX_INSTALLMENTS:
+        raise ApplicationError(
+            {"installments": [f"At most {MAX_INSTALLMENTS} instalments can be scheduled."]}
+        )
+    cleaned: list[dict[str, Any]] = []
+    for index, item in enumerate(items):
+        amount = _money(item.get("amount"), "installments")
+        due_on = item.get("due_on")
+        if amount <= ZERO:
+            raise ApplicationError(
+                {"installments": [f"Instalment {index + 1} must be more than zero."]}
+            )
+        if not isinstance(due_on, date):
+            raise ApplicationError({"installments": [f"Instalment {index + 1} needs a due date."]})
+        cleaned.append({"amount": amount, "due_on": due_on})
+    cleaned.sort(key=lambda item: item["due_on"])
+    total = sum((item["amount"] for item in cleaned), ZERO)
+    if cleaned and total != plan.payable:
+        raise ApplicationError(
+            {
+                "installments": [
+                    f"The instalments add up to ₹{total:,.2f}; "
+                    f"the fee after discount is ₹{plan.payable:,.2f}. They must match."
+                ]
+            }
+        )
+    return cleaned
+
+
+def _replace_installments(plan: FeePlan, *, actor: User, items: list[dict[str, Any]]) -> None:
+    cleaned = _clean_installments(plan, items)
+    before = [
+        {"amount": str(item.amount), "due_on": item.due_on.isoformat()}
+        for item in plan.installments.all()
+    ]
+    after = [
+        {"amount": str(item["amount"]), "due_on": item["due_on"].isoformat()} for item in cleaned
+    ]
+    if before == after:
+        _sync_next_due_from_schedule(plan, actor=actor)
+        return
+    plan.installments.all().delete()
+    FeeInstallment.objects.bulk_create(
+        [
+            FeeInstallment(plan=plan, sequence=index + 1, **item)
+            for index, item in enumerate(cleaned)
+        ]
+    )
+    record(
+        action=AuditAction.FEE_INSTALLMENTS_SET,
+        actor=actor,
+        resource_type=RESOURCE_PLAN,
+        resource_id=plan.pk,
+        context={**_plan_context(plan), "from": before, "to": after},
+    )
+    _sync_next_due_from_schedule(plan, actor=actor)
+
+
+@transaction.atomic
+def set_installments(*, plan: FeePlan, actor: User, items: list[dict[str, Any]]) -> FeePlan:
+    """Replace the schedule. An empty list goes back to ad hoc collection."""
+    _require_manage(actor)
+    # Locked without the totals annotation: Postgres refuses FOR UPDATE on an
+    # aggregate. The sync step fetches the totals it needs itself.
+    plan = FeePlan.objects.select_for_update().get(pk=plan.pk)
+    _replace_installments(plan, actor=actor, items=items)
+    sync_student_fee_status(plan.enrollment.student, actor=actor)
+    return plan
+
+
+def _sync_next_due_from_schedule(plan: FeePlan, *, actor: User) -> None:
+    """The plan's "next ₹N expected by <date>" follows the schedule, when there is one.
+
+    The first instalment that is not fully covered is what is expected next;
+    its uncovered part is the amount. Everything that already reads the
+    `next_due_*` fields — the overdue flag, the fees panel, the student's
+    `fee_status` — keeps working without knowing a schedule exists.
+    """
+    installments = list(plan.installments.all())
+    if not installments:
+        return
+    fresh = FeePlan.objects.with_totals().get(pk=plan.pk)
+    rows = installment_rows(fresh, installments)
+    nxt = next((row for row in rows if row["status"] != InstallmentStatus.PAID), None)
+    amount = nxt["balance"] if nxt else None
+    on = nxt["due_on"] if nxt else None
+    if plan.next_due_amount == amount and plan.next_due_on == on:
+        return
+    plan.next_due_amount = amount
+    plan.next_due_on = on
+    plan.updated_by = actor
+    plan.save(update_fields=["next_due_amount", "next_due_on", "updated_by", "updated_at"])
 
 
 @transaction.atomic
@@ -234,6 +410,7 @@ def record_payment(
     paid_on: date | None = None,
     method: str = PaymentMethod.CASH,
     reference: str = "",
+    reference_name: str = "",
     note: str = "",
 ) -> FeePayment:
     _require_manage(actor)
@@ -282,14 +459,18 @@ def record_payment(
         paid_on=when,
         method=method,
         reference=reference.strip(),
+        reference_name=reference_name.strip(),
         note=note.strip(),
         recorded_by=actor,
     )
     payment.full_clean()
     payment.save()
 
-    # An expected payment that has now arrived is no longer expected.
-    if plan.next_due_amount is not None and value >= plan.next_due_amount:
+    # An expected payment that has now arrived is no longer expected. With a
+    # schedule, "expected next" is the next uncovered instalment instead.
+    if plan.installments.exists():
+        _sync_next_due_from_schedule(plan, actor=actor)
+    elif plan.next_due_amount is not None and value >= plan.next_due_amount:
         plan.next_due_amount = None
         plan.next_due_on = None
         plan.updated_by = actor
@@ -307,6 +488,7 @@ def record_payment(
             "paid_on": when.isoformat(),
             "method": method,
             "reference": payment.reference,
+            "reference_name": payment.reference_name,
             "balance_after": str(plan.balance),
         },
     )
@@ -340,6 +522,7 @@ def void_payment(*, payment: FeePayment, actor: User, reason: str) -> FeePayment
             "reason": payment.void_reason,
         },
     )
+    _sync_next_due_from_schedule(payment.plan, actor=actor)
     sync_student_fee_status(payment.plan.enrollment.student, actor=actor)
     return payment
 
@@ -353,6 +536,7 @@ def plans_for_student(student: StudentProfile):
     return (
         FeePlan.objects.filter(enrollment__student=student)
         .select_related("enrollment__batch", "enrollment__course")
+        .prefetch_related("installments")
         .with_totals()
         .order_by("-created_at")
     )

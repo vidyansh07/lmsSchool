@@ -225,16 +225,21 @@ found: Rahul Verma, GRS-S-00042, MERN-02, registered 3 Aug" with "Open
 that record" and "This is a different person" (a reason is required and
 recorded). Nothing is created until the last step's "Register".
 
-Then, unchanged: course, batch, fee, first payment. After Register: the
+Then: course, batch, fee — with the instalment schedule (six by default,
+thirty days apart, editable before saving), the first payment with its
+method (cash / UPI / bank), reference number and the name of whoever paid
+or handled it — and an optional follow-up date and note. After Register: the
 student and enrolment exist, the batch seat is taken, the trainer is the
 batch's trainer, the timeline starts with "Registered by Priya", audit,
 welcome email queued; the counsellor lands on the student's record.
 
 ### 4.3 Schedule a follow-up
-On the student record → "Plan a follow-up" → type Follow-up, due date,
-channel → Create. Appears under "Follow-ups due" on the right day. When
-done: Complete with the outcome (reached / no answer / callback) and,
-if callback, the next follow-up is offered pre-filled.
+On the student record → "Plan a follow-up" → due date, priority, a short
+note → Create. It is pending from that moment: listed under "Follow-ups"
+on the record (pending above completed), counted under "Follow-ups due",
+and overdue once its time passes. "Mark done" asks how (phone / WhatsApp /
+email / in person), the outcome (reached / no answer / callback / closed)
+and what was said.
 
 ## 5. Student
 

@@ -29,6 +29,9 @@ function counsellorDashboard(overrides: Partial<CounsellorDashboard> = {}): Coun
     new_students_today: 0,
     new_students_this_week: 0,
     pending_registrations: 0,
+    open_leads_online: 0,
+    open_leads_offline: 0,
+    open_leads_total: 0,
     follow_ups_due: 0,
     follow_ups_overdue: 0,
     unassigned_batch: 0,
@@ -383,6 +386,9 @@ describe('AdmissionsDashboardContent', () => {
         new_students_today: 4,
         new_students_this_week: 9,
         pending_registrations: 7,
+        open_leads_online: 12,
+        open_leads_offline: 8,
+        open_leads_total: 20,
         follow_ups_due: 3,
         follow_ups_overdue: 2,
         unassigned_batch: 5,
@@ -403,6 +409,9 @@ describe('AdmissionsDashboardContent', () => {
     // ("today 61, this week 30") was a browser-side window, not a real figure.
     kpiValue(kpiTileFor(/registered this week/i), 9);
     kpiValue(kpiTileFor(/pending registrations/i), 7);
+    kpiValue(kpiTileFor(/online leads/i), 12);
+    kpiValue(kpiTileFor(/offline leads/i), 8);
+    kpiValue(kpiTileFor(/total leads/i), 20);
     kpiValue(kpiTileFor(/follow-ups due/i), 3);
     kpiValue(kpiTileFor(/follow-ups overdue/i), 2);
     kpiValue(kpiTileFor(/unassigned batch/i), 5);
@@ -524,6 +533,9 @@ describe('AdmissionsDashboardContent — pipeline bottleneck chart', () => {
     getCounsellorDashboard.mockResolvedValue(
       counsellorDashboard({
         pending_registrations: 7,
+        open_leads_online: 12,
+        open_leads_offline: 8,
+        open_leads_total: 20,
         follow_ups_due: 3,
         follow_ups_overdue: 2,
         unassigned_batch: 5,

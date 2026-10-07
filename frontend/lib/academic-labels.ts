@@ -4,6 +4,7 @@ import type {
   AcademicLifecycle,
   AssessmentCategory,
   AssessmentDelivery,
+  AttendanceMode,
   AttendanceStatus,
   ImportStatus,
   SessionStatus,
@@ -35,6 +36,11 @@ export const ATTENDANCE_STATUS_LABEL: Record<AttendanceStatus, string> = {
   absent: 'Absent',
   late: 'Late',
   excused: 'Excused',
+};
+
+export const ATTENDANCE_MODE_LABEL: Record<AttendanceMode, string> = {
+  offline: 'In person',
+  online: 'Online',
 };
 
 export const ATTENDANCE_STATUS_VARIANT: Record<AttendanceStatus, Variant> = {

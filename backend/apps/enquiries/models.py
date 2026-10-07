@@ -37,6 +37,34 @@ CLOSED_STAGES = frozenset(
 )
 
 
+class LeadChannel(models.TextChoices):
+    """Where the lead came from, coarsely: over the internet, or in the world."""
+
+    ONLINE = "online", _("Online")
+    OFFLINE = "offline", _("Offline")
+
+
+#: The sources the enquiry form offers (`apps/forms` migration 0004), and the
+#: channel each one implies. A source not listed here is offline.
+SOURCE_CHOICES: tuple[tuple[str, str], ...] = (
+    ("walk_in", "Walk-in"),
+    ("phone_call", "Phone call"),
+    ("website", "Website"),
+    ("google", "Google"),
+    ("facebook_instagram", "Facebook / Instagram"),
+    ("linkedin", "LinkedIn"),
+    ("whatsapp", "WhatsApp"),
+    ("referral", "Referral"),
+    ("college_seminar", "College seminar"),
+    ("other", "Other"),
+)
+ONLINE_SOURCES = frozenset({"website", "google", "facebook_instagram", "linkedin", "whatsapp"})
+
+
+def channel_for_source(source: str) -> str:
+    return LeadChannel.ONLINE if source in ONLINE_SOURCES else LeadChannel.OFFLINE
+
+
 class EnquiryQuerySet(SoftDeleteQuerySet):
     def with_related(self):
         return self.select_related("owner", "branch", "created_by", "student", "student__user")
@@ -61,6 +89,14 @@ class Enquiry(SoftDeleteBaseModel):
     batch_timing = models.CharField(_("batch timing"), max_length=20, blank=True)
     qualification = models.CharField(_("qualification"), max_length=40, blank=True)
     source = models.CharField(_("source"), max_length=40, blank=True)
+    channel = models.CharField(
+        _("channel"),
+        max_length=10,
+        choices=LeadChannel.choices,
+        default=LeadChannel.OFFLINE,
+        db_index=True,
+        help_text=_("Online or offline lead. Follows the source unless set by hand."),
+    )
     utm_source = models.CharField(_("UTM source"), max_length=200, blank=True)
     utm_medium = models.CharField(_("UTM medium"), max_length=200, blank=True)
     utm_campaign = models.CharField(_("UTM campaign"), max_length=200, blank=True)

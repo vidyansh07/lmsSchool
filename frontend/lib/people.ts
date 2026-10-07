@@ -178,7 +178,7 @@ export async function checkDuplicates(query: {
  */
 export async function createFollowUp(
   studentId: string,
-  payload: { due_at: string; priority?: ActivityPriority },
+  payload: { due_at: string; priority?: ActivityPriority; note?: string },
 ): Promise<ActivityDetail> {
   return apiMutate<ActivityDetail>(`/api/v1/students/${studentId}/follow-ups/`, {
     method: 'POST',

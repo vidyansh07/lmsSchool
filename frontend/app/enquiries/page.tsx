@@ -1,10 +1,17 @@
 "use client";
 
 /**
- * Enquiries: the admissions pipeline. A row per lead, filtered by stage from
- * the counts strip, searchable by name, mobile or email. A new enquiry is
- * entered through the enquiry form, so it lands here the same way a
- * website or Meritto lead would and starts the same automation rules.
+ * Enquiries: the admissions pipeline. A row per lead, kept in two piles —
+ * online (website, Google, social media, WhatsApp) and offline (walk-ins,
+ * phone calls, referrals, seminars) — with the totals of each at the top,
+ * filtered by stage from the counts strip, by source, by follow-up state and
+ * by date, searchable by name, mobile or email. Stage and source are changed
+ * from the row itself, one select each, so a counsellor working the phone
+ * never has to open a lead just to move it on.
+ *
+ * A new enquiry is entered through the enquiry form, so it lands here the
+ * same way a website or Meritto lead would and starts the same automation
+ * rules.
  */
 
 import Link from "next/link";
@@ -15,22 +22,53 @@ import { useAuth } from "@/components/auth-provider";
 import { Pagination } from "@/components/pagination";
 import { RequireAuth } from "@/components/require-auth";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
+import { Input, Select } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/layout";
+import { StatStrip } from "@/components/ui/stat-strip";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { useApi } from "@/hooks/use-api";
+import { errorMessage } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
-import { enquiryListPath } from "@/lib/enquiries";
+import { enquiryListPath, updateEnquiry, type EnquiryFollowUpFilter } from "@/lib/enquiries";
 import { formatDateTime } from "@/lib/format";
-import { ENQUIRY_STAGE_LABEL, ENQUIRY_STAGE_VARIANT, ENQUIRY_STAGES } from "@/lib/labels";
+import {
+  ENQUIRY_STAGE_LABEL,
+  ENQUIRY_STAGE_VARIANT,
+  ENQUIRY_STAGES,
+  LEAD_CHANNEL_LABEL,
+} from "@/lib/labels";
 import { cn } from "@/lib/utils";
-import type { Enquiry, EnquiryStage, EnquirySummary, Paginated } from "@/types/api";
+import type { Enquiry, EnquiryStage, EnquirySummary, LeadChannel, Paginated } from "@/types/api";
 
 /** The server's page size (`DefaultPagination.page_size`). */
 const PAGE_SIZE = 25;
+
+const CHANNEL_TABS: { value: LeadChannel | ""; label: string }[] = [
+  { value: "", label: "All leads" },
+  { value: "online", label: "Online" },
+  { value: "offline", label: "Offline" },
+];
+
+const FOLLOW_UP_OPTIONS: { value: EnquiryFollowUpFilter; label: string }[] = [
+  { value: "", label: "Any follow-up" },
+  { value: "overdue", label: "Follow-up overdue" },
+  { value: "today", label: "Follow-up today" },
+  { value: "none", label: "No follow-up planned" },
+];
+
+function pillClass(active: boolean): string {
+  return cn(
+    "inline-flex items-center gap-2 rounded-pill border px-3 py-1 text-xs font-medium transition-colors",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action",
+    active
+      ? "border-action bg-selected text-selected-fg"
+      : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
+  );
+}
 
 function StageStrip({
   summary,
@@ -42,7 +80,7 @@ function StageStrip({
   onStage: (stage: EnquiryStage | "") => void;
 }) {
   const items: { value: EnquiryStage | ""; label: string; count: number | null }[] = [
-    { value: "", label: "All", count: summary?.total ?? null },
+    { value: "", label: "All stages", count: summary?.total ?? null },
     ...ENQUIRY_STAGES.map((value) => ({
       value,
       label: ENQUIRY_STAGE_LABEL[value],
@@ -57,13 +95,7 @@ function StageStrip({
           type="button"
           aria-pressed={stage === item.value}
           onClick={() => onStage(item.value)}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-pill border px-3 py-1 text-xs font-medium transition-colors",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action",
-            stage === item.value
-              ? "border-action bg-selected text-selected-fg"
-              : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
-          )}
+          className={pillClass(stage === item.value)}
         >
           {item.label}
           {item.count !== null ? (
@@ -75,25 +107,102 @@ function StageStrip({
   );
 }
 
+function ChannelTabs({
+  summary,
+  channel,
+  onChannel,
+}: {
+  summary: EnquirySummary | null;
+  channel: LeadChannel | "";
+  onChannel: (channel: LeadChannel | "") => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Online or offline">
+      {CHANNEL_TABS.map((tab) => {
+        const count =
+          summary === null ? null : tab.value === "" ? summary.total : summary.channels[tab.value];
+        return (
+          <button
+            key={tab.value || "all"}
+            type="button"
+            aria-pressed={channel === tab.value}
+            onClick={() => onChannel(tab.value)}
+            className={pillClass(channel === tab.value)}
+          >
+            {tab.label}
+            {count !== null ? <span className="tabular-nums text-ink-faint">{count}</span> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function EnquiriesWorkspace() {
   const { user } = useAuth();
   const mayCapture = can(user?.capabilities, Capability.formAssign);
   const [stage, setStage] = useState<EnquiryStage | "">("");
+  const [channel, setChannel] = useState<LeadChannel | "">("");
+  const [source, setSource] = useState("");
+  const [followUp, setFollowUp] = useState<EnquiryFollowUpFilter>("");
+  const [createdAfter, setCreatedAfter] = useState("");
+  const [createdBefore, setCreatedBefore] = useState("");
   const [mine, setMine] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [savingId, setSavingId] = useState("");
+  const [saveError, setSaveError] = useState("");
 
   const summary = useApi<EnquirySummary>("/api/v1/enquiries/summary/");
   const list = useApi<Paginated<Enquiry>>(
-    enquiryListPath({ stage, owner: mine ? "me" : undefined, q: search.trim(), page }),
+    enquiryListPath({
+      stage,
+      channel,
+      source,
+      follow_up: followUp,
+      created_after: createdAfter,
+      created_before: createdBefore,
+      owner: mine ? "me" : undefined,
+      q: search.trim(),
+      page,
+    }),
   );
   const rows = list.data?.results ?? [];
   // Read once per page load: "late" only needs to be right to the minute.
   const [now] = useState(() => Date.now());
+  const sources = summary.data?.sources ?? [];
+  const sourceLabel = (value: string) =>
+    sources.find((option) => option.value === value)?.label ?? value;
+  const filtered =
+    Boolean(stage || channel || source || followUp || createdAfter || createdBefore || search || mine);
+
+  function resetPage<T>(setter: (value: T) => void) {
+    return (value: T) => {
+      setter(value);
+      setPage(1);
+    };
+  }
+
+  async function changeRow(row: Enquiry, changes: { stage?: EnquiryStage; source?: string }) {
+    setSavingId(row.id);
+    setSaveError("");
+    try {
+      await updateEnquiry(row.id, changes);
+      list.reload();
+      summary.reload();
+    } catch (cause) {
+      setSaveError(errorMessage(cause, "Could not save that change."));
+    } finally {
+      setSavingId("");
+    }
+  }
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Enquiries" meta="Every lead at your centre, by stage of the admissions pipeline.">
+      <PageHeader
+        title="Enquiries"
+        meta="Every lead at your centre, online and offline, by stage of the admissions pipeline."
+      >
         {mayCapture ? (
           <Button asChild>
             <Link href="/forms/fill/enquiry">
@@ -104,37 +213,75 @@ function EnquiriesWorkspace() {
         ) : null}
       </PageHeader>
 
-      <StageStrip
-        summary={summary.data}
-        stage={stage}
-        onStage={(next) => {
-          setStage(next);
-          setPage(1);
-        }}
+      <StatStrip
+        items={[
+          { label: "Online leads", value: summary.data?.channels.online ?? null },
+          { label: "Offline leads", value: summary.data?.channels.offline ?? null },
+          { label: "Total leads", value: summary.data?.total ?? null },
+        ]}
       />
 
-      <div className="flex flex-wrap items-center gap-4">
+      <ChannelTabs summary={summary.data} channel={channel} onChannel={resetPage(setChannel)} />
+      <StageStrip summary={summary.data} stage={stage} onStage={resetPage(setStage)} />
+
+      <div className="flex flex-wrap items-end gap-3">
         <Input
           aria-label="Search enquiries"
           placeholder="Search name, mobile or email"
           value={search}
           className="max-w-xs"
-          onChange={(event) => {
-            setSearch(event.target.value);
-            setPage(1);
-          }}
+          onChange={(event) => resetPage(setSearch)(event.target.value)}
         />
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
-            checked={mine}
-            onCheckedChange={(checked) => {
-              setMine(checked);
-              setPage(1);
-            }}
+        <Select
+          aria-label="Filter by source"
+          value={source}
+          className="max-w-[12rem]"
+          onChange={(event) => resetPage(setSource)(event.target.value)}
+        >
+          <option value="">Any source</option>
+          {sources.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+        <Select
+          aria-label="Filter by follow-up"
+          value={followUp}
+          className="max-w-[12rem]"
+          onChange={(event) => resetPage(setFollowUp)(event.target.value as EnquiryFollowUpFilter)}
+        >
+          {FOLLOW_UP_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </Select>
+        <label className="flex items-center gap-1 text-sm text-ink-muted">
+          From
+          <Input
+            type="date"
+            aria-label="Created from"
+            value={createdAfter}
+            onChange={(event) => resetPage(setCreatedAfter)(event.target.value)}
           />
+        </label>
+        <label className="flex items-center gap-1 text-sm text-ink-muted">
+          To
+          <Input
+            type="date"
+            aria-label="Created up to"
+            value={createdBefore}
+            onChange={(event) => resetPage(setCreatedBefore)(event.target.value)}
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox checked={mine} onCheckedChange={resetPage(setMine)} />
           Only mine
         </label>
       </div>
+
+      {saveError ? <Alert variant="error">{saveError}</Alert> : null}
 
       {list.isLoading ? (
         <LoadingState label="Loading enquiries…" rows={6} />
@@ -147,10 +294,10 @@ function EnquiriesWorkspace() {
         />
       ) : rows.length === 0 ? (
         <EmptyState
-          title={stage || search || mine ? "No enquiries match" : "No enquiries yet"}
+          title={filtered ? "No enquiries match" : "No enquiries yet"}
           description={
-            stage || search || mine
-              ? "Try another stage or clear the search."
+            filtered
+              ? "Try another stage, channel or source, or clear the search."
               : "Enquiries appear here when the enquiry form is filled in."
           }
         />
@@ -163,6 +310,7 @@ function EnquiriesWorkspace() {
                   <Th>Enquiry</Th>
                   <Th>Course</Th>
                   <Th>Source</Th>
+                  <Th>Online / offline</Th>
                   <Th>Stage</Th>
                   <Th>Owner</Th>
                   <Th>Next follow-up</Th>
@@ -173,8 +321,9 @@ function EnquiriesWorkspace() {
                 {rows.map((row) => {
                   const followUpLate =
                     row.next_follow_up_at !== null && new Date(row.next_follow_up_at).getTime() < now;
+                  const busy = savingId === row.id;
                   return (
-                    <tr key={row.id} className="hover:bg-sunken/40">
+                    <tr key={row.id} className="hover:bg-sunken/40" data-testid={`enquiry-${row.id}`}>
                       <Td>
                         <Link
                           href={`/enquiries/${row.id}`}
@@ -185,11 +334,54 @@ function EnquiriesWorkspace() {
                         <span className="block text-2xs tabular-nums text-ink-faint">{row.mobile}</span>
                       </Td>
                       <Td>{row.course || "—"}</Td>
-                      <Td>{row.source || "—"}</Td>
                       <Td>
-                        <Badge variant={ENQUIRY_STAGE_VARIANT[row.stage]}>
-                          {ENQUIRY_STAGE_LABEL[row.stage]}
+                        {row.can_manage ? (
+                          <Select
+                            aria-label={`Source of ${row.full_name}`}
+                            value={row.source}
+                            disabled={busy}
+                            onChange={(event) => void changeRow(row, { source: event.target.value })}
+                          >
+                            {row.source && !sources.some((option) => option.value === row.source) ? (
+                              <option value={row.source}>{row.source}</option>
+                            ) : null}
+                            {!row.source ? <option value="">Not known</option> : null}
+                            {sources.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </Select>
+                        ) : (
+                          sourceLabel(row.source) || "—"
+                        )}
+                      </Td>
+                      <Td>
+                        <Badge variant={row.channel === "online" ? "info" : "neutral"}>
+                          {LEAD_CHANNEL_LABEL[row.channel]}
                         </Badge>
+                      </Td>
+                      <Td>
+                        {row.can_manage ? (
+                          <Select
+                            aria-label={`Stage of ${row.full_name}`}
+                            value={row.stage}
+                            disabled={busy}
+                            onChange={(event) =>
+                              void changeRow(row, { stage: event.target.value as EnquiryStage })
+                            }
+                          >
+                            {ENQUIRY_STAGES.map((value) => (
+                              <option key={value} value={value}>
+                                {ENQUIRY_STAGE_LABEL[value]}
+                              </option>
+                            ))}
+                          </Select>
+                        ) : (
+                          <Badge variant={ENQUIRY_STAGE_VARIANT[row.stage]}>
+                            {ENQUIRY_STAGE_LABEL[row.stage]}
+                          </Badge>
+                        )}
                       </Td>
                       <Td>{row.owner?.name ?? "Unassigned"}</Td>
                       <Td className={cn("whitespace-nowrap tabular-nums", followUpLate && "text-danger")}>

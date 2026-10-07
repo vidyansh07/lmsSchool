@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,9 +24,23 @@ const listBatches = vi.hoisted(() => vi.fn());
 const createBatch = vi.hoisted(() => vi.fn());
 const assignBatchTrainer = vi.hoisted(() => vi.fn());
 const enrolStudent = vi.hoisted(() => vi.fn());
+const createFollowUp = vi.hoisted(() => vi.fn());
+const setEnrollmentFee = vi.hoisted(() => vi.fn());
+const recordPayment = vi.hoisted(() => vi.fn());
 
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => ({ user: null, can: () => false }) }));
-vi.mock('@/lib/people', () => ({ createStudent, checkDuplicates, listStudents, listTrainers }));
+vi.mock('@/lib/people', () => ({
+  createStudent,
+  checkDuplicates,
+  listStudents,
+  listTrainers,
+  createFollowUp,
+}));
+vi.mock('@/lib/fees', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/fees')>()),
+  setEnrollmentFee,
+  recordPayment,
+}));
 vi.mock('@/lib/courses', () => ({ listCourses }));
 vi.mock('@/lib/batches', () => ({ listBatches, createBatch, assignBatchTrainer, enrolStudent }));
 
@@ -178,6 +192,9 @@ beforeEach(() => {
   createBatch.mockReset();
   assignBatchTrainer.mockReset();
   enrolStudent.mockReset();
+  createFollowUp.mockReset();
+  setEnrollmentFee.mockReset();
+  recordPayment.mockReset();
 });
 
 function referrerRow(): StudentListRow {
@@ -677,5 +694,89 @@ describe('RegistrationWizard — confirming', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
     expect(screen.getByText(/Morning batch \(GRS-B-001\)/)).toBeInTheDocument();
+  });
+
+  it('schedules six instalments by default and keeps the payment references', async () => {
+    createStudent.mockResolvedValue(student());
+    assignBatchTrainer.mockResolvedValue({});
+    enrolStudent.mockResolvedValue(enrollment());
+    setEnrollmentFee.mockResolvedValue({});
+    recordPayment.mockResolvedValue({ amount: '1000.00', receipt_number: 'GRS-R-00009' });
+
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+    await user.type(screen.getByLabelText(/Agreed fee/), '25000');
+
+    // Six rows, thirty days apart, adding up to the fee — before anything is saved.
+    const amounts = await screen.findAllByLabelText(/instalment \d+ amount/i);
+    expect(amounts).toHaveLength(6);
+    expect(screen.getByText(/adds up to ₹25,000/i)).toBeInTheDocument();
+    const dates = screen.getAllByLabelText(/instalment \d+ due on/i) as HTMLInputElement[];
+    const first = new Date(`${dates[0]!.value}T00:00:00`);
+    const second = new Date(`${dates[1]!.value}T00:00:00`);
+    expect(Math.round((second.getTime() - first.getTime()) / 86_400_000)).toBe(30);
+
+    // The counsellor can shrink it to three and the rows are re-spread.
+    fireEvent.change(screen.getByLabelText(/number of instalments/i), { target: { value: '3' } });
+    await waitFor(() => expect(screen.getAllByLabelText(/instalment \d+ amount/i)).toHaveLength(3));
+
+    await user.selectOptions(screen.getByLabelText('Payment method'), 'upi');
+    await user.type(screen.getByLabelText('Reference number'), 'UPI-4471');
+    await user.type(screen.getByLabelText('Reference name'), 'Father');
+
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+    await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
+    await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search trainers results'), 'trainer-1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
+    expect(screen.getByText(/^3, first ₹/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
+    await waitFor(() => expect(setEnrollmentFee).toHaveBeenCalledOnce());
+    const [, payload] = setEnrollmentFee.mock.calls[0] as [string, { installments: { amount: string }[] }];
+    expect(payload.installments).toHaveLength(3);
+    expect(payload.installments.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(25000);
+    await waitFor(() => expect(recordPayment).toHaveBeenCalledOnce());
+    expect(recordPayment).toHaveBeenCalledWith(
+      'enrol-1',
+      expect.objectContaining({ method: 'upi', reference: 'UPI-4471', reference_name: 'Father' }),
+    );
+    await screen.findByText(/3 instalments scheduled/i);
+    expect(createFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('plans a follow-up with a note when a date is given', async () => {
+    createStudent.mockResolvedValue(student());
+    assignBatchTrainer.mockResolvedValue({});
+    enrolStudent.mockResolvedValue(enrollment());
+    createFollowUp.mockResolvedValue({ id: 'act-1' });
+
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+    expect(screen.getByLabelText('Follow-up note')).toBeDisabled();
+    await user.type(screen.getByLabelText('Next follow-up'), '2030-01-15');
+    await user.type(screen.getByLabelText('Follow-up note'), 'Ask about the loan');
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+    await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
+    await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search trainers results'), 'trainer-1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
+    expect(screen.getByText(/Ask about the loan/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
+    await waitFor(() => expect(createFollowUp).toHaveBeenCalledOnce());
+    expect(createFollowUp).toHaveBeenCalledWith(
+      'student-1',
+      expect.objectContaining({ note: 'Ask about the loan' }),
+    );
+    await screen.findByText(/Follow-up planned for/);
   });
 });

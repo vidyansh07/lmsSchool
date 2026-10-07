@@ -298,3 +298,39 @@ Audit `search.performed` (counts only). Cache: none.
 - Every list is paginated; every export past the sync limit is a job.
 - `X-Request-ID` on every response; the envelope carries it on errors.
 - Timeouts: 15 s statement / 20 s browser / 30 s worker; background for more.
+
+## Counsellor's desk (D-140, 7 October 2026)
+
+### Fees
+- `PUT /fees/enrollments/<id>/` additionally accepts `installments:
+  [{amount, due_on}]` (sent empty = ad hoc) and `installment_count` (the
+  default schedule with that many rows; default 6, max 36, 30 days apart,
+  first due today). The rows must sum to the fee after discount.
+- `PUT /fees/enrollments/<id>/installments/` `{installments: [...]}` —
+  `fee.manage_any`; replaces the schedule; audit `fee.installments.set`.
+- The plan now carries `installments: [{id, sequence, amount, due_on,
+  paid_amount, balance, status: paid|pending|overdue|upcoming}]`, derived.
+- `POST /fees/enrollments/<id>/payments/` additionally takes
+  `reference_name` (≤120). `method` is still the full enum; the desk offers
+  cash, upi, bank_transfer.
+
+### Follow-ups
+- `POST /students/<id>/follow-ups/` additionally takes `note` (≤1000 →
+  `Activity.summary`); the activity is returned in status `assigned`.
+
+### Enquiries
+- `Enquiry.channel: online|offline`, writable through `PATCH`, derived from
+  `source` when the source changes and no channel is sent.
+- `GET /enquiries/?channel=&source=&follow_up=overdue|today|none&created_after=&created_before=`.
+- `GET /enquiries/summary/` → `{stages, channels: {online, offline}, total,
+  sources: [{value, label}]}`.
+- `GET /dashboards/counsellor/` additionally returns `open_leads_online`,
+  `open_leads_offline`, `open_leads_total` (open stages only).
+
+### Attendance
+- Register entries carry `mode: offline|online` (saved, or the student's
+  default); `POST .../register/` entries accept `mode`. The register carries
+  the batch's `delivery_mode`.
+- `GET /attendance/present-now/` → `{date, online, offline, total, absent,
+  sessions_today, registers_taken}` over `visible_sessions` for today, not
+  cancelled; staff only.

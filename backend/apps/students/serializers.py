@@ -268,6 +268,8 @@ class FollowUpCreateSerializer(StrictSerializer):
     priority = serializers.ChoiceField(
         choices=ActivityPriority.choices, required=False, allow_null=True, default=None
     )
+    #: A short note about what the follow-up is for ("ask about the loan").
+    note = SafeCharField(max_length=1000, required=False, allow_blank=True, default="")
 
 
 class FeeAmountUpdateSerializer(StrictSerializer):

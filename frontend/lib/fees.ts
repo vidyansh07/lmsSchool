@@ -14,6 +14,7 @@ import type {
   FeePlan,
   FeeCollectionsTrendPoint,
   FeesOverview,
+  InstallmentInput,
   PaymentMethod,
   StudentFeeSummary,
 } from '@/types/api';
@@ -32,12 +33,62 @@ export async function setEnrollmentFee(
     discount_amount?: string | number;
     discount_reason?: string;
     notes?: string;
+    /** Sent: this is the schedule (empty = ad hoc). Left out: the server's default six. */
+    installments?: InstallmentInput[];
+    installment_count?: number;
   },
 ): Promise<FeePlan> {
   return apiMutate<FeePlan>(`${BASE}/enrollments/${enrollmentId}/`, {
     method: 'PUT',
     body: payload,
   });
+}
+
+/** Replace the instalment schedule. An empty list goes back to ad hoc collection. */
+export async function setInstallments(
+  enrollmentId: string,
+  installments: InstallmentInput[],
+): Promise<FeePlan> {
+  return apiMutate<FeePlan>(`${BASE}/enrollments/${enrollmentId}/installments/`, {
+    method: 'PUT',
+    body: { installments },
+  });
+}
+
+/**
+ * The default schedule, exactly as the server would build it: `count` equal
+ * slices of `payable`, the odd paisa on the first, due today and then every
+ * thirty days. Computed here too so the counsellor sees and can edit the
+ * rows before anything is saved.
+ */
+export function defaultInstallments(
+  payable: number,
+  count = 6,
+  start: Date = new Date(),
+  gapDays = 30,
+): InstallmentInput[] {
+  if (!Number.isFinite(payable) || payable <= 0 || count <= 0) return [];
+  const total = Math.round(payable * 100);
+  const each = Math.floor(total / count);
+  const remainder = total - each * count;
+  return Array.from({ length: count }, (_, index) => {
+    const due = new Date(start);
+    due.setDate(due.getDate() + gapDays * index);
+    const paise = index === 0 ? each + remainder : each;
+    return { amount: (paise / 100).toFixed(2), due_on: isoDate(due) };
+  });
+}
+
+/** Sum of a schedule's amounts, in rupees, tolerant of half-typed rows. */
+export function installmentsTotal(rows: InstallmentInput[]): number {
+  return rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+}
+
+function isoDate(date: Date): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 /** "The next ₹N is expected by <date>." Send both `null` to clear it. */
@@ -58,6 +109,7 @@ export async function recordPayment(
     paid_on?: string;
     method: PaymentMethod;
     reference?: string;
+    reference_name?: string;
     note?: string;
   },
 ): Promise<FeePayment> {

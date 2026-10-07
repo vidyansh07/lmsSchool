@@ -10,6 +10,7 @@ import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { Pagination } from '@/components/pagination';
 import { ScheduleList } from '@/components/schedule-list';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
+import { StatusActions, type StatusAction } from '@/components/status-actions';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ import {
 } from '@/lib/batches';
 import {
   BATCH_STATUS_LABEL,
+  BATCH_STATUS_PLAIN,
   BATCH_STATUS_VARIANT,
   ENROLLMENT_STATUS_LABEL,
   ENROLLMENT_STATUS_VARIANT,
@@ -58,23 +60,46 @@ import type {
   AdminUser,
 } from '@/types/api';
 
-/** Which transitions to offer. The server owns the real table. */
-function transitionsFor(status: BatchStatus): { target: BatchStatus; label: string }[] {
-  if (status === 'upcoming') {
-    return [
-      { target: 'active', label: 'Activate' },
-      { target: 'cancelled', label: 'Cancel' },
-    ];
-  }
-  if (status === 'active') {
-    return [
-      { target: 'completed', label: 'Mark complete' },
-      { target: 'cancelled', label: 'Cancel' },
-    ];
-  }
-  if (status === 'completed' || status === 'cancelled') {
-    return [{ target: 'archived', label: 'Archive' }];
-  }
+const ACTIVATE_BATCH: StatusAction<BatchStatus> = {
+  target: 'active',
+  label: 'Activate',
+  title: 'Activate this batch?',
+  description:
+    'Classes can start, attendance can be taken and students on it get access to the course. A trainer must be assigned first.',
+  variant: 'primary',
+};
+const COMPLETE_BATCH: StatusAction<BatchStatus> = {
+  target: 'completed',
+  label: 'Mark complete',
+  title: 'Mark this batch complete?',
+  description:
+    'Every active enrolment on it is marked completed. Students keep their access to the course. This cannot be undone.',
+  variant: 'outline',
+};
+const CANCEL_BATCH: StatusAction<BatchStatus> = {
+  target: 'cancelled',
+  label: 'Cancel batch',
+  title: 'Cancel this batch?',
+  description:
+    'Every live enrolment on it is cancelled and those students lose access to the course. This cannot be undone.',
+  confirmLabel: 'Cancel the batch',
+  cancelLabel: 'Keep it',
+  variant: 'destructive',
+};
+const ARCHIVE_BATCH: StatusAction<BatchStatus> = {
+  target: 'archived',
+  label: 'Archive',
+  title: 'Archive this batch?',
+  description:
+    'It is kept for the record only and students on it lose access to the course content. An archived batch cannot be restored.',
+  variant: 'destructive',
+};
+
+/** Which transitions to offer, and what to say first. The server owns the real table. */
+export function transitionsFor(status: BatchStatus): StatusAction<BatchStatus>[] {
+  if (status === 'upcoming') return [ACTIVATE_BATCH, CANCEL_BATCH];
+  if (status === 'active') return [COMPLETE_BATCH, CANCEL_BATCH];
+  if (status === 'completed' || status === 'cancelled') return [ARCHIVE_BATCH];
   return [];
 }
 
@@ -742,6 +767,7 @@ export function BatchDetailView({ batchId }: { batchId: string }) {
   const [error, setError] = useState<ApiError | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [isChangingStatus, setIsChangingStatus] = useState(false);
 
   // A single source of truth for loading the batch: the initial fetch on
   // mount and every refresh after a mutation call the same function, so
@@ -766,11 +792,14 @@ export function BatchDetailView({ batchId }: { batchId: string }) {
 
   async function onTransition(target: BatchStatus) {
     setMessage('');
+    setIsChangingStatus(true);
     try {
       await setBatchStatus(batchId, target);
       await load();
     } catch (cause) {
       setMessage(cause instanceof ApiError ? cause.message : 'Could not change the status.');
+    } finally {
+      setIsChangingStatus(false);
     }
   }
 
@@ -826,31 +855,36 @@ export function BatchDetailView({ batchId }: { batchId: string }) {
 
       {message ? <Alert variant="error">{message}</Alert> : null}
 
+      {batch.status === 'archived' ? (
+        <Alert variant="warning" data-testid="batch-archived-banner">
+          This batch is archived: kept for the record, closed to its students, and it cannot be
+          restored. Its roster, classes and attendance stay readable below.
+        </Alert>
+      ) : null}
+
       {batch.can_manage ? (
-        <Card>
+        <Card data-testid="batch-status">
           <CardHeader>
-            <CardTitle as="h2">Status</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle as="h2" className="flex-1">
+                Status
+              </CardTitle>
+              <Badge variant={BATCH_STATUS_VARIANT[batch.status]} dot>
+                {BATCH_STATUS_LABEL[batch.status]}
+              </Badge>
+            </div>
             <CardDescription>
-              Cancelling a batch cancels its enrolments; completing it completes them.
+              <span className="font-medium text-ink">{BATCH_STATUS_PLAIN[batch.status].label}.</span>{' '}
+              {BATCH_STATUS_PLAIN[batch.status].meaning} Every change here asks you to confirm
+              first.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {transitionsFor(batch.status).length === 0 ? (
-              <p className="text-sm text-ink-muted">No status changes are available.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {transitionsFor(batch.status).map((transition) => (
-                  <Button
-                    key={transition.target}
-                    size="sm"
-                    variant={transition.target === 'active' ? 'primary' : 'outline'}
-                    onClick={() => void onTransition(transition.target)}
-                  >
-                    {transition.label}
-                  </Button>
-                ))}
-              </div>
-            )}
+            <StatusActions
+              actions={transitionsFor(batch.status)}
+              busy={isChangingStatus}
+              onConfirm={onTransition}
+            />
           </CardContent>
         </Card>
       ) : null}

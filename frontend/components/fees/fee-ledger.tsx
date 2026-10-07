@@ -32,6 +32,11 @@ import {
 } from 'lucide-react';
 
 import { ExportMenu } from '@/components/export-menu';
+import {
+  InstallmentEditor,
+  InstallmentTable,
+  installmentsAddUp,
+} from '@/components/fees/installment-editor';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -54,6 +59,7 @@ import {
   getFeeHistory,
   recordPayment,
   setEnrollmentFee,
+  setInstallments,
   setNextDue,
   voidPayment,
 } from '@/lib/fees';
@@ -71,6 +77,7 @@ import type {
   FeeHistoryEntry,
   FeePayment,
   FeePlan,
+  InstallmentInput,
   PaymentMethod,
   StudentFeeSummary,
 } from '@/types/api';
@@ -317,6 +324,7 @@ function RecordPaymentForm({ onOpenChange, plan, onSaved }: PlanDialogProps) {
   const [paidOn, setPaidOn] = useState(isoToday());
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [reference, setReference] = useState('');
+  const [referenceName, setReferenceName] = useState('');
   const [note, setNote] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
@@ -333,6 +341,7 @@ function RecordPaymentForm({ onOpenChange, plan, onSaved }: PlanDialogProps) {
         paid_on: paidOn,
         method,
         reference: reference.trim(),
+        reference_name: referenceName.trim(),
         note: note.trim(),
       });
       onOpenChange(false);
@@ -388,7 +397,7 @@ function RecordPaymentForm({ onOpenChange, plan, onSaved }: PlanDialogProps) {
               onChange={(event) => setPaidOn(event.target.value)}
             />
           </Field>
-          <Field label="How" htmlFor="pay-method" error={errors.method} required>
+          <Field label="Payment method" htmlFor="pay-method" error={errors.method} required>
             <Select
               id="pay-method"
               value={method}
@@ -402,15 +411,33 @@ function RecordPaymentForm({ onOpenChange, plan, onSaved }: PlanDialogProps) {
             </Select>
           </Field>
           <Field
-            label="Reference"
+            label="Reference number"
             htmlFor="pay-reference"
             error={errors.reference}
-            hint="UPI or bank transaction id, cheque number."
+            hint={
+              method === 'upi'
+                ? 'The UPI transaction id.'
+                : method === 'bank_transfer'
+                  ? 'The bank reference number.'
+                  : 'Any receipt or slip number, if there is one.'
+            }
           >
             <Input
               id="pay-reference"
               value={reference}
               onChange={(event) => setReference(event.target.value)}
+            />
+          </Field>
+          <Field
+            label="Reference name"
+            htmlFor="pay-reference-name"
+            error={errors.reference_name}
+            hint="Who paid or handled it: a parent, the owner, the scanner operator."
+          >
+            <Input
+              id="pay-reference-name"
+              value={referenceName}
+              onChange={(event) => setReferenceName(event.target.value)}
             />
           </Field>
         </div>
@@ -543,6 +570,67 @@ export function NextDueDialog({ open, ...props }: PlanDialogProps & { open: bool
 }
 
 // ---------------------------------------------------------------------------
+// The schedule
+// ---------------------------------------------------------------------------
+
+function InstallmentsForm({ onOpenChange, plan, onSaved }: PlanDialogProps) {
+  const payable = Number(plan.payable);
+  const [rows, setRows] = useState<InstallmentInput[]>(
+    plan.installments.map((row) => ({ amount: row.amount, due_on: row.due_on })),
+  );
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const addsUp = installmentsAddUp(rows, payable);
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await setInstallments(plan.enrollment_id, rows);
+      onOpenChange(false);
+      onSaved();
+    } catch (cause) {
+      const fields = fieldErrors(cause);
+      setError(fields.installments ?? errorMessage(cause, 'Could not save the schedule.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={(event) => void save(event)} noValidate>
+      <DialogHeader>
+        <DialogTitle>Instalment schedule</DialogTitle>
+        <DialogDescription>
+          {plan.course_title} · {money(plan.payable)} after discount. Payments already received
+          count against the earliest instalments first.
+        </DialogDescription>
+      </DialogHeader>
+      <InstallmentEditor payable={payable} rows={rows} onChange={setRows} error={error} />
+      <DialogFooter>
+        <Button type="button" variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={saving || !addsUp}>
+          {saving ? 'Saving…' : 'Save schedule'}
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+export function InstallmentsDialog({ open, ...props }: PlanDialogProps & { open: boolean }) {
+  return (
+    <Dialog open={open} onOpenChange={props.onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        {open ? <InstallmentsForm {...props} /> : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // History
 // ---------------------------------------------------------------------------
 
@@ -586,8 +674,18 @@ export function describeHistory(entry: FeeHistoryEntry): string {
         ? `Next ${money(to.amount)} expected by ${formatDate(to.on)}.`
         : 'Expected payment cleared.';
     }
+    case 'fee.installments.set': {
+      const to = (context.to ?? []) as { amount?: string; due_on?: string }[];
+      return to.length
+        ? `Schedule set: ${to.length} instalment${to.length === 1 ? '' : 's'}, first ${money(
+            to[0]?.amount,
+          )} by ${formatDate(to[0]?.due_on)}.`
+        : 'Schedule removed: payments taken as they come.';
+    }
     case 'fee.payment.recorded':
-      return `Received ${money(text(context.amount))} by ${
+      return `Received ${money(text(context.amount))}${
+        text(context.reference_name) ? ` from ${text(context.reference_name)}` : ''
+      } by ${
         PAYMENT_METHOD_LABEL[text(context.method) as PaymentMethod] ?? text(context.method)
       } on ${formatDate(text(context.paid_on))}. Receipt ${text(context.receipt_number)}. Balance ${money(
         text(context.balance_after),
@@ -695,7 +793,8 @@ function PaymentsTable({
               <Th>Receipt</Th>
               <Th>Date</Th>
               <Th className="text-right">Amount</Th>
-              <Th>How</Th>
+              <Th>Method</Th>
+              <Th>Reference name</Th>
               <Th>Taken by</Th>
               {mayManage ? <Th className="text-right">Actions</Th> : null}
             </tr>
@@ -745,6 +844,7 @@ function PaymentsTable({
                     <span className="block text-xs text-ink-muted">{payment.note}</span>
                   ) : null}
                 </Td>
+                <Td>{payment.reference_name || <span className="text-ink-faint">—</span>}</Td>
                 <Td>{payment.recorded_by || 'Unknown'}</Td>
                 {mayManage ? (
                   <Td className="text-right">
@@ -816,7 +916,8 @@ export function FeePlanCard({
   mayManage: boolean;
   onChanged: () => void;
 }) {
-  const [dialog, setDialog] = useState<'fee' | 'payment' | 'due' | null>(null);
+  const [dialog, setDialog] = useState<'fee' | 'payment' | 'due' | 'schedule' | null>(null);
+  const scheduled = plan.installments.length > 0;
   const [showHistory, setShowHistory] = useState(false);
   const payable = Number(plan.payable);
   const paid = Number(plan.paid);
@@ -922,16 +1023,35 @@ export function FeePlanCard({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setDialog('due')}
+            onClick={() => setDialog('schedule')}
             disabled={balance <= 0}
           >
             <CalendarClock className="size-4" aria-hidden="true" />
-            Next expected
+            {scheduled ? 'Edit instalments' : 'Set up instalments'}
           </Button>
+          {scheduled ? null : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setDialog('due')}
+              disabled={balance <= 0}
+            >
+              Next expected
+            </Button>
+          )}
           <Button size="sm" variant="outline" onClick={() => setDialog('fee')}>
             <BadgeIndianRupee className="size-4" aria-hidden="true" />
             Change fee
           </Button>
+        </div>
+      ) : null}
+
+      {scheduled ? (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
+            Instalments
+          </p>
+          <InstallmentTable installments={plan.installments} />
         </div>
       ) : null}
 
@@ -982,6 +1102,12 @@ export function FeePlanCard({
           <NextDueDialog
             open={dialog === 'due'}
             onOpenChange={(open) => setDialog(open ? 'due' : null)}
+            plan={plan}
+            onSaved={onChanged}
+          />
+          <InstallmentsDialog
+            open={dialog === 'schedule'}
+            onOpenChange={(open) => setDialog(open ? 'schedule' : null)}
             plan={plan}
             onSaved={onChanged}
           />

@@ -13,9 +13,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { ApiError, fieldErrors } from '@/lib/api';
-import { ATTENDANCE_OPTIONS } from '@/lib/academic-labels';
+import { ATTENDANCE_MODE_LABEL, ATTENDANCE_OPTIONS } from '@/lib/academic-labels';
 import { getRegister, markAttendance } from '@/lib/academics';
-import type { AttendanceStatus, Register } from '@/types/api';
+import type { AttendanceMode, AttendanceStatus, Register } from '@/types/api';
 
 /**
  * The class register.
@@ -28,6 +28,7 @@ import type { AttendanceStatus, Register } from '@/types/api';
 function RegisterScreen({ sessionId }: { sessionId: string }) {
   const [register, setRegister] = useState<Register | null>(null);
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
+  const [modes, setModes] = useState<Record<string, AttendanceMode>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [error, setError] = useState<ApiError | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -48,6 +49,7 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
               .map((entry) => [entry.enrollment_id, entry.status as AttendanceStatus]),
           ),
         );
+        setModes(Object.fromEntries(data.entries.map((entry) => [entry.enrollment_id, entry.mode])));
         setNotes(
           Object.fromEntries(data.entries.map((entry) => [entry.enrollment_id, entry.note])),
         );
@@ -75,6 +77,7 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
           enrollment_id: entry.enrollment_id,
           // Nobody unmarked: a register with a gap in it is not a register.
           status: marks[entry.enrollment_id] ?? 'absent',
+          mode: modes[entry.enrollment_id] ?? entry.mode,
           note: notes[entry.enrollment_id] ?? '',
         })),
       );
@@ -170,6 +173,7 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
                 <tr>
                   <Th className="sticky top-0 z-10 bg-sunken">Student</Th>
                   <Th className="sticky top-0 z-10 bg-sunken">Attendance</Th>
+                  <Th className="sticky top-0 z-10 bg-sunken">Joined</Th>
                   <Th className="sticky top-0 z-10 bg-sunken">Note</Th>
                 </tr>
               </thead>
@@ -212,6 +216,33 @@ function RegisterScreen({ sessionId }: { sessionId: string }) {
                               }
                             >
                               {option.label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </Td>
+                    <Td>
+                      <div
+                        role="radiogroup"
+                        aria-label={`How ${entry.full_name} joined`}
+                        className="flex flex-wrap gap-1"
+                      >
+                        {(['offline', 'online'] as AttendanceMode[]).map((option) => {
+                          const active = (modes[entry.enrollment_id] ?? entry.mode) === option;
+                          return (
+                            <Button
+                              key={option}
+                              type="button"
+                              role="radio"
+                              aria-checked={active}
+                              size="sm"
+                              variant={active ? 'secondary' : 'ghost'}
+                              disabled={!register.can_mark}
+                              onClick={() =>
+                                setModes((current) => ({ ...current, [entry.enrollment_id]: option }))
+                              }
+                            >
+                              {ATTENDANCE_MODE_LABEL[option]}
                             </Button>
                           );
                         })}

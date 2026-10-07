@@ -490,6 +490,12 @@ SPECTACULAR_SETTINGS = {
         "PermissionCategoryEnum": "apps.authorization.models.PermissionCategory.choices",
         "PolicyScopeEnum": "apps.policies.models.PolicyScope.choices",
         "FeeStatusEnum": "apps.students.models.FeeStatus.choices",
+        # Two unrelated "channel" choice sets: how a lead came in (online /
+        # offline) and, on the DSR, how a class was delivered.
+        "LeadChannelEnum": "apps.enquiries.models.LeadChannel.choices",
+        "MessageChannelEnum": "apps.communication.models.MessageChannel.choices",
+        "AttendanceModeEnum": "apps.attendance.models.AttendanceMode.choices",
+        "InstallmentStatusEnum": "apps.fees.models.InstallmentStatus.choices",
         "QualificationEnum": "apps.students.models.Qualification.choices",
         "PublishStatusEnum": "apps.courses.models.PublishStatus.choices",
         "CourseVisibilityEnum": "apps.courses.models.CourseVisibility.choices",

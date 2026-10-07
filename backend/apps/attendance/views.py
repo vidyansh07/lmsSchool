@@ -26,7 +26,7 @@ from apps.enrollments.models import Enrollment
 from apps.sessions import access as session_access
 
 from . import services
-from .models import AttendanceRecord
+from .models import AttendanceRecord, default_mode_for
 from .serializers import (
     AdminAttendanceRecordSerializer,
     AttendanceCorrectionSerializer,
@@ -35,6 +35,7 @@ from .serializers import (
     CorrectAttendanceSerializer,
     MarkAttendanceSerializer,
     MarkResultSerializer,
+    PresentNowSerializer,
     RegisterSerializer,
 )
 
@@ -79,7 +80,7 @@ class SessionRegisterView(APIView):
             str(row.enrollment_id): row for row in AttendanceRecord.objects.filter(session=session)
         }
         entries = []
-        for enrollment in services.roster_for(session):
+        for enrollment in services.roster_for(session).select_related("batch"):
             mark = marks.get(str(enrollment.pk))
             entries.append(
                 {
@@ -88,6 +89,7 @@ class SessionRegisterView(APIView):
                     "full_name": enrollment.student.user.full_name,
                     "enrollment_status": enrollment.status,
                     "status": mark.status if mark else None,
+                    "mode": mark.mode if mark else default_mode_for(enrollment),
                     "note": mark.note if mark else "",
                     "was_corrected": mark.was_corrected if mark else False,
                 }
@@ -98,6 +100,7 @@ class SessionRegisterView(APIView):
                 "session_id": session.pk,
                 "session_date": session.session_date,
                 "batch_code": session.batch.code,
+                "delivery_mode": session.batch.delivery_mode,
                 "can_mark": session.can_take_attendance
                 and not services.register_locked(session, request.user),
                 "attendance_taken_at": session.attendance_taken_at,
@@ -288,3 +291,24 @@ class EnrollmentAttendanceView(APIView):
                 "records": serializer(rows, many=True).data,
             }
         )
+
+
+class PresentNowView(APIView):
+    """Who is in class today — online, in person, and together.
+
+    Staff only: a student's own attendance is `attendance/mine/`. Scoped by
+    `visible_sessions`, so a trainer sees their own classes, a counsellor or
+    manager their centre, an administrator everything.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="How many students are present today, online and in person",
+        responses={200: PresentNowSerializer},
+        tags=ATTENDANCE_TAG,
+    )
+    def get(self, request):
+        if getattr(request.user, "role", "") == "student":
+            return _forbidden(request, "Your own attendance is under My attendance.")
+        return Response(PresentNowSerializer(services.present_now(user=request.user)).data)

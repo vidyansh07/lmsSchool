@@ -134,6 +134,9 @@ class CounsellorDashboardSerializer(serializers.Serializer):
     #: version it replaced did.
     new_students_this_week = serializers.IntegerField(read_only=True)
     pending_registrations = serializers.IntegerField(read_only=True)
+    open_leads_online = serializers.IntegerField(read_only=True)
+    open_leads_offline = serializers.IntegerField(read_only=True)
+    open_leads_total = serializers.IntegerField(read_only=True)
     follow_ups_due = serializers.IntegerField(read_only=True)
     follow_ups_overdue = serializers.IntegerField(read_only=True)
     unassigned_batch = serializers.IntegerField(read_only=True)

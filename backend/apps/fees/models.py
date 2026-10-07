@@ -8,9 +8,17 @@ was that ₹5,000 for" a question nobody could answer.
 The plan holds what was *agreed*: the course fee, any discount, and an optional
 "next ₹N expected by <date>". Payments are appended underneath it, any amount,
 whenever they happen — a counsellor's day is a ₹1,000 registration here, ₹8,000
-after a salary comes in there, the rest in two months. Nothing here is a
-schedule that has to be honoured; the plan says what is owed, the payments say
-what has been received, and the balance is the difference.
+after a salary comes in there, the rest in two months. The plan says what is owed, the
+payments say what has been received, and the balance is the difference.
+
+Since October 2026 a plan also carries an instalment *schedule*: by default
+six instalments, the first due the day the fee is agreed and the rest every
+thirty days, which the counsellor can reshape before saving. The schedule is
+a promise about *when*, not a second ledger: payments are still appended
+underneath the plan, any amount, and each instalment's state (paid, pending,
+overdue, upcoming) is read off the ledger by covering the instalments in
+order with what has actually been received. Nothing about an instalment is
+ever "marked paid" by hand.
 
 A payment is never edited or deleted. A mistake is *voided* — kept, marked,
 with a reason and a name — because a ledger that can be silently rewritten is
@@ -55,6 +63,21 @@ class FeePlanStatus(models.TextChoices):
     PARTIAL = "partial", _("Partly paid")
     PAID = "paid", _("Paid in full")
     WAIVED = "waived", _("Waived")
+
+
+class InstallmentStatus(models.TextChoices):
+    """Derived, never stored: read off the ledger every time."""
+
+    PAID = "paid", _("Paid")
+    PENDING = "pending", _("Pending")
+    OVERDUE = "overdue", _("Overdue")
+    UPCOMING = "upcoming", _("Upcoming")
+
+
+#: The schedule a fee gets unless the counsellor shapes a different one.
+DEFAULT_INSTALLMENT_COUNT = 6
+DEFAULT_INSTALLMENT_GAP_DAYS = 30
+MAX_INSTALLMENTS = 36
 
 
 class FeePlanQuerySet(models.QuerySet):
@@ -179,6 +202,13 @@ class FeePayment(BaseModel):
         validators=[validate_no_control_characters],
         help_text=_("A UPI or bank transaction id, a cheque number."),
     )
+    reference_name = models.CharField(
+        _("reference name"),
+        max_length=120,
+        blank=True,
+        validators=[validate_no_control_characters],
+        help_text=_("Who made or handled the payment: a parent, the owner, the scanner operator."),
+    )
     note = models.CharField(
         _("note"), max_length=300, blank=True, validators=[validate_no_control_characters]
     )
@@ -211,3 +241,71 @@ class FeePayment(BaseModel):
     @property
     def is_voided(self) -> bool:
         return self.voided_at is not None
+
+
+class FeeInstallment(BaseModel):
+    """One expected slice of a fee: how much, by when. State is derived."""
+
+    plan = models.ForeignKey(FeePlan, on_delete=models.CASCADE, related_name="installments")
+    sequence = models.PositiveSmallIntegerField(_("sequence"))
+    amount = models.DecimalField(
+        _("amount"),
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    due_on = models.DateField(_("due on"), db_index=True)
+
+    class Meta:
+        verbose_name = _("fee instalment")
+        verbose_name_plural = _("fee instalments")
+        ordering = ("plan", "sequence")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["plan", "sequence"], name="feeinstallment_plan_sequence_uniq"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Instalment {self.sequence}: {self.amount} by {self.due_on}"
+
+
+def installment_rows(plan: FeePlan, installments=None, *, today=None) -> list[dict]:
+    """Each instalment with how much of it is covered and what state that makes it.
+
+    Payments are not tied to instalments — a student who pays ₹5,000 against
+    two ₹3,000 instalments has simply paid the first and half the second. So
+    the plan's `paid` total is poured over the schedule in order: an
+    instalment is *paid* once fully covered; the first uncovered one whose
+    date has not passed is *pending* (it is the one being collected now);
+    anything uncovered and past its date is *overdue*; the rest are *upcoming*.
+    """
+    today = today or timezone.localdate()
+    rows = list(installments if installments is not None else plan.installments.all())
+    remaining = plan.paid
+    result: list[dict] = []
+    pending_taken = False
+    for item in rows:
+        covered = min(item.amount, max(remaining, ZERO))
+        remaining -= covered
+        if covered >= item.amount:
+            state = InstallmentStatus.PAID
+        elif item.due_on < today:
+            state = InstallmentStatus.OVERDUE
+        elif not pending_taken:
+            state = InstallmentStatus.PENDING
+            pending_taken = True
+        else:
+            state = InstallmentStatus.UPCOMING
+        result.append(
+            {
+                "id": item.pk,
+                "sequence": item.sequence,
+                "amount": item.amount,
+                "due_on": item.due_on,
+                "paid_amount": covered,
+                "balance": item.amount - covered,
+                "status": state,
+            }
+        )
+    return result

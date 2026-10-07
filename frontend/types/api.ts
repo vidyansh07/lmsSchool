@@ -673,12 +673,17 @@ export type TopicStatus =
 
 export type AttendanceStatus = "present" | "absent" | "late" | "excused";
 
+/** How the student attended: in the room, or over a link. */
+export type AttendanceMode = "offline" | "online";
+
 export interface RegisterEntry {
   enrollment_id: string;
   student_code: string;
   full_name: string;
   enrollment_status: EnrollmentStatus;
   status: AttendanceStatus | null;
+  /** The saved mode, or the student's default (online for an online student). */
+  mode: AttendanceMode;
   note: string;
   was_corrected: boolean;
 }
@@ -687,6 +692,8 @@ export interface Register {
   session_id: string;
   session_date: string;
   batch_code: string;
+  /** The batch's delivery mode: offline, online or hybrid. */
+  delivery_mode: string;
   can_mark: boolean;
   attendance_taken_at: string | null;
   entries: RegisterEntry[];
@@ -696,6 +703,17 @@ export interface MarkResult {
   created: number;
   updated: number;
   corrections: number;
+}
+
+/** `GET /attendance/present-now/`: who is in class today, by how they joined. */
+export interface PresentNow {
+  date: string;
+  online: number;
+  offline: number;
+  total: number;
+  absent: number;
+  sessions_today: number;
+  registers_taken: number;
 }
 
 export interface AttendanceRecord {
@@ -1764,6 +1782,10 @@ export interface CounsellorDashboard {
    *  it. */
   new_students_this_week: number;
   pending_registrations: number;
+  /** Open enquiries that came in online / offline, and both together. */
+  open_leads_online: number;
+  open_leads_offline: number;
+  open_leads_total: number;
   follow_ups_due: number;
   follow_ups_overdue: number;
   unassigned_batch: number;
@@ -1848,6 +1870,28 @@ export type PaymentMethod =
 /** Derived by the server from the numbers; never stored, never set by hand. */
 export type FeePlanStatus = "unpaid" | "partial" | "paid" | "waived";
 
+/** The three ways money arrives at the desk; the others stay readable on old receipts. */
+export const PAYMENT_METHODS_OFFERED: readonly PaymentMethod[] = ["cash", "upi", "bank_transfer"];
+
+/** Derived by the server by pouring what was paid over the schedule in order. */
+export type InstallmentStatus = "paid" | "pending" | "overdue" | "upcoming";
+
+export interface FeeInstallment {
+  id: string;
+  sequence: number;
+  amount: string;
+  due_on: string;
+  paid_amount: string;
+  balance: string;
+  status: InstallmentStatus;
+}
+
+/** One row of a schedule as the counsellor shapes it, before it is saved. */
+export interface InstallmentInput {
+  amount: string;
+  due_on: string;
+}
+
 export interface FeePayment {
   id: string;
   receipt_number: string;
@@ -1855,6 +1899,8 @@ export interface FeePayment {
   paid_on: string;
   method: PaymentMethod;
   reference: string;
+  /** Who made or handed over the payment: a parent, the owner, the scanner operator. */
+  reference_name: string;
   note: string;
   recorded_by: string | null;
   created_at: string;
@@ -1893,11 +1939,14 @@ export interface FeePlan {
   updated_by: string | null;
   created_at: string;
   updated_at: string;
+  /** The schedule, with each instalment's derived state. Empty means ad hoc. */
+  installments: FeeInstallment[];
   payments: FeePayment[];
 }
 
 /** A plan as it appears in lists: the same figures without the payments. */
-export type FeePlanBrief = Omit<FeePlan, "payments"> & {
+export type FeePlanBrief = Omit<FeePlan, "payments" | "installments"> & {
+  installments?: FeeInstallment[];
   student_id?: string;
   student_name?: string;
 };
@@ -3372,6 +3421,8 @@ export interface Enquiry {
   batch_timing: string;
   qualification: string;
   source: string;
+  /** Online (website, Google, social, WhatsApp) or offline (walk-in, phone, referral, seminar). */
+  channel: LeadChannel;
   utm_source: string;
   utm_medium: string;
   utm_campaign: string;
@@ -3405,7 +3456,13 @@ export interface EnquiryDetail extends Enquiry {
 }
 
 /** `GET /enquiries/summary/`. */
+export type LeadChannel = "online" | "offline";
+
 export interface EnquirySummary {
   stages: Record<EnquiryStage, number>;
+  /** How many visible enquiries came in each way. */
+  channels: Record<LeadChannel, number>;
   total: number;
+  /** The sources the enquiry form offers, for a select. */
+  sources: { value: string; label: string }[];
 }

@@ -147,3 +147,31 @@ def test_a_student_outside_the_callers_branch_404s(
     )
 
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_a_follow_up_carries_its_note_and_is_live_work_from_the_start(
+    api_client_no_csrf, counsellor_user, student_profile, enrollment, follow_up_type
+):
+    """Planned from the record with a short note, the follow-up is already
+    assigned to the counsellor — pending, not a draft — so it can be marked
+    done and is swept to overdue when its time passes."""
+    due_at = timezone.now() + timedelta(days=2)
+    api_client_no_csrf.force_login(counsellor_user)
+    response = api_client_no_csrf.post(
+        _follow_up_url(student_profile),
+        {"due_at": due_at.isoformat(), "note": "Ask about the education loan"},
+        format="json",
+    )
+    assert response.status_code == 201, response.data
+    assert response.data["status"] == "assigned"
+    assert response.data["summary"] == "Ask about the education loan"
+    activity = Activity.objects.get(pk=response.data["id"])
+    assert activity.planned_at == activity.due_at
+
+    # Pending and completed are told apart by status on the student's list.
+    listing = api_client_no_csrf.get(
+        f"/api/v1/students/{student_profile.pk}/activities/?category=follow_up"
+    )
+    assert listing.status_code == 200
+    assert [row["status"] for row in listing.data["results"]] == ["assigned"]

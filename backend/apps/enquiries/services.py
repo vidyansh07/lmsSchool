@@ -20,7 +20,7 @@ from django.utils import timezone
 from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError
 
-from .models import CLOSED_STAGES, Enquiry, EnquiryStage
+from .models import CLOSED_STAGES, Enquiry, EnquiryStage, channel_for_source
 from .signals import enquiry_changed
 
 #: Form question key → enquiry field. Keys not listed are kept on the form
@@ -66,6 +66,7 @@ EDITABLE_FIELDS = frozenset(
         "batch_timing",
         "qualification",
         "source",
+        "channel",
         "utm_source",
         "utm_medium",
         "utm_campaign",
@@ -96,6 +97,14 @@ def _parse_datetime(value: Any):
     except ValueError:
         return None
     return parsed if timezone.is_aware(parsed) else timezone.make_aware(parsed)
+
+
+def _clean_channel(value):
+    from .models import LeadChannel
+
+    if value not in LeadChannel.values:
+        raise ApplicationError({"channel": ["Choose online or offline."]})
+    return value
 
 
 def _clean(field: str, value: Any) -> Any:
@@ -165,6 +174,11 @@ def _apply(enquiry: Enquiry, fields: dict[str, Any]) -> list[str]:
             changed.append(name)
     if "mobile" in changed:
         enquiry.mobile_key = mobile_key(enquiry.mobile)
+    if "source" in changed and "channel" not in fields:
+        implied = channel_for_source(enquiry.source)
+        if enquiry.channel != implied:
+            enquiry.channel = implied
+            changed.append("channel")
     if "stage" in changed:
         enquiry.stage_changed_at = timezone.now()
         if enquiry.stage not in _LOST_STAGES and "lost_reason" not in fields:

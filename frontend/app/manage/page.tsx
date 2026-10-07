@@ -49,6 +49,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Grid, GridItem } from '@/components/ui/layout';
 import { StatCard } from '@/components/ui/stat';
+import { PresentNowStrip } from '@/components/academics/present-now';
 import { WarningsStrip } from '@/components/warnings-strip';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
@@ -252,6 +253,8 @@ function ManagerOverview() {
       <QuickActions actions={quickActions} />
 
       <WarningsStrip />
+
+      <PresentNowStrip />
 
       <Grid>
         {totals.map((figure) => (

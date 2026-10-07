@@ -19,13 +19,16 @@ import type {
 const recordPayment = vi.hoisted(() => vi.fn());
 const setEnrollmentFee = vi.hoisted(() => vi.fn());
 const setNextDue = vi.hoisted(() => vi.fn());
+const setInstallments = vi.hoisted(() => vi.fn());
 const voidPayment = vi.hoisted(() => vi.fn());
 const getFeeHistory = vi.hoisted(() => vi.fn());
 
-vi.mock('@/lib/fees', () => ({
+vi.mock('@/lib/fees', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/fees')>()),
   recordPayment,
   setEnrollmentFee,
   setNextDue,
+  setInstallments,
   voidPayment,
   getFeeHistory,
 }));
@@ -38,6 +41,7 @@ function payment(overrides: Partial<FeePayment> = {}): FeePayment {
     paid_on: '2026-09-01',
     method: 'upi',
     reference: 'UPI-77',
+    reference_name: '',
     note: '',
     recorded_by: 'Kiran Counsellor',
     created_at: '2026-09-01T10:00:00Z',
@@ -51,6 +55,7 @@ function payment(overrides: Partial<FeePayment> = {}): FeePayment {
 
 function plan(overrides: Partial<FeePlan> = {}): FeePlan {
   return {
+    installments: [],
     id: 'plan-1',
     enrollment_id: 'enrol-1',
     enrollment_code: 'GRS-E-00001',
@@ -225,18 +230,115 @@ describe('FeeLedger', () => {
     fireEvent.click(screen.getByRole('button', { name: /record payment/i }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText(/amount/i), { target: { value: '4000' } });
-    fireEvent.change(within(dialog).getByLabelText(/reference/i), { target: { value: 'UPI-99' } });
+    // Only cash, UPI and bank transfer are offered.
+    const method = within(dialog).getByLabelText(/payment method/i) as HTMLSelectElement;
+    expect(Array.from(method.options).map((option) => option.value)).toEqual([
+      'cash',
+      'upi',
+      'bank_transfer',
+    ]);
+    fireEvent.change(method, { target: { value: 'upi' } });
+    fireEvent.change(within(dialog).getByLabelText(/reference number/i), {
+      target: { value: 'UPI-99' },
+    });
+    fireEvent.change(within(dialog).getByLabelText(/reference name/i), {
+      target: { value: 'Father (Ramesh)' },
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: /record payment/i }));
     await waitFor(() => expect(recordPayment).toHaveBeenCalledOnce());
     expect(recordPayment).toHaveBeenCalledWith(
       'enrol-1',
       expect.objectContaining({
         amount: '4000',
-        method: 'cash',
+        method: 'upi',
         reference: 'UPI-99',
+        reference_name: 'Father (Ramesh)',
       }),
     );
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
+  });
+
+  it('shows who handed over each payment in the history', () => {
+    render(
+      <FeeLedger
+        summary={summary([plan({ payments: [payment({ reference_name: 'Mother' })] })])}
+        enrollments={[]}
+        mayManage={false}
+        isLoading={false}
+        error={null}
+        onChanged={() => {}}
+      />,
+    );
+    expect(screen.getByText('Mother')).toBeInTheDocument();
+  });
+
+  it('lists the instalments with their state and opens the schedule editor', async () => {
+    setInstallments.mockResolvedValue(plan());
+    const scheduled = plan({
+      installments: [
+        {
+          id: 'i1',
+          sequence: 1,
+          amount: '5000.00',
+          due_on: '2026-09-01',
+          paid_amount: '5000.00',
+          balance: '0.00',
+          status: 'paid',
+        },
+        {
+          id: 'i2',
+          sequence: 2,
+          amount: '5000.00',
+          due_on: '2026-10-01',
+          paid_amount: '0.00',
+          balance: '5000.00',
+          status: 'overdue',
+        },
+        {
+          id: 'i3',
+          sequence: 3,
+          amount: '5000.00',
+          due_on: '2026-11-01',
+          paid_amount: '0.00',
+          balance: '5000.00',
+          status: 'pending',
+        },
+      ],
+      payable: '15000.00',
+      balance: '10000.00',
+    });
+    render(
+      <FeeLedger
+        summary={summary([scheduled])}
+        enrollments={[]}
+        mayManage
+        isLoading={false}
+        error={null}
+        onChanged={() => {}}
+      />,
+    );
+    expect(screen.getByText('Instalments')).toBeInTheDocument();
+    expect(screen.getByTestId('installment-2')).toHaveTextContent('Overdue');
+    expect(screen.getByTestId('installment-3')).toHaveTextContent('Pending');
+    expect(screen.getByTestId('installment-1')).toHaveTextContent('Paid');
+
+    fireEvent.click(screen.getByRole('button', { name: /edit instalments/i }));
+    const dialog = await screen.findByRole('dialog');
+    const amounts = within(dialog).getAllByLabelText(/instalment \d+ amount/i);
+    expect(amounts).toHaveLength(3);
+    // Changing one amount so the rows no longer add up blocks saving...
+    fireEvent.change(amounts[2]!, { target: { value: '4000' } });
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(/must add up to/i);
+    expect(within(dialog).getByRole('button', { name: /save schedule/i })).toBeDisabled();
+    // ...and putting it right lets the schedule be saved.
+    fireEvent.change(amounts[2]!, { target: { value: '5000' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /save schedule/i }));
+    await waitFor(() => expect(setInstallments).toHaveBeenCalledOnce());
+    expect(setInstallments).toHaveBeenCalledWith('enrol-1', [
+      { amount: '5000.00', due_on: '2026-09-01' },
+      { amount: '5000.00', due_on: '2026-10-01' },
+      { amount: '5000', due_on: '2026-11-01' },
+    ]);
   });
 
   it('shows the field error the server sent back', async () => {

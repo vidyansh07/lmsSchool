@@ -19,7 +19,8 @@ const getRegister = vi.hoisted(() => vi.fn());
 const markAttendance = vi.hoisted(() => vi.fn());
 const listTodaySessions = vi.hoisted(() => vi.fn());
 const listSessions = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/academics', () => ({ getRegister, markAttendance, listTodaySessions, listSessions }));
+const getPresentNow = vi.hoisted(() => vi.fn(async () => ({ date: '2026-10-07', online: 0, offline: 0, total: 0, absent: 0, sessions_today: 0, registers_taken: 0 })));
+vi.mock('@/lib/academics', () => ({ getRegister, markAttendance, listTodaySessions, listSessions, getPresentNow }));
 
 const getSessionWithTopic = vi.hoisted(() => vi.fn());
 const getSessionDsr = vi.hoisted(() => vi.fn());
@@ -74,6 +75,7 @@ function registerEntry(overrides: Partial<RegisterEntry> = {}): RegisterEntry {
     student_code: 'GRS-S-00001',
     full_name: 'Ada Lovelace',
     enrollment_status: 'active',
+    mode: 'offline',
     status: null,
     note: '',
     was_corrected: false,
@@ -125,6 +127,7 @@ function fixtures(overrides: {
     session_id: session.id,
     session_date: session.session_date,
     batch_code: session.batch_code,
+    delivery_mode: 'offline',
     can_mark: overrides.canMark ?? true,
     attendance_taken_at: session.attendance_taken_at,
     entries,

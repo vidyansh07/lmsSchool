@@ -103,7 +103,7 @@ test.describe('Course authoring', () => {
     await page.getByRole('link', { name: 'Linux Administration Foundations' }).click();
 
     await expect(page.getByRole('heading', { name: 'Modules and lessons' })).toBeVisible();
-    await expect(page.getByText('Publishing')).toBeVisible();
+    await expect(page.getByTestId('course-publishing')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Course details' })).toBeVisible();
   });
 

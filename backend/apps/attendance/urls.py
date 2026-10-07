@@ -7,6 +7,7 @@ from .views import (
     AttendanceHistoryView,
     EnrollmentAttendanceView,
     MyAttendanceView,
+    PresentNowView,
     SessionAttendanceListView,
     SessionRegisterView,
 )
@@ -19,6 +20,7 @@ session_attendance_patterns = [
 
 attendance_patterns = [
     path("mine/", MyAttendanceView.as_view(), name="mine"),
+    path("present-now/", PresentNowView.as_view(), name="present-now"),
     path("<uuid:record_id>/correct/", AttendanceCorrectionView.as_view(), name="correct"),
     path("<uuid:record_id>/history/", AttendanceHistoryView.as_view(), name="history"),
 ]

@@ -69,6 +69,8 @@ import {
   CalendarClock,
   CalendarRange,
   Clock,
+  Globe,
+  MapPin,
   PlusCircle,
   Rocket,
   UploadCloud,
@@ -212,6 +214,9 @@ const KPI_DEFINITIONS: { key: string; label: string; own?: string }[] = [
   { key: 'new_students_today', label: 'Registered today' },
   { key: 'new_students_this_week', label: 'Registered this week' },
   { key: 'pending_registrations', label: 'Pending registrations' },
+  { key: 'open_leads_online', label: 'Online leads' },
+  { key: 'open_leads_offline', label: 'Offline leads' },
+  { key: 'open_leads_total', label: 'Total leads' },
   {
     key: 'batches_starting_soon',
     label: 'Batches starting soon',
@@ -555,6 +560,39 @@ export function AdmissionsDashboardContent() {
             icon={Rocket}
             hint="Seats still to fill"
             href="/admissions/batches"
+          />
+        </GridItem>
+        <GridItem span={3}>
+          <KpiTileSection
+            label="Online leads"
+            value={dashboard.data?.open_leads_online ?? 0}
+            isLoading={dashboard.isLoading}
+            failed={Boolean(dashboard.error)}
+            icon={Globe}
+            hint="Open enquiries from the web"
+            href="/enquiries"
+          />
+        </GridItem>
+        <GridItem span={3}>
+          <KpiTileSection
+            label="Offline leads"
+            value={dashboard.data?.open_leads_offline ?? 0}
+            isLoading={dashboard.isLoading}
+            failed={Boolean(dashboard.error)}
+            icon={MapPin}
+            hint="Walk-ins, calls, referrals"
+            href="/enquiries"
+          />
+        </GridItem>
+        <GridItem span={3}>
+          <KpiTileSection
+            label="Total leads"
+            value={dashboard.data?.open_leads_total ?? 0}
+            isLoading={dashboard.isLoading}
+            failed={Boolean(dashboard.error)}
+            icon={Users}
+            hint="Every open enquiry"
+            href="/enquiries"
           />
         </GridItem>
         <GridItem span={3}>

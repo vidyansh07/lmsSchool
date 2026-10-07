@@ -38,6 +38,7 @@ from .serializers import (
     FeesOverviewSerializer,
     RecordPaymentSerializer,
     SetFeePlanSerializer,
+    SetInstallmentsSerializer,
     SetNextDueSerializer,
     StudentFeeSummarySerializer,
     VoidPaymentSerializer,
@@ -61,7 +62,9 @@ def _may_read(user, enrollment: Enrollment) -> bool:
 
 def _plan_or_404(enrollment: Enrollment) -> FeePlan:
     return get_object_or_404(
-        FeePlan.objects.select_related("enrollment__batch", "enrollment__course").with_totals(),
+        FeePlan.objects.select_related("enrollment__batch", "enrollment__course")
+        .prefetch_related("installments")
+        .with_totals(),
         enrollment=enrollment,
     )
 
@@ -96,6 +99,27 @@ class EnrollmentFeeView(APIView):
         serializer.is_valid(raise_exception=True)
         services.set_fee_plan(
             enrollment=enrollment, actor=request.user, **serializer.validated_data
+        )
+        return Response(FeePlanSerializer(_plan_or_404(enrollment)).data)
+
+
+class EnrollmentFeeInstallmentsView(APIView):
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_MANAGE_ANY
+
+    @extend_schema(
+        summary="Replace the instalment schedule for an enrolment's fee",
+        request=SetInstallmentsSerializer,
+        responses={200: FeePlanSerializer},
+        tags=FEES_TAG,
+    )
+    def put(self, request, enrollment_id):
+        enrollment = _enrollment(request.user, enrollment_id)
+        plan = _plan_or_404(enrollment)
+        serializer = SetInstallmentsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        services.set_installments(
+            plan=plan, actor=request.user, items=serializer.validated_data["installments"]
         )
         return Response(FeePlanSerializer(_plan_or_404(enrollment)).data)
 

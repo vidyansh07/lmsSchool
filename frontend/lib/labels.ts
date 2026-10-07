@@ -41,7 +41,9 @@ import type {
   FormEntity,
   FormFieldType,
   FormVersionStatus,
+  InstallmentStatus,
   InstitutionKind,
+  LeadChannel,
   PaymentMethod,
   PolicyCategory,
   Qualification,
@@ -53,6 +55,7 @@ import type {
   TemplateStatus,
   UserRole,
 } from "@/types/api";
+import { PAYMENT_METHODS_OFFERED } from "@/types/api";
 
 export const REQUIREMENT_STATUS_LABEL: Record<RequirementStatus, string> = {
   open: "Open",
@@ -177,11 +180,26 @@ export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   other: "Other",
 };
 
+/** The methods a counsellor can pick when recording a payment: cash, UPI, bank. */
 export const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] =
-  (Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((value) => ({
-    value,
-    label: PAYMENT_METHOD_LABEL[value],
-  }));
+  PAYMENT_METHODS_OFFERED.map((value) => ({ value, label: PAYMENT_METHOD_LABEL[value] }));
+
+export const INSTALLMENT_STATUS_LABEL: Record<InstallmentStatus, string> = {
+  paid: "Paid",
+  pending: "Pending",
+  overdue: "Overdue",
+  upcoming: "Upcoming",
+};
+
+export const INSTALLMENT_STATUS_VARIANT: Record<
+  InstallmentStatus,
+  "success" | "warning" | "error" | "neutral"
+> = {
+  paid: "success",
+  pending: "warning",
+  overdue: "error",
+  upcoming: "neutral",
+};
 
 export const FEE_PLAN_STATUS_LABEL: Record<FeePlanStatus, string> = {
   unpaid: "Nothing paid yet",
@@ -653,6 +671,11 @@ export const ENQUIRY_STAGE_VARIANT: Record<
   registered: "success",
   not_interested: "error",
   not_eligible: "neutral",
+};
+
+export const LEAD_CHANNEL_LABEL: Record<LeadChannel, string> = {
+  online: "Online",
+  offline: "Offline",
 };
 
 /** Pipeline order, open stages first. */

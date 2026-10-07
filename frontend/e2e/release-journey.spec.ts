@@ -161,8 +161,11 @@ test('the release journey: set a course up, teach it, finish it, verify the cert
   // The course last: it refuses to publish until a published module holds a
   // published lesson, which is the rule that makes the order matter.
   await page.reload();
+  // "Activate" is the course-level verb since the counsellor UX pass; every
+  // status change asks first, so the dialog's own Activate is the real click.
   const publishing = page.getByTestId('course-publishing');
-  await publishing.getByRole('button', { name: 'Publish', exact: true }).click();
+  await publishing.getByRole('button', { name: 'Activate', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(publishing.getByText('Published').first()).toBeVisible();
 
   // ========================================================================

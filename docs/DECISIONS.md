@@ -1280,3 +1280,55 @@ reports; one example rule (counselling for a flagged student) is seeded as a
 draft. A batch's reports summarise into coverage, a class strip and a CSV
 export (`GET /batches/<id>/dsr-summary/`, `/dsr-export/`).
 
+
+### D-140 · The counsellor's desk: instalments by default, who paid, follow-ups at registration, confirmed status changes, online and offline leads and attendance (7 October 2026)
+
+The owner asked for six improvements aimed at a counsellor with no technical
+background, built on `feat/counsellor-ux` off `feat/automation-forms`.
+
+**Fees.** A fee plan carries an instalment schedule (`FeeInstallment`):
+by default six instalments, the first due the day the fee is agreed and the
+rest every thirty days, which the counsellor can reshape (count, amounts,
+dates) before saving and later through `PUT
+/fees/enrollments/<id>/installments/`. The rows must add up to the fee after
+discount. Payments stay ad hoc; an instalment's state (paid, pending,
+overdue, upcoming) is derived by pouring what was paid over the schedule in
+order, and the plan's existing `next_due_amount`/`next_due_on` follow the
+first uncovered instalment, so the overdue flag, the fees panel and the
+student's `fee_status` keep reading the one field they always read. An empty
+schedule means ad hoc collection (the showcase seed uses it). A payment now
+records a `reference_name` (who handed the money over) beside the method and
+the reference number; the desk offers cash, UPI and bank transfer. D-fees
+(12 September) stands otherwise.
+
+**Follow-ups.** `POST /students/<id>/follow-ups/` takes a `note` and leaves
+the activity *assigned* (planned → assigned) rather than a draft, so it is
+pending from the start, swept to overdue when its time passes and can be
+marked done. The registration wizard offers a follow-up date and note; the
+student record lists pending and completed follow-ups with a "Mark done"
+dialog that answers the seeded `follow-up-note` form.
+
+**Courses and batches.** Every status change asks first
+(`components/status-actions.tsx`), explaining what happens to students and
+the catalogue. The course verbs are Activate / Deactivate / Archive /
+Restore (the server statuses are unchanged: published / draft / archived),
+and the status card says in plain words what the current status means.
+Archived records carry a banner; a course can be restored (to inactive), a
+batch cannot, and the banner says so.
+
+**Leads.** An enquiry is online or offline (`Enquiry.channel`, derived from
+its source unless set by hand; `ONLINE_SOURCES` = website, Google,
+Facebook/Instagram, LinkedIn, WhatsApp). The summary endpoint returns the
+counts per channel and the list of sources; the list filters by `channel`,
+`source`, `follow_up` (overdue / today / none) and `created_after` /
+`created_before`. The enquiries screen shows online, offline and total
+leads, and the stage and source are changed from the row. The counsellor
+dashboard carries the three open-lead counts.
+
+**Attendance.** A register row records how the student joined
+(`AttendanceRecord.mode`: in person / online, defaulting from the student's
+or batch's delivery mode; `O` / `I` on the focused row flips it). `GET
+/attendance/present-now/` counts today's saved registers (present and late)
+by mode over the classes the caller sees, and the admin, manager and
+trainer overviews show present online / in person / today and how many
+registers are in. The DSR's typed online/offline counts are unchanged.

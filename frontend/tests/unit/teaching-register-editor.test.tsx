@@ -12,6 +12,7 @@ function entry(overrides: Partial<RegisterEntry> = {}): RegisterEntry {
     student_code: 'GRS-S-00001',
     full_name: 'Ada Lovelace',
     enrollment_status: 'active',
+    mode: 'offline',
     status: null,
     note: '',
     was_corrected: false,
@@ -213,10 +214,49 @@ describe('RegisterEditor', () => {
     expect(screen.getByText('Suspended')).toBeInTheDocument();
   });
 
-  it('shows the honest "not available" fallback for online/offline rather than a fabricated count', () => {
-    render(<StaticRegister entries={threeStudents()} />);
-    expect(screen.getByText(/Online: Not available/)).toBeInTheDocument();
-    expect(screen.getByText(/Offline: Not available/)).toBeInTheDocument();
+  it('counts the present students by how they joined', () => {
+    const rows = threeStudents();
+    const marks = Object.fromEntries(rows.map((row) => [row.enrollment_id, 'present' as const]));
+    render(
+      <RegisterEditor
+        entries={rows}
+        marks={marks}
+        modes={{ [rows[0]!.enrollment_id]: 'online' }}
+        onMark={vi.fn()}
+        onMarkAllPresent={vi.fn()}
+        onMode={vi.fn()}
+        canMark
+      />,
+    );
+    const tally = document.querySelector('[aria-live="polite"]')!;
+    expect(tally).toHaveTextContent(/Online: 1/);
+    expect(tally).toHaveTextContent(/In person: 2/);
+  });
+
+  it('flips how a student joined with the O and I keys and the row buttons', async () => {
+    const user = userEvent.setup();
+    const onMode = vi.fn();
+    const rows = threeStudents();
+    render(
+      <RegisterEditor
+        entries={rows}
+        marks={{}}
+        modes={{}}
+        onMark={vi.fn()}
+        onMarkAllPresent={vi.fn()}
+        onMode={onMode}
+        canMark
+      />,
+    );
+    screen.getByRole('row', { name: /Ada Lovelace/ }).focus();
+    await user.keyboard('o');
+    expect(onMode).toHaveBeenCalledWith(rows[0]!.enrollment_id, 'online');
+    await user.click(
+      within(screen.getByRole('radiogroup', { name: /How Ada Lovelace joined/ })).getByRole('radio', {
+        name: 'In person',
+      }),
+    );
+    expect(onMode).toHaveBeenCalledWith(rows[0]!.enrollment_id, 'offline');
   });
 
   it('exposes the running counts in an aria-live polite region', () => {

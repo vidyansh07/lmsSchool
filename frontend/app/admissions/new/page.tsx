@@ -51,11 +51,18 @@ import { assignBatchTrainer, createBatch, enrolStudent, listBatches } from '@/li
 import { formatDate, isoDaysFromNow, isoToday } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
 import { listCourses } from '@/lib/courses';
-import { recordPayment, setEnrollmentFee } from '@/lib/fees';
+import {
+  DEFAULT_INSTALLMENT_COUNT,
+  InstallmentEditor,
+  installmentsAddUp,
+} from '@/components/fees/installment-editor';
+import { Textarea } from '@/components/ui/input';
+import { defaultInstallments, recordPayment, setEnrollmentFee } from '@/lib/fees';
 import { PAYMENT_METHOD_LABEL, PAYMENT_METHOD_OPTIONS, QUALIFICATION_OPTIONS } from '@/lib/labels';
 import { formatCurrency } from '@/lib/format';
 import {
   checkDuplicates,
+  createFollowUp,
   createStudent,
   ensureTeachingProfile,
   listStudents,
@@ -68,6 +75,7 @@ import type {
   BatchListRow,
   CourseListRow,
   Enrollment,
+  InstallmentInput,
   PaymentMethod,
   StudentDuplicateMatch,
   StudentListRow,
@@ -107,6 +115,8 @@ interface Result {
   /** What happened to the fee after the enrolment: the receipt issued, or why
    *  it could not be recorded. Empty when no fee was quoted. */
   feeNote: string;
+  /** The follow-up planned, or why it could not be. Empty when none was asked for. */
+  followUpNote: string;
 }
 
 export function RegistrationWizard() {
@@ -130,6 +140,18 @@ export function RegistrationWizard() {
   // changed hands today.
   const [paidNow, setPaidNow] = useState('1000');
   const [paidMethod, setPaidMethod] = useState<PaymentMethod>('cash');
+  // The UPI transaction id or bank reference, and who handed the money over
+  // (a parent, the owner, the scanner operator) — kept on the receipt.
+  const [paidReference, setPaidReference] = useState('');
+  const [paidReferenceName, setPaidReferenceName] = useState('');
+  // The instalment schedule: on by default, six instalments thirty days
+  // apart starting today, reshaped by the counsellor before anything is
+  // saved. Regenerated from the fee until the counsellor turns it off.
+  const [installments, setInstallments] = useState<InstallmentInput[]>([]);
+  const [installmentsEnabled, setInstallmentsEnabled] = useState(true);
+  // An optional follow-up planned at registration: when to call, and why.
+  const [followUpOn, setFollowUpOn] = useState('');
+  const [followUpNote, setFollowUpNote] = useState('');
   // Which centre the student — and a batch created here — belong to. Only a
   // superadmin is asked; everybody else's own centre is forced by the server.
   const [branchId, setBranchId] = useState('');
@@ -359,13 +381,28 @@ export function RegistrationWizard() {
     hint: row.category_name || row.code,
   }));
 
+  // The schedule follows the fee while it is switched on: a fee typed after
+  // the rows were generated would otherwise leave six stale amounts behind.
+  function onFeeAmountChange(value: string) {
+    setFeeAmount(value);
+    if (!installmentsEnabled) return;
+    setInstallments((rows) =>
+      defaultInstallments(Number(value), rows.length || DEFAULT_INSTALLMENT_COUNT),
+    );
+  }
+
+  function onInstallmentsChange(rows: InstallmentInput[]) {
+    setInstallmentsEnabled(rows.length > 0);
+    setInstallments(rows);
+  }
+
   function onCourseSelect(option: PickerOption) {
     const found = courseOptions.find((row) => row.id === option.value);
     if (!found) return;
     setCourse(found);
     // The course's usual fee is the starting point; the counsellor may have
     // typed something already, and that wins.
-    if (feeAmount.trim() === '' && found.default_fee) setFeeAmount(String(Math.round(Number(found.default_fee))));
+    if (feeAmount.trim() === '' && found.default_fee) onFeeAmountChange(String(Math.round(Number(found.default_fee))));
     setPickedBatch(null);
     setBatchQuery('');
     advanceTo('batch', 'course');
@@ -587,19 +624,52 @@ export function RegistrationWizard() {
     let feeNote = '';
     if (feeAmount.trim() !== '') {
       try {
-        await setEnrollmentFee(enrollment.id, { agreed_amount: feeAmount.trim() });
+        await setEnrollmentFee(enrollment.id, {
+          agreed_amount: feeAmount.trim(),
+          installments: installmentsEnabled ? installments : [],
+        });
+        const scheduleNote = installmentsEnabled
+          ? ` ${installments.length} instalment${installments.length === 1 ? '' : 's'} scheduled.`
+          : '';
         if (paidNow.trim() !== '' && Number(paidNow) > 0) {
-          const payment = await recordPayment(enrollment.id, { amount: paidNow.trim(), method: paidMethod });
-          feeNote = `${formatCurrency(payment.amount)} received today — receipt ${payment.receipt_number}.`;
+          const payment = await recordPayment(enrollment.id, {
+            amount: paidNow.trim(),
+            method: paidMethod,
+            reference: paidReference.trim(),
+            reference_name: paidReferenceName.trim(),
+          });
+          feeNote = `${formatCurrency(payment.amount)} received today — receipt ${payment.receipt_number}.${scheduleNote}`;
         } else {
-          feeNote = `Fee of ${formatCurrency(feeAmount)} recorded; nothing paid yet.`;
+          feeNote = `Fee of ${formatCurrency(feeAmount)} recorded; nothing paid yet.${scheduleNote}`;
         }
       } catch (cause) {
         feeNote = `Enrolled, but the fee could not be recorded (${errorMessage(cause, 'unknown error')}). Record it from the student's page.`;
       }
     }
 
-    setResult({ student, batchName: batchInfo.name, batchCode: batchInfo.code, enrollment, feeNote });
+    // The follow-up is the counsellor's own reminder; like the fee, it must
+    // never read as a failed enrolment.
+    let followUpResult = '';
+    if (followUpOn !== '') {
+      try {
+        await createFollowUp(student.id, {
+          due_at: new Date(`${followUpOn}T09:00:00`).toISOString(),
+          note: followUpNote.trim(),
+        });
+        followUpResult = `Follow-up planned for ${formatDate(followUpOn)}.`;
+      } catch (cause) {
+        followUpResult = `The follow-up could not be planned (${errorMessage(cause, 'unknown error')}). Plan it from the student's page.`;
+      }
+    }
+
+    setResult({
+      student,
+      batchName: batchInfo.name,
+      batchCode: batchInfo.code,
+      enrollment,
+      feeNote,
+      followUpNote: followUpResult,
+    });
     setIsSubmitting(false);
   }
 
@@ -649,6 +719,11 @@ export function RegistrationWizard() {
     setCreatedStudent(null);
     setPaidNow('1000');
     setPaidMethod('cash');
+    setPaidReference('');
+    setPaidReferenceName('');
+    setInstallmentsEnabled(true);
+    setFollowUpOn('');
+    setFollowUpNote('');
     setTrainerId('');
     setTrainerName('');
     setTrainerAssigned(false);
@@ -756,7 +831,7 @@ export function RegistrationWizard() {
                     min={MIN_FEE_AMOUNT}
                     step="1"
                     value={feeAmount}
-                    onChange={(event) => setFeeAmount(event.target.value)}
+                    onChange={(event) => onFeeAmountChange(event.target.value)}
                     placeholder="e.g. 25000"
                   />
                 </Field>
@@ -776,7 +851,7 @@ export function RegistrationWizard() {
                     disabled={feeAmount.trim() === ''}
                   />
                 </Field>
-                <Field label="Paid by" htmlFor="reg-paid-method">
+                <Field label="Payment method" htmlFor="reg-paid-method">
                   <Select
                     id="reg-paid-method"
                     value={paidMethod}
@@ -790,7 +865,83 @@ export function RegistrationWizard() {
                     ))}
                   </Select>
                 </Field>
+                <Field
+                  label="Reference number"
+                  htmlFor="reg-paid-reference"
+                  hint={
+                    paidMethod === 'upi'
+                      ? 'The UPI transaction id.'
+                      : paidMethod === 'bank_transfer'
+                        ? 'The bank reference number.'
+                        : 'Any receipt or slip number, if there is one.'
+                  }
+                >
+                  <Input
+                    id="reg-paid-reference"
+                    value={paidReference}
+                    onChange={(event) => setPaidReference(event.target.value)}
+                    disabled={feeAmount.trim() === '' || paidNow.trim() === ''}
+                  />
+                </Field>
+                <Field
+                  label="Reference name"
+                  htmlFor="reg-paid-reference-name"
+                  hint="Who paid or handled it: a parent, the owner, the scanner operator."
+                >
+                  <Input
+                    id="reg-paid-reference-name"
+                    value={paidReferenceName}
+                    onChange={(event) => setPaidReferenceName(event.target.value)}
+                    disabled={feeAmount.trim() === '' || paidNow.trim() === ''}
+                  />
+                </Field>
                 <BranchField idPrefix="reg-branch" value={branchId} onChange={setBranchId} error={studentErrors.branch} />
+              </div>
+
+              {feeAmount.trim() !== '' && Number(feeAmount) > 0 ? (
+                <div className="rounded-lg border border-line bg-sunken/40 p-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
+                    Instalments
+                  </p>
+                  <InstallmentEditor
+                    idPrefix="reg-inst"
+                    payable={Number(feeAmount)}
+                    rows={installmentsEnabled ? installments : []}
+                    onChange={onInstallmentsChange}
+                  />
+                </div>
+              ) : null}
+
+              <div className="rounded-lg border border-line bg-sunken/40 p-3">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
+                  Follow-up
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Field
+                    label="Next follow-up"
+                    htmlFor="reg-follow-up-on"
+                    hint="Optional. A reminder on your dashboard, 9:00 that morning."
+                  >
+                    <Input
+                      id="reg-follow-up-on"
+                      type="date"
+                      min={isoToday()}
+                      value={followUpOn}
+                      onChange={(event) => setFollowUpOn(event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Follow-up note" htmlFor="reg-follow-up-note">
+                    <Textarea
+                      id="reg-follow-up-note"
+                      rows={2}
+                      maxLength={1000}
+                      placeholder="e.g. Ask about the education loan"
+                      value={followUpNote}
+                      onChange={(event) => setFollowUpNote(event.target.value)}
+                      disabled={followUpOn === ''}
+                    />
+                  </Field>
+                </div>
               </div>
 
               <StudentBackgroundFields
@@ -1033,6 +1184,7 @@ export function RegistrationWizard() {
                 </p>
                 <p className="text-sm">
                   Enrolment {result.enrollment.code}.{result.feeNote ? ` ${result.feeNote}` : ''}
+                  {result.followUpNote ? ` ${result.followUpNote}` : ''}
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Button size="sm" onClick={onSaveAndStartAnother}>
@@ -1086,6 +1238,24 @@ export function RegistrationWizard() {
                     </dd>
                   </div>
                   <div>
+                    <dt className="text-xs text-ink-muted">Instalments</dt>
+                    <dd className="font-medium">
+                      {feeAmount.trim() === ''
+                        ? 'No fee yet'
+                        : installmentsEnabled && installments.length > 0
+                          ? `${installments.length}, first ${formatCurrency(installments[0]?.amount)} by ${formatDate(installments[0]?.due_on)}`
+                          : 'None — paid as it comes'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-ink-muted">Follow-up</dt>
+                    <dd className="font-medium">
+                      {followUpOn === ''
+                        ? 'None planned'
+                        : `${formatDate(followUpOn)}${followUpNote.trim() ? ` — ${followUpNote.trim()}` : ''}`}
+                    </dd>
+                  </div>
+                  <div>
                     <dt className="text-xs text-ink-muted">Course</dt>
                     <dd className="font-medium">{course?.title ?? 'Not chosen yet'}</dd>
                   </div>
@@ -1106,7 +1276,15 @@ export function RegistrationWizard() {
                     </dd>
                   </div>
                 </dl>
-                <Button onClick={() => void onConfirm()} disabled={isSubmitting}>
+                <Button
+                  onClick={() => void onConfirm()}
+                  disabled={
+                    isSubmitting ||
+                    (feeAmount.trim() !== '' &&
+                      installmentsEnabled &&
+                      !installmentsAddUp(installments, Number(feeAmount)))
+                  }
+                >
                   {isSubmitting ? 'Enrolling…' : 'Confirm and enrol'}
                 </Button>
               </>

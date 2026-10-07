@@ -76,6 +76,7 @@ import {
 } from '@/lib/reporting';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
+import { PresentNowStrip } from '@/components/academics/present-now';
 import { getRegister, listTodaySessions, markAttendance } from '@/lib/academics';
 import { ApiError, errorMessage, fieldErrors } from '@/lib/api';
 import { getBatch } from '@/lib/batches';
@@ -97,6 +98,7 @@ import {
 } from '@/lib/dsr';
 import { fallback, formatDate, formatNumber, formatPercent } from '@/lib/format';
 import type {
+  AttendanceMode,
   AttendanceStatus,
   BatchDetail,
   BatchSummary,
@@ -191,6 +193,7 @@ export function ClassWorkspace({
   const [isLoadingBatchInfo, setIsLoadingBatchInfo] = useState(false);
 
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
+  const [modes, setModes] = useState<Record<string, AttendanceMode>>({});
   const [draft, setDraft] = useState<DSRWritePayload>({});
   const [topicSelection, setTopicSelection] = useState('');
   const [isDirty, setIsDirty] = useState(Boolean(localDraft));
@@ -246,6 +249,7 @@ export function ClassWorkspace({
                 .filter((pair): pair is [string, AttendanceStatus] => pair[1] !== null),
             ),
           );
+          setModes(Object.fromEntries(registerData.entries.map((entry) => [entry.enrollment_id, entry.mode])));
         } else {
           setRegister(null);
           setRegisterLoadError(
@@ -420,6 +424,11 @@ export function ClassWorkspace({
     setMarks(Object.fromEntries(register.entries.map((entry) => [entry.enrollment_id, 'present'])));
   }
 
+  function markMode(enrollmentId: string, mode: AttendanceMode) {
+    setIsDirty(true);
+    setModes((current) => ({ ...current, [enrollmentId]: mode }));
+  }
+
   function changeTopicSelection(value: string) {
     setIsDirty(true);
     setTopicSelection(value);
@@ -431,6 +440,7 @@ export function ClassWorkspace({
     return register.entries.map((entry) => ({
       enrollment_id: entry.enrollment_id,
       status: marks[entry.enrollment_id] ?? ('absent' as AttendanceStatus),
+      mode: modes[entry.enrollment_id] ?? entry.mode,
       note: entry.note,
     }));
   }
@@ -592,6 +602,8 @@ export function ClassWorkspace({
               marks={marks}
               onMark={markStudent}
               onMarkAllPresent={markAllPresent}
+              modes={modes}
+              onMode={markMode}
               canMark={register.can_mark}
             />
             {register.can_mark ? (
@@ -821,6 +833,8 @@ export function TodayWorkspace() {
           Choose a class to take its register and file the day&rsquo;s report.
         </p>
       </div>
+
+      <PresentNowStrip />
 
       <Grid>
         {summary.map((figure) => (

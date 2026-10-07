@@ -33,6 +33,7 @@ vi.mock('@/hooks/use-api', () => ({ useApi }));
 // The compliance chart's endpoint. Empty by default: every existing case
 // sees its empty state and nothing else about the page changes.
 const dsrComplianceTrend = vi.hoisted(() => vi.fn());
+vi.mock('@/components/academics/present-now', () => ({ PresentNowStrip: () => null }));
 vi.mock('@/lib/reporting', () => ({ dsrComplianceTrend }));
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => useAuthMock.value }));
 vi.mock('next/navigation', () => ({

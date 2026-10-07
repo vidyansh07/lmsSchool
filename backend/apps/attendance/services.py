@@ -19,7 +19,14 @@ from apps.common.exceptions import ApplicationError
 from apps.enrollments.models import Enrollment, EnrollmentStatus
 from apps.sessions.models import ClassSession, SessionStatus
 
-from .models import AttendanceCorrection, AttendanceRecord, AttendanceStatus
+from .models import (
+    COUNTS_AS_PRESENT,
+    AttendanceCorrection,
+    AttendanceMode,
+    AttendanceRecord,
+    AttendanceStatus,
+    default_mode_for,
+)
 
 #: Enrolment statuses that put a student on the register.
 #:
@@ -93,7 +100,8 @@ def mark_attendance(
     _guard_report_lock(session, actor)
 
     valid_statuses = set(AttendanceStatus.values)
-    roster = {str(row.pk): row for row in roster_for(session)}
+    valid_modes = set(AttendanceMode.values)
+    roster = {str(row.pk): row for row in roster_for(session).select_related("batch")}
 
     # --- validate everything first
     seen: set[str] = set()
@@ -116,6 +124,9 @@ def mark_attendance(
             )
         if status not in valid_statuses:
             problems.setdefault(f"entries[{index}]", []).append(f"Unknown status {status!r}.")
+        mode = entry.get("mode")
+        if mode is not None and mode not in valid_modes:
+            problems.setdefault(f"entries[{index}]", []).append(f"Unknown mode {mode!r}.")
 
     if problems:
         raise ApplicationError(problems)
@@ -143,6 +154,7 @@ def mark_attendance(
                     session=session,
                     enrollment=roster[enrollment_id],
                     status=status,
+                    mode=entry.get("mode") or default_mode_for(roster[enrollment_id]),
                     note=note,
                     marked_by=actor,
                     marked_at=now,
@@ -150,8 +162,10 @@ def mark_attendance(
             )
             continue
 
-        if row.status == status and row.note == note:
+        mode = entry.get("mode") or row.mode
+        if row.status == status and row.note == note and row.mode == mode:
             continue
+        row.mode = mode
 
         # Re-marking is a correction: the previous value is kept, and the
         # change is appended to this row's own history alongside it.
@@ -174,7 +188,15 @@ def mark_attendance(
     if updated:
         AttendanceRecord.objects.bulk_update(
             updated,
-            ["status", "note", "previous_status", "corrected_by", "corrected_at", "updated_at"],
+            [
+                "status",
+                "mode",
+                "note",
+                "previous_status",
+                "corrected_by",
+                "corrected_at",
+                "updated_at",
+            ],
         )
     if history:
         AttendanceCorrection.objects.bulk_create(history)
@@ -296,3 +318,37 @@ def correct_record(
     forget_360(record_row.enrollment.student_id)
 
     return record_row
+
+
+def present_now(*, user: User) -> dict[str, Any]:
+    """Who is in class today, over the classes the caller may see.
+
+    "Present" is the register's word (`COUNTS_AS_PRESENT`: present or late),
+    and "online"/"offline" is how each student was marked as joining. A class
+    whose register has not been taken yet contributes nothing — the figure is
+    what has been recorded, never a guess from the timetable.
+    """
+    from django.db.models import Count, Q
+
+    from apps.sessions import access as session_access
+
+    today = timezone.localdate()
+    sessions = (
+        session_access.visible_sessions(user)
+        .filter(session_date=today)
+        .exclude(status=SessionStatus.CANCELLED)
+    )
+    totals = AttendanceRecord.objects.filter(session__in=sessions).aggregate(
+        online=Count("id", filter=Q(status__in=COUNTS_AS_PRESENT, mode=AttendanceMode.ONLINE)),
+        offline=Count("id", filter=Q(status__in=COUNTS_AS_PRESENT, mode=AttendanceMode.OFFLINE)),
+        absent=Count("id", filter=Q(status=AttendanceStatus.ABSENT)),
+    )
+    return {
+        "date": today,
+        "online": totals["online"] or 0,
+        "offline": totals["offline"] or 0,
+        "total": (totals["online"] or 0) + (totals["offline"] or 0),
+        "absent": totals["absent"] or 0,
+        "sessions_today": sessions.count(),
+        "registers_taken": sessions.filter(attendance_taken_at__isnull=False).count(),
+    }

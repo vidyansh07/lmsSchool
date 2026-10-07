@@ -588,3 +588,70 @@ def test_a_student_sees_their_own_attendance_and_percentage(
     assert entry["summary"]["percentage"] == 100
     assert entry["records"][0]["status"] == "present"
     assert entry["records"][0]["topic"] == "Filesystem basics"
+
+
+# ---------------------------------------------------------------------------
+# Online and in person
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def started_session(admin_user, batch, schedule):
+    """A class earlier today, so it is both "today" and open for a register."""
+    from datetime import time
+
+    from apps.sessions.services import create_session
+
+    return create_session(
+        batch=batch,
+        actor=admin_user,
+        session_date=timezone.localdate(),
+        start_time=time(0, 0),
+        end_time=time(0, 30),
+        topic="Shell basics",
+    )
+
+
+@pytest.mark.django_db
+def test_a_mark_records_how_the_student_joined_and_present_now_counts_it(
+    api_client_no_csrf, trainer_profile, admin_user, batch, enrollment, started_session
+):
+    """The register row starts on the batch's mode; the trainer can flip it;
+    the present-now figure splits what was recorded by that mode."""
+    api_client_no_csrf.force_login(trainer_profile.user)
+    register = api_client_no_csrf.get(f"/api/v1/sessions/{started_session.pk}/register/")
+    assert register.status_code == 200, register.json()
+    assert register.json()["delivery_mode"] == batch.delivery_mode
+    assert register.json()["entries"][0]["mode"] == "offline"
+
+    response = api_client_no_csrf.post(
+        f"/api/v1/sessions/{started_session.pk}/register/",
+        {"entries": [{"enrollment_id": str(enrollment.pk), "status": "present", "mode": "online"}]},
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
+    assert AttendanceRecord.objects.get(enrollment=enrollment).mode == "online"
+    register = api_client_no_csrf.get(f"/api/v1/sessions/{started_session.pk}/register/")
+    assert register.json()["entries"][0]["mode"] == "online"
+
+    # Re-marking without a mode keeps the one that was saved.
+    api_client_no_csrf.post(
+        f"/api/v1/sessions/{started_session.pk}/register/",
+        {"entries": [{"enrollment_id": str(enrollment.pk), "status": "late"}]},
+        format="json",
+    )
+    assert AttendanceRecord.objects.get(enrollment=enrollment).mode == "online"
+
+    api_client_no_csrf.force_login(admin_user)
+    now = api_client_no_csrf.get("/api/v1/attendance/present-now/")
+    assert now.status_code == 200, now.json()
+    body = now.json()
+    assert (body["online"], body["offline"], body["total"]) == (1, 0, 1)
+    assert body["sessions_today"] >= 1
+    assert body["registers_taken"] >= 1
+
+
+@pytest.mark.django_db
+def test_present_now_is_for_staff_only(api_client_no_csrf, student):
+    api_client_no_csrf.force_login(student)
+    assert api_client_no_csrf.get("/api/v1/attendance/present-now/").status_code == 403

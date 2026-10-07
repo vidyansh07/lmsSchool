@@ -44,15 +44,21 @@ import {
   ENQUIRY_STAGE_LABEL,
   ENQUIRY_STAGE_VARIANT,
   ENQUIRY_STAGES,
+  LEAD_CHANNEL_LABEL,
 } from "@/lib/labels";
 import { createActivity, type ActivityTypeListResponse } from "@/lib/work";
 import type {
   Activity,
   EnquiryDetail,
   EnquiryStage,
+  EnquirySummary,
   FormAssignment,
+  LeadChannel,
   Paginated,
 } from "@/types/api";
+
+/** The sources that mean "came in online" — mirrors `apps.enquiries.models.ONLINE_SOURCES`. */
+const ONLINE_SOURCES = new Set(["website", "google", "facebook_instagram", "linkedin", "whatsapp"]);
 
 const LOST_STAGES: EnquiryStage[] = ["not_interested", "not_eligible"];
 
@@ -106,9 +112,11 @@ function Facts({ enquiry }: { enquiry: EnquiryDetail }) {
 
 function PipelineCard({
   enquiry,
+  sources,
   onSaved,
 }: {
   enquiry: EnquiryDetail;
+  sources: { value: string; label: string }[];
   onSaved: (message: string) => void;
 }) {
   const uid = useId();
@@ -117,8 +125,13 @@ function PipelineCard({
   const [lostReason, setLostReason] = useState(enquiry.lost_reason);
   const [followUp, setFollowUp] = useState(toLocalInput(enquiry.next_follow_up_at));
   const [quality, setQuality] = useState(enquiry.lead_quality ? String(enquiry.lead_quality) : "");
+  const [source, setSource] = useState(enquiry.source);
+  const [channel, setChannel] = useState<LeadChannel>(enquiry.channel);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const sourceOptions = sources.some((option) => option.value === source) || !source
+    ? sources
+    : [{ value: source, label: source }, ...sources];
 
   async function save(extra: EnquiryChanges = {}) {
     setSaving(true);
@@ -129,6 +142,8 @@ function PipelineCard({
         lost_reason: LOST_STAGES.includes(stage) ? lostReason : "",
         next_follow_up_at: followUp ? new Date(followUp).toISOString() : null,
         lead_quality: quality ? Number(quality) : null,
+        source,
+        channel,
         ...extra,
       });
       onSaved(extra.owner ? "The enquiry is yours now." : "Saved.");
@@ -194,6 +209,40 @@ function PipelineCard({
                   {score} of 5
                 </option>
               ))}
+            </Select>
+          </Field>
+          <Field label="Source" htmlFor={`${uid}-source`} error={errors.source}>
+            <Select
+              id={`${uid}-source`}
+              disabled={!enquiry.can_manage}
+              value={source}
+              onChange={(event) => {
+                setSource(event.target.value);
+                setChannel(ONLINE_SOURCES.has(event.target.value) ? "online" : "offline");
+              }}
+            >
+              {!source ? <option value="">Not known</option> : null}
+              {sourceOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label="Online or offline"
+            htmlFor={`${uid}-channel`}
+            error={errors.channel}
+            hint="Follows the source; change it if the source is misleading."
+          >
+            <Select
+              id={`${uid}-channel`}
+              disabled={!enquiry.can_manage}
+              value={channel}
+              onChange={(event) => setChannel(event.target.value as LeadChannel)}
+            >
+              <option value="online">{LEAD_CHANNEL_LABEL.online}</option>
+              <option value="offline">{LEAD_CHANNEL_LABEL.offline}</option>
             </Select>
           </Field>
           {LOST_STAGES.includes(stage) ? (
@@ -504,6 +553,7 @@ export function EnquiryScreen({ id }: { id: string }) {
   const { user } = useAuth();
   const maySend = can(user?.capabilities, Capability.formAssign);
   const { data, error, isLoading, reload } = useApi<EnquiryDetail>(`/api/v1/enquiries/${id}/`);
+  const summary = useApi<EnquirySummary>("/api/v1/enquiries/summary/");
   const [notice, setNotice] = useState<string | null>(null);
 
   if (isLoading) return <LoadingState label="Loading enquiry…" rows={6} />;
@@ -531,6 +581,9 @@ export function EnquiryScreen({ id }: { id: string }) {
         title={data.full_name}
         meta={[data.course, data.source].filter(Boolean).join(" · ") || "Enquiry"}
       >
+        <Badge variant={data.channel === "online" ? "info" : "neutral"}>
+          {LEAD_CHANNEL_LABEL[data.channel]}
+        </Badge>
         <Badge variant={ENQUIRY_STAGE_VARIANT[data.stage]}>{ENQUIRY_STAGE_LABEL[data.stage]}</Badge>
       </PageHeader>
       {notice ? <Alert variant="success">{notice}</Alert> : null}
@@ -539,6 +592,7 @@ export function EnquiryScreen({ id }: { id: string }) {
       <PipelineCard
         key={data.updated_at}
         enquiry={data}
+        sources={summary.data?.sources ?? []}
         onSaved={(message) => {
           setNotice(message);
           reload();

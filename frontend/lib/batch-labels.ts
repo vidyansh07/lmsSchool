@@ -10,6 +10,30 @@ export const BATCH_STATUS_LABEL: Record<BatchStatus, string> = {
   archived: 'Archived',
 };
 
+/** What each status means on the ground, for the status card. */
+export const BATCH_STATUS_PLAIN: Record<BatchStatus, { label: string; meaning: string }> = {
+  upcoming: {
+    label: 'Inactive, not started',
+    meaning: 'Students can be enrolled; classes begin once it is activated.',
+  },
+  active: {
+    label: 'Active',
+    meaning: 'Classes run, attendance is taken, students have access.',
+  },
+  completed: {
+    label: 'Completed',
+    meaning: 'The batch has run; its students keep their access to the course.',
+  },
+  cancelled: {
+    label: 'Cancelled',
+    meaning: 'Its enrolments were cancelled and students lost access.',
+  },
+  archived: {
+    label: 'Archived',
+    meaning: 'Kept for the record only; students on it no longer have access.',
+  },
+};
+
 export const BATCH_STATUS_VARIANT: Record<
   BatchStatus,
   'neutral' | 'success' | 'warning' | 'error'

@@ -243,7 +243,7 @@ class StudentFollowUpView(APIView):
         from apps.enrollments.models import Enrollment
         from apps.work import access as work_access
         from apps.work import services as work_services
-        from apps.work.models import ActivityType
+        from apps.work.models import ActivityStatus, ActivityType
 
         # The student's own most recent enrolment, whatever its status — a
         # follow-up is not scoped to one class the way `DSRCreateActivityView`'s
@@ -266,8 +266,17 @@ class StudentFollowUpView(APIView):
             # `POST /activities/` would refuse the same assignment.
             assigned_to=request.user,
             due_at=data["due_at"],
+            planned_at=data["due_at"],
             priority=data.get("priority"),
+            summary=data.get("note", ""),
         )
+        # A follow-up planned from the record is live work, not a draft: it
+        # is assigned to the person who planned it, so it shows as pending,
+        # is swept to overdue when its time passes, and can be marked done.
+        for to_status in (ActivityStatus.PLANNED, ActivityStatus.ASSIGNED):
+            activity = work_services.transition_activity(
+                actor=request.user, activity=activity, to_status=to_status
+            )
         detail = get_object_or_404(work_access.visible_activities(request.user), pk=activity.pk)
         return Response(
             ActivityDetailSerializer(detail, context={"as_student": False}).data,

@@ -424,3 +424,83 @@ def test_only_if_unowned_keeps_a_walk_in_with_its_counsellor(admin_user, counsel
     automation_services.dispatch(AutomationTrigger.ENQUIRY_CREATED, enquiry)
     enquiry.refresh_from_db()
     assert enquiry.owner == counsellor_user
+
+
+# ---------------------------------------------------------------------------
+# Online and offline leads
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_an_enquiry_is_online_or_offline_by_its_source_and_the_summary_counts_each(
+    api_client_no_csrf, counsellor_user
+):
+    from apps.enquiries import services
+    from apps.enquiries.models import Enquiry
+
+    web, _ = services.capture(
+        actor=counsellor_user,
+        values={"full_name": "Web Lead", "mobile": "9876500001", "source": "website"},
+    )
+    walk, _ = services.capture(
+        actor=counsellor_user,
+        values={"full_name": "Walk Lead", "mobile": "9876500002", "source": "walk_in"},
+    )
+    assert (web.channel, walk.channel) == ("online", "offline")
+
+    api_client_no_csrf.force_login(counsellor_user)
+    summary = api_client_no_csrf.get("/api/v1/enquiries/summary/").json()
+    assert summary["channels"] == {"online": 1, "offline": 1}
+    assert summary["total"] == 2
+    assert {row["value"] for row in summary["sources"]} >= {"website", "walk_in", "referral"}
+
+    online = api_client_no_csrf.get("/api/v1/enquiries/?channel=online").json()
+    assert [row["full_name"] for row in online["results"]] == ["Web Lead"]
+
+    # The source can be changed from the list, and the channel follows it...
+    response = api_client_no_csrf.patch(
+        f"/api/v1/enquiries/{walk.pk}/", {"source": "google"}, format="json"
+    )
+    assert response.status_code == 200, response.json()
+    assert response.json()["channel"] == "online"
+    # ...unless the channel is set by hand in the same change.
+    response = api_client_no_csrf.patch(
+        f"/api/v1/enquiries/{walk.pk}/",
+        {"source": "referral", "channel": "online"},
+        format="json",
+    )
+    assert response.json()["channel"] == "online"
+    assert Enquiry.objects.get(pk=walk.pk).channel == "online"
+
+
+@pytest.mark.django_db
+def test_enquiries_can_be_filtered_by_follow_up_and_date(api_client_no_csrf, counsellor_user):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.enquiries import services
+
+    late, _ = services.capture(
+        actor=counsellor_user, values={"full_name": "Late", "mobile": "9876500003"}
+    )
+    services.update(
+        actor=counsellor_user,
+        enquiry=late,
+        fields={"next_follow_up_at": timezone.now() - timedelta(hours=2)},
+    )
+    services.capture(actor=counsellor_user, values={"full_name": "Fresh", "mobile": "9876500004"})
+
+    api_client_no_csrf.force_login(counsellor_user)
+    overdue = api_client_no_csrf.get("/api/v1/enquiries/?follow_up=overdue").json()
+    assert [row["full_name"] for row in overdue["results"]] == ["Late"]
+    none_planned = api_client_no_csrf.get("/api/v1/enquiries/?follow_up=none").json()
+    assert [row["full_name"] for row in none_planned["results"]] == ["Fresh"]
+    today = timezone.localdate()
+    assert api_client_no_csrf.get(f"/api/v1/enquiries/?created_after={today}").json()["count"] == 2
+    assert (
+        api_client_no_csrf.get(
+            f"/api/v1/enquiries/?created_before={today - timedelta(days=1)}"
+        ).json()["count"]
+        == 0
+    )

@@ -98,7 +98,8 @@ def test_scorecards_count_the_work_and_the_money(
     ]
     assert card["last_active_at"] is not None
     # Noise did not count.
-    assert card["total_actions"] == 3  # plan set, payment, and the derived fee status
+    # plan set, its instalment schedule, the payment, and the derived fee status
+    assert card["total_actions"] == 4
 
 
 @pytest.mark.django_db

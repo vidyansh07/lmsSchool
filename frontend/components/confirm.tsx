@@ -1,17 +1,20 @@
 'use client';
 
 /**
- * A confirmation dialog — for irreversible actions ONLY.
+ * A confirmation dialog — for irreversible actions, and for the status
+ * changes on a course or a batch.
  *
  * Do not use this for anything that can be undone or corrected on the next
- * screen: deactivating a user, unpublishing a course, clearing a filter, even
- * most deletes that soft-delete under the hood. The brief for this app is
- * explicit that confirmation dialogs should be minimal and rare — every one
- * that appears for a reversible action trains people to click through them
- * without reading, which is exactly the moment a *real* irreversible one
- * needs their attention. Reserve it for: permanently deleting data, sending
- * something to someone (an email, a certificate) that cannot be unsent, or
- * an action the backend genuinely cannot roll back.
+ * screen: deactivating a user, unpublishing a lesson, clearing a filter, even
+ * most deletes that soft-delete under the hood. Every confirmation that
+ * appears for a trivial action trains people to click through them without
+ * reading, which is exactly the moment a *real* one needs their attention.
+ * Reserve it for: permanently deleting data, sending something to someone
+ * (an email, a certificate) that cannot be unsent, an action the backend
+ * cannot roll back — and, by the owner's call of 7 October 2026, every
+ * course or batch status change (`components/status-actions.tsx`), because
+ * those reach students and the public catalogue and the people pressing
+ * them are counsellors, not administrators.
  *
  * Traps focus while open (Tab cycles inside the dialog, Escape closes it) and
  * restores focus to whatever triggered it on close — the same contract every

@@ -8,10 +8,13 @@
  */
 
 import { apiFetch, apiMutate } from "./api";
-import type { EnquiryDetail, EnquiryStage, EnquirySummary } from "@/types/api";
+import type { EnquiryDetail, EnquiryStage, EnquirySummary, LeadChannel } from "@/types/api";
 
 export interface EnquiryChanges {
   stage?: EnquiryStage;
+  source?: string;
+  /** Follows the source unless set by hand. */
+  channel?: LeadChannel;
   owner?: string | null;
   lost_reason?: string;
   lead_quality?: number | null;
@@ -34,14 +37,26 @@ export async function updateEnquiry(id: string, changes: EnquiryChanges): Promis
 }
 
 /** The list path for `useApi`, with the filters the pipeline screen uses. */
+export type EnquiryFollowUpFilter = "" | "overdue" | "today" | "none";
+
 export function enquiryListPath(filters: {
   stage?: EnquiryStage | "";
+  channel?: LeadChannel | "";
+  source?: string;
+  follow_up?: EnquiryFollowUpFilter;
+  created_after?: string;
+  created_before?: string;
   owner?: string;
   q?: string;
   page?: number;
 }): string {
   const query = new URLSearchParams();
   if (filters.stage) query.set("stage", filters.stage);
+  if (filters.channel) query.set("channel", filters.channel);
+  if (filters.source) query.set("source", filters.source);
+  if (filters.follow_up) query.set("follow_up", filters.follow_up);
+  if (filters.created_after) query.set("created_after", filters.created_after);
+  if (filters.created_before) query.set("created_before", filters.created_before);
   if (filters.owner) query.set("owner", filters.owner);
   if (filters.q) query.set("q", filters.q);
   if (filters.page && filters.page > 1) query.set("page", String(filters.page));

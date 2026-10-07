@@ -255,8 +255,9 @@ def test_void_needs_a_reason(manager_user, enrollment):
 def test_next_due_gives_an_expected_date_and_an_overdue_flag(
     api_client_no_csrf, counsellor_user, enrollment
 ):
+    # Ad hoc collection (no schedule): "next expected" is set by hand.
     plan = services.set_fee_plan(
-        enrollment=enrollment, actor=counsellor_user, agreed_amount="10000"
+        enrollment=enrollment, actor=counsellor_user, agreed_amount="10000", installments=[]
     )
     services.record_payment(plan=plan, actor=counsellor_user, amount="1000")
     yesterday = timezone.localdate() - timedelta(days=1)
@@ -308,6 +309,7 @@ def test_history_lists_every_change_newest_first(api_client_no_csrf, counsellor_
     assert actions == [
         AuditAction.FEE_PAYMENT_VOIDED,
         AuditAction.FEE_PAYMENT_RECORDED,
+        AuditAction.FEE_INSTALLMENTS_SET,
         AuditAction.FEE_PLAN_SET,
     ]
     assert all(row["actor_label"] == counsellor_user.email for row in response.json())
@@ -479,3 +481,209 @@ def test_the_overview_counts_only_the_callers_centre(
     api_client_no_csrf.force_login(unbounded_superadmin)
     everything = api_client_no_csrf.get("/api/v1/fees/overview/").json()
     assert everything["outstanding_total"] == "14000.00"
+
+
+# ---------------------------------------------------------------------------
+# The instalment schedule
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_new_fee_gets_six_instalments_thirty_days_apart(
+    api_client_no_csrf, counsellor_user, enrollment
+):
+    api_client_no_csrf.force_login(counsellor_user)
+    response = api_client_no_csrf.put(
+        fee_url(enrollment),
+        {"agreed_amount": "25000", "discount_amount": "1000", "discount_reason": "Early bird"},
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
+    rows = response.json()["installments"]
+    assert len(rows) == 6
+    today = timezone.localdate()
+    assert [row["due_on"] for row in rows] == [
+        str(today + timedelta(days=30 * index)) for index in range(6)
+    ]
+    assert sum(money(row["amount"]) for row in rows) == money("24000")
+    assert [row["status"] for row in rows] == ["pending"] + ["upcoming"] * 5
+    # The plan's "next expected" follows the schedule, so the overdue flag,
+    # the fees panel and the student's status keep reading the one field.
+    assert response.json()["next_due_amount"] == rows[0]["amount"]
+    assert response.json()["next_due_on"] == str(today)
+    assert AuditLog.objects.filter(action=AuditAction.FEE_INSTALLMENTS_SET).count() == 1
+
+
+@pytest.mark.django_db
+def test_the_odd_paisa_lands_on_the_first_instalment(counsellor_user, enrollment):
+    plan = services.set_fee_plan(
+        enrollment=enrollment, actor=counsellor_user, agreed_amount="10000", installment_count=3
+    )
+    amounts = [item.amount for item in plan.installments.all()]
+    assert amounts == [money("3333.34"), money("3333.33"), money("3333.33")]
+
+
+@pytest.mark.django_db
+def test_the_counsellor_shapes_the_schedule_before_saving(
+    api_client_no_csrf, counsellor_user, enrollment
+):
+    today = timezone.localdate()
+    api_client_no_csrf.force_login(counsellor_user)
+    response = api_client_no_csrf.put(
+        fee_url(enrollment),
+        {
+            "agreed_amount": "9000",
+            "installments": [
+                {"amount": "5000", "due_on": str(today)},
+                {"amount": "4000", "due_on": str(today + timedelta(days=45))},
+            ],
+        },
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
+    rows = response.json()["installments"]
+    assert [(row["amount"], row["due_on"]) for row in rows] == [
+        ("5000.00", str(today)),
+        ("4000.00", str(today + timedelta(days=45))),
+    ]
+
+
+@pytest.mark.django_db
+def test_a_schedule_must_add_up_to_the_fee_after_discount(
+    api_client_no_csrf, counsellor_user, enrollment
+):
+    today = timezone.localdate()
+    api_client_no_csrf.force_login(counsellor_user)
+    response = api_client_no_csrf.put(
+        fee_url(enrollment),
+        {"agreed_amount": "9000", "installments": [{"amount": "5000", "due_on": str(today)}]},
+        format="json",
+    )
+    assert response.status_code == 400
+    assert "add up to" in response.json()["error"]["details"]["installments"][0]
+    assert not FeePlan.objects.exists()
+
+
+@pytest.mark.django_db
+def test_instalment_states_follow_the_ledger(counsellor_user, enrollment):
+    today = timezone.localdate()
+    plan = services.set_fee_plan(
+        enrollment=enrollment,
+        actor=counsellor_user,
+        agreed_amount="12000",
+        installments=[
+            {"amount": "4000", "due_on": today - timedelta(days=40)},
+            {"amount": "4000", "due_on": today - timedelta(days=10)},
+            {"amount": "4000", "due_on": today + timedelta(days=20)},
+        ],
+    )
+    # ₹5,000 covers the first instalment and a quarter of the second.
+    services.record_payment(plan=plan, actor=counsellor_user, amount="5000")
+    plan = FeePlan.objects.with_totals().get(pk=plan.pk)
+    rows = services.installment_rows(plan)
+    assert [row["status"] for row in rows] == ["paid", "overdue", "pending"]
+    assert rows[1]["paid_amount"] == money("1000")
+    assert rows[1]["balance"] == money("3000")
+    assert plan.next_due_amount == money("3000")
+    assert plan.next_due_on == today - timedelta(days=10)
+    assert plan.is_overdue is True
+    enrollment.student.refresh_from_db()
+    assert enrollment.student.fee_status == FeeStatus.OVERDUE
+
+    # Paying the rest of it moves "next expected" on to the third instalment.
+    services.record_payment(plan=plan, actor=counsellor_user, amount="3000")
+    plan.refresh_from_db()
+    assert plan.next_due_on == today + timedelta(days=20)
+    assert plan.is_overdue is False
+
+    # Voiding brings the overdue instalment back.
+    payment = plan.payments.get(amount=money("3000"))
+    services.void_payment(payment=payment, actor=counsellor_user, reason="Wrong student")
+    plan.refresh_from_db()
+    assert plan.next_due_on == today - timedelta(days=10)
+
+
+@pytest.mark.django_db
+def test_the_schedule_can_be_replaced_later(api_client_no_csrf, counsellor_user, enrollment):
+    today = timezone.localdate()
+    plan = services.set_fee_plan(enrollment=enrollment, actor=counsellor_user, agreed_amount="6000")
+    assert plan.installments.count() == 6
+    api_client_no_csrf.force_login(counsellor_user)
+    response = api_client_no_csrf.put(
+        f"{fee_url(enrollment)}installments/",
+        {
+            "installments": [
+                {"amount": "3000", "due_on": str(today)},
+                {"amount": "3000", "due_on": str(today + timedelta(days=30))},
+            ]
+        },
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
+    assert len(response.json()["installments"]) == 2
+    # An empty schedule means "collect ad hoc".
+    response = api_client_no_csrf.put(
+        f"{fee_url(enrollment)}installments/", {"installments": []}, format="json"
+    )
+    assert response.status_code == 200
+    assert response.json()["installments"] == []
+
+
+@pytest.mark.django_db
+def test_changing_the_fee_respreads_the_schedule_over_its_dates(counsellor_user, enrollment):
+    plan = services.set_fee_plan(
+        enrollment=enrollment, actor=counsellor_user, agreed_amount="6000", installment_count=2
+    )
+    dates = [item.due_on for item in plan.installments.all()]
+    services.set_fee_plan(
+        enrollment=enrollment, actor=counsellor_user, agreed_amount="8000", installment_count=2
+    )
+    plan.refresh_from_db()
+    rows = list(plan.installments.all())
+    assert [item.due_on for item in rows] == dates
+    assert [item.amount for item in rows] == [money("4000"), money("4000")]
+
+
+@pytest.mark.django_db
+def test_a_trainer_cannot_touch_the_schedule(
+    api_client_no_csrf, trainer, counsellor_user, enrollment
+):
+    services.set_fee_plan(enrollment=enrollment, actor=counsellor_user, agreed_amount="6000")
+    api_client_no_csrf.force_login(trainer)
+    response = api_client_no_csrf.put(
+        f"{fee_url(enrollment)}installments/", {"installments": []}, format="json"
+    )
+    assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Who paid, and how
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_payment_keeps_its_method_reference_and_who_handed_it_over(
+    api_client_no_csrf, counsellor_user, enrollment
+):
+    services.set_fee_plan(enrollment=enrollment, actor=counsellor_user, agreed_amount="10000")
+    api_client_no_csrf.force_login(counsellor_user)
+    response = api_client_no_csrf.post(
+        f"{fee_url(enrollment)}payments/",
+        {
+            "amount": "2000",
+            "method": "upi",
+            "reference": "UPI-4471-XK",
+            "reference_name": "Father (Ramesh)",
+        },
+        format="json",
+    )
+    assert response.status_code == 201, response.json()
+    body = response.json()
+    assert body["method"] == "upi"
+    assert body["reference"] == "UPI-4471-XK"
+    assert body["reference_name"] == "Father (Ramesh)"
+    entry = AuditLog.objects.get(action=AuditAction.FEE_PAYMENT_RECORDED)
+    assert entry.context["reference_name"] == "Father (Ramesh)"
+    # And it is visible in the student's payment history.
+    history = api_client_no_csrf.get(fee_url(enrollment)).json()["payments"]
+    assert history[0]["reference_name"] == "Father (Ramesh)"

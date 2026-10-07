@@ -60,6 +60,8 @@ def render_receipt_pdf(payment, *, institution_name: str, support_line: str = ""
     row(7, "Paid by", payment.get_method_display())
     if payment.reference:
         row(8, "Reference", payment.reference)
+    if payment.reference_name:
+        row(8, "Reference", f"{payment.reference} ({payment.reference_name})".strip(" ()"))
     row(9, "Received by", payment.recorded_by.full_name if payment.recorded_by else "")
 
     page.setLineWidth(0.5)

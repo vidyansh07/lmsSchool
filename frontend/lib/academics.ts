@@ -4,12 +4,14 @@ import { apiFetch, apiMutate, queryString } from './api';
 import type {
   AcademicPolicy,
   AttendanceCorrection,
+  AttendanceMode,
   AttendanceStatus,
   ClassSession,
   EffectivePolicy,
   MarkResult,
   MyAttendance,
   Paginated,
+  PresentNow,
   Register,
   SessionStatus,
 } from '@/types/api';
@@ -110,12 +112,17 @@ export async function getRegister(sessionId: string): Promise<Register> {
  */
 export async function markAttendance(
   sessionId: string,
-  entries: { enrollment_id: string; status: AttendanceStatus; note?: string }[],
+  entries: { enrollment_id: string; status: AttendanceStatus; mode?: AttendanceMode; note?: string }[],
 ): Promise<MarkResult> {
   return apiMutate<MarkResult>(`/api/v1/sessions/${sessionId}/register/`, {
     method: 'POST',
     body: { entries },
   });
+}
+
+/** Who is in class today — online, in person, together — over the classes the caller sees. */
+export async function getPresentNow(): Promise<PresentNow> {
+  return apiFetch<PresentNow>('/api/v1/attendance/present-now/');
 }
 
 export async function listMyAttendance(): Promise<MyAttendance[]> {

@@ -14,6 +14,26 @@ export const STATUS_LABEL: Record<PublishStatus, string> = {
   archived: 'Archived',
 };
 
+/** What each status means for the people who are not administrators. */
+export const STATUS_PLAIN: Record<PublishStatus, { label: string; meaning: string }> = {
+  draft: {
+    label: 'Inactive',
+    meaning: 'Not in the catalogue; students cannot find or join it.',
+  },
+  in_review: {
+    label: 'Inactive, awaiting review',
+    meaning: 'Not in the catalogue until an owner or administrator activates it.',
+  },
+  published: {
+    label: 'Active',
+    meaning: 'Listed in the catalogue; students can find and join it.',
+  },
+  archived: {
+    label: 'Archived',
+    meaning: 'Hidden everywhere and closed to students; kept for the record.',
+  },
+};
+
 export const STATUS_VARIANT: Record<PublishStatus, 'neutral' | 'success' | 'warning' | 'error'> = {
   draft: 'neutral',
   in_review: 'warning',

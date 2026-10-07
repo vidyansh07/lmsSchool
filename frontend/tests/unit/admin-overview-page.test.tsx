@@ -22,6 +22,7 @@ const enrolmentTrend = vi.hoisted(() => vi.fn());
 const batchSummaries = vi.hoisted(() => vi.fn());
 const useApi = vi.hoisted(() => vi.fn());
 
+vi.mock('@/components/academics/present-now', () => ({ PresentNowStrip: () => null }));
 vi.mock('@/lib/reporting', () => ({
   adminDashboard,
   attendanceTrend,
