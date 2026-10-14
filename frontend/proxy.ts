@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 /**
  * Content-Security-Policy, with a per-request nonce.
  *
- * Why this is middleware and not a static header
+ * Why this is a request proxy and not a static header
  * ----------------------------------------------
  * Next's App Router serves the page with inline `<script>` elements — the
  * bootstrap and the streamed flight data. A policy of `script-src 'self'`
@@ -68,7 +68,7 @@ function apiOrigins(request: NextRequest, configured: string): string[] {
   return [...origins];
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const configuredApiOrigin = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
   const isDevelopment = process.env.NODE_ENV === 'development';

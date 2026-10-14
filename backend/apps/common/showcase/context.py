@@ -91,7 +91,7 @@ class Context:
     now: datetime = field(default_factory=timezone.localtime)
     #: Seeded, so the same "random" choices on every run.
     rng: random.Random = field(
-        default_factory=lambda: random.Random(RUN_SEED)  # noqa: S311 — determinism
+        default_factory=lambda: random.Random(RUN_SEED)  # nosec B311  # noqa: S311 — fixture
     )
     #: Model label → rows created this run. ``found`` is the other side: rows a
     #: stage looked for and did not need to create. The finish stage prints
@@ -188,7 +188,7 @@ class Context:
 
     def rng_for(self, stage_key: str) -> random.Random:
         """The generator for one stage; the command installs it as ``rng``."""
-        return random.Random(f"{RUN_SEED}:{stage_key}")  # noqa: S311 — determinism
+        return random.Random(f"{RUN_SEED}:{stage_key}")  # nosec B311  # noqa: S311 — fixture
 
     def ensure_password(self, user: User) -> None:
         """Make a *found* account sign in with the current password.

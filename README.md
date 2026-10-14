@@ -183,6 +183,8 @@ Documentation:
 
 | Document | Covers |
 | --- | --- |
+| [`docs/CURRENT_PROJECT_STATUS.md`](docs/CURRENT_PROJECT_STATUS.md) | Current baseline, role boundaries, natural navigation names, open decisions and release blockers |
+| [`docs/STAGING_RELEASE_RUNBOOK.md`](docs/STAGING_RELEASE_RUNBOOK.md) | Secure-staging changes, deployment gates, administrator provisioning, backup evidence and the separate AWS cleanup approval boundary |
 | [`docs/architecture.md`](docs/architecture.md) | Why the apps are split as they are, the capability model, the service layer |
 | [`docs/authentication.md`](docs/authentication.md) | Browser auth, API auth, logout and invalidation, expiry, tokens, enumeration, rate limits |
 | [`docs/courses.md`](docs/courses.md) | Content model, ordering, publishing workflow, access rules, video and resource handling |

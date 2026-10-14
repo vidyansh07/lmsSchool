@@ -143,3 +143,18 @@ FROM pg_sequences WHERE schemaname = 'public' ORDER BY sequencename
 
 echo
 echo "Restore verified. The scratch database is being dropped."
+
+# A verified local dump is still on the same host as the database. When an
+# off-host destination is configured, copy this exact restored artifact with
+# the staging backup KMS key. Configuration without a usable AWS CLI is an
+# error, not a reason to silently leave the only backup on the source host.
+if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
+  command -v aws >/dev/null || {
+    echo "BACKUP_S3_BUCKET is set but the AWS CLI is unavailable. The verified dump was not copied off-host." >&2
+    exit 1
+  }
+  : "${BACKUP_KMS_KEY_ID:?BACKUP_KMS_KEY_ID is required when BACKUP_S3_BUCKET is set}"
+  echo "Copying verified dump to s3://$BACKUP_S3_BUCKET/db/…"
+  aws s3 cp "$DUMP" "s3://$BACKUP_S3_BUCKET/db/$(basename "$DUMP")" \
+    --sse aws:kms --sse-kms-key-id "$BACKUP_KMS_KEY_ID"
+fi

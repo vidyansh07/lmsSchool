@@ -81,9 +81,15 @@ echo "Mirroring bucket '$BUCKET' from the '$ENVIRONMENT' stack to $MEDIA_DIR ...
   --entrypoint /bin/bash storage-init /mirror.sh
 echo "Mirror complete."
 
-if [ -n "${BACKUP_S3_BUCKET:-}" ] && command -v aws >/dev/null; then
+if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
+  command -v aws >/dev/null || {
+    echo "BACKUP_S3_BUCKET is set but the AWS CLI is unavailable. The media mirror was not copied off-host." >&2
+    exit 1
+  }
+  : "${BACKUP_KMS_KEY_ID:?BACKUP_KMS_KEY_ID is required when BACKUP_S3_BUCKET is set}"
   echo "Copying media backup to s3://$BACKUP_S3_BUCKET/media/…"
-  aws s3 sync "$MEDIA_DIR" "s3://$BACKUP_S3_BUCKET/media/"
+  aws s3 sync "$MEDIA_DIR" "s3://$BACKUP_S3_BUCKET/media/" \
+    --sse aws:kms --sse-kms-key-id "$BACKUP_KMS_KEY_ID"
 fi
 
 if [ "$VERIFY" != "--verify" ]; then

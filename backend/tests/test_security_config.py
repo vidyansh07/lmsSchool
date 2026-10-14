@@ -41,6 +41,7 @@ PROD_ENV = {
     "DEFAULT_FROM_EMAIL": "no-reply@example.com",
     "FRONTEND_BASE_URL": "https://app.example.com",
     "MFA_ENCRYPTION_KEY": FAKE_MFA_ENCRYPTION_KEY,
+    "UPLOAD_SCANNER": "clamav",
     "SENTRY_DSN": "",
 }
 
@@ -134,11 +135,17 @@ def test_production_settings_load_and_are_hardened():
         ({"CACHE_URL": ""}, "CACHE_URL"),
         ({"EMAIL_HOST": ""}, "EMAIL_HOST"),
         ({"DEFAULT_FROM_EMAIL": ""}, "DEFAULT_FROM_EMAIL"),
+        (
+            {"EMAIL_BACKEND": "django.core.mail.backends.console.EmailBackend"},
+            "must use a delivering email backend",
+        ),
         ({"FRONTEND_BASE_URL": ""}, "FRONTEND_BASE_URL"),
         ({"DATABASE_URL": ""}, "DATABASE_URL"),
         # ERP Phase 5 (ADR-05): a deployed environment must fail closed
         # without its own MFA_ENCRYPTION_KEY rather than boot with none.
         ({"MFA_ENCRYPTION_KEY": ""}, "MFA_ENCRYPTION_KEY"),
+        ({"UPLOAD_SCANNER": "disabled"}, "UPLOAD_SCANNER"),
+        ({"UPLOAD_SCAN_FAIL_OPEN": "true"}, "UPLOAD_SCAN_FAIL_OPEN"),
         ({"DJANGO_ENV": "local"}, "Environment mismatch"),
         # §14.10: no broker means "background" work would run in the request.
         ({"CELERY_BROKER_URL": ""}, "CELERY_BROKER_URL"),
@@ -163,6 +170,20 @@ def test_django_deployment_checks_pass_for_staging():
         {"DJANGO_ENV": "staging", "DJANGO_SETTINGS_MODULE": "config.settings.staging"},
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_production_keeps_the_database_statement_timeout():
+    result = _run_django(
+        [
+            "shell",
+            "-c",
+            "from django.conf import settings; "
+            "print(settings.DATABASES['default']['OPTIONS'].get('options', ''))",
+        ],
+        {},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "statement_timeout=15000" in result.stdout
 
 
 # --- Runtime security posture ---------------------------------------------

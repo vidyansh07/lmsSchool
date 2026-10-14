@@ -48,6 +48,22 @@ services:
       timeout: 3s
       retries: 5
 
+  # Malware scanning for every document and student submission before it is
+  # stored. Port 3310 stays on the private Compose network: clamd's TCP protocol
+  # is not encrypted or authenticated and must never be published to the host.
+  # The feature-release tag receives compatible security/patch updates while
+  # avoiding an unreviewed jump to a new ClamAV feature release.
+  clamav:
+    image: clamav/clamav:1.5_base-debian13-slim
+    restart: unless-stopped
+    environment:
+      CLAMAV_NO_CLAMD: "false"
+      CLAMAV_NO_FRESHCLAMD: "false"
+      CLAMD_STARTUP_TIMEOUT: "900"
+    volumes:
+      - staging_clamav_signatures:/var/lib/clamav
+    mem_limit: 4g
+
   # TLS in front of everything, on one origin. See infra/proxy/Caddyfile.
   proxy:
     image: caddy:2.10-alpine
@@ -111,10 +127,33 @@ services:
         mc alias set staging http://storage:9000 "$$AWS_ACCESS_KEY_ID" "$$AWS_SECRET_ACCESS_KEY"
         mc mb --ignore-existing "staging/$$AWS_STORAGE_BUCKET_NAME"
         mc anonymous set none "staging/$$AWS_STORAGE_BUCKET_NAME"
-        # So an overwrite or delete is recoverable for 30 days independent of
-        # scripts/backup-media.sh's own mirror (docs/erp/BACKUP_AND_RECOVERY.md).
+        # Preserve object versions independently of backup-media.sh's mirror.
+        # Versioning alone sets no retention period; configure and verify the
+        # approved lifecycle/Object Lock policy on the real staging bucket.
         mc version enable "staging/$$AWS_STORAGE_BUCKET_NAME"
         echo "bucket $$AWS_STORAGE_BUCKET_NAME ready, private, and versioned"
+
+  # One-shot release task. It uses the schema-owning role and is invoked
+  # explicitly by scripts/deploy.sh before web/worker processes restart. The
+  # profile keeps a normal `docker compose up` from running DDL by accident.
+  migrate:
+    profiles: ["release"]
+    build:
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+      target: production
+    command: ["migrate"]
+    env_file:
+      - .env.staging
+    environment:
+      DJANGO_ENV: staging
+      DJANGO_SETTINGS_MODULE: config.settings.staging
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:?set in .env.staging}
+      RUN_MIGRATIONS: "false"
+      COLLECT_STATIC: "false"
+    depends_on:
+      db:
+        condition: service_healthy
 
   backend:
     build:
@@ -128,7 +167,9 @@ services:
     environment:
       DJANGO_ENV: staging
       DJANGO_SETTINGS_MODULE: config.settings.staging
-      RUN_MIGRATIONS: "true"
+      # DDL belongs to the one-shot migrate service above, never to a web
+      # replica holding the lower-privilege runtime database credentials.
+      RUN_MIGRATIONS: "false"
       COLLECT_STATIC: "true"
     volumes:
       # Separate storage from every other environment.
@@ -139,6 +180,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      clamav:
         condition: service_healthy
       storage-init:
         condition: service_completed_successfully
@@ -251,5 +294,6 @@ volumes:
   staging_caddy_config:
   staging_postgres_data:
   staging_redis_data:
+  staging_clamav_signatures:
   staging_object_storage:
   staging_media:

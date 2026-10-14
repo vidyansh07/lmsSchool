@@ -248,3 +248,69 @@ def test_the_scan_does_not_consume_the_file(settings):
     handle.read(4)
     scanning.scan_upload(handle)
     assert handle.read() == b"ent work"
+
+
+class _FakeClamavConnection:
+    def __init__(self, response: bytes):
+        self.response = response
+        self.sent: list[bytes] = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def settimeout(self, _timeout):
+        return None
+
+    def sendall(self, value: bytes):
+        self.sent.append(value)
+
+    def recv(self, _size: int) -> bytes:
+        response, self.response = self.response, b""
+        return response
+
+
+def _use_fake_clamav(settings, monkeypatch, response: bytes) -> _FakeClamavConnection:
+    connection = _FakeClamavConnection(response)
+    settings.UPLOAD_SCANNER = "clamav"
+    settings.CLAMAV_HOST = "clamav"
+    settings.CLAMAV_PORT = 3310
+    settings.CLAMAV_TIMEOUT_SECONDS = 2.0
+    monkeypatch.setattr(
+        scanning.socket,
+        "create_connection",
+        lambda address, timeout: connection,
+    )
+    return connection
+
+
+def test_clamav_streams_the_file_without_sending_its_name(settings, monkeypatch):
+    connection = _use_fake_clamav(settings, monkeypatch, b"stream: OK\0")
+    upload = io.BytesIO(b"student work")
+    upload.name = "../../private-answer.txt"
+
+    assert scanning.scan_upload(upload, kind="submission").clean is True
+    assert connection.sent[0] == b"zINSTREAM\0"
+    assert connection.sent[-1] == b"\0\0\0\0"
+    assert b"student work" in connection.sent
+    assert all(b"private-answer" not in part for part in connection.sent)
+
+
+@pytest.mark.django_db
+def test_clamav_detection_is_refused_without_returning_the_signature(settings, monkeypatch):
+    _use_fake_clamav(settings, monkeypatch, b"stream: Eicar-Test-Signature FOUND\0")
+
+    with pytest.raises(ValidationError) as excinfo:
+        scanning.scan_upload(io.BytesIO(b"test payload"), kind="submission")
+
+    assert "rejected by a security scan" in str(excinfo.value)
+    assert "Eicar" not in str(excinfo.value)
+
+
+def test_clamav_protocol_error_fails_closed(settings, monkeypatch):
+    _use_fake_clamav(settings, monkeypatch, b"INSTREAM size limit exceeded. ERROR\0")
+
+    with pytest.raises(ValidationError, match="temporarily unavailable"):
+        scanning.scan_upload(io.BytesIO(b"payload"))

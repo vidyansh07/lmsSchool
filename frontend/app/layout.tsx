@@ -25,7 +25,7 @@ import './globals.css';
  * `h1`-`h4` in the base layer, so a screen gets it without asking.
  *
  * Self-hosting matters twice over: the Content-Security-Policy in
- * `middleware.ts` sets `font-src 'self' data:` and allows no third-party font
+ * `proxy.ts` sets `font-src 'self' data:` and allows no third-party font
  * origin, so a Google Fonts URL would yield unstyled text in production and
  * nowhere else; and a webfont fetched on first paint is the classic cause of
  * text appearing a beat late. `display: swap` shows the fallback immediately
@@ -61,7 +61,7 @@ export const viewport: Viewport = {
 /**
  * Every route renders per request.
  *
- * The Content-Security-Policy in `middleware.ts` carries a nonce, and Next can
+ * The Content-Security-Policy in `proxy.ts` carries a nonce, and Next can
  * only put that nonce on its inline scripts while it is rendering the response.
  * A statically prerendered page was built long before the request existed, so
  * it carries no nonce, its inline bootstrap is refused, and the page loads

@@ -11,7 +11,7 @@ at the end records each real restore.
 | Database | `scripts/backup.sh staging` → `pg_dump --format=custom` to `backups/` on the host | 02:00 daily (cron, installed by `deploy.sh`) | `backup.sh --verify` restores into a scratch database and prints row counts and every sequence (D-088) |
 | Database verify | `scripts/backup.sh staging --verify` | 03:00 Sundays | log in `backups/cron.log` |
 | Retention | prune `*.dump` older than `BACKUP_KEEP_DAYS` (14) | 04:00 daily | |
-| Off-host copy | `aws s3 cp` newest dump to `s3://$BACKUP_S3_BUCKET/db/` | 04:00 daily, **only when the bucket is configured — it is not yet** | |
+| Off-host copy | `aws s3 cp` newest dump to `s3://$BACKUP_S3_BUCKET/db/` with the approved KMS key | 04:00 daily, **only when the bucket and key are configured — they are not yet** | provider checksum plus restore drill |
 | Object storage (student files, exports, resumes) | **none** | — | — |
 
 ## What the ERP adds
@@ -27,7 +27,10 @@ at the end records each real restore.
   from the backup copy, and compares SHA-256.
 - Cron: 02:30 daily; verify 03:30 Sundays; same retention.
 - Bucket versioning is enabled by `storage-init` (`mc version enable`) so an
-  overwrite or delete is recoverable for 30 days independent of the mirror.
+  overwrite or delete creates a recoverable older version independent of the
+  mirror. Versioning does **not** establish a 30-day guarantee by itself; the
+  approved lifecycle/Object Lock policy and its actual retention must be
+  configured and verified on the off-host staging bucket.
 
 ### Configuration backup
 Roles, permissions, policies, forms, activity types, automations and
@@ -38,8 +41,9 @@ so a bad configuration change can be diffed and reverted without a full
 restore.
 
 ### Encryption
-Dumps at rest on the host are on an encrypted volume (EBS default); the S3
-copy uses SSE-S3. `MFA_ENCRYPTION_KEY` is **not** in any backup; it lives
+Dumps at rest on the host must be on a confirmed encrypted volume. Database
+and media copies sent to S3 use SSE-KMS and fail if `BACKUP_KMS_KEY_ID` is not
+configured. `MFA_ENCRYPTION_KEY` is **not** in any backup; it lives
 in the environment and must be restored from the secret store — a restore
 without it makes every TOTP device unusable (users fall back to email OTP
 and recovery codes; documented in the runbook).
@@ -48,7 +52,7 @@ and recovery codes; documented in the runbook).
 
 | Objective | Value | Reason |
 | --- | --- | --- |
-| RPO (data loss) | 24 h for database and media; 0 for configuration changes made through the API (they are audited and can be replayed from the audit log) | nightly dumps |
+| RPO (data loss) | 24 h for database, media and configuration until a shorter measured schedule is approved | Nightly dumps/mirrors. Audit history helps investigate changes but is not a complete replayable backup. |
 | RTO (time to restore) | 2 h to a working stack on the same host; 4 h to a new host | measured in the drill |
 
 To reach RPO 1 h later: enable WAL archiving to the bucket (`archive_command`

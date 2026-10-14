@@ -369,6 +369,9 @@ CELERY_BEAT_SCHEDULE = {
 # `apps.common.scanning` documents why the unavailable case fails closed.
 UPLOAD_SCANNER = env.str("UPLOAD_SCANNER", default="disabled")
 UPLOAD_SCAN_FAIL_OPEN = env.bool("UPLOAD_SCAN_FAIL_OPEN", default=False)
+CLAMAV_HOST = env.str("CLAMAV_HOST", default="clamav")
+CLAMAV_PORT = env.int("CLAMAV_PORT", default=3310)
+CLAMAV_TIMEOUT_SECONDS = env.float("CLAMAV_TIMEOUT_SECONDS", default=10.0)
 
 FILE_STORAGE_BACKEND = env.str("FILE_STORAGE_BACKEND", default=LOCAL_BACKEND)
 AWS_STORAGE_BUCKET_NAME = env.str("AWS_STORAGE_BUCKET_NAME", default="")
@@ -580,6 +583,7 @@ LOGGING = {
     },
     "formatters": {
         "console": {
+            "()": "apps.common.logging.RedactingFormatter",
             "format": "%(asctime)s %(levelname)-8s %(name)s [%(request_id)s] %(message)s",
         },
         "json": {"()": "apps.common.logging.JSONFormatter"},

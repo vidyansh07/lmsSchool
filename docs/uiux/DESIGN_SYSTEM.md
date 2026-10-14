@@ -309,7 +309,7 @@ change that caused it.
 2. **Never promote the brand to an action.** It is 2.96:1 on white. The
    contrast test asserts it stays *under* 4.5:1 precisely so this cannot
    happen quietly.
-3. **The CSP forbids a font CDN.** `frontend/middleware.ts` sets
+3. **The CSP forbids a font CDN.** `frontend/proxy.ts` sets
    `font-src 'self' data:`. Fonts come through `next/font` and are self-hosted
    at build. A Google Fonts URL yields unstyled text in production and nowhere
    else. Never widen the CSP for a font.

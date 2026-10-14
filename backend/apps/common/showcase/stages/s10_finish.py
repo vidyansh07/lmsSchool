@@ -30,7 +30,7 @@ from django.core.cache import cache
 from ..context import Context
 from ..roster import sorted_for_sign_in
 
-PASSWORD_LINE = "Password: the value of DEMO_USER_PASSWORD (printed nowhere)."  # noqa: S105
+PASSWORD_LINE = "Password: the value of DEMO_USER_PASSWORD (printed nowhere)."  # nosec B105  # noqa: S105 — label, not a credential
 
 
 def run(ctx: Context) -> None:

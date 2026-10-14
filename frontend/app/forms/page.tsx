@@ -130,7 +130,7 @@ function FormsWorkspace() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Forms"
+        title="Form inbox"
         meta="Forms sent to you to fill, and the ones you sent."
       />
 

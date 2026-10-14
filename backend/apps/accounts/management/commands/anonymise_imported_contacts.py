@@ -249,7 +249,8 @@ class Command(BaseCommand):
                     profile.updated_at = now
                     profiles.append(profile)
 
-        assert PHONE_RE.match(UNDIALLABLE_PHONE)
+        if PHONE_RE.fullmatch(UNDIALLABLE_PHONE) is None:
+            raise CommandError("The configured placeholder phone does not pass validation.")
 
         if dry_run:
             # Counted as the run would leave it: the rows a real run withdraws

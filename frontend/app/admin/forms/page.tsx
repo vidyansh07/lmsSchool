@@ -183,7 +183,7 @@ function FormsList() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Forms</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Form builder</h1>
           <p className="text-sm text-ink-muted">
             The dynamic schema behind activities, enquiries, student profiles
             and registration. A published version is what the rest of the app

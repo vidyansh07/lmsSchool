@@ -253,7 +253,9 @@ def _seed(*parts: Any) -> random.Random:
     """A generator of its own for one thing — a plan, a pick — so no draw
     depends on what was drawn before it or on the calendar. Same pattern as
     stage 6."""
-    return random.Random(":".join([str(RUN_SEED), STAGE, *(str(p) for p in parts)]))  # noqa: S311
+    return random.Random(  # nosec B311  # noqa: S311 — deterministic fixture
+        ":".join([str(RUN_SEED), STAGE, *(str(p) for p in parts)])
+    )
 
 
 def _score(kind: str, code: str) -> float:

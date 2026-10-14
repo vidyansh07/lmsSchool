@@ -247,11 +247,12 @@ def test_batches_stage_builds_every_state_and_is_idempotent(
     # --- The headline trainer and today's classes ------------------------------
     headline_trainer = TrainerProfile.objects.get(user__email="trainer@grras.com")
     assert batches["a2"].trainer_id == headline_trainer.pk
-    started = ClassSession.objects.filter(
-        batch=batches["a2"], session_date=today, start_time__lte=now.time()
-    )
-    assert started.exists(), "the headline batch has a class today that has started"
-    assert started.get().trainer_id == headline_trainer.pk
+    weekly = BatchSchedule.objects.filter(batch=batches["a2"])
+    assert weekly.count() == 3
+    clock = weekly.get(note__startswith="[showcase][today/a2]")
+    started = ClassSession.objects.get(batch=batches["a2"], session_date=today, schedule=clock)
+    assert started.start_time <= now.time(), "the headline batch has a class today that started"
+    assert started.trainer_id == headline_trainer.pk
     later = ClassSession.objects.filter(batch=batches["a1"], session_date=today)
     if (now + timedelta(hours=2)).time() <= time(21, 55) and now.date() == today:
         assert later.filter(start_time__gt=now.time()).exists(), "a1 has a class later today"
@@ -259,11 +260,8 @@ def test_batches_stage_builds_every_state_and_is_idempotent(
         assert later.filter(start_time__lte=now.time()).exists()
     # The clock slot: on today's weekday, tagged so a later day finds it; the
     # fixed slots on the spec's days regardless of what day it is.
-    weekly = BatchSchedule.objects.filter(batch=batches["a2"])
-    assert weekly.count() == 3
-    clock = weekly.get(note__startswith="[showcase][today/a2]")
     assert clock.weekday == today.weekday()
-    assert started.get().schedule_id == clock.pk
+    assert started.schedule_id == clock.pk
     assert set(weekly.exclude(pk=clock.pk).values_list("weekday", flat=True)) == {0, 2}
     a1_days = BatchSchedule.objects.filter(batch=batches["a1"]).values_list("weekday", flat=True)
     assert set(a1_days) >= {0, 2}

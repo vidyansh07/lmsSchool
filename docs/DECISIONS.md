@@ -1332,3 +1332,22 @@ or batch's delivery mode; `O` / `I` on the focused row flips it). `GET
 by mode over the classes the caller sees, and the admin, manager and
 trainer overviews show present online / in person / today and how many
 registers are in. The DSR's typed online/offline counts are unchanged.
+
+### D-141 · Build-only npm findings do not weaken the production vulnerability gate (14 October 2026)
+
+The staging security pass upgrades Next.js and pins patched production
+transitives (`sharp` and `source-map-js`), leaving `npm audit --omit=dev
+--audit-level=high` clean. A newly published stack-exhaustion advisory for
+`braces` still appears through `eslint-config-next` → `fast-glob` →
+`micromatch`; npm has no patched `braces` 3.x release and proposes downgrading
+the Next.js lint configuration across a major boundary. That chain is used by
+linting during CI, is not copied into the standalone production image, and does
+not process application requests. The related `brace-expansion` and `undici`
+findings are pinned to patched releases.
+
+CI therefore blocks high-severity findings in production dependencies and
+critical findings across the full build tree, while still printing the five
+remaining high build-tool findings on every run. The exception ends when a
+compatible patched `braces` release reaches `eslint-config-next`; Dependabot
+continues to surface that update. Forcing an unrelated Next.js downgrade would
+reintroduce fixed runtime advisories and is the less safe choice.

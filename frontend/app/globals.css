@@ -142,7 +142,7 @@
   /* ---- Type -------------------------------------------------------------
      Sora for headings and figures, Inter for everything read at length.
      Both self-hosted through `next/font` in `app/layout.tsx` --
-     `middleware.ts` sets `font-src 'self' data:`, so a Google Fonts URL here
+     `proxy.ts` sets `font-src 'self' data:`, so a Google Fonts URL here
      would produce unstyled text in production and nowhere else.
      `--font-mono` is a system stack: the old file pointed it at
      `--font-geist-mono`, which was never defined anywhere, so `font-mono` in

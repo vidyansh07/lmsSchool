@@ -116,7 +116,11 @@ docker compose -f docker-compose.staging.yml exec backend python manage.py seed_
 ```
 
 The staging stack uses the production image targets (gunicorn, Next.js
-standalone), its own Redis, and its own named volumes.
+standalone), its own Redis, its own named volumes, a private ClamAV service,
+and separate database roles for schema migrations and everyday application
+queries. Deployed settings require a delivering email backend; console,
+in-memory, dummy and file backends are rejected because verification and
+password-reset links must not appear in operator logs.
 
 ### Seed data
 
@@ -169,15 +173,18 @@ keys are overwritten with the showcase's values on every run. It is gated on
 with them. `--list` prints the stages; `--only KEY` and `--from KEY` run part
 of it.
 
-Because those accounts are on a real domain, `scripts/verify_demo.sh` must be
-told to accept it: set `VERIFY_ALLOWED_EMAIL_DOMAINS=grras.com` in
-`.env.staging` (see the template). The check still fails on any other real
-domain. And because the showcase fans notifications out to every account,
-staging **must** keep `EMAIL_BACKEND` on a non-delivering backend — the
-template sets the console one, so mail (password resets included) lands in
-the backend container's log — and the command refuses to run under any other
-unless passed `--allow-real-mail`. The SMTP block in the template is for when
-credentials exist.
+The showcase roster uses a real-looking domain and fans notifications out to
+many accounts. It is therefore **not compatible with the secure user-acceptance
+staging environment**, where SMTP must deliver the two approved administrator
+invitations and verification messages. Keep showcase work on a separate,
+non-delivering demonstration environment. Do not use `--allow-real-mail` to
+bypass the seeder's guard on staging.
+
+For this staging environment, `VERIFY_ALLOWED_EMAIL_DOMAINS` contains only
+`grrassolutions.in`, the domain of the two explicitly approved administrator
+addresses. All learner, trainer and business data must use reserved synthetic
+domains. The allow-list is not a substitute for reviewing the exact account
+inventory before release.
 
 ---
 

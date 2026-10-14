@@ -1,12 +1,8 @@
-"""The seam where a malware scanner attaches to uploads.
+"""Malware scanning for uploads.
 
-§14.3 asks for the *architecture*, not a scanner. The distinction matters:
-bolting ClamAV onto this deployment today would add a daemon, a signature feed
-and an operational failure mode nobody has agreed to run, while leaving the
-actual question — "what happens to an upload when the scanner says no, and what
-happens when the scanner is down?" — unanswered. Those two answers are the hard
-part, so they are written down and tested here, and the scanner itself is a
-named function that arrives later without touching a single caller.
+The validation seam and its failure policy are independent of the scanner
+implementation. Staging uses ClamAV over the private Compose network; tests can
+select deterministic scanners without touching a live daemon.
 
 How it attaches
 ---------------
@@ -33,6 +29,8 @@ kind of problem.
 
 from __future__ import annotations
 
+import socket
+import struct
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -66,9 +64,65 @@ def _reject_all(uploaded_file: Any) -> ScanResult:
     return ScanResult(clean=False, detail="test scanner: reject-all")
 
 
+_CLAMAV_CHUNK_BYTES = 64 * 1024
+_CLAMAV_RESPONSE_BYTES = 4096
+
+
+def _clamav(uploaded_file: Any) -> ScanResult:
+    """Stream a file to ``clamd`` using its bounded INSTREAM protocol.
+
+    The file is not copied to a shared directory and its client filename is
+    never sent. Only the bytes cross the private container network. ClamAV's
+    TCP protocol has no transport security, so the compose service deliberately
+    does not publish port 3310 to the host.
+    """
+    host = settings.CLAMAV_HOST
+    port = settings.CLAMAV_PORT
+    timeout = settings.CLAMAV_TIMEOUT_SECONDS
+
+    try:
+        uploaded_file.seek(0)
+        with socket.create_connection((host, port), timeout=timeout) as connection:
+            connection.settimeout(timeout)
+            connection.sendall(b"zINSTREAM\0")
+            while True:
+                chunk = uploaded_file.read(_CLAMAV_CHUNK_BYTES)
+                if not chunk:
+                    break
+                if not isinstance(chunk, bytes):
+                    raise ScannerUnavailable("ClamAV received a non-binary upload stream.")
+                connection.sendall(struct.pack("!I", len(chunk)))
+                connection.sendall(chunk)
+            connection.sendall(struct.pack("!I", 0))
+
+            response = bytearray()
+            while len(response) < _CLAMAV_RESPONSE_BYTES:
+                block = connection.recv(min(1024, _CLAMAV_RESPONSE_BYTES - len(response)))
+                if not block:
+                    break
+                response.extend(block)
+                if b"\0" in block:
+                    break
+    except ScannerUnavailable:
+        raise
+    except (OSError, ValueError) as exc:
+        raise ScannerUnavailable(f"ClamAV could not scan the upload: {exc}") from exc
+
+    answer = bytes(response).split(b"\0", 1)[0].decode("utf-8", "replace").strip()
+    if answer.endswith(" OK"):
+        return ScanResult(clean=True, detail="clean")
+    if answer.endswith(" FOUND"):
+        signature = answer.removesuffix(" FOUND").partition(":")[2].strip()
+        return ScanResult(clean=False, detail=signature or "malware detected")
+    if not answer:
+        raise ScannerUnavailable("ClamAV closed the connection without a response.")
+    raise ScannerUnavailable(f"ClamAV returned an error: {answer}")
+
+
 #: name -> scanner. A real scanner is added here and selected by configuration;
 #: nothing that calls `scan_upload` changes.
 SCANNERS: dict[str, Callable[[Any], ScanResult]] = {
+    "clamav": _clamav,
     "disabled": _disabled,
     "reject_all": _reject_all,
 }

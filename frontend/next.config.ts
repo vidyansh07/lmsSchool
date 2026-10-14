@@ -18,7 +18,7 @@ const securityHeaders = [
 
 /**
  * The Content-Security-Policy is NOT here. It needs a per-request nonce, which a
- * static header cannot carry, so `middleware.ts` owns it — see the reasoning
+ * static header cannot carry, so `proxy.ts` owns it — see the reasoning
  * there. Setting a second policy in this file would not relax the first one:
  * browsers apply every policy they are given and take the intersection, so a
  * leftover `script-src 'self'` here would keep blocking the nonced scripts and

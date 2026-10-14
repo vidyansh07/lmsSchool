@@ -450,7 +450,9 @@ class Scope:
 
 def _seed(*parts: Any) -> random.Random:
     """A generator for one row, from its natural key — see the module docstring."""
-    return random.Random(":".join([str(RUN_SEED), STAGE, *(str(p) for p in parts)]))  # noqa: S311
+    return random.Random(  # nosec B311  # noqa: S311 — deterministic fixture
+        ":".join([str(RUN_SEED), STAGE, *(str(p) for p in parts)])
+    )
 
 
 def run(ctx: Context) -> None:

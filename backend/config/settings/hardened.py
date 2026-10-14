@@ -21,6 +21,7 @@ from apps.common.storage import check_storage_configuration
 from .base import *
 from .base import (
     CELERY_BROKER_URL,
+    DATABASE_STATEMENT_TIMEOUT_MS,
     DEV_SECRET_KEY_MARKER,
     MIDDLEWARE,
     REST_FRAMEWORK,
@@ -77,6 +78,14 @@ DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 DATABASES["default"]["ATOMIC_REQUESTS"] = True
 DATABASES["default"].setdefault("OPTIONS", {})
 DATABASES["default"]["OPTIONS"]["sslmode"] = env.str("DATABASE_SSL_MODE", default="require")
+# Rebuilding DATABASES from the required deployed URL above discards the base
+# module's connection options. Reapply the query deadline explicitly so a slow
+# or hostile query cannot occupy a web worker indefinitely in staging or
+# production.
+if DATABASE_STATEMENT_TIMEOUT_MS > 0:
+    DATABASES["default"]["OPTIONS"]["options"] = (
+        f"-c statement_timeout={DATABASE_STATEMENT_TIMEOUT_MS}"
+    )
 forbid_sqlite(DATABASES)
 
 # --- Static files ----------------------------------------------------------
@@ -130,6 +139,20 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if NUM_PROXIES els
 # A deployed environment that cannot send mail cannot reset a password, so the
 # SMTP host is required rather than silently defaulting to the console.
 EMAIL_BACKEND = env.str("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+NON_DELIVERING_EMAIL_BACKENDS = frozenset(
+    {
+        "django.core.mail.backends.console.EmailBackend",
+        "django.core.mail.backends.locmem.EmailBackend",
+        "django.core.mail.backends.dummy.EmailBackend",
+        "django.core.mail.backends.filebased.EmailBackend",
+    }
+)
+if EMAIL_BACKEND in NON_DELIVERING_EMAIL_BACKENDS:
+    raise ImproperlyConfigured(
+        "A deployed environment must use a delivering email backend. Console, memory, "
+        "dummy and file backends can expose password-reset links and one-time codes "
+        "to operators or leave users unable to verify their address."
+    )
 if EMAIL_BACKEND.endswith("smtp.EmailBackend"):
     EMAIL_HOST = require_setting("EMAIL_HOST", env.str("EMAIL_HOST", default=""))
 DEFAULT_FROM_EMAIL = require_setting(
@@ -138,6 +161,16 @@ DEFAULT_FROM_EMAIL = require_setting(
 FRONTEND_BASE_URL = require_setting(
     "FRONTEND_BASE_URL", env.str("FRONTEND_BASE_URL", default="")
 ).rstrip("/")
+
+# A disabled scanner silently accepts hostile student submissions. Deployed
+# environments either scan them with ClamAV or deliberately refuse every
+# upload while the scanner is unavailable.
+if UPLOAD_SCANNER not in {"clamav", "reject_all"}:
+    raise ImproperlyConfigured(
+        "UPLOAD_SCANNER must be 'clamav' or 'reject_all' in a deployed environment."
+    )
+if UPLOAD_SCAN_FAIL_OPEN:
+    raise ImproperlyConfigured("UPLOAD_SCAN_FAIL_OPEN must be false in a deployed environment.")
 
 # --- MFA (ERP Phase 5, ADR-05) ----------------------------------------------
 # Encrypts every TOTP device's secret at rest. Rotating it would make every

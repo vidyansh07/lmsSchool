@@ -100,7 +100,7 @@ Phase 10 added no application code beyond closing gaps the release journey
 found. What it added is around the edges: a production-shaped staging stack
 (`docker-compose.staging.yml`, `infra/proxy/`), the operational scripts
 (`scripts/verify_demo.sh`, `scripts/backup.sh`, `scripts/check_migrations.sh`),
-and `frontend/middleware.ts`, which owns the Content-Security-Policy because it
+and `frontend/proxy.ts`, which owns the Content-Security-Policy because it
 needs a per-request nonce. Start at `docs/RELEASE_READINESS.md`.
 
 **Five rules that hold everywhere.** Break one and the review fails.

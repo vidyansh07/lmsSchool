@@ -22,7 +22,7 @@
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "lucide-react": "1.38.0",
-    "next": "16.3.3",
+    "next": "16.4.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "recharts": "3.10.1",
@@ -39,10 +39,19 @@
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "6.1.1",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.3.3",
+    "eslint-config-next": "16.4.0",
     "jsdom": "30.0.1",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "brace-expansion": "5.0.12"
+    },
+    "brace-expansion@<2": "1.1.21",
+    "sharp": "0.35.5",
+    "source-map-js": "1.2.2",
+    "undici": "8.10.2"
   }
 }

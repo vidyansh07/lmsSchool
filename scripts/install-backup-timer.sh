@@ -25,9 +25,9 @@
 #                       --verify                                 hash-checked against
 #                                                                the source
 #   04:00 every day     prune dumps older than BACKUP_KEEP_DAYS (default 14),
-#                       and, when BACKUP_S3_BUCKET is set in .env.staging and
-#                       the aws CLI is present, copy the newest dump to
-#                       s3://$BACKUP_S3_BUCKET/db/
+#                       and, when BACKUP_S3_BUCKET is set in .env.staging,
+#                       require the AWS CLI and copy the newest dump with
+#                       SSE-KMS to s3://$BACKUP_S3_BUCKET/db/
 #
 # A backup nobody has restored is a hope, not a backup; the Sunday runs are
 # what make the rest of the week's dumps and mirrors worth anything. Logs go
@@ -52,9 +52,12 @@ fi
 
 mkdir -p "$REPO/backups" "$REPO/backups/config"
 PRUNE="find $REPO/backups -name '*.dump' -mtime +\${BACKUP_KEEP_DAYS:-14} -delete"
-UPLOAD="if [ -n \"\${BACKUP_S3_BUCKET:-}\" ] && command -v aws >/dev/null; then aws s3 cp \"\$(ls -t $REPO/backups/*.dump | head -1)\" \"s3://\${BACKUP_S3_BUCKET}/db/\" >> $LOG 2>&1; fi"
+UPLOAD="if [ -n \"\${BACKUP_S3_BUCKET:-}\" ]; then command -v aws >/dev/null || { echo 'BACKUP_S3_BUCKET is set but the AWS CLI is unavailable' >&2; exit 1; }; : \"\${BACKUP_KMS_KEY_ID:?BACKUP_KMS_KEY_ID is required when BACKUP_S3_BUCKET is set}\"; aws s3 cp \"\$(ls -t $REPO/backups/*.dump | head -1)\" \"s3://\${BACKUP_S3_BUCKET}/db/\" --sse aws:kms --sse-kms-key-id \"\${BACKUP_KMS_KEY_ID}\" >> $LOG 2>&1; fi"
 COMPOSE="docker compose -f docker-compose.staging.yml --env-file .env.staging"
-EXPORT_CONFIG="mkdir -p $REPO/backups/config && $COMPOSE exec -T backend python manage.py export_configuration > $REPO/backups/config/config-\$(date +%Y%m%d).json"
+# cron treats an unescaped `%` as a newline and pipes the remainder to stdin.
+# Keep the backslashes in the installed crontab or every configuration export
+# stops at `date +` and leaves an empty file behind.
+EXPORT_CONFIG="mkdir -p $REPO/backups/config && $COMPOSE exec -T backend python manage.py export_configuration > $REPO/backups/config/config-\$(date +\\%Y\\%m\\%d).json"
 
 ENTRIES=$(cat <<CRON
 0 2 * * * cd $REPO && ./scripts/backup.sh staging >> $LOG 2>&1 $MARK

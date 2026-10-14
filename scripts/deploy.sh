@@ -10,8 +10,8 @@
 #      deploy nobody should run;
 #   2. fetches and checks out the branch on the host — the host pulls from the
 #      repository's origin, so push first;
-#   3. builds and starts the stack; migrations apply on backend start
-#      (RUN_MIGRATIONS=true in docker-compose.staging.yml);
+#   3. builds the images, applies migrations once with the schema-owner role,
+#      then starts the stack with the lower-privilege runtime role;
 #   4. waits for the backend to report ready;
 #   5. optionally seeds the demo accounts, layers the showcase data set on
 #      top (--showcase; additive and idempotent), and imports the SITP
@@ -55,7 +55,7 @@ echo "▶ host: $TARGET"
 remote 'echo "  checkout: $(pwd) @ $(git rev-parse --abbrev-ref HEAD) $(git rev-parse --short HEAD)"'
 
 echo "▶ 1/5 backup"
-remote './scripts/backup.sh staging 2>&1 | tail -2'
+remote './scripts/backup.sh staging --verify 2>&1 | tail -8'
 
 echo "▶ 2/5 code"
 remote 'test "$(git status --short | wc -l)" -eq 0 || { echo "  the host has local edits; resolve them first:"; git status --short; exit 1; }'
@@ -66,10 +66,16 @@ else
 fi
 remote 'echo "  now at $(git rev-parse --short HEAD): $(git log -1 --format=%s | cut -c1-72)"'
 
-echo "▶ 3/5 build and start"
-remote "$COMPOSE up -d --build --remove-orphans 2>&1 | grep -E 'Built|Started|Created|Recreated|rror' | tail -12"
+echo "▶ 3/5 build"
+remote "$COMPOSE --profile release build 2>&1 | grep -E 'Built|exporting|ERROR|rror' | tail -12"
 
-echo "▶ 3b/5 backup schedule"
+echo "▶ 3a/5 migrate (schema-owner role)"
+remote "$COMPOSE run --rm migrate"
+
+echo "▶ 3b/5 start"
+remote "$COMPOSE up -d --no-build --remove-orphans 2>&1 | grep -E 'Started|Created|Recreated|rror' | tail -12"
+
+echo "▶ 3c/5 backup schedule"
 remote './scripts/install-backup-timer.sh 2>&1 | tail -4'
 
 echo "▶ 4/5 ready?"

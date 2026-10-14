@@ -77,7 +77,7 @@ describe('AppShell', () => {
     mockAuth.value = { user: null, isLoading: false, signOut: vi.fn(), can: () => false };
     renderShell();
     expect(screen.getByRole('link', { name: /sign in/i })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'User accounts' })).not.toBeInTheDocument();
   });
 
   it('hides management links from a user without the capability', () => {
@@ -89,7 +89,7 @@ describe('AppShell', () => {
     };
     renderShell();
 
-    expect(screen.queryByRole('link', { name: 'Users' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'User accounts' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Students' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'My profile' })).toBeInTheDocument();
   });
@@ -109,7 +109,7 @@ describe('AppShell', () => {
     };
     renderShell();
 
-    expect(screen.getByRole('link', { name: 'Users' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'User accounts' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Students' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Trainers' })).toBeInTheDocument();
   });
@@ -160,7 +160,7 @@ describe('AppShell sidebar collapse', () => {
     // The label text is visually hidden (`sr-only`) when collapsed, not
     // removed, so the accessible name — and the Tooltip's hover/focus
     // equivalent carrying the same text — survive exactly as before.
-    expect(screen.getByRole('link', { name: 'Users' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'User accounts' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'My profile' })).toBeInTheDocument();
   });
 
@@ -189,14 +189,14 @@ describe('AppShell sidebar collapse', () => {
     await user.click(screen.getByRole('button', { name: 'Open navigation menu' }));
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('link', { name: 'Users' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'User accounts' })).toBeInTheDocument();
     // The collapsed sidebar's own group boundaries render as a divider
     // (`<hr>`) instead of a text heading; the drawer's copy of the nav is
     // always the expanded one and should have none.
     expect(dialog.querySelectorAll('hr')).toHaveLength(0);
     // And the label text in the drawer is real, visible text — not the
     // collapsed sidebar's `sr-only` copy.
-    const usersLabel = within(dialog).getByText('Users');
+    const usersLabel = within(dialog).getByText('User accounts');
     expect(usersLabel).not.toHaveClass('sr-only');
   });
 });

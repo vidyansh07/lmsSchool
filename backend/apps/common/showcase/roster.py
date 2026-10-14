@@ -164,7 +164,7 @@ class _Allocator:
     """
 
     def __init__(self) -> None:
-        self.rng = random.Random(ROSTER_SEED)  # noqa: S311 — determinism, not secrecy
+        self.rng = random.Random(ROSTER_SEED)  # nosec B311  # noqa: S311 — deterministic fixture
         self.local_parts: set[str] = set()
         self.phones: set[str] = set()
 

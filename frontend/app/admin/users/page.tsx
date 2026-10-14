@@ -86,7 +86,7 @@ function UsersTable() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">User accounts</h1>
           <p className="text-sm text-ink-muted">
             Every account on the platform, across all roles.
           </p>
@@ -145,7 +145,7 @@ function UsersTable() {
         sort={list.query.ordering}
         onSortChange={list.toggleSort}
         onRowActivate={(row) => router.push(`/admin/users/${row.id}`)}
-        caption="Users"
+        caption="User accounts"
         densityStorageKey="grras.admin-users-density"
       />
 

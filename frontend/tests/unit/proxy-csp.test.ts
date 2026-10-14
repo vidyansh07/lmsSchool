@@ -17,15 +17,15 @@
 import { NextRequest } from 'next/server';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { middleware } from '@/middleware';
+import { proxy } from '@/proxy';
 
 const ORIGINAL_ENV = process.env.NODE_ENV;
 
 function policyFor(nodeEnv: string, pageUrl = 'http://localhost:3100/profile'): string {
   // `NODE_ENV` is read-only in the Next types but writable at runtime, and the
-  // middleware branches on it, so this is the only way to exercise both paths.
+  // proxy branches on it, so this is the only way to exercise both paths.
   (process.env as Record<string, string>).NODE_ENV = nodeEnv;
-  const response = middleware(new NextRequest(pageUrl));
+  const response = proxy(new NextRequest(pageUrl));
   return response.headers.get('content-security-policy') ?? '';
 }
 

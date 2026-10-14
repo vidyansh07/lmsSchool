@@ -66,9 +66,16 @@ export interface NavItem {
    *  a person scanning thirty links actually recognises. */
   icon: LucideIcon;
   capability?: string;
-  /** Show to these roles as well, whose rights come from assignment rather than
-   *  from a platform-wide capability. */
-  roles?: string[];
+  /**
+   * Base roles whose access is resolved from an assignment or ownership check
+   * on the destination rather than a platform-wide capability. This is only a
+   * navigation hint: the destination still enforces the record-level scope.
+   *
+   * A configured custom role does not use this fallback. Its explicit
+   * capability set is authoritative, so removing a capability also removes
+   * the corresponding navigation item.
+   */
+  scopedRoles?: string[];
 }
 
 export interface NavGroup {
@@ -91,68 +98,73 @@ export const STUDENT_NAV: NavItem[] = [
     href: "/dashboard",
     label: "Dashboard",
     icon: LayoutDashboard,
-    roles: ["student"],
+    scopedRoles: ["student"],
   },
   {
     href: "/my-learning",
     label: "My learning",
     icon: BookOpenCheck,
-    roles: ["student"],
+    scopedRoles: ["student"],
   },
   { href: "/courses", label: "Courses", icon: BookOpen },
   {
     href: "/my-batches",
     label: "My batches",
     icon: Layers,
-    roles: ["student"],
+    scopedRoles: ["student"],
   },
-  { href: "/my-fees", label: "My fees", icon: Wallet, roles: ["student"] },
+  { href: "/my-fees", label: "My fees", icon: Wallet, scopedRoles: ["student"] },
   {
     href: "/my-assignments",
     label: "My assignments",
     icon: ClipboardList,
-    roles: ["student"],
+    scopedRoles: ["student"],
   },
   {
     href: "/my-projects",
     label: "My projects",
     icon: FolderKanban,
-    roles: ["student"],
+    scopedRoles: ["student"],
   },
   {
     href: "/exams",
-    label: "Examinations",
+    label: "Exams",
     icon: ScrollText,
-    roles: ["student"],
+    scopedRoles: ["student"],
   },
-  { href: "/my-results", label: "My results", icon: Award, roles: ["student"] },
+  { href: "/my-results", label: "My results", icon: Award, scopedRoles: ["student"] },
   {
     href: "/my-attendance",
     label: "My attendance",
     icon: CalendarCheck,
-    roles: ["student"],
+    scopedRoles: ["student"],
   },
   {
     href: "/my-progress",
     label: "My progress",
     icon: TrendingUp,
-    roles: ["student"],
+    scopedRoles: ["student"],
   },
   {
     href: "/calendar",
     label: "Calendar",
     icon: CalendarDays,
-    roles: ["student"],
+    scopedRoles: ["student"],
   },
   { href: "/announcements", label: "Announcements", icon: Megaphone },
   {
     href: "/discussions",
     label: "Discussions",
     icon: MessagesSquare,
-    roles: ["student"],
+    scopedRoles: ["student"],
   },
   // Forms a counsellor or trainer sent them to fill.
-  { href: "/forms", label: "Forms", icon: ClipboardCheck, roles: ["student"] },
+  {
+    href: "/forms",
+    label: "Form inbox",
+    icon: ClipboardCheck,
+    scopedRoles: ["student"],
+  },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/profile", label: "My profile", icon: UserCircle2 },
 ];
@@ -165,7 +177,7 @@ export const STAFF_NAV: NavGroup[] = [
         href: "/dashboard",
         label: "Dashboard",
         icon: LayoutDashboard,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
       // A counsellor's landing page is their pipeline, not an institution
       // overview they hold no capability to read.
@@ -174,11 +186,11 @@ export const STAFF_NAV: NavGroup[] = [
         label: "Dashboard",
         icon: LayoutDashboard,
         capability: Capability.enrolmentCreate,
-        roles: ["counsellor"],
+        scopedRoles: ["counsellor"],
       },
       {
         href: "/admin/overview",
-        label: "Overview",
+        label: "Institution overview",
         icon: BarChart3,
         capability: Capability.reportViewAny,
       },
@@ -191,24 +203,16 @@ export const STAFF_NAV: NavGroup[] = [
     ],
   },
   {
-    // The client asked for two manager pages that drill all the way down,
-    // rather than a dashboard of widgets. They are grouped as "Review" because
-    // that is the job: looking at how a batch or a trainer is doing.
-    title: "Review",
+    // The manager pages drill into the institution's day-to-day academic work
+    // rather than presenting another dashboard of widgets.
+    title: "Academic operations",
     items: [
       {
         href: "/activities",
         label: "Activities",
         icon: ListTodo,
         capability: Capability.activityViewAny,
-        roles: ["trainer"],
-      },
-      // The admissions pipeline: leads before they are students.
-      {
-        href: "/enquiries",
-        label: "Enquiries",
-        icon: UserPlus,
-        capability: Capability.enquiryViewAny,
+        scopedRoles: ["trainer"],
       },
       {
         href: "/manage/batches",
@@ -241,7 +245,7 @@ export const STAFF_NAV: NavGroup[] = [
         label: "Trainer requirements",
         icon: Megaphone,
         capability: Capability.requirementManage,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
     ],
   },
@@ -250,6 +254,12 @@ export const STAFF_NAV: NavGroup[] = [
     // and in the order somebody works through them.
     title: "Admissions",
     items: [
+      {
+        href: "/enquiries",
+        label: "Enquiries",
+        icon: UserPlus,
+        capability: Capability.enquiryViewAny,
+      },
       {
         href: "/admissions",
         label: "Registrations",
@@ -281,55 +291,52 @@ export const STAFF_NAV: NavGroup[] = [
     items: [
       {
         href: "/teaching/today",
-        label: "Today",
+        label: "Today's class",
         icon: Sparkles,
         capability: Capability.sessionManageAny,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
       {
         href: "/teaching",
         icon: CalendarCheck,
-        // No apostrophe: a typographic one reads better and makes every locator
-        // that names this link — a test, a screen reader script, a search box —
-        // depend on which character was typed.
-        label: "Classes today",
+        label: "Class schedule",
         capability: Capability.sessionManageAny,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
       {
         href: "/teaching/assignments",
         label: "Assignments",
         icon: ClipboardList,
         capability: Capability.assignmentManageAny,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
       {
         href: "/teaching/assessments",
         label: "Weekly tests",
         icon: ClipboardCheck,
         capability: Capability.assessmentManageAny,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
       {
         href: "/teaching/projects",
         label: "Projects",
         icon: FolderKanban,
         capability: Capability.projectManageAny,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
       {
         href: "/teaching/exams",
-        label: "Examinations",
+        label: "Exams",
         icon: ScrollText,
         capability: Capability.examManageAny,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
       {
         href: "/teaching/questions",
         label: "Question bank",
         icon: LibraryBig,
         capability: Capability.questionViewAny,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
     ],
   },
@@ -338,7 +345,7 @@ export const STAFF_NAV: NavGroup[] = [
     items: [
       {
         href: "/admin/users",
-        label: "Users",
+        label: "User accounts",
         icon: Users,
         capability: Capability.userViewAny,
       },
@@ -361,23 +368,23 @@ export const STAFF_NAV: NavGroup[] = [
     items: [
       {
         href: "/admin/courses",
-        label: "Authoring",
+        label: "Course management",
         icon: PenLine,
         capability: Capability.courseViewAny,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
       {
         href: "/admin/batches",
         label: "Batches",
         icon: Layers,
         capability: Capability.batchViewAny,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
-      { href: "/courses", label: "Catalogue", icon: BookOpen },
+      { href: "/courses", label: "Course catalogue", icon: BookOpen },
     ],
   },
   {
-    title: "Outcomes",
+    title: "Results and reports",
     items: [
       {
         href: "/admin/completions",
@@ -396,11 +403,11 @@ export const STAFF_NAV: NavGroup[] = [
         label: "Reports",
         icon: FileSpreadsheet,
         capability: Capability.reportViewAny,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
       {
         href: "/admin/imports",
-        label: "Bulk import",
+        label: "Data import",
         icon: Workflow,
         capability: Capability.dataImport,
       },
@@ -423,13 +430,13 @@ export const STAFF_NAV: NavGroup[] = [
       },
       {
         href: "/admin/policies",
-        label: "Policies",
+        label: "Rules and policies",
         icon: ToggleLeft,
         capability: Capability.policyView,
       },
       {
         href: "/admin/forms",
-        label: "Forms",
+        label: "Form builder",
         icon: FileText,
         capability: Capability.formManage,
       },
@@ -447,7 +454,7 @@ export const STAFF_NAV: NavGroup[] = [
       },
       {
         href: "/admin/communication",
-        label: "Communication",
+        label: "Message templates",
         icon: Send,
         capability: Capability.templateManage,
       },
@@ -482,23 +489,23 @@ export const STAFF_NAV: NavGroup[] = [
         href: "/calendar",
         label: "Calendar",
         icon: CalendarDays,
-        roles: ["trainer", "counsellor", "manager", "admin", "superadmin"],
+        scopedRoles: ["trainer", "counsellor", "manager", "admin", "superadmin"],
       },
     ],
   },
   {
-    title: "Everyday",
+    title: "My work",
     items: [
       { href: "/announcements", label: "Announcements", icon: Megaphone },
       {
         href: "/discussions",
         label: "Discussions",
         icon: MessagesSquare,
-        roles: ["trainer"],
+        scopedRoles: ["trainer"],
       },
       // Forms sent to you to fill — anyone may receive one — and, for those
       // who send them, the ones you sent and "Fill in a form".
-      { href: "/forms", label: "Forms", icon: ClipboardCheck },
+      { href: "/forms", label: "Form inbox", icon: ClipboardCheck },
       { href: "/notifications", label: "Notifications", icon: Bell },
       { href: "/profile", label: "My profile", icon: UserCircle2 },
     ],
@@ -518,13 +525,13 @@ export const ADMIN_NAV: NavGroup[] = [
     items: [
       {
         href: "/admin/activity",
-        label: "Activity review",
+        label: "Staff activity",
         icon: Activity,
         capability: Capability.auditView,
       },
       {
         href: "/admin/overview",
-        label: "Overview",
+        label: "Institution overview",
         icon: BarChart3,
         capability: Capability.reportViewAny,
       },
@@ -537,7 +544,7 @@ export const ADMIN_NAV: NavGroup[] = [
     ],
   },
   {
-    title: "Manager's work",
+    title: "Academic operations",
     items: [
       {
         href: "/activities",
@@ -589,13 +596,19 @@ export const ADMIN_NAV: NavGroup[] = [
     ],
   },
   {
-    title: "Counsellor's work",
+    title: "Admissions",
     items: [
       {
         href: "/admissions/dashboard",
         label: "Admissions pipeline",
         icon: LayoutDashboard,
         capability: Capability.enrolmentCreate,
+      },
+      {
+        href: "/enquiries",
+        label: "Enquiries",
+        icon: UserPlus,
+        capability: Capability.enquiryViewAny,
       },
       {
         href: "/admissions",
@@ -624,7 +637,7 @@ export const ADMIN_NAV: NavGroup[] = [
     ],
   },
   {
-    title: "Students and fees",
+    title: "Student records",
     items: [
       {
         href: "/admin/students",
@@ -634,7 +647,7 @@ export const ADMIN_NAV: NavGroup[] = [
       },
       {
         href: "/admin/imports",
-        label: "Bulk import",
+        label: "Data import",
         icon: Workflow,
         capability: Capability.dataImport,
       },
@@ -655,11 +668,11 @@ export const ADMIN_NAV: NavGroup[] = [
         icon: LibraryBig,
         capability: Capability.courseViewAny,
       },
-      { href: "/courses", label: "Catalogue", icon: BookOpen },
+      { href: "/courses", label: "Course catalogue", icon: BookOpen },
     ],
   },
   {
-    title: "Performance and outcomes",
+    title: "Results and reports",
     items: [
       {
         href: "/admin/reports",
@@ -688,7 +701,7 @@ export const ADMIN_NAV: NavGroup[] = [
         href: "/calendar",
         label: "Calendar",
         icon: CalendarDays,
-        roles: ["admin", "superadmin"],
+        scopedRoles: ["admin", "superadmin"],
       },
     ],
   },
@@ -697,13 +710,13 @@ export const ADMIN_NAV: NavGroup[] = [
     items: [
       {
         href: "/teaching/today",
-        label: "Today",
+        label: "Today's class",
         icon: Sparkles,
         capability: Capability.sessionManageAny,
       },
       {
         href: "/teaching",
-        label: "Classes today",
+        label: "Class schedule",
         icon: CalendarCheck,
         capability: Capability.sessionManageAny,
       },
@@ -727,7 +740,7 @@ export const ADMIN_NAV: NavGroup[] = [
       },
       {
         href: "/teaching/exams",
-        label: "Examinations",
+        label: "Exams",
         icon: ScrollText,
         capability: Capability.examManageAny,
       },
@@ -744,7 +757,7 @@ export const ADMIN_NAV: NavGroup[] = [
     items: [
       {
         href: "/admin/users",
-        label: "Users",
+        label: "User accounts",
         icon: Users,
         capability: Capability.userViewAny,
       },
@@ -756,13 +769,13 @@ export const ADMIN_NAV: NavGroup[] = [
       },
       {
         href: "/admin/policies",
-        label: "Policies",
+        label: "Rules and policies",
         icon: ToggleLeft,
         capability: Capability.policyView,
       },
       {
         href: "/admin/forms",
-        label: "Forms",
+        label: "Form builder",
         icon: FileText,
         capability: Capability.formManage,
       },
@@ -780,7 +793,7 @@ export const ADMIN_NAV: NavGroup[] = [
       },
       {
         href: "/admin/communication",
-        label: "Communication",
+        label: "Message templates",
         icon: Send,
         capability: Capability.templateManage,
       },
@@ -817,10 +830,10 @@ export const ADMIN_NAV: NavGroup[] = [
     ],
   },
   {
-    title: "Everyday",
+    title: "My work",
     items: [
       { href: "/announcements", label: "Announcements", icon: Megaphone },
-      { href: "/forms", label: "Forms", icon: ClipboardCheck },
+      { href: "/forms", label: "Form inbox", icon: ClipboardCheck },
       { href: "/notifications", label: "Notifications", icon: Bell },
       { href: "/profile", label: "My profile", icon: UserCircle2 },
     ],
@@ -843,11 +856,20 @@ export const STAFF_ROLES = [
 /** Whether this person should see a given entry. */
 export function isVisible(
   item: NavItem,
-  user: { role: string; capabilities: string[] } | null,
+  user: {
+    role: string;
+    capabilities: string[];
+    custom_role?: string | null;
+  } | null,
 ): boolean {
   if (!item.capability) {
-    return !item.roles || Boolean(user && item.roles.includes(user.role));
+    return !item.scopedRoles || Boolean(user && item.scopedRoles.includes(user.role));
   }
   if (user?.capabilities.includes(item.capability)) return true;
-  return Boolean(user && item.roles?.includes(user.role));
+  // Assignment-scoped fallbacks are part of the built-in role contract. A
+  // configured role's explicit capability list replaces that contract, so a
+  // role fallback must not silently restore a permission that was removed.
+  return Boolean(
+    user && !user.custom_role && item.scopedRoles?.includes(user.role),
+  );
 }

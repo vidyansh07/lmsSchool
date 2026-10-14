@@ -295,7 +295,10 @@ and defeat both rate limiting and audit attribution.
   environments.
 - A redaction filter scrubs known-sensitive keys (`password`, `token`,
   `secret`, `authorization`, `cookie`, `api_key`, …) from structured context
-  before anything is written, recursively and depth-limited.
+  before anything is written, recursively and depth-limited. It also scrubs
+  interpolated message arguments and exception text, including verification
+  codes, recovery codes, database URLs, AWS session credentials, signed URLs,
+  request bodies and payment fields.
 - The audit log records actor, action, resource, result, timestamp, request id,
   IP, user agent, method and path. Its context is scrubbed at the single write
   point, so no caller can persist a secret by accident.
@@ -319,7 +322,8 @@ and defeat both rate limiting and audit attribution.
 
 - Backend dependencies are pinned exactly; the frontend has a committed
   lockfile. Upgrades go through a pull request so every scan re-runs.
-- CI runs `pip-audit --strict`, `npm audit --audit-level=high` and `bandit`.
+- CI runs `pip-audit --strict`, a high-severity production-only npm audit, a
+  critical-severity all-dependency npm audit, and `bandit`.
 - Dependabot proposes weekly updates, grouped for minor/patch.
 - Both images run as unprivileged users. The backend runtime image contains no
   build toolchain.
@@ -332,17 +336,14 @@ Named so nobody assumes a control exists that does not:
 
 | Not implemented | Notes |
 | --- | --- |
-| Multi-factor authentication | Planned for administrator accounts |
 | Account lockout after repeated failures | Rate limiting only, today |
 | Token authentication for non-browser clients | Foundation is ready; unused auth is unreviewed attack surface |
 | Changing your own email address | Needs its own verified, re-authenticated flow |
-| Antivirus scanning of uploads | The hook exists and is tested (`apps/common/scanning.py`); no scanner is configured, and an unreachable one refuses the upload |
+| Automated audit retention | `purge_before` exists; no scheduler yet |
 | Document uploads (ID proof, certificates) | The upload pipeline exists; no endpoint uses it yet |
 | Signed video URLs for S3 / managed providers | Modelled and routed, but only the external-URL provider is playable today |
-| Virus scanning of course resources | Same hook, same state: wired, unconfigured |
 | Per-file download rate limiting | `burst` is attached to exports and bulk imports (§14.4); individual file downloads are still on the ordinary user limit |
 | Field-level encryption at rest | Database-level encryption is a deployment concern |
-| Automated audit retention | `purge_before` exists; no scheduler yet |
 | WAF / DDoS protection | Edge concern, handled by the hosting platform |
 
 ---
@@ -427,16 +428,18 @@ URL is signed and expiring, and its object ACL grants nothing to `AllUsers`.
 
 ### Malware scanning
 
-`apps/common/scanning.py` is the seam a scanner attaches to. It answers the two
-questions that matter before a scanner exists:
+`apps/common/scanning.py` streams uploads to ClamAV's bounded INSTREAM protocol
+without sending the client filename. Staging runs clamd on the private Compose
+network; port 3310 is not published because that protocol is neither encrypted
+nor authenticated. The policy answers two failure cases:
 
 - **Infected** — the upload is refused with a message that says only that a
   security scan rejected it. The signature name goes to the audit log, never to
   the uploader: telling somebody *which* detection fired turns the endpoint into
   an oracle for tuning a payload until it passes.
-- **Scanner unavailable** — refused, by default. `UPLOAD_SCAN_FAIL_OPEN` can
-  reverse that, and should not be. Failing open means an attacker bypasses
-  scanning entirely by taking the scanner down.
+- **Scanner unavailable** — refused. Hardened settings require either `clamav`
+  or the deliberate `reject_all` test mode and reject fail-open configuration.
+  Failing open would let an attacker bypass scanning by taking the scanner down.
 
 Rejections are audited as `file.upload.rejected`.
 
@@ -493,19 +496,20 @@ view, and editing it is the first thing an intruder would want to do. Future
 tables inherit the row grants through `ALTER DEFAULT PRIVILEGES`, so a new model
 does not arrive unreadable.
 
-The script was applied to a scratch database and its grants verified with
-`has_table_privilege` before being committed; the transcript of what was checked
-is in the file's header comment.
+The provisioning script is dry-run by default and refuses an unmigrated schema.
+It reads role names and passwords from the environment through psql rather than
+embedding them in SQL or command arguments. Run it only after a verified backup,
+then review its `has_*_privilege` output.
 
 ---
 
 ## 16. Dependency policy (Phase 9, §14.7)
 
-CI fails on `pip-audit --strict`, `npm audit --audit-level=high`, `bandit` and
-`gitleaks`. A high-severity advisory is not waived silently: if one cannot be
-fixed by upgrading, the exception goes in `docs/DECISIONS.md` naming the
-advisory, why the code is not reachable by it, and what mitigates it in the
-meantime. There are no such exceptions today.
+CI fails on `pip-audit --strict`, high-severity production npm findings,
+critical findings anywhere in the npm tree, `bandit` and `gitleaks`. A
+high-severity advisory is not waived silently: if one cannot be fixed by
+upgrading, the exception goes in `docs/DECISIONS.md` naming the advisory, why
+the code is not reachable by it, and what mitigates it in the meantime.
 
 ---
 
