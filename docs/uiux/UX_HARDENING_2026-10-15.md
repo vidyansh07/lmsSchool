@@ -229,7 +229,8 @@ summary that accompanies this branch.
 | UX-21 / UX-22 tables | A control inside a row (select, button, link) never also opens the row — fixed once in `DataTable`; students and admissions rows open anywhere; inline fee-status and availability changes are announced |
 | Onboarding edge case | An address that already has an account says whose it is and offers the next step: open their trainer profile, let a manager teach, or open the account |
 | Concurrency | `expected_updated_at` on account edits and role changes; an edit based on an older copy is refused with `409 stale_write` (row-locked) and the screen offers a reload |
-| UX-28 (partial) | axe-core checks over nine new or changed surfaces, zero violations (contrast excluded) |
+| UX-16 rest | **Messages** (every email or SMS sent, and whether it arrived — `communication.view_any`) and **Certificates** (with the verification link; `GET /certificates/?student=`) tabs. There is no student-document model, so no Documents tab |
+| UX-28 | axe-core checks over nine new or changed surfaces, zero violations (contrast excluded), and a live keyboard pass: a visible ring at every Tab stop, dialogs that trap focus and return it on Escape, forms that open on their first field (`data-autofocus`), Arrow/Enter on table rows, the unsaved-changes prompt defaulting to *Keep editing*. It found and fixed: palette search needing the exact phrase, a quick action not opening its dialog from the same screen, and twenty identically named "Manage" links. A pass with a real screen reader is still worth doing |
 
 Engineering fixes found on the way: the search box and the trainer skill box
 wrote a stale value back over a search set from outside (a saved view, Back);
@@ -242,8 +243,7 @@ synchronously, which removes an intermittent session-ended test failure.
 
 Still open, and not guessed in code: **bulk actions** (UX-12) need the owner to
 name the operations; **manager versus counsellor** navigation needs the owner's
-split. A screen-reader and live keyboard pass in a browser remains a release
-check.
+split.
 
 ## Remaining UX work
 
