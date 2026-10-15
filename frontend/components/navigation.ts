@@ -146,6 +146,12 @@ export const STUDENT_NAV: NavItem[] = [
     scopedRoles: ["student"],
   },
   {
+    href: "/my-activities",
+    label: "My activities",
+    icon: ListTodo,
+    scopedRoles: ["student"],
+  },
+  {
     href: "/calendar",
     label: "Calendar",
     icon: CalendarDays,
