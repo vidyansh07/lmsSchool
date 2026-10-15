@@ -98,7 +98,8 @@ def resolve_targets(
     target: dict[str, Any],
     *,
     filterset: str,
-    search_fields: Iterable[str],
+    search_fields: Iterable[str] = (),
+    request=None,
 ) -> tuple[list[Any], list[str]]:
     """The rows to act on, and the ticked ids that named nothing visible.
 
@@ -116,7 +117,8 @@ def resolve_targets(
     rows = visible
     if any(value not in (None, "") for value in filters.values()):
         data = {key: value for key, value in filters.items() if value not in (None, "")}
-        filtered = import_string(filterset)(data=data, queryset=rows)
+        # The request goes through for filters that read the caller ("mine").
+        filtered = import_string(filterset)(data=data, queryset=rows, request=request)
         if not filtered.is_valid():
             raise ApplicationError({"filters": ["One of the filters is not valid."]})
         rows = filtered.qs

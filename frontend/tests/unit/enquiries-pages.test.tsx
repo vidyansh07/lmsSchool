@@ -26,6 +26,17 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: 
 
 vi.mock("@/components/work/activity-drawer", () => ({ ActivityDrawer: () => null }));
 
+const bulkAssignEnquiryOwner = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/bulk", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/bulk")>("@/lib/bulk");
+  return { ...actual, bulkAssignEnquiryOwner };
+});
+const listUsers = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/people", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/people")>("@/lib/people");
+  return { ...actual, listUsers };
+});
+
 const auth = vi.hoisted(() => ({
   capabilities: ["enquiry.view_any", "enquiry.manage", "form.assign", "form.view"] as string[],
 }));
@@ -201,6 +212,48 @@ describe("EnquiriesPage", () => {
       target: { value: "website" },
     });
     await waitFor(() => expect(updateEnquiry).toHaveBeenCalledWith("e-1", { source: "website" }));
+  });
+
+  it("hands the ticked enquiries to a colleague and says what happened", async () => {
+    mockList({
+      data: page<Enquiry>([enquiry(), enquiry({ id: "e-2", full_name: "Sita Rao" })]),
+    });
+    listUsers.mockImplementation((query: { role: string }) =>
+      Promise.resolve({
+        count: 1,
+        results:
+          query.role === "counsellor"
+            ? [{ id: "u-9", full_name: "Neha Gupta", email: "neha@x.test", role: "counsellor", branch_code: "JAI" }]
+            : [],
+      }),
+    );
+    bulkAssignEnquiryOwner.mockResolvedValue({ action: "assign_owner", total: 2, done: 2, skipped: [] });
+    render(<EnquiriesPage />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Ravi Sharma" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Sita Rao" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign owner" }));
+    const owner = await screen.findByRole("option", { name: /Neha Gupta · Counsellor · JAI/ });
+    fireEvent.change(owner.closest("select")!, { target: { value: "u-9" } });
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+
+    await waitFor(() =>
+      expect(bulkAssignEnquiryOwner).toHaveBeenCalledWith({ ids: ["e-1", "e-2"], owner_id: "u-9" }),
+    );
+    expect(await screen.findByRole("dialog", { name: "Owner assigned" })).toHaveTextContent(
+      "2 enquiries assigned.",
+    );
+    expect(reloadList).toHaveBeenCalled();
+  });
+
+  it("offers no bulk owner change without enquiry.manage", () => {
+    const before = auth.capabilities;
+    auth.capabilities = ["enquiry.view_any"];
+    mockList({ data: page<Enquiry>([enquiry()]) });
+    render(<EnquiriesPage />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Ravi Sharma" }));
+    expect(screen.queryByRole("button", { name: "Assign owner" })).not.toBeInTheDocument();
+    auth.capabilities = before;
   });
 
   it("shows stage and source read-only when the row cannot be managed", () => {

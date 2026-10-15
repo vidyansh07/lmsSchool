@@ -25,6 +25,7 @@ export function BulkResultDialog({
   title,
   doneLabel,
   itemNoun,
+  itemPlural,
   onClose,
 }: {
   result: BulkResult | null;
@@ -32,6 +33,7 @@ export function BulkResultDialog({
   /** Past tense of the action, e.g. "invitation sent" / "moved". */
   doneLabel: string;
   itemNoun: string;
+  itemPlural?: string;
   onClose: () => void;
 }) {
   return (
@@ -41,7 +43,7 @@ export function BulkResultDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {result
-              ? `${formatCount(result.done, itemNoun)} ${doneLabel}${
+              ? `${formatCount(result.done, itemNoun, itemPlural)} ${doneLabel}${
                   result.skipped.length > 0 ? `, ${result.skipped.length} skipped` : ''
                 }.`
               : null}

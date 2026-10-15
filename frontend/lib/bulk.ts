@@ -60,7 +60,7 @@ export async function bulkUsers(
 }
 
 export async function bulkAssignEnquiryOwner(
-  body: BulkTarget & { owner_id: string },
+  body: BulkTarget & { owner_id: string | null },
 ): Promise<BulkResult> {
   return apiMutate<BulkResult>('/api/v1/enquiries/bulk/', {
     method: 'POST',

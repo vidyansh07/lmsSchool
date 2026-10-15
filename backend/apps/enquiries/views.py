@@ -13,6 +13,7 @@ import django_filters
 from django.db.models import Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
+from rest_framework import serializers
 from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.response import Response
@@ -20,8 +21,10 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import User
 from apps.accounts.roles import UserRole
+from apps.common import bulk
 from apps.common.exceptions import ApplicationError, AuthorityError
 from apps.common.permissions import IsActiveUser
+from apps.common.throttling import BurstThrottle
 
 from . import access, services
 from .models import SOURCE_CHOICES, Enquiry, EnquiryStage, LeadChannel
@@ -144,6 +147,18 @@ class EnquirySummaryView(APIView):
         )
 
 
+def _owner_for(enquiry: Enquiry, owner: User | None) -> User | None:
+    """Refuse an owner who could not work the enquiry: somebody inactive, a
+    student, or staff at another centre."""
+    if owner is None:
+        return None
+    if not owner.is_active or owner.role == UserRole.STUDENT:
+        raise ApplicationError({"owner": ["Choose an active member of staff."]})
+    if enquiry.branch_id and owner.branch_id and owner.branch_id != enquiry.branch_id:
+        raise ApplicationError({"owner": ["The owner must work at the enquiry's centre."]})
+    return owner
+
+
 class EnquiryDetailView(APIView):
     permission_classes = (IsActiveUser,)
     serializer_class = EnquiryDetailSerializer
@@ -177,14 +192,76 @@ class EnquiryDetailView(APIView):
                 owner = User.objects.filter(pk=owner_id, is_active=True).first()
                 if owner is None:
                     raise ApplicationError({"owner": ["No such active person."]})
-                if enquiry.branch_id and owner.branch_id and owner.branch_id != enquiry.branch_id:
-                    raise ApplicationError(
-                        {"owner": ["The owner must work at the enquiry's centre."]}
-                    )
-            fields["owner"] = owner
+            fields["owner"] = _owner_for(enquiry, owner)
         services.update(actor=request.user, enquiry=enquiry, fields=fields)
         return Response(
             EnquiryDetailSerializer(
                 self._get(request, enquiry_id), context={"request": request}
             ).data
         )
+
+
+class EnquiryBulkRequestSerializer(bulk.BulkTargetSerializer):
+    """`POST /enquiries/bulk/`: hand many enquiries to one person."""
+
+    action = serializers.ChoiceField(choices=("assign_owner",))
+    #: Empty takes the owner off ("unassigned").
+    owner_id = serializers.UUIDField(allow_null=True)
+
+
+class EnquiryBulkView(APIView):
+    """Assign an owner to many enquiries at once — the ticked ones, or every
+    one the list's filters match.
+
+    Each enquiry needs the same right the single change does (its owner, or
+    `enquiry.manage` at its centre), and the same owner rule (active staff
+    at the enquiry's centre); one that fails either is skipped with the
+    reason.
+    """
+
+    permission_classes = (IsActiveUser,)
+    throttle_classes = (BurstThrottle,)
+
+    @extend_schema(
+        summary="Act on many enquiries at once",
+        request=EnquiryBulkRequestSerializer,
+        responses={200: bulk.BulkResultSerializer},
+        tags=TAG,
+    )
+    def post(self, request):
+        _refuse_students(request.user)
+        serializer = EnquiryBulkRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        owner = None
+        if data.get("owner_id"):
+            owner = User.objects.filter(pk=data["owner_id"], is_active=True).first()
+            if owner is None or owner.role == UserRole.STUDENT:
+                raise ApplicationError({"owner_id": ["Choose an active member of staff."]})
+
+        rows, missing = bulk.resolve_targets(
+            access.visible_enquiries(request.user),
+            data,
+            filterset="apps.enquiries.views.EnquiryFilterSet",
+            request=request,
+        )
+
+        def assign(enquiry: Enquiry) -> str | None:
+            if not access.can_manage_enquiry(request.user, enquiry):
+                return "You cannot change this enquiry."
+            if enquiry.owner_id == getattr(owner, "pk", None):
+                return "Already theirs." if owner else "Already unassigned."
+            services.update(
+                actor=request.user, enquiry=enquiry, fields={"owner": _owner_for(enquiry, owner)}
+            )
+            return None
+
+        result = bulk.apply_each(
+            bulk.BulkResult(action=data["action"]),
+            rows,
+            missing,
+            assign,
+            lambda enquiry: enquiry.full_name or enquiry.mobile or str(enquiry.pk),
+        )
+        return Response(bulk.BulkResultSerializer(result).data)

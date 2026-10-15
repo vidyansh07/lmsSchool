@@ -35,6 +35,7 @@ export function BulkActionsBar({
   onClear,
   actions,
   itemNoun = 'row',
+  itemPlural,
   className,
   children,
 }: {
@@ -48,6 +49,8 @@ export function BulkActionsBar({
   onClear: () => void;
   actions: BulkAction[];
   itemNoun?: string;
+  /** For a noun whose plural is not "+s" ("enquiry", "enquiries"). */
+  itemPlural?: string;
   className?: string;
   /** Controls that are not a plain button — an export menu, say. */
   children?: ReactNode;
@@ -71,8 +74,8 @@ export function BulkActionsBar({
     >
       <p aria-live="polite" className="font-medium">
         {selectAllMatching
-          ? `All ${formatCount(totalMatchingCount ?? selectedCount, itemNoun)} matching the current filter are selected`
-          : `${formatCount(selectedCount, itemNoun)} selected`}
+          ? `All ${formatCount(totalMatchingCount ?? selectedCount, itemNoun, itemPlural)} matching the current filter are selected`
+          : `${formatCount(selectedCount, itemNoun, itemPlural)} selected`}
       </p>
 
       {canOfferSelectAll ? (
@@ -81,7 +84,7 @@ export function BulkActionsBar({
           onClick={onSelectAllMatching}
           className="text-action underline-offset-2 hover:underline"
         >
-          Select all {formatCount(totalMatchingCount ?? 0, itemNoun)} matching this filter
+          Select all {formatCount(totalMatchingCount ?? 0, itemNoun, itemPlural)} matching this filter
         </button>
       ) : null}
 
