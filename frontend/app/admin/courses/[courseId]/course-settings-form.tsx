@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
 import { fieldErrors } from '@/lib/api';
 import { listCategories, updateCourse } from '@/lib/courses';
 import { DIFFICULTY_OPTIONS, VISIBILITY_OPTIONS } from '@/lib/course-labels';
@@ -41,6 +42,18 @@ export function CourseSettingsForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const dirty =
+    title !== course.title ||
+    shortDescription !== course.short_description ||
+    description !== course.description ||
+    difficulty !== course.difficulty ||
+    visibility !== course.visibility ||
+    duration !== (course.estimated_duration_minutes ? String(course.estimated_duration_minutes) : '') ||
+    defaultFee !== (course.default_fee ?? '') ||
+    objectives !== course.learning_objectives.join('\n') ||
+    prerequisites !== course.prerequisites.join('\n');
+  // A refresh or a closed tab asks first while the details are unsaved.
+  useUnsavedChanges(dirty && !isSaving);
 
   useEffect(() => {
     let cancelled = false;

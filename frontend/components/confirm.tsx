@@ -146,7 +146,10 @@ export function Confirm({
           </p>
         ) : null}
         <div className="mt-5 flex justify-end gap-2">
+          {/* `type="button"`: a confirmation rendered inside a form must never
+              submit it — the default type of a button there is "submit". */}
           <Button
+            type="button"
             data-confirm-cancel
             variant="outline"
             size="sm"
@@ -155,7 +158,13 @@ export function Confirm({
           >
             {cancelLabel}
           </Button>
-          <Button variant={confirmVariant} size="sm" onClick={onConfirm} disabled={isConfirming}>
+          <Button
+            type="button"
+            variant={confirmVariant}
+            size="sm"
+            onClick={onConfirm}
+            disabled={isConfirming}
+          >
             {isConfirming ? 'Working…' : confirmLabel}
           </Button>
         </div>

@@ -31,6 +31,7 @@ import { FormAssignmentsTable } from "@/components/forms/form-assignments-table"
 import { SendFormDialog } from "@/components/forms/send-form-dialog";
 import { EmptyState } from "@/components/states";
 import { useApi } from "@/hooks/use-api";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { ApiError, errorMessage } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
 import { useAuth } from "@/components/auth-provider";
@@ -150,6 +151,8 @@ export function FormDetail({ slug }: { slug: string }) {
     null,
   );
   const [dirty, setDirty] = useState(false);
+  // A refresh or a closed tab asks first while there are unsaved edits.
+  useUnsavedChanges(dirty);
 
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);

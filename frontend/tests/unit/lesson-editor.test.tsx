@@ -121,3 +121,25 @@ describe('LessonEditor — double-submission protection', () => {
     resolve();
   });
 });
+
+describe('LessonEditor — unsaved work', () => {
+  it('asks before Cancel throws away a half-written lesson', async () => {
+    const onCancel = vi.fn();
+    render(<LessonEditor moduleId="module-1" onSaved={vi.fn()} onCancel={onCancel} />);
+
+    fireEvent.change(screen.getByLabelText(/^Lesson title/), { target: { value: 'Pipes and redirection' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent("Discard this lesson's changes?");
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('cancels at once when nothing was typed', () => {
+    const onCancel = vi.fn();
+    render(<LessonEditor moduleId="module-1" onSaved={vi.fn()} onCancel={onCancel} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+});

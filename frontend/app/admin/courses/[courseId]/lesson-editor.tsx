@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
+import { Confirm } from '@/components/confirm';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
 import { ApiError, fieldErrors } from '@/lib/api';
 import {
   addLessonResourceLink,
@@ -104,6 +106,10 @@ export function LessonEditor({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isChangingStatus, setIsChangingStatus] = useState(false);
+  // Typing into the editor marks it; Cancel, a refresh or a closed tab then
+  // asks before throwing a half-written lesson away.
+  const [touched, setTouched] = useState(false);
+  const { isPrompting, guard, confirmDiscard, cancelDiscard } = useUnsavedChanges(touched && !isSaving);
 
   // Load the full body when editing: the outline summary deliberately does not
   // include it, so the editor has to ask for it separately.
@@ -135,6 +141,7 @@ export function LessonEditor({
   }, [lessonId]);
 
   function set<K extends keyof LessonFormState>(key: K, value: LessonFormState[K]) {
+    setTouched(true);
     setForm((current) => ({ ...current, [key]: value }));
   }
 
@@ -183,160 +190,171 @@ export function LessonEditor({
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="space-y-4 rounded-card border border-line p-4"
-      noValidate
-    >
-      {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
+    <>
+      <form
+        onSubmit={onSubmit}
+        className="space-y-4 rounded-card border border-line p-4"
+        noValidate
+      >
+        {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Lesson title" htmlFor="lesson-title" error={errors.title} required>
-          <Input value={form.title} onChange={(event) => set('title', event.target.value)} />
-        </Field>
-        <Field label="Content type" htmlFor="lesson-type" error={errors.content_type}>
-          <Select
-            value={form.content_type}
-            onChange={(event) => set('content_type', event.target.value as LessonContentType)}
-          >
-            {CONTENT_TYPE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      </div>
-
-      <Field label="Description" htmlFor="lesson-description" error={errors.description}>
-        <Textarea
-          rows={2}
-          value={form.description}
-          onChange={(event) => set('description', event.target.value)}
-        />
-      </Field>
-
-      {form.content_type === 'text' ? (
-        <Field
-          label="Lesson body"
-          htmlFor="lesson-body"
-          error={errors.text_content}
-          hint="Plain text. Rendered as written, never as HTML."
-        >
-          <Textarea
-            rows={8}
-            value={form.text_content}
-            onChange={(event) => set('text_content', event.target.value)}
-          />
-        </Field>
-      ) : null}
-
-      {form.content_type === 'external_link' ? (
-        <Field
-          label="External URL"
-          htmlFor="lesson-url"
-          error={errors.external_url}
-          hint="Must be an https:// URL."
-        >
-          <Input
-            type="url"
-            value={form.external_url}
-            onChange={(event) => set('external_url', event.target.value)}
-          />
-        </Field>
-      ) : null}
-
-      {form.content_type === 'video' ? (
         <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Lesson title" htmlFor="lesson-title" error={errors.title} required>
+            <Input value={form.title} onChange={(event) => set('title', event.target.value)} />
+          </Field>
+          <Field label="Content type" htmlFor="lesson-type" error={errors.content_type}>
+            <Select
+              value={form.content_type}
+              onChange={(event) => set('content_type', event.target.value as LessonContentType)}
+            >
+              {CONTENT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+
+        <Field label="Description" htmlFor="lesson-description" error={errors.description}>
+          <Textarea
+            rows={2}
+            value={form.description}
+            onChange={(event) => set('description', event.target.value)}
+          />
+        </Field>
+
+        {form.content_type === 'text' ? (
           <Field
-            label="Video URL"
-            htmlFor="lesson-video"
-            error={errors.video}
-            hint="https:// only. Stored as metadata; never served from this app."
+            label="Lesson body"
+            htmlFor="lesson-body"
+            error={errors.text_content}
+            hint="Plain text. Rendered as written, never as HTML."
+          >
+            <Textarea
+              rows={8}
+              value={form.text_content}
+              onChange={(event) => set('text_content', event.target.value)}
+            />
+          </Field>
+        ) : null}
+
+        {form.content_type === 'external_link' ? (
+          <Field
+            label="External URL"
+            htmlFor="lesson-url"
+            error={errors.external_url}
+            hint="Must be an https:// URL."
           >
             <Input
               type="url"
-              value={form.video_source_url}
-              onChange={(event) => set('video_source_url', event.target.value)}
+              value={form.external_url}
+              onChange={(event) => set('external_url', event.target.value)}
             />
           </Field>
-          <Field label="Video length (seconds)" htmlFor="lesson-video-duration">
+        ) : null}
+
+        {form.content_type === 'video' ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Video URL"
+              htmlFor="lesson-video"
+              error={errors.video}
+              hint="https:// only. Stored as metadata; never served from this app."
+            >
+              <Input
+                type="url"
+                value={form.video_source_url}
+                onChange={(event) => set('video_source_url', event.target.value)}
+              />
+            </Field>
+            <Field label="Video length (seconds)" htmlFor="lesson-video-duration">
+              <Input
+                type="number"
+                min={0}
+                value={form.video_duration_seconds}
+                onChange={(event) => set('video_duration_seconds', event.target.value)}
+              />
+            </Field>
+          </div>
+        ) : null}
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Duration (minutes)" htmlFor="lesson-duration" error={errors.duration_minutes}>
             <Input
               type="number"
-              min={0}
-              value={form.video_duration_seconds}
-              onChange={(event) => set('video_duration_seconds', event.target.value)}
+              min={1}
+              value={form.duration_minutes}
+              onChange={(event) => set('duration_minutes', event.target.value)}
             />
           </Field>
+          <div className="flex items-center gap-2 self-end pb-2 text-sm">
+            <Checkbox
+              id="lesson-is-preview"
+              checked={form.is_preview}
+              onCheckedChange={(value) => set('is_preview', value)}
+            />
+            <label htmlFor="lesson-is-preview">Free preview</label>
+          </div>
+          <div className="flex items-center gap-2 self-end pb-2 text-sm">
+            <Checkbox
+              id="lesson-is-required"
+              checked={form.is_required}
+              onCheckedChange={(value) => set('is_required', value)}
+            />
+            <label htmlFor="lesson-is-required">Required</label>
+          </div>
         </div>
-      ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Duration (minutes)" htmlFor="lesson-duration" error={errors.duration_minutes}>
-          <Input
-            type="number"
-            min={1}
-            value={form.duration_minutes}
-            onChange={(event) => set('duration_minutes', event.target.value)}
-          />
-        </Field>
-        <div className="flex items-center gap-2 self-end pb-2 text-sm">
-          <Checkbox
-            id="lesson-is-preview"
-            checked={form.is_preview}
-            onCheckedChange={(value) => set('is_preview', value)}
-          />
-          <label htmlFor="lesson-is-preview">Free preview</label>
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" size="sm" disabled={isSaving}>
+            {/* "Create lesson", not "Add lesson": the button that opens this
+                editor is already called "Add lesson", and two controls with one
+                name is ambiguous for anyone navigating by label — a screen reader
+                included. */}
+            {isSaving ? 'Saving…' : lesson ? 'Save lesson' : 'Create lesson'}
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => guard(onCancel)}>
+            Cancel
+          </Button>
+          {lesson ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={isChangingStatus}
+                onClick={() => void onToggleStatus()}
+              >
+                {lesson.status === 'published' ? 'Unpublish' : 'Publish'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={isChangingStatus}
+                onClick={() => void onDelete()}
+                className="ml-auto"
+              >
+                <Trash2 className="size-3.5" aria-hidden="true" />
+                Delete
+              </Button>
+            </>
+          ) : null}
         </div>
-        <div className="flex items-center gap-2 self-end pb-2 text-sm">
-          <Checkbox
-            id="lesson-is-required"
-            checked={form.is_required}
-            onCheckedChange={(value) => set('is_required', value)}
-          />
-          <label htmlFor="lesson-is-required">Required</label>
-        </div>
-      </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" size="sm" disabled={isSaving}>
-          {/* "Create lesson", not "Add lesson": the button that opens this
-              editor is already called "Add lesson", and two controls with one
-              name is ambiguous for anyone navigating by label — a screen reader
-              included. */}
-          {isSaving ? 'Saving…' : lesson ? 'Save lesson' : 'Create lesson'}
-        </Button>
-        <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
-          Cancel
-        </Button>
-        {lesson ? (
-          <>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={isChangingStatus}
-              onClick={() => void onToggleStatus()}
-            >
-              {lesson.status === 'published' ? 'Unpublish' : 'Publish'}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="destructive"
-              disabled={isChangingStatus}
-              onClick={() => void onDelete()}
-              className="ml-auto"
-            >
-              <Trash2 className="size-3.5" aria-hidden="true" />
-              Delete
-            </Button>
-          </>
-        ) : null}
-      </div>
-
-      {lesson && loaded ? <ResourceManager lesson={loaded} onChanged={onSaved} /> : null}
-    </form>
+        {lesson && loaded ? <ResourceManager lesson={loaded} onChanged={onSaved} /> : null}
+      </form>
+      <Confirm
+        open={isPrompting}
+        title="Discard this lesson's changes?"
+        description="What was typed here has not been saved."
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        onConfirm={confirmDiscard}
+        onCancel={cancelDiscard}
+      />
+    </>
   );
 }
 
