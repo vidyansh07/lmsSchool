@@ -45,6 +45,7 @@ import { Activity, CalendarCheck, CalendarDays, ClipboardCheck, ClipboardList } 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
+import { Confirm } from '@/components/confirm';
 import { RequireAuth } from '@/components/require-auth';
 import { Capability } from '@/lib/capabilities';
 import { ErrorState, LoadingState } from '@/components/states';
@@ -78,7 +79,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { PresentNowStrip } from '@/components/academics/present-now';
 import { getRegister, listTodaySessions, markAttendance } from '@/lib/academics';
-import { ApiError, errorMessage, fieldErrors } from '@/lib/api';
+import { ApiError, errorMessage, fieldErrors, unshownError } from '@/lib/api';
 import { getBatch } from '@/lib/batches';
 import { listModules } from '@/lib/courses';
 import {
@@ -165,6 +166,37 @@ function ClassCompleteSummary({
  * tested in `app/admissions/new/page.tsx` — without needing to drive
  * `next/navigation` for every behaviour that has nothing to do with routing.
  */
+/** The report's own fields, which `DsrPanel` shows an error beside. Anything
+ *  else the server refuses with is said above the Finish button instead. */
+const DSR_FIELD_KEYS = [
+  'actual_topic',
+  'attachments',
+  'homework',
+  'homework_due_on',
+  'issues',
+  'lessons_covered',
+  'offline_count',
+  'online_count',
+  'student_concerns',
+  'student_notes',
+  'teaching_notes',
+] as const;
+
+/** Present (late counts as present) and absent, as the register will record them. */
+function countMarks(
+  entries: { enrollment_id: string }[],
+  marks: Record<string, AttendanceStatus>,
+): { present: number; absent: number; student: number } {
+  let present = 0;
+  let absent = 0;
+  for (const entry of entries) {
+    const status = marks[entry.enrollment_id];
+    if (status === 'present' || status === 'late') present += 1;
+    else if (status === 'absent') absent += 1;
+  }
+  return { present, absent, student: entries.length };
+}
+
 export function ClassWorkspace({
   sessionId,
   onChangeClass,
@@ -206,6 +238,11 @@ export function ClassWorkspace({
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [topicError, setTopicError] = useState<string | null>(null);
   const [dsrFieldErrors, setDsrFieldErrors] = useState<Record<string, string>>({});
+  // A refusal of the report that is not about one of its fields — "already
+  // submitted", "class not found", a 403 — said beside the Finish button.
+  const [finishError, setFinishError] = useState<string | null>(null);
+  // Which button is waiting on "N students are not marked" before it runs.
+  const [confirmUnmarked, setConfirmUnmarked] = useState<'finish' | 'save' | null>(null);
 
   const [isFinishing, setIsFinishing] = useState(false);
   const [finished, setFinished] = useState(false);
@@ -332,15 +369,21 @@ export function ClassWorkspace({
         student: dsr?.student_count ?? 0,
       };
     }
-    let present = 0;
-    let absent = 0;
-    for (const entry of register.entries) {
-      const status = marks[entry.enrollment_id];
-      if (status === 'present' || status === 'late') present += 1;
-      else if (status === 'absent') absent += 1;
-    }
-    return { present, absent, student: register.entries.length };
+    return countMarks(register.entries, marks);
   }, [register, marks, dsr]);
+
+  const unmarkedCount =
+    register && register.can_mark
+      ? register.entries.filter((entry) => !marks[entry.enrollment_id]).length
+      : 0;
+
+  /** Every unmarked student recorded absent — said out loud first, below. */
+  function marksWithUnmarkedAbsent(): Record<string, AttendanceStatus> {
+    if (!register) return marks;
+    const filled = { ...marks };
+    for (const entry of register.entries) filled[entry.enrollment_id] ??= 'absent';
+    return filled;
+  }
 
   // --- Local draft: synchronous, no debounce (see the module docstring) ----
 
@@ -435,47 +478,69 @@ export function ClassWorkspace({
     setDraft((current) => withTopicChoice(current, value, SKIP_TOPIC_VALUE));
   }
 
-  function buildRegisterEntries() {
+  function buildRegisterEntries(using: Record<string, AttendanceStatus> = marks) {
     if (!register) return [];
     return register.entries.map((entry) => ({
       enrollment_id: entry.enrollment_id,
-      status: marks[entry.enrollment_id] ?? ('absent' as AttendanceStatus),
+      status: using[entry.enrollment_id] ?? ('absent' as AttendanceStatus),
       mode: modes[entry.enrollment_id] ?? entry.mode,
       note: entry.note,
     }));
   }
 
-  async function saveRegisterOnly() {
+  async function saveRegisterOnly(using: Record<string, AttendanceStatus> = marks) {
     if (!register || !register.can_mark) return;
     setIsSavingRegister(true);
     setRegisterError(null);
     setRegisterSaved(null);
     try {
-      const result = await markAttendance(sessionId, buildRegisterEntries());
+      const result = await markAttendance(sessionId, buildRegisterEntries(using));
       setRegisterSaved(
         `Saved. ${result.created} new, ${result.updated} updated` +
           (result.corrections ? `, ${result.corrections} corrected.` : '.'),
       );
       setRegister(await getRegister(sessionId));
     } catch (cause) {
-      setRegisterError(fieldErrors(cause).__all__ ?? 'The register could not be saved.');
+      setRegisterError(errorMessage(cause, 'The register could not be saved.'));
     } finally {
       setIsSavingRegister(false);
     }
   }
 
-  async function finishClass() {
+  /** Finish or save — but never record an unmarked student absent silently. */
+  function request(action: 'finish' | 'save') {
+    if (unmarkedCount > 0) {
+      setConfirmUnmarked(action);
+      return;
+    }
+    if (action === 'finish') void finishClass();
+    else void saveRegisterOnly();
+  }
+
+  function confirmUnmarkedAbsent() {
+    const action = confirmUnmarked;
+    setConfirmUnmarked(null);
+    const filled = marksWithUnmarkedAbsent();
+    setIsDirty(true);
+    setMarks(filled);
+    if (action === 'finish') void finishClass(filled);
+    else if (action === 'save') void saveRegisterOnly(filled);
+  }
+
+  async function finishClass(using: Record<string, AttendanceStatus> = marks) {
     if (!session || !register || !dsr) return;
     setIsFinishing(true);
     setRegisterError(null);
     setTopicError(null);
     setDsrFieldErrors({});
+    setFinishError(null);
+    const counts = register ? countMarks(register.entries, using) : liveCounts;
 
     if (register.can_mark) {
       try {
-        await markAttendance(sessionId, buildRegisterEntries());
+        await markAttendance(sessionId, buildRegisterEntries(using));
       } catch (cause) {
-        setRegisterError(fieldErrors(cause).__all__ ?? 'The register could not be saved.');
+        setRegisterError(errorMessage(cause, 'The register could not be saved.'));
         setIsFinishing(false);
         return;
       }
@@ -490,7 +555,7 @@ export function ClassWorkspace({
             : { lesson_id: topicSelection, status: 'completed' },
         );
       } catch (cause) {
-        setTopicError(fieldErrors(cause).__all__ ?? 'The topic could not be recorded.');
+        setTopicError(errorMessage(cause, 'The topic could not be recorded.'));
         setIsFinishing(false);
         return;
       }
@@ -499,21 +564,40 @@ export function ClassWorkspace({
     try {
       const payload: DSRWritePayload = {
         ...withTopicChoice(draft, topicSelection, SKIP_TOPIC_VALUE),
-        present_count: liveCounts.present,
-        absent_count: liveCounts.absent,
-        student_count: liveCounts.student,
+        present_count: counts.present,
+        absent_count: counts.absent,
+        student_count: counts.student,
         submit: true,
       };
-      const submitted = dsr.id ? await updateDsr(dsr.id, payload) : await startDsr(sessionId, payload);
+      const submitted = await submitReport(payload);
       setDsr(submitted);
       clearDsrDraft(sessionId);
       setIsDirty(false);
-      setFinishedCounts({ present: liveCounts.present, absent: liveCounts.absent });
+      setFinishedCounts({ present: counts.present, absent: counts.absent });
       setFinished(true);
     } catch (cause) {
-      setDsrFieldErrors(fieldErrors(cause));
+      const fields = fieldErrors(cause);
+      setDsrFieldErrors(fields);
+      setFinishError(unshownError(fields, DSR_FIELD_KEYS));
     } finally {
       setIsFinishing(false);
+    }
+  }
+
+  /**
+   * Submit the report, starting it if it has no id yet. The background
+   * autosave may have started it a moment ago — then the start answers 409
+   * and the report that now exists is the one to submit, not an error.
+   */
+  async function submitReport(payload: DSRWritePayload): Promise<DSR> {
+    if (dsr?.id) return updateDsr(dsr.id, payload);
+    try {
+      return await startDsr(sessionId, payload);
+    } catch (cause) {
+      if (!(cause instanceof ApiError) || cause.status !== 409) throw cause;
+      const latest = await getSessionDsr(sessionId);
+      if (!latest.id) throw cause;
+      return updateDsr(latest.id, payload);
     }
   }
 
@@ -523,7 +607,7 @@ export function ClassWorkspace({
         keys: 'mod+enter',
         description: 'Finish class',
         handler: () => {
-          if (!isFinishing && !finished) void finishClass();
+          if (!isFinishing && !finished) request('finish');
         },
       },
     ],
@@ -607,7 +691,7 @@ export function ClassWorkspace({
               canMark={register.can_mark}
             />
             {register.can_mark ? (
-              <Button type="button" variant="outline" size="sm" onClick={() => void saveRegisterOnly()} disabled={isSavingRegister}>
+              <Button type="button" variant="outline" size="sm" onClick={() => request('save')} disabled={isSavingRegister}>
                 {isSavingRegister ? 'Saving…' : 'Save register'}
               </Button>
             ) : null}
@@ -677,11 +761,18 @@ export function ClassWorkspace({
       />
 
       {!dsr || !register ? null : dsr.is_editable ? (
-        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4">
-          <span className="text-xs text-ink-muted">Tip: Ctrl/Cmd + Enter finishes the class.</span>
-          <Button type="button" size="lg" onClick={() => void finishClass()} disabled={isFinishing}>
-            {isFinishing ? 'Finishing…' : 'Finish class'}
-          </Button>
+        <div className="space-y-3 border-t border-line pt-4">
+          {finishError ? (
+            <Alert variant="error" role="alert">
+              {finishError}
+            </Alert>
+          ) : null}
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <span className="text-xs text-ink-muted">Tip: Ctrl/Cmd + Enter finishes the class.</span>
+            <Button type="button" size="lg" onClick={() => request('finish')} disabled={isFinishing}>
+              {isFinishing ? 'Finishing…' : 'Finish class'}
+            </Button>
+          </div>
         </div>
       ) : (
         <p className="border-t border-line pt-4 text-sm text-ink-muted">
@@ -689,6 +780,17 @@ export function ClassWorkspace({
           them if something in it is wrong.
         </p>
       )}
+
+      <Confirm
+        open={confirmUnmarked !== null}
+        title={`${formatNumber(unmarkedCount)} student${unmarkedCount === 1 ? ' is' : 's are'} not marked`}
+        description="Anyone left unmarked is recorded as absent. Go back to mark them, or record them absent and carry on."
+        confirmLabel={confirmUnmarked === 'save' ? 'Mark absent and save' : 'Mark absent and finish'}
+        cancelLabel="Go back and mark"
+        confirmVariant="primary"
+        onConfirm={confirmUnmarkedAbsent}
+        onCancel={() => setConfirmUnmarked(null)}
+      />
     </div>
   );
 }
