@@ -737,7 +737,13 @@ def _ensure_registers(ctx: Context, scope: Scope) -> None:
             if session.status != SessionStatus.COMPLETED:
                 # A class that was in progress: the register does not complete it.
                 set_session_status(session=session, target=SessionStatus.COMPLETED, actor=actor)
-            when = _end_of(ctx, session) + timedelta(minutes=10)
+            # Ten minutes after the class — but on its own day: a 21:55 class
+            # (the latest the clock slot allows) ends at 23:55, and its
+            # register is not taken tomorrow.
+            when = min(
+                _end_of(ctx, session) + timedelta(minutes=10),
+                ctx.at(session.session_date, 23, 59),
+            )
             ctx.backdate(session, attendance_taken_at=when)
             # The whole register at once: the same queryset ``update()``
             # ``ctx.backdate`` makes, without a round trip per mark — six
