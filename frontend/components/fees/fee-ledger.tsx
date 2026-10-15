@@ -53,7 +53,7 @@ import {
 import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
-import { ApiError, errorMessage, fieldErrors } from '@/lib/api';
+import { ApiError, errorMessage, fieldErrors, isUncertainOutcome, unshownError } from '@/lib/api';
 import { ENROLLMENT_STATUS_LABEL, ENROLLMENT_STATUS_VARIANT } from '@/lib/batch-labels';
 import {
   getFeeHistory,
@@ -210,8 +210,10 @@ function SetFeeForm({ onOpenChange, enrollmentId, plan, onSaved }: SetFeeProps) 
     } catch (cause) {
       const fields = fieldErrors(cause);
       setErrors(fields);
-      if (Object.keys(fields).length === 0)
-        setMessage(errorMessage(cause, 'The fee could not be saved.'));
+      setMessage(
+        unshownError(fields, ['agreed_amount', 'discount_amount', 'discount_reason', 'notes']) ??
+          '',
+      );
     } finally {
       setSaving(false);
     }
@@ -347,10 +349,22 @@ function RecordPaymentForm({ onOpenChange, plan, onSaved }: PlanDialogProps) {
       onOpenChange(false);
       onSaved();
     } catch (cause) {
+      if (isUncertainOutcome(cause)) {
+        // The request may have landed. Refresh the ledger behind this dialog
+        // and say so, rather than inviting a second click and a second receipt.
+        setMessage(
+          'No answer came back from the server, so this payment may already be saved. ' +
+            'Check the payments list before recording it again.',
+        );
+        onSaved();
+        return;
+      }
       const fields = fieldErrors(cause);
       setErrors(fields);
-      if (Object.keys(fields).length === 0)
-        setMessage(errorMessage(cause, 'The payment could not be recorded.'));
+      setMessage(
+        unshownError(fields, ['amount', 'paid_on', 'method', 'reference', 'reference_name', 'note']) ??
+          '',
+      );
     } finally {
       setSaving(false);
     }
@@ -488,7 +502,7 @@ function NextDueForm({ onOpenChange, plan, onSaved }: PlanDialogProps) {
     } catch (cause) {
       const fields = fieldErrors(cause);
       setErrors(fields);
-      if (Object.keys(fields).length === 0) setMessage(errorMessage(cause, 'Could not save this.'));
+      setMessage(unshownError(fields, ['next_due_amount', 'next_due_on']) ?? '');
     } finally {
       setSaving(false);
     }

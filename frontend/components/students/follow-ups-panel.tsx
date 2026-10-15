@@ -27,7 +27,7 @@ import {
 import { Field } from '@/components/ui/field';
 import { Select, Textarea } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
-import { errorMessage, fieldErrors } from '@/lib/api';
+import { errorMessage, fieldErrors, unshownError } from '@/lib/api';
 import { formatDateTime } from '@/lib/format';
 import { ACTIVITY_STATUS_LABEL, ACTIVITY_STATUS_VARIANT } from '@/lib/labels';
 import { completeActivity, listStudentActivities } from '@/lib/work';
@@ -82,8 +82,7 @@ function MarkDoneForm({
     } catch (cause) {
       const fields = fieldErrors(cause);
       setErrors(fields);
-      if (Object.keys(fields).length === 0)
-        setMessage(errorMessage(cause, 'Could not mark this follow-up done.'));
+      setMessage(unshownError(fields, ['channel', 'outcome', 'summary']) ?? '');
     } finally {
       setSaving(false);
     }

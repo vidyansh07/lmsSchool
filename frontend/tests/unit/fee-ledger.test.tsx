@@ -365,6 +365,54 @@ describe('FeeLedger', () => {
     expect(await within(dialog).findByText('Only ₹9,000 is still owed.')).toBeInTheDocument();
   });
 
+  it('says why a payment was refused when the reason is not about a field', async () => {
+    const { ApiError } = await import('@/lib/api');
+    recordPayment.mockRejectedValue(
+      new ApiError(403, 'permission_denied', 'You cannot record payments for this centre.', 'r'),
+    );
+    render(
+      <FeeLedger
+        summary={summary([plan()])}
+        enrollments={[]}
+        mayManage
+        isLoading={false}
+        error={null}
+        onChanged={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /record payment/i }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/amount/i), { target: { value: '500' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /record payment/i }));
+    expect(
+      await within(dialog).findByText('You cannot record payments for this centre.'),
+    ).toBeInTheDocument();
+  });
+
+  it('warns that a timed-out payment may already be saved and refreshes the ledger', async () => {
+    const { ApiError } = await import('@/lib/api');
+    recordPayment.mockRejectedValue(
+      new ApiError(0, 'timeout', 'The request timed out.', ''),
+    );
+    const onChanged = vi.fn();
+    render(
+      <FeeLedger
+        summary={summary([plan()])}
+        enrollments={[]}
+        mayManage
+        isLoading={false}
+        error={null}
+        onChanged={onChanged}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /record payment/i }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/amount/i), { target: { value: '500' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /record payment/i }));
+    expect(await within(dialog).findByText(/may already be saved/i)).toBeInTheDocument();
+    expect(onChanged).toHaveBeenCalled();
+  });
+
   it('voids a payment with a reason, never without one', async () => {
     voidPayment.mockResolvedValue(payment({ is_voided: true }));
     render(

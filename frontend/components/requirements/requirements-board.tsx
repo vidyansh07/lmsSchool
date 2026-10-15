@@ -33,7 +33,7 @@ import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Pagination } from "@/components/pagination";
 import { useList } from "@/hooks/use-list";
-import { errorMessage, fieldErrors } from "@/lib/api";
+import { errorMessage, fieldErrors, unshownError } from "@/lib/api";
 import { listBatches } from "@/lib/batches";
 import { Capability, can } from "@/lib/capabilities";
 import { fallback, formatDate, formatDateTime } from "@/lib/format";
@@ -492,8 +492,7 @@ function RaiseDialog({
     } catch (cause) {
       const fields = fieldErrors(cause);
       setErrors(fields);
-      if (Object.keys(fields).length === 0)
-        setFormError(errorMessage(cause, "That could not be raised."));
+      setFormError(unshownError(fields, ["title", "details", "batch", "needed_by"]));
     } finally {
       setIsSaving(false);
     }

@@ -256,6 +256,30 @@ function firstMessage(value: unknown): string | null {
   return null;
 }
 
+/**
+ * The sentence a form shows above its fields: the form-level message, or else
+ * the first error under a key the form does not render beside a field. A 403,
+ * a 409 on `status` or a timeout otherwise leaves the button reverting with
+ * nothing said.
+ */
+export function unshownError(
+  fields: Record<string, string>,
+  shown: readonly string[],
+): string | null {
+  if (fields.__all__) return fields.__all__;
+  const stray = Object.entries(fields).find(([key]) => !shown.includes(key));
+  return stray ? stray[1] : null;
+}
+
+/**
+ * True when a write may have reached the server although no answer came
+ * back — a timeout or a dropped connection. Retrying blindly can record a
+ * payment twice; the screen should say to check first.
+ */
+export function isUncertainOutcome(cause: unknown): boolean {
+  return cause instanceof ApiError && (cause.code === 'timeout' || cause.code === 'network_error');
+}
+
 /** A friendly sentence for a `429 rate_limited` refusal, or `null` otherwise. */
 export function rateLimitMessage(cause: unknown): string | null {
   if (!(cause instanceof ApiError) || cause.code !== 'rate_limited') return null;
