@@ -9,6 +9,7 @@ import { MfaVerifyForm } from "@/components/auth/mfa-verify-form";
 import { useAuth } from "@/components/auth-provider";
 import { homeFor, safeReturnPath } from "@/components/navigation";
 import { ErrorState } from "@/components/states";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,7 @@ function destinationFor(user: CurrentUser): string {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, setUser } = useAuth();
+  const { user, setUser, sessionEnded } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -96,6 +97,11 @@ export default function LoginPage() {
         </p>
       </div>
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        {sessionEnded && !errors.__all__ ? (
+          <Alert variant="info" role="status">
+            Your session has ended. Sign in again to carry on where you were.
+          </Alert>
+        ) : null}
         {errors.__all__ ? (
           // The server answers every failed sign-in identically, so this
           // never reveals whether the address exists.

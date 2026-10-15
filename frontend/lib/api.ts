@@ -53,6 +53,22 @@ function readCsrfCookie(): string | null {
   return match ? decodeURIComponent(match.slice(CSRF_COOKIE_NAME.length + 1)) : null;
 }
 
+/**
+ * Told when the server answers `authentication_required` — the session cookie
+ * expired, was revoked from another device, or a role change ended it.
+ * `AuthProvider` listens, so a screen open across the 12-hour session limit
+ * goes back to sign-in instead of showing "Authentication is required." with
+ * a Retry that can never work.
+ */
+const sessionEndedListeners = new Set<() => void>();
+
+export function onSessionEnded(listener: () => void): () => void {
+  sessionEndedListeners.add(listener);
+  return () => {
+    sessionEndedListeners.delete(listener);
+  };
+}
+
 export interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   /** Abort the request after this many milliseconds. */
@@ -139,13 +155,15 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (!response.ok) {
     const envelope = payload as ApiErrorBody | null;
-    throw new ApiError(
+    const error = new ApiError(
       response.status,
       envelope?.error?.code ?? 'error',
       envelope?.error?.message ?? 'The request failed.',
       envelope?.error?.request_id ?? response.headers.get('X-Request-ID') ?? '',
       envelope?.error?.details ?? null,
     );
+    if (error.isAuthError) sessionEndedListeners.forEach((listener) => listener());
+    throw error;
   }
 
   return payload as T;
