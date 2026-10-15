@@ -28,6 +28,7 @@ import { Suspense } from 'react';
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
 import { WarningsStrip } from '@/components/warnings-strip';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
+import { SavedViews } from '@/components/saved-views';
 import { ListToolbar } from '@/components/list-toolbar';
 import { AttentionChip } from '@/components/manage/attention-chip';
 import { Pagination } from '@/components/pagination';
@@ -176,6 +177,12 @@ export function BatchesHub() {
           onClear={() => list.setQuery({ attention: undefined, page: 1 })}
         />
 
+        <SavedViews
+          screen="manage-batches"
+          keys={['search', 'ordering', 'attention', 'status']}
+          query={list.query}
+          onApply={list.setQuery}
+        />
         <ListToolbar
           search={String(list.query.search ?? '')}
           onSearchChange={(value) => list.setQuery({ search: value })}

@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
 import { CourseCard } from '@/components/course-card';
+import { SavedViews } from '@/components/saved-views';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -73,6 +74,12 @@ function CourseAdminList() {
         />
       ) : null}
 
+      <SavedViews
+        screen="admin-courses"
+        keys={['search', 'ordering', 'status']}
+        query={list.query}
+        onApply={list.setQuery}
+      />
       <ListToolbar
         search={String(list.query.search ?? '')}
         onSearchChange={(value) => list.setQuery({ search: value })}

@@ -8,6 +8,7 @@ import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { exportFiltersFrom } from '@/lib/reporting';
+import { SavedViews } from '@/components/saved-views';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -240,6 +241,12 @@ function StudentsTable() {
         />
       ) : null}
 
+      <SavedViews
+        screen="admin-students"
+        keys={['search', 'ordering', 'institution', 'fee_status', 'is_active']}
+        query={list.query}
+        onApply={list.setQuery}
+      />
       <ListToolbar
         search={String(list.query.search ?? '')}
         onSearchChange={(value) => list.setQuery({ search: value })}

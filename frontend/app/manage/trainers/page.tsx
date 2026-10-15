@@ -21,6 +21,7 @@ import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
+import { SavedViews } from '@/components/saved-views';
 import { ListToolbar } from '@/components/list-toolbar';
 import { AttentionChip } from '@/components/manage/attention-chip';
 import { Pagination } from '@/components/pagination';
@@ -58,6 +59,13 @@ export function TrainersHub() {
   const [skillDraft, setSkillDraft] = useState(String(list.query.skill ?? ''));
   const debouncedSkill = useDebouncedValue(skillDraft.trim(), 400);
   const appliedSkill = String(list.query.skill ?? '');
+  // A skill set from outside (a saved view, the address bar) is shown in the
+  // box, so the debounce below never writes the old one back over it.
+  const [seenSkill, setSeenSkill] = useState(appliedSkill);
+  if (appliedSkill !== seenSkill) {
+    setSeenSkill(appliedSkill);
+    if (skillDraft.trim() !== appliedSkill) setSkillDraft(appliedSkill);
+  }
   if (debouncedSkill !== appliedSkill && debouncedSkill === skillDraft.trim()) {
     list.setQuery({ skill: debouncedSkill });
   }
@@ -227,6 +235,12 @@ export function TrainersHub() {
           onClear={() => list.setQuery({ attention: undefined, page: 1 })}
         />
 
+        <SavedViews
+          screen="manage-trainers"
+          keys={['search', 'ordering', 'attention', 'skill', 'is_accepting_assignments']}
+          query={list.query}
+          onApply={list.setQuery}
+        />
         <ListToolbar
           search={String(list.query.search ?? '')}
           onSearchChange={(value) => list.setQuery({ search: value })}

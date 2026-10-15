@@ -10,6 +10,7 @@ import { useBranches } from '@/components/organisation/branch-field';
 import { Button } from '@/components/ui/button';
 
 import { DataTable, type DataTableColumn } from '@/components/data-table';
+import { SavedViews } from '@/components/saved-views';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -134,6 +135,12 @@ function UsersTable() {
         }}
       />
 
+      <SavedViews
+        screen="admin-users"
+        keys={['search', 'ordering', 'role', 'is_active', 'branch']}
+        query={list.query}
+        onApply={list.setQuery}
+      />
       <ListToolbar
         search={String(list.query.search ?? '')}
         onSearchChange={(value) => list.setQuery({ search: value })}

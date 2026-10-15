@@ -26,6 +26,7 @@ import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { exportFiltersFrom } from '@/lib/reporting';
 import { money } from '@/components/fees/fee-ledger';
+import { SavedViews } from '@/components/saved-views';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -204,6 +205,12 @@ export function AdmissionsList() {
         </div>
       </div>
 
+      <SavedViews
+        screen="admissions"
+        keys={['search', 'ordering', 'course', 'batch', 'status']}
+        query={list.query}
+        onApply={list.setQuery}
+      />
       <ListToolbar
         search={String(list.query.search ?? '')}
         onSearchChange={(value) => list.setQuery({ search: value })}
