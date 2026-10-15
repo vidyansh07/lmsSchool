@@ -2,6 +2,7 @@
 
 import { Eye } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
@@ -45,12 +46,18 @@ function StudentsTable() {
   const seesEveryCentre = viewer?.role === 'superadmin' || viewer?.role === 'admin';
   const { branches } = useBranches(seesEveryCentre);
   const [actionError, setActionError] = useState('');
+  // An inline change is said when it lands, so a select that quietly
+  // re-renders is not the only sign anything happened.
+  const [notice, setNotice] = useState('');
+  const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
 
   async function changeFeeStatus(row: StudentListRow, value: FeeStatus) {
     setActionError('');
+    setNotice('');
     try {
       await setFeeStatus(row.id, value);
+      setNotice(`${row.full_name || row.email}: fee status is now ${labelFor(FEE_STATUS_LABEL, value)}.`);
       list.reload();
     } catch (cause) {
       setActionError(
@@ -337,8 +344,15 @@ function StudentsTable() {
       />
 
       {actionError ? <Alert variant="error">{actionError}</Alert> : null}
+      {notice ? (
+        <Alert variant="success" role="status">
+          {notice}
+        </Alert>
+      ) : null}
 
       <DataTable
+
+        onRowActivate={(row) => router.push(`/admissions/${row.id}`)}
         columns={columns}
         rows={list.data?.results ?? []}
         getRowId={(row) => row.id}

@@ -120,6 +120,10 @@ function HeaderCheckbox({
   );
 }
 
+/** Elements whose own click must never also open the row they sit in. */
+const INTERACTIVE_SELECTOR =
+  'a, button, input, select, textarea, label, summary, [role="button"], [role="menuitem"], [role="checkbox"], [role="switch"], [data-row-action]';
+
 export function DataTable<Row>({
   columns,
   rows,
@@ -348,7 +352,17 @@ export function DataTable<Row>({
                         aria-selected={selection ? isSelected : undefined}
                         onFocus={() => setFocusedIndex(index)}
                         onKeyDown={(event) => handleRowKeyDown(event, index)}
-                        onClick={() => onRowActivate?.(row)}
+                        onClick={(event) => {
+                          if (!onRowActivate) return;
+                          // A click on a control inside the row — a link, a
+                          // button, a select changing a fee status — belongs
+                          // to that control, not to "open this row". Checked
+                          // here once rather than trusting every cell to stop
+                          // its own click from bubbling.
+                          const control = (event.target as HTMLElement).closest(INTERACTIVE_SELECTOR);
+                          if (control && event.currentTarget.contains(control)) return;
+                          onRowActivate(row);
+                        }}
                         className={cn(
                           'animate-fade-in outline-none transition-colors',
                           onRowActivate && 'cursor-pointer hover:bg-sunken/60 active:bg-sunken',

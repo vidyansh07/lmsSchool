@@ -138,8 +138,16 @@ describe('AdminBatchesPage', () => {
     render(<AdminBatchesPage />);
     await waitFor(() => expect(screen.getByText('Morning Linux batch')).toBeInTheDocument());
     const user = userEvent.setup();
-    await user.click(screen.getByText('Morning Linux batch'));
+    // Anywhere on the row opens it…
+    await user.click(screen.getByText('Linux Essentials'));
     expect(push).toHaveBeenCalledWith('/admin/batches/batch-1');
+    // …and the name is a real link to the same place, which handles its own
+    // click instead of the row navigating a second time.
+    push.mockClear();
+    expect(screen.getByRole('link', { name: 'Morning Linux batch' })).toHaveAttribute(
+      'href',
+      '/admin/batches/batch-1',
+    );
   });
 
   it('shows an error with retry on failure', async () => {

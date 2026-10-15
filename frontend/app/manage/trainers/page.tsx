@@ -84,15 +84,22 @@ export function TrainersHub() {
     min_experience: String(list.query.min_experience ?? '') || undefined,
   };
   const [actionError, setActionError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busyTrainerId, setBusyTrainerId] = useState<string | null>(null);
 
   async function toggleAvailability(row: ManageTrainerRow) {
     setBusyTrainerId(row.id);
     setActionError('');
+    setNotice('');
     try {
       await updateTrainer(row.id, {
         is_accepting_assignments: !row.is_accepting_assignments,
       });
+      setNotice(
+        row.is_accepting_assignments
+          ? `${row.full_name || row.email} no longer takes new batches.`
+          : `${row.full_name || row.email} now takes new batches.`,
+      );
       list.reload();
     } catch (cause) {
       setActionError(
@@ -340,6 +347,11 @@ export function TrainersHub() {
         />
 
         {actionError ? <Alert variant="error">{actionError}</Alert> : null}
+        {notice ? (
+          <Alert variant="success" role="status">
+            {notice}
+          </Alert>
+        ) : null}
 
         <DataTable
           columns={columns}

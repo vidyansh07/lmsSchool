@@ -20,6 +20,7 @@
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 import { DataTable, type DataTableColumn } from '@/components/data-table';
@@ -49,6 +50,7 @@ import { listCourses } from '@/lib/courses';
 import type { BatchListRow, CourseListRow, Enrollment } from '@/types/api';
 
 export function AdmissionsList() {
+  const router = useRouter();
   const list = useList<Enrollment>(
     listEnrollments,
     { page_size: 20 },
@@ -335,6 +337,8 @@ export function AdmissionsList() {
           ) : null}
 
           <DataTable
+
+            onRowActivate={(row) => router.push(`/admissions/${row.student_id}`)}
             columns={columns}
             rows={visibleRows}
             getRowId={(row) => row.id}
