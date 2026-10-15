@@ -258,16 +258,26 @@ def _seed(*parts: Any) -> random.Random:
     )
 
 
-def _score(kind: str, code: str) -> float:
+def _natural(item: Any) -> str:
+    """One enrolment's key for a draw: the student's email and the batch's
+    name, the same on every database. Not ``code``: that comes from a
+    sequence, so it shifts with whatever else was created first (another
+    test, an earlier import) and the draws — and every "each method appears"
+    guarantee the stage makes — would move with it."""
+    row = getattr(item, "enrollment", item)
+    return f"{row.student.user.email.lower()}|{row.batch.name}"
+
+
+def _score(kind: str, item: Any) -> float:
     """Where an enrolment ranks for a pick: the lowest scores are taken."""
-    return _seed(kind, code).random()
+    return _seed(kind, _natural(item)).random()
 
 
 def _lowest(kind: str, rows: list, count: int) -> list:
-    """The ``count`` rows (enrolments or specs — both have a ``code``) with
-    the lowest score under ``kind``. Each row's score is its own, so the
-    pick only moves when the rows themselves do."""
-    return sorted(rows, key=lambda row: _score(kind, row.code))[:count]
+    """The ``count`` rows (enrolments or specs) with the lowest score under
+    ``kind``. Each row's score is its own, so the pick only moves when the
+    rows themselves do."""
+    return sorted(rows, key=lambda row: _score(kind, row))[:count]
 
 
 def _enrolments(batches: list, statuses: list[str]) -> list[Enrollment]:
@@ -534,7 +544,7 @@ def _plan(ctx: Context) -> Plan:
         waived = discounted[0]
 
     for row in rows:
-        draw = _seed("plan", row.code)
+        draw = _seed("plan", _natural(row))
         agreed = _agreed(draw, row)
         discount, reason = ZERO, ""
         if row is waived:
@@ -556,7 +566,7 @@ def _plan(ctx: Context) -> Plan:
 
     # --- imported SITP ------------------------------------------------------
     for row in _imported_enrolments(ctx):
-        draw = _seed("plan", row.code)
+        draw = _seed("plan", _natural(row))
         spec = PlanSpec(row, row.batch.branch.code, _agreed(draw, row), ZERO, "", imported=True)
         outcome = _weighted(draw, SITP_OUTCOMES)
         _draw_payments(ctx, draw, spec, outcome, _floor(ctx, row, imported=True))
@@ -587,28 +597,28 @@ def _draw_ageing(ctx: Context, plan: Plan, headline: Enrollment | None) -> None:
     ]
 
     def by_score(spec: PlanSpec) -> tuple:
-        return (spec.imported, _score("ageing", spec.code))
+        return (spec.imported, _score("ageing", spec))
 
     def by_start(spec: PlanSpec) -> tuple:
-        return (spec.imported, spec.enrollment.batch.start_date, _score("ageing", spec.code))
+        return (spec.imported, spec.enrollment.batch.start_date, _score("ageing", spec))
 
     ordered.sort(key=by_score)
     for label, oldest, youngest in OVERDUE_BUCKETS:
         ordered.sort(key=by_start if label == "90+" else by_score)
         picked, ordered = ordered[:OVERDUE_PER_BUCKET], ordered[OVERDUE_PER_BUCKET:]
         for spec in picked:
-            draw = _seed("ageing", spec.code)
+            draw = _seed("ageing", _natural(spec))
             on = ctx.days_ago(draw.randint(youngest, oldest))
             spec.next_due = (_due_amount(draw, spec), on, label)
     ordered.sort(key=by_score)
     for spec in ordered[:DUE_SOON]:
-        draw = _seed("ageing", spec.code)
+        draw = _seed("ageing", _natural(spec))
         on = ctx.days_ahead(draw.randint(1, 7))
         spec.next_due = (_due_amount(draw, spec), on, "due soon")
     if headline is not None:
         spec = next(s for s in plan.specs if s.enrollment is headline)
         if spec.balance >= MIN_INSTALMENT:
-            draw = _seed("ageing", spec.code)
+            draw = _seed("ageing", _natural(spec))
             spec.next_due = (_due_amount(draw, spec), ctx.days_ahead(5), "due soon")
 
 
