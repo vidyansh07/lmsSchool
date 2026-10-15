@@ -241,9 +241,28 @@ codes and UUIDs, so two of its tests failed only inside a full run — draws now
 use emails, names and slugs; `AuthProvider` tracks the signed-in state
 synchronously, which removes an intermittent session-ended test failure.
 
-Still open, and not guessed in code: **bulk actions** (UX-12) need the owner to
-name the operations; **manager versus counsellor** navigation needs the owner's
-split.
+## Third loop — bulk actions and role navigation (15 October 2026)
+
+The owner named the operations and the navigation (D-144).
+
+| Item | What changed |
+| --- | --- |
+| UX-12 bulk actions | Row checkboxes (named after their row) and a selection bar on accounts, students, admissions (enrolments), the trainers hub and enquiries. "Select all N matching" is a deliberate second step and works with every action; it is withheld on admissions while the page-only date filter is on |
+| Export selected | Every bar exports the ticked rows, or everything matching. New `accounts` report so the accounts list can export at all |
+| Resend invitations | Accounts, trainers and students; accepted, inactive and your own accounts are skipped and listed |
+| Move to a centre | Accounts, with a reason in each audit entry; students and your own account skipped; moving a trainer's account now moves their trainer profile too |
+| Assign an owner | Enquiries, chosen by name; refused for owners at another centre or students (also on the single change) |
+| Transfers | The transfer screens use the real transfer (old enrolment `Transferred`, reason, upgrade flag) instead of enrol-then-cancel; the whole-batch mode lets you untick who stays; admissions can move ticked enrolments |
+| Results | Every bulk action ends in a dialog: how many were done, and each skipped row with its reason |
+| Role navigation | Separate grouped sidebars for manager, counsellor and trainer; module tabs across the top of every page in a multi-screen module |
+| In-page actions | Student 360 offers Plan a follow-up and an Actions menu (record a payment, log an activity, enrol, move, resend invitation), each by capability |
+| Pickers | "Assigned to (user id)" on activities and in the activity drawer became a staff picker by name |
+
+Edge cases fixed on the way: a bulk filter the list does not declare is
+refused (an ignored filter would have widened "all matching" to every row);
+the "Has referred N students" link now filters the list (and its export);
+"Select all 4,000 rows" counts with separators and irregular plurals
+("3 enquiries").
 
 ## Remaining UX work
 

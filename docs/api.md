@@ -991,6 +991,40 @@ itself (`work_activities`, `deliveries`, `automation_runs`); and a nightly
 beat task (`reporting.expire_exports`) deletes files past
 `export_retention_days` and marks the job expired.
 
+### Bulk actions and exporting ticked rows (15 October 2026)
+
+Every bulk endpoint takes the same target and answers in the same shape
+(`apps/common/bulk.py`):
+
+- target: `{"ids": [...]}` (the ticked rows, at most 500) **or**
+  `{"filters": {...}}` — the list's own FilterSet keys plus `search`,
+  resolved server-side inside the caller's visible set ("select all
+  matching"). An unknown filter key is a 400, never ignored; more than 500
+  matching rows is a 400 asking to narrow the filter.
+- answer: `{"action", "total", "done", "skipped": [{"id", "label", "reason"}]}`.
+  Each row runs through the single-row service in its own savepoint, so a
+  refused row is skipped with its reason and the rest carry on; an id the
+  caller cannot see is skipped as "Not found".
+
+| Method | Path | Access |
+| --- | --- | --- |
+| `POST` | `/api/v1/users/bulk/` | `user.view_any` plus `user.update_any` for `resend_invitation`, or `organisation.assign_users` for `move_centre` (`branch_id` from the caller's visible centres, `reason` required); your own account and (for a move) students are skipped; the authority ladder applies per account |
+| `POST` | `/api/v1/trainers/bulk/` | `trainer.view_any` + `user.update_any` — `resend_invitation` by trainer id or the hub's filters |
+| `POST` | `/api/v1/students/bulk/` | `student.view_any` + `user.update_any` — `resend_invitation` by student id or the list's filters |
+| `POST` | `/api/v1/enquiries/bulk/` | `assign_owner` with `owner_id` (active staff, not a student; `null` unassigns); per enquiry: its owner or `enquiry.manage` at its centre, and the owner must work at the enquiry's centre |
+| `POST` | `/api/v1/enrollments/<id>/transfer/` | `enrolment.create` + `enrolment.update_any` — `{batch_id, reason, is_upgrade}`; the old row becomes `transferred` and points at the new one (`transfer_student`); a full target is 409 |
+| `POST` | `/api/v1/enrollments/bulk-transfer/` | the same rights — many enrolments to one batch, one at a time, so a target that fills up partway skips the rest with the reason |
+| `POST` | `/api/v1/reports/selections/` | `data.export` and report access — `{ids}` (at most 1,000) for a 30-minute, per-person token |
+
+Export the ticked rows by passing `?selection=<token>` to
+`/reports/<key>/count/` and `/reports/<key>/export/`, or `selection` to
+`POST /reports/exports/` (the job stores the ids, so it runs after the token
+expires). A token narrows inside the caller's visible set; somebody else's or
+an expired one is a 400, and a report that cannot narrow to rows refuses one.
+A new `accounts` report (the accounts list: `user.view_any`, its centre scope,
+filters and search) lets the accounts list export; the students report also
+takes `referred_by`.
+
 ---
 
 Two Phase 21 changes touch every endpoint above rather than adding a shape

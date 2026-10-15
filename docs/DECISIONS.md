@@ -1398,3 +1398,30 @@ sign-in email through the administration route. A centre-bound role is not given
 to an account with no centre until it is placed in one. A trainer profile on a
 role that no longer teaches is kept for history but cannot take batches or
 timetable slots, and the trainer directory lists only people who teach.
+
+### D-144 · Bulk actions run row by row and report every skip; each staff role has its own sidebar (15 October 2026)
+
+The owner chose the bulk operations, modelled on ClassPro and Meritto: export
+the selection, resend invitations, move accounts to a centre, assign an
+enquiry owner, transfer enrolments to another batch, and "select all
+matching" working with every one of them. A bulk endpoint resolves its rows
+from the ticked ids or from the list's own filters inside the caller's
+visible set, refuses a filter it does not recognise (ignoring one would
+widen the action), caps one request at 500 rows, and runs each row through
+the single-row service, so every authority, centre and capacity rule and
+every audit entry still applies. The answer names each skipped row and why.
+Exporting ticked rows uses a short-lived per-person selection token because a
+request line full of ids does not fit through the server.
+
+A transfer is a transfer: the screens now call `transfer_student`, which keeps
+the old enrolment as `transferred` and pointing at the new one, with the
+reason, instead of enrolling and cancelling (which recorded every move as a
+drop-out).
+
+Managers, counsellors and trainers each get their own grouped sidebar —
+manager: academics and staff first; counsellor: leads and admissions first;
+trainer: today's class and the classroom — with every entry still gated by
+capability, so a configured role sees only what it holds. A page in a module
+with more than one screen shows the module's other screens as tabs. This
+supersedes the shared `STAFF_NAV` of D-130 ("only the sidebar differs"):
+what each role may do is unchanged.
