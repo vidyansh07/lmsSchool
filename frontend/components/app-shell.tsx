@@ -61,6 +61,7 @@ import {
   type NavGroup,
   type NavItem,
 } from '@/components/navigation';
+import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -762,6 +763,30 @@ function Shell({
   );
 }
 
+/**
+ * The one reminder that used to live only on the old home page: an
+ * unverified address means password resets and notices may never arrive.
+ * Shown on every page until it is fixed, except the page that fixes it.
+ */
+function EmailVerificationNotice() {
+  const { user } = useAuth();
+  const pathname = usePathname();
+  if (!user || user.is_email_verified || pathname === '/settings/account') return null;
+  return (
+    <Alert variant="warning" className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <AlertTitle>Your email address is not verified</AlertTitle>
+        <p className="text-sm text-ink-muted">
+          Verify it so password resets and notifications reach you.
+        </p>
+      </div>
+      <Button asChild size="sm" variant="outline">
+        <Link href="/settings/account">Verify email</Link>
+      </Button>
+    </Alert>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const isStaff = Boolean(user && STAFF_ROLES.includes(user.role));
@@ -794,6 +819,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         Skip to content
       </a>
       <Shell groups={groups} onOpenSearch={() => setPaletteOpen(true)}>
+        <EmailVerificationNotice />
         {children}
       </Shell>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />

@@ -4,7 +4,9 @@ import {
   ADMIN_NAV,
   STAFF_NAV,
   STUDENT_NAV,
+  homeFor,
   isVisible,
+  safeReturnPath,
   type NavGroup,
   type NavItem,
 } from "@/components/navigation";
@@ -73,5 +75,40 @@ describe("navigation wording and structure", () => {
     expect(labels).not.toContain("Examinations");
     expect(labels).not.toContain("Bulk import");
     expect(labels).not.toContain("Authoring");
+  });
+});
+
+describe("homeFor", () => {
+  it("starts each person at the first entry of their own navigation", () => {
+    expect(homeFor({ role: "student", capabilities: [] })).toBe("/dashboard");
+    expect(homeFor({ role: "trainer", capabilities: [] })).toBe("/dashboard");
+    expect(
+      homeFor({ role: "counsellor", capabilities: [Capability.enrolmentCreate] }),
+    ).toBe("/admissions/dashboard");
+    expect(
+      homeFor({
+        role: "admin",
+        capabilities: [Capability.auditView, Capability.reportViewAny],
+      }),
+    ).toBe("/admin/activity");
+    expect(
+      homeFor({
+        role: "manager",
+        capabilities: [Capability.enrolmentCreate, Capability.performanceViewAny],
+      }),
+    ).toBe("/manage");
+    expect(homeFor(null)).toBe("/login");
+  });
+});
+
+describe("safeReturnPath", () => {
+  it("keeps a path on this site and refuses everything else", () => {
+    expect(safeReturnPath("/students/1?tab=fees")).toBe("/students/1?tab=fees");
+    expect(safeReturnPath("https://evil.example")).toBeNull();
+    expect(safeReturnPath("//evil.example")).toBeNull();
+    expect(safeReturnPath("/\\evil.example")).toBeNull();
+    expect(safeReturnPath("/login?next=/x")).toBeNull();
+    expect(safeReturnPath("/ok\nSet-Cookie")).toBeNull();
+    expect(safeReturnPath(null)).toBeNull();
   });
 });

@@ -867,3 +867,42 @@ export function isVisible(
     user && !user.custom_role && item.scopedRoles?.includes(user.role),
   );
 }
+
+/**
+ * Where a signed-in person starts: the first entry their own navigation
+ * offers them. Deriving it from the sidebar keeps the two in step — the
+ * owner's ranking of the administrator's menu is also their landing page —
+ * and a configured role that lost a capability never lands on a page it can
+ * no longer open.
+ */
+export function homeFor(
+  user: { role: string; capabilities: string[]; custom_role?: string | null } | null,
+): string {
+  if (!user) return "/login";
+  if (!STAFF_ROLES.includes(user.role)) return "/dashboard";
+  // The sidebar's first entry for a manager is the counsellor's pipeline
+  // (both hold `enrolment.create`); their own overview at `/manage` is the
+  // landing screen the dashboards contract names (docs/erp/USER_JOURNEYS.md §6).
+  if (user.role === "manager" && user.capabilities.includes(Capability.performanceViewAny)) {
+    return "/manage";
+  }
+  for (const group of navFor(user.role)) {
+    const first = group.items.find((item) => isVisible(item, user));
+    if (first) return first.href;
+  }
+  return "/profile";
+}
+
+/**
+ * A `?next=` return path, accepted only when it stays on this site. Anything
+ * else — another origin, a protocol-relative `//host`, a backslash trick, or
+ * the sign-in page itself — falls back to `null`, so the link in an email can
+ * bring somebody back to where they were going and never anywhere else.
+ */
+export function safeReturnPath(value: string | null | undefined): string | null {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return null;
+  if (value.includes("\\") || [...value].some((ch) => ch.charCodeAt(0) < 32)) return null;
+  const path = value.split(/[?#]/)[0] ?? value;
+  if (path === "/login" || path.startsWith("/login/")) return null;
+  return value;
+}

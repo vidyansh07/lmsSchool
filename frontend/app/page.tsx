@@ -1,14 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { Activity, GraduationCap, KeyRound, ShieldCheck, UserCog, Users } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { Activity, KeyRound, ShieldCheck } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
+import { homeFor } from '@/components/navigation';
 import { LoadingState } from '@/components/states';
-import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Capability } from '@/lib/capabilities';
 
 const foundations = [
   {
@@ -32,142 +33,45 @@ const foundations = [
 ];
 
 export default function HomePage() {
-  const { user, isLoading, can } = useAuth();
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
+  // A signed-in person has a real home now — their first navigation entry —
+  // so this address is only the public front page.
+  useEffect(() => {
+    if (user) router.replace(homeFor(user));
+  }, [user, router]);
 
   if (isLoading) return <LoadingState label="Loading…" rows={4} />;
-
-  if (!user) {
-    return (
-      <div className="space-y-8">
-        <section className="space-y-4">
-          <h1 className="text-3xl font-semibold tracking-tight">Grras LMS</h1>
-          <p className="max-w-prose text-ink-muted">
-            Identity and people management for students, trainers and administrators. Sign in to
-            continue.
-          </p>
-          <Button asChild>
-            <Link href="/login">Sign in</Link>
-          </Button>
-        </section>
-
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <h2 className="sr-only">What this platform provides</h2>
-          {foundations.map(({ icon: Icon, title, description }) => (
-            <Card key={title}>
-              <CardHeader>
-                <Icon className="size-5 text-action" aria-hidden="true" />
-                <CardTitle>{title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CardDescription>{description}</CardDescription>
-              </CardContent>
-            </Card>
-          ))}
-        </section>
-      </div>
-    );
-  }
+  if (user) return <LoadingState label="Opening your home…" rows={4} />;
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Welcome back, {user.first_name || user.email}
-        </h1>
-        <p className="text-sm text-ink-muted">
-          Signed in as {user.role}. Learning features arrive in a later phase.
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold tracking-tight">Grras LMS</h1>
+        <p className="max-w-prose text-ink-muted">
+          Identity and people management for students, trainers and administrators. Sign in to
+          continue.
         </p>
-      </div>
+        <Button asChild>
+          <Link href="/login">Sign in</Link>
+        </Button>
+      </section>
 
-      {!user.is_email_verified ? (
-        <Alert variant="warning" className="space-y-2">
-          <AlertTitle>Your email address is not verified</AlertTitle>
-          <p className="text-ink-muted">
-            Verify it so password resets and notifications reach you.
-          </p>
-          <Button asChild size="sm" variant="outline">
-            <Link href="/settings/account">Verify email</Link>
-          </Button>
-        </Alert>
-      ) : null}
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <h2 className="sr-only">Quick links</h2>
-        {user.role !== 'admin' ? (
-          <Card>
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <h2 className="sr-only">What this platform provides</h2>
+        {foundations.map(({ icon: Icon, title, description }) => (
+          <Card key={title}>
             <CardHeader>
-              <GraduationCap className="size-5 text-action" aria-hidden="true" />
-              <CardTitle>My dashboard</CardTitle>
+              <Icon className="size-5 text-action" aria-hidden="true" />
+              <CardTitle>{title}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <CardDescription>
-                Your courses, classes and progress in one place.
-              </CardDescription>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/dashboard">Open dashboard</Link>
-              </Button>
+            <CardContent>
+              <CardDescription>{description}</CardDescription>
             </CardContent>
           </Card>
-        ) : null}
-
-        <Card>
-          <CardHeader>
-            <UserCog className="size-5 text-action" aria-hidden="true" />
-            <CardTitle>My profile</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <CardDescription>
-              Keep your contact details and profile information up to date.
-            </CardDescription>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/profile">Open profile</Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        {can(Capability.userViewAny) ? (
-          <Card>
-            <CardHeader>
-              <Users className="size-5 text-action" aria-hidden="true" />
-              <CardTitle>People management</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <CardDescription>
-                Manage accounts, students and trainers across the platform.
-              </CardDescription>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/admin/users">Users</Link>
-                </Button>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/admin/students">Students</Link>
-                </Button>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/admin/trainers">Trainers</Link>
-                </Button>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/admin/batches">Batches</Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        <Card>
-          <CardHeader>
-            <KeyRound className="size-5 text-action" aria-hidden="true" />
-            <CardTitle>Security</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <CardDescription>
-              Change your password or sign out of every device.
-            </CardDescription>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/settings/security">Security settings</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+        ))}
+      </section>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { AuthSplitShell } from "@/components/auth/auth-split-shell";
 import { MfaVerifyForm } from "@/components/auth/mfa-verify-form";
 import { useAuth } from "@/components/auth-provider";
+import { homeFor, safeReturnPath } from "@/components/navigation";
 import { ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
@@ -14,6 +15,17 @@ import { Input } from "@/components/ui/input";
 import { fieldErrors } from "@/lib/api";
 import { login } from "@/lib/auth";
 import type { CurrentUser, MfaMethodName } from "@/types/api";
+
+/** Back to the page that sent them here, or else their own home. Read from
+ *  the address bar at the moment of use rather than through
+ *  `useSearchParams`, which would need a Suspense boundary around the form. */
+function destinationFor(user: CurrentUser): string {
+  const next =
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("next");
+  return safeReturnPath(next) ?? homeFor(user);
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,12 +40,12 @@ export default function LoginPage() {
   const [mfaMethods, setMfaMethods] = useState<MfaMethodName[] | null>(null);
 
   useEffect(() => {
-    if (user) router.replace("/");
+    if (user) router.replace(destinationFor(user));
   }, [user, router]);
 
   function finishSignIn(signedIn: CurrentUser) {
     setUser(signedIn);
-    router.replace("/");
+    router.replace(destinationFor(signedIn));
   }
 
   async function onSubmit(event: React.FormEvent) {

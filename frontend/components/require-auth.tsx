@@ -35,7 +35,11 @@ export function RequireAuth({
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !user) router.replace('/login');
+    if (isLoading || user) return;
+    // Carry the page they asked for, so a link from an email or a
+    // notification lands there after signing in rather than on a home page.
+    const here = `${window.location.pathname}${window.location.search}`;
+    router.replace(here === '/' ? '/login' : `/login?next=${encodeURIComponent(here)}`);
   }, [isLoading, user, router]);
 
   if (isLoading) return <LoadingState label="Checking your session…" rows={4} />;

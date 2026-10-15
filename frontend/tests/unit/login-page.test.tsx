@@ -60,7 +60,8 @@ describe("LoginPage", () => {
     fillCredentials();
 
     await waitFor(() => expect(setUser).toHaveBeenCalledWith(USER));
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+    // A student-shaped account with no staff role lands on its dashboard.
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/dashboard"));
     expect(screen.queryByText("Verify it's you")).not.toBeInTheDocument();
   });
 
@@ -102,7 +103,38 @@ describe("LoginPage", () => {
       expect(verifyMfa).toHaveBeenCalledWith("totp", "123456"),
     );
     await waitFor(() => expect(setUser).toHaveBeenCalledWith(USER));
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/dashboard"));
+  });
+
+  it("sends a counsellor to their own pipeline rather than a generic page", async () => {
+    const counsellor = {
+      ...USER,
+      role: "counsellor",
+      capabilities: ["enrolment.create"],
+      custom_role: null,
+    } as unknown as CurrentUser;
+    login.mockResolvedValue(counsellor);
+    render(<LoginPage />);
+
+    fillCredentials();
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/admissions/dashboard"));
+  });
+
+  it("returns to the page that asked for sign-in, but never off the site", async () => {
+    login.mockResolvedValue(USER);
+    window.history.replaceState(null, "", "/login?next=%2Fstudents%2Fabc%3Ftab%3Dfees");
+    const { unmount } = render(<LoginPage />);
+    fillCredentials();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/students/abc?tab=fees"));
+    unmount();
+
+    replace.mockReset();
+    window.history.replaceState(null, "", "/login?next=%2F%2Fevil.example%2Fphish");
+    render(<LoginPage />);
+    fillCredentials();
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/dashboard"));
+    window.history.replaceState(null, "", "/");
   });
 
   it("returns to the credentials form from the MFA step without signing in", async () => {
