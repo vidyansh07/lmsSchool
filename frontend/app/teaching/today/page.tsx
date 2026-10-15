@@ -960,6 +960,11 @@ export function TodayWorkspace() {
         <Grid>
           <GridItem span={12} lgSpan={6}>
             <ChartCard
+              error={delivery.error ?? attendance.error}
+              onRetry={() => {
+                delivery.reload();
+                attendance.reload();
+              }}
               title="Classes held and attendance rate"
               subtitle="Volume against rate — a busy week and a well-attended one are not the same week"
               icon={Activity}
@@ -985,6 +990,8 @@ export function TodayWorkspace() {
 
           <GridItem span={12} lgSpan={6}>
             <ChartCard
+              error={batches.error}
+              onRetry={batches.reload}
               title="Attendance by batch"
               subtitle={`Your batches, lowest first. Amber is below the ${ATTENDANCE_TARGET}% target.`}
               icon={CalendarCheck}
@@ -1006,6 +1013,8 @@ export function TodayWorkspace() {
 
           <GridItem span={12}>
             <ChartCard
+              error={workload.error}
+              onRetry={workload.reload}
               title="What is waiting on you"
               subtitle="Open work across your batches, so the largest queue is obvious"
               icon={ClipboardList}

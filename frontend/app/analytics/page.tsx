@@ -219,6 +219,8 @@ function Analytics() {
       <Grid>
         <GridItem span={12} lgSpan={6}>
           <ChartCard
+            error={enrolments.error}
+            onRetry={enrolments.reload}
             title="Enrolments over time"
             subtitle="Enrolments started each week, and where each cohort stands now"
             icon={GraduationCap}
@@ -254,6 +256,8 @@ function Analytics() {
 
         <GridItem span={12} lgSpan={6}>
           <ChartCard
+            error={delivery.error}
+            onRetry={delivery.reload}
             title="Registers still owed"
             subtitle="Classes that finished and were marked complete with no register taken"
             icon={ClipboardList}
@@ -275,6 +279,8 @@ function Analytics() {
 
         <GridItem span={12}>
           <ChartCard
+            error={batches.error}
+            onRetry={batches.reload}
             title="Attendance by batch"
             subtitle={`The ten lowest of the batches you can see. Amber is below the ${ATTENDANCE_TARGET}% target.`}
             icon={CalendarCheck}
@@ -297,6 +303,11 @@ function Analytics() {
 
         <GridItem span={12} lgSpan={6}>
           <ChartCard
+            error={delivery.error ?? attendance.error}
+            onRetry={() => {
+                delivery.reload();
+                attendance.reload();
+              }}
             title="Classes held and attendance rate"
             subtitle="Volume against rate — a busy week and a well-attended one are not the same week"
             icon={Activity}
@@ -323,6 +334,8 @@ function Analytics() {
 
         <GridItem span={12} lgSpan={6}>
           <ChartCard
+            error={enrolments.error}
+            onRetry={enrolments.reload}
             title="Enrolment mix"
             subtitle="Where every enrolment started in this period now stands"
             icon={TrendingUp}
@@ -342,6 +355,8 @@ function Analytics() {
 
         <GridItem span={12}>
           <ChartCard
+            error={dsr.error}
+            onRetry={dsr.reload}
             title="Daily report compliance"
             subtitle="Reports submitted, approved and sent back each week — submission only, not the attendance they carry"
             icon={ClipboardList}
