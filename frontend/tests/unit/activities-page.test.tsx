@@ -22,6 +22,11 @@ vi.mock("@/components/work/activity-drawer", () => ({
   ActivityDrawer: () => null,
 }));
 
+const listUsers = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/people", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/people")>("@/lib/people");
+  return { ...actual, listUsers };
+});
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock("@/components/auth-provider", () => ({ useAuth }));
 const searchParams = vi.hoisted(() => ({ value: new URLSearchParams() }));
@@ -221,5 +226,42 @@ describe("ActivitiesPage", () => {
     // with a still-ticked box would read as a dead checkbox all over again.
     expect(screen.getByRole("checkbox", { name: "Mine" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Overdue" })).not.toBeChecked();
+  });
+});
+
+describe("ActivitiesPage — assigned to, by name", () => {
+  it("filters by a person chosen by name, never a typed account id", async () => {
+    useAuth.mockReturnValue({
+      user: { id: "u1", role: "manager", capabilities: ["activity.view_any", "user.view_any"] },
+      isLoading: false,
+      can: () => true,
+    });
+    listActivities.mockResolvedValue(paginated([]));
+    listUsers.mockImplementation((query: { role: string }) =>
+      Promise.resolve({
+        results:
+          query.role === "trainer"
+            ? [{ id: "t-1", full_name: "Tina Trainer", email: "t@x.test", role: "trainer", branch_code: "JAI" }]
+            : [],
+      }),
+    );
+    render(<ActivitiesPage />);
+
+    const select = await screen.findByRole("combobox", { name: "Assigned to" });
+    await screen.findByRole("option", { name: /Tina Trainer · Trainer/ });
+    fireEvent.change(select, { target: { value: "t-1" } });
+    await waitFor(() =>
+      expect(listActivities).toHaveBeenLastCalledWith(
+        expect.objectContaining({ assigned_to: "t-1" }),
+      ),
+    );
+    expect(screen.queryByPlaceholderText(/user id/i)).not.toBeInTheDocument();
+  });
+
+  it("leaves the filter out for somebody who cannot list accounts", async () => {
+    listActivities.mockResolvedValue(paginated([]));
+    render(<ActivitiesPage />);
+    await waitFor(() => expect(listActivities).toHaveBeenCalled());
+    expect(screen.queryByRole("combobox", { name: "Assigned to" })).not.toBeInTheDocument();
   });
 });
