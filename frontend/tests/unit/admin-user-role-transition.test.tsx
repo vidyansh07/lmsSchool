@@ -8,12 +8,14 @@ import type { AdminUser } from '@/types/api';
 
 const getUser = vi.hoisted(() => vi.fn());
 const transitionUserRole = vi.hoisted(() => vi.fn());
+const setUserActive = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/people', async () => {
   const actual = await vi.importActual<typeof import('@/lib/people')>('@/lib/people');
   return {
     ...actual,
     getUser,
     transitionUserRole,
+    setUserActive,
     getUserAudit: vi.fn(),
   };
 });
@@ -148,5 +150,30 @@ describe('administrator role transition', () => {
     await user.click(screen.getByRole('link', { name: 'All users' }));
     await user.click(screen.getByRole('button', { name: 'Discard changes' }));
     expect(push).toHaveBeenCalledWith('/admin/users');
+  });
+});
+
+describe('deactivating an account', () => {
+  it('asks first and records a reason; activating does not ask', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 'admin-1', role: 'admin' },
+      can: (capability: string) => capability === 'user.set_active',
+    });
+    setUserActive.mockResolvedValue({});
+    const user = userEvent.setup();
+    render(<UserAdministration userId="manager-1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Deactivate this account' }));
+    expect(setUserActive).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog', { name: /deactivate mira manager/i });
+    expect(dialog).toHaveTextContent(/signed out of every device/i);
+    expect(screen.getByRole('button', { name: 'Deactivate' })).toBeDisabled();
+
+    await user.type(screen.getByLabelText(/^Reason/), 'Left the institute.');
+    await user.click(screen.getByRole('button', { name: 'Deactivate' }));
+
+    await waitFor(() =>
+      expect(setUserActive).toHaveBeenCalledWith('manager-1', false, 'Left the institute.'),
+    );
   });
 });

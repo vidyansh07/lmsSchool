@@ -35,7 +35,7 @@ import {
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
-import { ApiError, fieldErrors } from "@/lib/api";
+import { ApiError, errorMessage, fieldErrors } from "@/lib/api";
 import { Capability } from "@/lib/capabilities";
 import { formatDateTime } from "@/lib/format";
 import { ROLE_LABEL, ROLE_OPTIONS, labelFor } from "@/lib/labels";
@@ -191,6 +191,9 @@ export function UserAdministration({ userId }: { userId: string }) {
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleReason, setRoleReason] = useState("");
   const [stepUpOpen, setStepUpOpen] = useState(false);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivateReason, setDeactivateReason] = useState("");
+  const [deactivateError, setDeactivateError] = useState("");
   const hasUnsavedChanges = Boolean(
     user &&
       (form.email.trim().toLowerCase() !== user.email.toLowerCase() ||
@@ -305,6 +308,24 @@ export function UserAdministration({ userId }: { userId: string }) {
         setErrors(fieldErrors(cause));
         setRoleDialogOpen(true);
       }
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function deactivate() {
+    if (!user || !deactivateReason.trim()) return;
+    setBusy("active");
+    setDeactivateError("");
+    setNotice("");
+    try {
+      await setUserActive(user.id, false, deactivateReason.trim());
+      setDeactivateOpen(false);
+      setDeactivateReason("");
+      setNotice("Deactivated. They were signed out everywhere and cannot sign in.");
+      load();
+    } catch (cause) {
+      setDeactivateError(errorMessage(cause, "This account could not be deactivated."));
     } finally {
       setBusy("");
     }
@@ -603,6 +624,55 @@ export function UserAdministration({ userId }: { userId: string }) {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={deactivateOpen}
+        onOpenChange={(open) => (busy === "active" ? null : setDeactivateOpen(open))}
+      >
+        <DialogContent size="md" hideCloseButton>
+          <DialogHeader>
+            <DialogTitle>Deactivate {user.full_name || user.email}?</DialogTitle>
+            <DialogDescription>
+              They are signed out of every device at once and cannot sign in until somebody
+              activates the account again. Nothing they did is deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {deactivateError ? <Alert variant="error">{deactivateError}</Alert> : null}
+            <Field
+              label="Reason"
+              htmlFor="deactivate-reason"
+              hint="Required and recorded in the account history."
+              required
+            >
+              <Input
+                id="deactivate-reason"
+                value={deactivateReason}
+                maxLength={255}
+                onChange={(event) => setDeactivateReason(event.target.value)}
+              />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy === "active"}
+              onClick={() => setDeactivateOpen(false)}
+            >
+              Keep active
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy === "active" || !deactivateReason.trim()}
+              onClick={() => void deactivate()}
+            >
+              {busy === "active" ? "Deactivating…" : "Deactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <StepUpDialog
         open={stepUpOpen}
         onConfirmed={() => {
@@ -681,15 +751,20 @@ export function UserAdministration({ userId }: { userId: string }) {
                   type="button"
                   variant={user.is_active ? "destructive" : "primary"}
                   disabled={busy === "active"}
-                  onClick={() =>
+                  onClick={() => {
+                    if (user.is_active) {
+                      // Locking somebody out is asked first, with a reason
+                      // for the audit trail; letting them back in is not.
+                      setDeactivateError("");
+                      setDeactivateOpen(true);
+                      return;
+                    }
                     void run(
                       "active",
-                      () => setUserActive(user.id, !user.is_active),
-                      user.is_active
-                        ? "Deactivated. Their next request will be refused."
-                        : "Activated.",
-                    )
-                  }
+                      () => setUserActive(user.id, true),
+                      "Activated.",
+                    );
+                  }}
                 >
                   {user.is_active
                     ? "Deactivate this account"
