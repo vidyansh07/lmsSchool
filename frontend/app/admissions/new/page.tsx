@@ -46,7 +46,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import { errorMessage, fieldErrors } from '@/lib/api';
+import { errorMessage, fieldErrors, unshownError } from '@/lib/api';
 import { assignBatchTrainer, createBatch, enrolStudent, listBatches } from '@/lib/batches';
 import { formatDate, isoDaysFromNow, isoToday } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
@@ -84,6 +84,19 @@ import type {
 } from '@/types/api';
 
 type StepKey = 'student' | 'course' | 'batch' | 'trainer' | 'confirm';
+
+/** The student step's own fields; any other key the server refuses with is
+ *  said above the form rather than dropped (`profile.*` lifts onto these). */
+const STUDENT_FIELD_KEYS = [
+  'email',
+  'phone',
+  'first_name',
+  'last_name',
+  'city',
+  'qualification',
+  'fee_amount',
+  'branch',
+] as const;
 
 const STEPS: WizardStep[] = [
   { key: 'student', label: 'Student' },
@@ -164,6 +177,9 @@ export function RegistrationWizard() {
   const [studentErrors, setStudentErrors] = useState<Record<string, string>>({});
   const [duplicates, setDuplicates] = useState<StudentDuplicateMatch[]>([]);
   const [duplicateChecking, setDuplicateChecking] = useState(false);
+  // The check could not run. Not the same as "no duplicates": the counsellor
+  // is told, and the server checks again when the student is registered.
+  const [duplicateCheckFailed, setDuplicateCheckFailed] = useState(false);
   const [acknowledgedDuplicate, setAcknowledgedDuplicate] = useState(false);
   // Why this is a different person, typed at the duplicate-check step and
   // held here — nothing is sent anywhere until the wizard's final "Register"
@@ -259,10 +275,16 @@ export function RegistrationWizard() {
         phone: phoneQuery.length >= 4 ? phoneQuery : undefined,
       })
         .then((response) => {
-          if (!cancelled) setDuplicates(response.results);
+          if (!cancelled) {
+            setDuplicates(response.results);
+            setDuplicateCheckFailed(false);
+          }
         })
         .catch(() => {
-          if (!cancelled) setDuplicates([]);
+          if (!cancelled) {
+            setDuplicates([]);
+            setDuplicateCheckFailed(true);
+          }
         })
         .finally(() => {
           if (!cancelled) setDuplicateChecking(false);
@@ -577,7 +599,24 @@ export function RegistrationWizard() {
     try {
       student = await ensureStudent();
     } catch (cause) {
-      setStudentErrors(fieldErrors(cause));
+      const errors = fieldErrors(cause);
+      setStudentErrors(errors);
+      if (errors.override_reason) {
+        // The server found a likely duplicate the wizard did not show — its
+        // own check had failed, or the record appeared since. Bring the
+        // matches back up so the counsellor can decide, and give a reason.
+        setAcknowledgedDuplicate(false);
+        setOverrideReason('');
+        checkDuplicates({
+          email: email.trim() || undefined,
+          phone: phone.trim() || undefined,
+        })
+          .then((response) => {
+            setDuplicates(response.results);
+            setDuplicateCheckFailed(false);
+          })
+          .catch(() => setDuplicateCheckFailed(true));
+      }
       goToStep('student');
       setIsSubmitting(false);
       return;
@@ -776,7 +815,19 @@ export function RegistrationWizard() {
           </CardHeader>
           <CardContent>
             <form onSubmit={onStudentSubmit} className="space-y-4" noValidate>
-              {studentErrors.__all__ ? <Alert variant="error">{studentErrors.__all__}</Alert> : null}
+              {unshownError(studentErrors, STUDENT_FIELD_KEYS) ? (
+                <Alert variant="error">{unshownError(studentErrors, STUDENT_FIELD_KEYS)}</Alert>
+              ) : null}
+              {createdStudent ? (
+                <Alert variant="info">
+                  {createdStudent.user.full_name || createdStudent.user.email} is already registered as{' '}
+                  {createdStudent.student_id}. These details are saved; correct them later on the
+                  student&rsquo;s own record. Carry on with the course and batch.
+                </Alert>
+              ) : null}
+              {/* Once the record exists, editing here would change nothing:
+                  the wizard reuses it. Locked rather than silently ignored. */}
+              <fieldset disabled={Boolean(createdStudent)} className="min-w-0 space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Email" htmlFor="reg-email" error={studentErrors.email} required>
                   <Input
@@ -982,8 +1033,16 @@ export function RegistrationWizard() {
                 )}
               </div>
 
+              </fieldset>
+
               {duplicateChecking ? (
                 <p className="text-xs text-ink-muted">Checking for existing students…</p>
+              ) : null}
+              {duplicateCheckFailed && !duplicateChecking && !createdStudent ? (
+                <Alert variant="warning">
+                  Could not check whether this student is already registered. You can carry on —
+                  the check runs again when you register them.
+                </Alert>
               ) : null}
               <DuplicateMatch matches={visibleDuplicates} onConfirmDifferentPerson={onContinuePastDuplicate} />
 

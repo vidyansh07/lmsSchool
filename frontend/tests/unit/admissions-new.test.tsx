@@ -615,6 +615,53 @@ describe('RegistrationWizard — confirming', () => {
     expect(screen.getByText('This email is already registered.')).toBeInTheDocument();
   });
 
+  it('says when the duplicate check could not run, instead of implying there is none', async () => {
+    checkDuplicates.mockRejectedValue(new ApiError(0, 'network_error', 'Could not reach the server.', ''));
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+
+    expect(
+      await screen.findByText(/could not check whether this student is already registered/i, undefined, {
+        timeout: 3000,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('brings the matches back when the server finds a duplicate the wizard did not show', async () => {
+    createStudent.mockRejectedValueOnce(
+      new ApiError(409, 'conflict', 'Conflict.', 'req-5', {
+        override_reason: ['A student with this phone already exists. Give a reason to register anyway.'],
+      }),
+    );
+    checkDuplicates.mockResolvedValueOnce({ results: [] }).mockResolvedValue({ results: [existingMatch()] });
+    const user = userEvent.setup();
+    await goToConfirmWithExistingBatch(user);
+    await user.click(await screen.findByRole('button', { name: /assign a trainer later/i }));
+    await user.click(await screen.findByRole('button', { name: /confirm and enrol/i }));
+
+    await waitFor(() => expect(screen.getByText('Student details')).toBeInTheDocument());
+    expect(
+      screen.getByText('A student with this phone already exists. Give a reason to register anyway.'),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/Jane Existing/)).toBeInTheDocument();
+  });
+
+  it('says a nested profile error above the form rather than dropping it', async () => {
+    createStudent.mockRejectedValue(
+      new ApiError(400, 'validation_error', 'The submitted data is invalid.', 'req-6', {
+        profile: { institution: ['Ensure this field has no more than 150 characters.'] },
+      } as unknown as Record<string, string[]>),
+    );
+    const user = userEvent.setup();
+    await goToConfirmWithExistingBatch(user);
+    await user.click(await screen.findByRole('button', { name: /assign a trainer later/i }));
+    await user.click(await screen.findByRole('button', { name: /confirm and enrol/i }));
+
+    await waitFor(() => expect(screen.getByText('Student details')).toBeInTheDocument());
+    expect(screen.getByText('Ensure this field has no more than 150 characters.')).toBeInTheDocument();
+  });
+
   it('shows a trainer clash message verbatim, without paraphrasing it', async () => {
     createStudent.mockResolvedValue(student());
     assignBatchTrainer.mockRejectedValue(
