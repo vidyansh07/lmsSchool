@@ -307,3 +307,18 @@ def test_resending_student_invitations_from_the_students_list(
         format="json",
     )
     assert refused.status_code == 403
+
+
+@pytest.mark.django_db
+def test_a_filter_the_list_does_not_have_is_refused_not_ignored(
+    api_client_no_csrf, admin_user, branch
+):
+    """Ignored, it would widen 'every account matching' to every account."""
+    pending = _make("p@example.test", UserRole.COUNSELLOR, branch)
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.post(
+        URL, {"action": "resend_invitation", "filters": {"rolee": "counsellor"}}, format="json"
+    )
+    assert response.status_code == 400
+    assert "rolee" in str(response.json())
+    assert not _invited(pending)

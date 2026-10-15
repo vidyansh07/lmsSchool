@@ -114,11 +114,20 @@ def resolve_targets(
 
     filters = dict(target.get("filters") or {})
     search = filters.pop("search", "")
+    filterset_class = import_string(filterset)
+    # A filter the list does not have would be ignored, and an ignored filter
+    # widens "every row matching" to every row — the one mistake a bulk
+    # action must not make quietly. Refuse it instead.
+    unknown = sorted(set(filters) - set(filterset_class.base_filters))
+    if unknown or (search and not tuple(search_fields)):
+        raise ApplicationError(
+            {"filters": [f"This list cannot be filtered by {', '.join(unknown) or 'search'}."]}
+        )
     rows = visible
     if any(value not in (None, "") for value in filters.values()):
         data = {key: value for key, value in filters.items() if value not in (None, "")}
         # The request goes through for filters that read the caller ("mine").
-        filtered = import_string(filterset)(data=data, queryset=rows, request=request)
+        filtered = filterset_class(data=data, queryset=rows, request=request)
         if not filtered.is_valid():
             raise ApplicationError({"filters": ["One of the filters is not valid."]})
         rows = filtered.qs
