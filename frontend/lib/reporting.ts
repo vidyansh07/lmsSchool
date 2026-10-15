@@ -98,6 +98,12 @@ export async function queueExport(payload: {
   search?: string;
   skill?: string;
   is_accepting_assignments?: string;
+  status?: string;
+  fee_status?: string;
+  is_active?: string;
+  institution?: string;
+  branch?: string;
+  min_experience?: string;
   attention?: string;
 }): Promise<ExportJob> {
   return apiMutate<ExportJob>('/api/v1/reports/exports/', { method: 'POST', body: payload });

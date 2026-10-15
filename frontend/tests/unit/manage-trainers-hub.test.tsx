@@ -155,6 +155,27 @@ describe('TrainersHub', () => {
     expect(await screen.findByText('Manager · also teaches')).toBeInTheDocument();
   });
 
+  it('narrows by experience and says so, with a way to clear it', async () => {
+    listManageTrainers.mockResolvedValue(page([trainerRow()]));
+    render(<TrainersHub />);
+    await waitFor(() => expect(listManageTrainers).toHaveBeenCalledTimes(1));
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText('Experience'), '5');
+    await waitFor(() =>
+      expect(listManageTrainers).toHaveBeenLastCalledWith(
+        expect.objectContaining({ min_experience: '5' }),
+        expect.anything(),
+      ),
+    );
+    await user.click(screen.getByRole('button', { name: 'Remove filter Experience: 5+ years' }));
+    await waitFor(() =>
+      expect(listManageTrainers).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({ min_experience: '5' }),
+        expect.anything(),
+      ),
+    );
+  });
+
   it('opens the trainer on row activation', async () => {
     listManageTrainers.mockResolvedValue(page([trainerRow()]));
     render(<TrainersHub />);

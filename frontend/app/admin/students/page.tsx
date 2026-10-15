@@ -9,6 +9,8 @@ import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { exportFiltersFrom } from '@/lib/reporting';
 import { SavedViews } from '@/components/saved-views';
+import { ActiveFilters } from '@/components/active-filters';
+import { useBranches } from '@/components/organisation/branch-field';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -34,10 +36,14 @@ import type { FeeStatus, StudentListRow } from '@/types/api';
 import { CreateStudentDialog } from './create-student-dialog';
 
 function StudentsTable() {
-  const { can } = useAuth();
+  const { user: viewer, can } = useAuth();
   const list = useList<StudentListRow>(listStudents, {}, {
-    urlKeys: ['institution', 'fee_status', 'is_active'],
+    urlKeys: ['institution', 'fee_status', 'is_active', 'branch'],
   });
+  // Administrators and the platform operator see every centre; a centre
+  // filter only means something to them.
+  const seesEveryCentre = viewer?.role === 'superadmin' || viewer?.role === 'admin';
+  const { branches } = useBranches(seesEveryCentre);
   const [actionError, setActionError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
 
@@ -221,7 +227,7 @@ function StudentsTable() {
         <div className="flex gap-2">
           <ExportMenu
             reportKey="students"
-            filters={exportFiltersFrom(list.query, ['search', 'institution', 'fee_status', 'is_active'])}
+            filters={exportFiltersFrom(list.query, ['search', 'institution', 'fee_status', 'is_active', 'branch'])}
             count={list.data?.count ?? null}
             size="md"
           />
@@ -243,7 +249,7 @@ function StudentsTable() {
 
       <SavedViews
         screen="admin-students"
-        keys={['search', 'ordering', 'institution', 'fee_status', 'is_active']}
+        keys={['search', 'ordering', 'institution', 'fee_status', 'is_active', 'branch']}
         query={list.query}
         onApply={list.setQuery}
       />
@@ -294,7 +300,41 @@ function StudentsTable() {
             <option value="false">Inactive</option>
           </Select>
         </div>
+        {seesEveryCentre && branches.length > 1 ? (
+          <div>
+            <label htmlFor="filter-branch" className="mb-1.5 block text-sm font-medium">
+              Centre
+            </label>
+            <Select
+              id="filter-branch"
+              value={String(list.query.branch ?? '')}
+              onChange={(event) => list.setQuery({ branch: event.target.value })}
+            >
+              <option value="">All centres</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name} ({branch.code})
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
       </ListToolbar>
+      <ActiveFilters
+        query={list.query}
+        onChange={list.setQuery}
+        filters={[
+          { key: 'search', label: 'Search' },
+          { key: 'institution', label: 'College or employer' },
+          { key: 'fee_status', label: 'Fee status', display: (value) => labelFor(FEE_STATUS_LABEL, value) },
+          { key: 'is_active', label: 'Status', display: (value) => (value === 'true' ? 'Active' : 'Inactive') },
+          {
+            key: 'branch',
+            label: 'Centre',
+            display: (value) => branches.find((branch) => branch.id === value)?.name ?? value,
+          },
+        ]}
+      />
 
       {actionError ? <Alert variant="error">{actionError}</Alert> : null}
 

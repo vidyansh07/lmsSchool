@@ -29,6 +29,8 @@ import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
 import { WarningsStrip } from '@/components/warnings-strip';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { SavedViews } from '@/components/saved-views';
+import { ActiveFilters } from '@/components/active-filters';
+import { labelFor } from '@/lib/labels';
 import { ListToolbar } from '@/components/list-toolbar';
 import { AttentionChip } from '@/components/manage/attention-chip';
 import { Pagination } from '@/components/pagination';
@@ -210,6 +212,14 @@ export function BatchesHub() {
             </Select>
           </div>
         </ListToolbar>
+        <ActiveFilters
+          query={list.query}
+          onChange={list.setQuery}
+          filters={[
+            { key: 'search', label: 'Search' },
+            { key: 'status', label: 'Status', display: (value) => labelFor(BATCH_STATUS_LABEL, value) },
+          ]}
+        />
 
         <DataTable
           columns={columns}

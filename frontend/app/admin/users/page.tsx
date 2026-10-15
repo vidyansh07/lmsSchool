@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { SavedViews } from '@/components/saved-views';
+import { ActiveFilters } from '@/components/active-filters';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -197,6 +198,20 @@ function UsersTable() {
           </div>
         ) : null}
       </ListToolbar>
+      <ActiveFilters
+        query={list.query}
+        onChange={list.setQuery}
+        filters={[
+          { key: 'search', label: 'Search' },
+          { key: 'role', label: 'Role', display: (value) => labelFor(ROLE_LABEL, value) },
+          { key: 'is_active', label: 'Status', display: (value) => (value === 'true' ? 'Active' : 'Inactive') },
+          {
+            key: 'branch',
+            label: 'Centre',
+            display: (value) => branches.find((branch) => branch.id === value)?.name ?? value,
+          },
+        ]}
+      />
 
       <DataTable
         columns={columns}

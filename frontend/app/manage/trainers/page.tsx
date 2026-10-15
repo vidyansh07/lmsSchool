@@ -22,6 +22,8 @@ import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
 import { SavedViews } from '@/components/saved-views';
+import { ActiveFilters } from '@/components/active-filters';
+import { useBranches } from '@/components/organisation/branch-field';
 import { ListToolbar } from '@/components/list-toolbar';
 import { AttentionChip } from '@/components/manage/attention-chip';
 import { Pagination } from '@/components/pagination';
@@ -42,7 +44,9 @@ import { updateTrainer } from '@/lib/people';
 
 export function TrainersHub() {
   const router = useRouter();
-  const { can } = useAuth();
+  const { user: viewer, can } = useAuth();
+  const seesEveryCentre = viewer?.role === 'superadmin' || viewer?.role === 'admin';
+  const { branches } = useBranches(seesEveryCentre);
   // The attention strip links here with `?attention=…` — "the batches running
   // behind", "the trainers with no review" — so the list opens already
   // narrowed to the thing the person clicked on, rather than to everything.
@@ -51,7 +55,7 @@ export function TrainersHub() {
   const list = useList<ManageTrainerRow>(
     listManageTrainers,
     { page_size: 20, ...(attention ? { attention } : {}) },
-    { urlKeys: ['attention', 'skill', 'is_accepting_assignments'] },
+    { urlKeys: ['attention', 'skill', 'is_accepting_assignments', 'branch', 'min_experience'] },
   );
   const [showCreate, setShowCreate] = useState(false);
   // Typed into a box and applied after a pause (or on Enter) — not only on
@@ -75,6 +79,8 @@ export function TrainersHub() {
     skill: appliedSkill || undefined,
     is_accepting_assignments: String(list.query.is_accepting_assignments ?? '') || undefined,
     attention: String(list.query.attention ?? '') || undefined,
+    branch: String(list.query.branch ?? '') || undefined,
+    min_experience: String(list.query.min_experience ?? '') || undefined,
   };
   const [actionError, setActionError] = useState('');
   const [busyTrainerId, setBusyTrainerId] = useState<string | null>(null);
@@ -237,7 +243,7 @@ export function TrainersHub() {
 
         <SavedViews
           screen="manage-trainers"
-          keys={['search', 'ordering', 'attention', 'skill', 'is_accepting_assignments']}
+          keys={['search', 'ordering', 'attention', 'skill', 'is_accepting_assignments', 'branch', 'min_experience']}
           query={list.query}
           onApply={list.setQuery}
         />
@@ -276,7 +282,61 @@ export function TrainersHub() {
               <option value="false">Not accepting</option>
             </Select>
           </div>
+          <div>
+            <label htmlFor="filter-experience" className="mb-1.5 block text-sm font-medium">
+              Experience
+            </label>
+            <Select
+              id="filter-experience"
+              value={String(list.query.min_experience ?? '')}
+              onChange={(event) => list.setQuery({ min_experience: event.target.value })}
+            >
+              <option value="">Any</option>
+              <option value="1">1+ years</option>
+              <option value="3">3+ years</option>
+              <option value="5">5+ years</option>
+              <option value="10">10+ years</option>
+            </Select>
+          </div>
+          {seesEveryCentre && branches.length > 1 ? (
+            <div>
+              <label htmlFor="filter-branch" className="mb-1.5 block text-sm font-medium">
+                Centre
+              </label>
+              <Select
+                id="filter-branch"
+                value={String(list.query.branch ?? '')}
+                onChange={(event) => list.setQuery({ branch: event.target.value })}
+              >
+                <option value="">All centres</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name} ({branch.code})
+                  </option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
         </ListToolbar>
+        <ActiveFilters
+          query={list.query}
+          onChange={list.setQuery}
+          filters={[
+            { key: 'search', label: 'Search' },
+            { key: 'skill', label: 'Skill' },
+            {
+              key: 'is_accepting_assignments',
+              label: 'Availability',
+              display: (value) => (value === 'true' ? 'Accepting' : 'Not accepting'),
+            },
+            { key: 'min_experience', label: 'Experience', display: (value) => `${value}+ years` },
+            {
+              key: 'branch',
+              label: 'Centre',
+              display: (value) => branches.find((branch) => branch.id === value)?.name ?? value,
+            },
+          ]}
+        />
 
         {actionError ? <Alert variant="error">{actionError}</Alert> : null}
 

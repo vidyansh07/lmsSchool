@@ -131,6 +131,7 @@ EXTRA_FILTER_KEYS = (
     "is_active",
     "institution",
     "branch",
+    "min_experience",
 )
 
 
@@ -168,7 +169,7 @@ LIST_NARROWING: dict[str, tuple[str, tuple[str, ...], tuple[str, ...]]] = {
     "trainers": (
         "apps.trainers.views.TrainerFilterSet",
         ("trainer_id", "user__email", "user__first_name", "user__last_name", "professional_title"),
-        ("skill", "is_accepting_assignments", "attention"),
+        ("skill", "is_accepting_assignments", "attention", "branch", "min_experience"),
     ),
     "students": (
         "apps.students.views.StudentFilterSet",

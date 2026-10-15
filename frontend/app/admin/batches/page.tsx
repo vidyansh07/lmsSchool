@@ -9,6 +9,8 @@ import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { exportFiltersFrom } from '@/lib/reporting';
 import { SavedViews } from '@/components/saved-views';
+import { ActiveFilters } from '@/components/active-filters';
+import { labelFor } from '@/lib/labels';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -157,6 +159,14 @@ function BatchList() {
           </Select>
         </div>
       </ListToolbar>
+      <ActiveFilters
+        query={list.query}
+        onChange={list.setQuery}
+        filters={[
+          { key: 'search', label: 'Search' },
+          { key: 'status', label: 'Status', display: (value) => labelFor(BATCH_STATUS_LABEL, value) },
+        ]}
+      />
 
       <DataTable
         columns={columns}

@@ -27,6 +27,8 @@ import { ExportMenu } from '@/components/export-menu';
 import { exportFiltersFrom } from '@/lib/reporting';
 import { money } from '@/components/fees/fee-ledger';
 import { SavedViews } from '@/components/saved-views';
+import { ActiveFilters } from '@/components/active-filters';
+import { labelFor } from '@/lib/labels';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -290,6 +292,28 @@ export function AdmissionsList() {
           />
         </div>
       </ListToolbar>
+      <ActiveFilters
+        query={list.query}
+        onChange={list.setQuery}
+        filters={[
+          { key: 'search', label: 'Search' },
+          {
+            key: 'course',
+            label: 'Course',
+            display: (value) => courses.find((course) => course.slug === value)?.title ?? value,
+          },
+          {
+            key: 'batch',
+            label: 'Batch',
+            display: (value) => batches.find((batch) => batch.id === value)?.code ?? value,
+          },
+          {
+            key: 'status',
+            label: 'Status',
+            display: (value) => labelFor(ENROLLMENT_STATUS_LABEL, value),
+          },
+        ]}
+      />
 
       {!list.isLoading && !list.error && list.data && list.data.count === 0 ? (
         <EmptyState
