@@ -213,6 +213,38 @@ Verification for the loop: frontend 166 files / 1,524 tests (also green under
 affected backend suites and a full backend run are recorded in the change
 summary that accompanies this branch.
 
+## Second loop — the remaining audit items (15 October 2026)
+
+| Audit item | What changed |
+| --- | --- |
+| UX-16 Student 360 | A **Fees** tab (the same ledger and endpoints as the admissions record, writable only with `fee.manage_any`), and links to the admissions record and the account |
+| UX-06 / UX-19 trainer record | The trainer's page shows their profile and lets `trainer.update_any` edit title, skills (as tags), experience, expertise and availability; shows whether the invitation was ever accepted, with **Resend invitation**; links the account. Onboarding takes skills as tags |
+| UX-07 reverse links | Student 360, the admissions record and the trainer page each link to the account |
+| UX-10 export parity | Students, enrolments and batches export the rows on screen (`LIST_NARROWING` in `apps/reporting/views.py` applies each list's own FilterSet and search, directly and when queued). The admissions export no longer sends the course *slug* where an id is expected — course-filtered exports had been refused |
+| UX-11 saved views | Server-backed, per user and screen, on users, students, batches, courses, admissions, both manager hubs and the class-report queue; apply, save, rename, remove |
+| UX-09 filters | Chips saying every active filter, each removable, with Clear all; centre filters for those who see every centre; trainer experience |
+| UX-08 rest | The class-report queue keeps status, batch, trainer and its date range in the address bar |
+| UX-13 builders | Course details, lesson editor (Cancel asks), form builder and flow builder guard unsaved work |
+| UX-25 palette | Quick actions — register a student, add a trainer or staff account, open a batch — capability-gated, landing with the dialog open (`?create=1`) |
+| UX-21 / UX-22 tables | A control inside a row (select, button, link) never also opens the row — fixed once in `DataTable`; students and admissions rows open anywhere; inline fee-status and availability changes are announced |
+| Onboarding edge case | An address that already has an account says whose it is and offers the next step: open their trainer profile, let a manager teach, or open the account |
+| Concurrency | `expected_updated_at` on account edits and role changes; an edit based on an older copy is refused with `409 stale_write` (row-locked) and the screen offers a reload |
+| UX-28 (partial) | axe-core checks over nine new or changed surfaces, zero violations (contrast excluded) |
+
+Engineering fixes found on the way: the search box and the trainer skill box
+wrote a stale value back over a search set from outside (a saved view, Back);
+`Confirm`'s buttons are now `type="button"` so one inside a form cannot submit
+it; two export filters sharing a true/false choice set broke `check --deploy`
+until named once (`TrueFalseEnum`); the showcase seed drew from sequence-made
+codes and UUIDs, so two of its tests failed only inside a full run — draws now
+use emails, names and slugs; `AuthProvider` tracks the signed-in state
+synchronously, which removes an intermittent session-ended test failure.
+
+Still open, and not guessed in code: **bulk actions** (UX-12) need the owner to
+name the operations; **manager versus counsellor** navigation needs the owner's
+split. A screen-reader and live keyboard pass in a browser remains a release
+check.
+
 ## Remaining UX work
 
 The broader gap audit remains at `.lavish/lms-ux-functional-gap-audit.html`.
