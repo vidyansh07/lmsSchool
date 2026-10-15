@@ -4,13 +4,14 @@
  * Moving people between batches — one student, or a whole batch's worth.
  *
  * Both modes show the move before it happens: who, from where, to where, and
- * how many seats that leaves. `transferEnrollment` (see `lib/batches.ts`)
- * enrols on the new batch before cancelling the old one, so a failure here —
- * a full target batch, most often — leaves the student exactly where they
- * started rather than dropped between two records. The batch mode runs one
- * transfer at a time and reports each result as it happens rather than an
- * all-or-nothing outcome, because "23 of 25 moved, here are the two that
- * didn't" is the honest answer when a batch fills up partway through.
+ * how many seats that leaves, and both ask why — the reason is kept on the
+ * old enrolment, which becomes "Transferred" and points at the new one
+ * (`transfer_student`), so the move never reads as a drop-out. A failure — a
+ * full target batch, most often — leaves the student exactly where they
+ * were. The batch mode moves the ticked students in one request and reports
+ * each result rather than an all-or-nothing outcome, because "23 of 25
+ * moved, here are the two that didn't" is the honest answer when a batch
+ * fills up partway through.
  */
 
 import Link from 'next/link';
@@ -18,6 +19,7 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 
 import { SearchPicker, type PickerOption } from '@/components/admissions/search-picker';
+import { TransferReasonFields as ReasonFields } from '@/components/admissions/transfer-reason-fields';
 import { RequireAuth } from '@/components/require-auth';
 import { LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
@@ -26,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrapper, Td, Th } from '@/components/ui/table';
 import { errorMessage } from '@/lib/api';
+import { bulkTransferEnrollments } from '@/lib/bulk';
 import {
   getBatchRoster,
   getEnrollment,
@@ -70,6 +73,9 @@ function StudentTransfer({
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [reason, setReason] = useState('');
+  const [isUpgrade, setIsUpgrade] = useState(false);
+  const [reasonError, setReasonError] = useState('');
 
   // Arriving from the "Transfer" link on a student's own page.
   useEffect(() => {
@@ -133,20 +139,28 @@ function StudentTransfer({
 
   async function onConfirm() {
     if (!student || !sourceEnrollment || !targetBatch) return;
+    if (!reason.trim()) {
+      setReasonError('Say why the student is being moved.');
+      return;
+    }
     setIsBusy(true);
     setError('');
     setNotice('');
+    setReasonError('');
     try {
       await transferEnrollment({
-        studentId: student.id,
         fromEnrollmentId: sourceEnrollment.id,
         toBatchId: targetBatch.id,
+        reason: reason.trim(),
+        isUpgrade,
       });
       setNotice(
         `${student.user.full_name || student.user.email} moved from ${sourceEnrollment.batch_name} to ${targetBatch.name}.`,
       );
       setSourceEnrollment(null);
       setTargetBatch(null);
+      setReason('');
+      setIsUpgrade(false);
       listStudentEnrollments(student.student_id)
         .then(setEnrollments)
         .catch(() => undefined);
@@ -264,12 +278,24 @@ function StudentTransfer({
 
       {student && sourceEnrollment && targetBatch ? (
         <Alert variant="info" data-testid="transfer-preview">
-          This withdraws {student.user.full_name || student.user.email} from{' '}
-          <strong>{sourceEnrollment.batch_name}</strong> ({sourceEnrollment.course_title}) and enrols
-          them on <strong>{targetBatch.name}</strong> ({targetBatch.course_title}), starting{' '}
+          This moves {student.user.full_name || student.user.email} from{' '}
+          <strong>{sourceEnrollment.batch_name}</strong> ({sourceEnrollment.course_title}) to{' '}
+          <strong>{targetBatch.name}</strong> ({targetBatch.course_title}), starting{' '}
           {formatDate(targetBatch.start_date)} with {targetBatch.seats_available} seat
-          {targetBatch.seats_available === 1 ? '' : 's'} currently open.
+          {targetBatch.seats_available === 1 ? '' : 's'} currently open. Their old enrolment is
+          kept, marked Transferred, with its attendance.
         </Alert>
+      ) : null}
+
+      {student && sourceEnrollment && targetBatch ? (
+        <ReasonFields
+          idPrefix="transfer"
+          reason={reason}
+          onReason={setReason}
+          isUpgrade={isUpgrade}
+          onUpgrade={setIsUpgrade}
+          error={reasonError}
+        />
       ) : null}
 
       {student && sourceEnrollment && targetBatch ? (
@@ -299,6 +325,11 @@ function BatchTransfer() {
   const [results, setResults] = useState<RowResult[] | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState('');
+  const [reason, setReason] = useState('');
+  const [isUpgrade, setIsUpgrade] = useState(false);
+  const [reasonError, setReasonError] = useState('');
+  // Who stays behind: everyone movable is ticked until somebody unticks them.
+  const [leftOut, setLeftOut] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -332,32 +363,45 @@ function BatchTransfer() {
   }, [targetQuery, sourceBatch]);
 
   const movable = (roster ?? []).filter((entry) => MOVABLE_STATUSES.has(entry.status));
+  const chosen = movable.filter((entry) => !leftOut.has(entry.id));
+
+  function toggleEntry(id: string) {
+    setLeftOut((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   async function onConfirm() {
-    if (!targetBatch) return;
+    if (!targetBatch || chosen.length === 0) return;
+    if (!reason.trim()) {
+      setReasonError('Say why these students are being moved.');
+      return;
+    }
     setIsRunning(true);
     setError('');
-    let current: RowResult[] = movable.map((entry) => ({ entry, status: 'pending' }));
-    setResults(current);
-    for (let index = 0; index < movable.length; index += 1) {
-      const entry = movable[index]!;
-      let outcome: RowResult;
-      try {
-        await transferEnrollment({
-          studentId: entry.student_id,
-          fromEnrollmentId: entry.id,
-          toBatchId: targetBatch.id,
-        });
-        outcome = { entry, status: 'moved' };
-      } catch (cause) {
-        outcome = {
-          entry,
-          status: 'failed',
-          message: errorMessage(cause, 'Could not move this student.'),
-        };
-      }
-      current = current.map((row, rowIndex) => (rowIndex === index ? outcome : row));
-      setResults(current);
+    setReasonError('');
+    setResults(chosen.map((entry) => ({ entry, status: 'pending' })));
+    try {
+      const outcome = await bulkTransferEnrollments({
+        ids: chosen.map((entry) => entry.id),
+        batch_id: targetBatch.id,
+        reason: reason.trim(),
+        is_upgrade: isUpgrade,
+      });
+      const refused = new Map(outcome.skipped.map((row) => [row.id, row.reason]));
+      setResults(
+        chosen.map((entry) =>
+          refused.has(entry.id)
+            ? { entry, status: 'failed', message: refused.get(entry.id) }
+            : { entry, status: 'moved' },
+        ),
+      );
+    } catch (cause) {
+      setResults(null);
+      setError(errorMessage(cause, 'Could not move these students.'));
     }
     setIsRunning(false);
     if (sourceBatch) {
@@ -391,6 +435,7 @@ function BatchTransfer() {
           setSourceBatch(sourceOptions.find((row) => row.id === option.value) ?? null);
           setRoster(null);
           setResults(null);
+          setLeftOut(new Set());
         }}
         placeholder="Source batch"
         emptyMessage="Type to search."
@@ -422,9 +467,9 @@ function BatchTransfer() {
 
           {targetBatch ? (
             <Alert variant="info" data-testid="batch-transfer-preview">
-              This moves {movable.length} student{movable.length === 1 ? '' : 's'} from{' '}
+              This moves {chosen.length} student{chosen.length === 1 ? '' : 's'} from{' '}
               <strong>{sourceBatch.name}</strong> to <strong>{targetBatch.name}</strong>
-              {targetBatch.seats_available < movable.length ? (
+              {targetBatch.seats_available < chosen.length ? (
                 <>
                   {' '}
                   — only {targetBatch.seats_available} seat{targetBatch.seats_available === 1 ? '' : 's'}{' '}
@@ -436,20 +481,43 @@ function BatchTransfer() {
             </Alert>
           ) : null}
 
+          {targetBatch && !results ? (
+            <ReasonFields
+              idPrefix="batch-transfer"
+              reason={reason}
+              onReason={setReason}
+              isUpgrade={isUpgrade}
+              onUpgrade={setIsUpgrade}
+              error={reasonError}
+            />
+          ) : null}
+
           <TableWrapper>
             <Table>
               <thead>
                 <tr>
+                  {!results ? <Th className="w-10"><span className="sr-only">Move</span></Th> : null}
                   <Th>Student</Th>
                   <Th>Current status</Th>
                   {results ? <Th>Result</Th> : null}
                 </tr>
               </thead>
               <tbody>
-                {movable.map((entry, index) => {
-                  const outcome = results?.[index];
+                {(results ? chosen : movable).map((entry) => {
+                  const outcome = results?.find((row) => row.entry.id === entry.id);
                   return (
                     <tr key={entry.id}>
+                      {!results ? (
+                        <Td>
+                          <input
+                            type="checkbox"
+                            aria-label={`Move ${entry.full_name || entry.email}`}
+                            checked={!leftOut.has(entry.id)}
+                            onChange={() => toggleEntry(entry.id)}
+                            className="size-4 rounded border-line accent-action"
+                          />
+                        </Td>
+                      ) : null}
                       <Td className="font-medium">
                         {entry.full_name || entry.email}
                         <span className="block font-mono text-xs text-ink-muted">
@@ -480,8 +548,8 @@ function BatchTransfer() {
           </TableWrapper>
 
           {targetBatch && !results ? (
-            <Button onClick={() => void onConfirm()} disabled={isRunning}>
-              {isRunning ? 'Moving…' : `Move ${movable.length} student${movable.length === 1 ? '' : 's'}`}
+            <Button onClick={() => void onConfirm()} disabled={isRunning || chosen.length === 0}>
+              {isRunning ? 'Moving…' : `Move ${chosen.length} student${chosen.length === 1 ? '' : 's'}`}
             </Button>
           ) : null}
         </>
@@ -523,7 +591,7 @@ export function TransferContent() {
           <CardDescription>
             {mode === 'student'
               ? 'Find the student, pick the enrolment to move, and choose where it goes.'
-              : 'Everyone currently active, pending or suspended on the source batch moves to the target.'}
+              : 'Everyone active, pending or suspended on the source batch is ticked; untick anyone who stays.'}
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -5,7 +5,7 @@
  * registration-date narrowing (the API cannot filter by it) still applies
  * only to the current page's rows, and the density toggle persists.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,6 +15,12 @@ import type { Enrollment } from '@/types/api';
 
 const listEnrollments = vi.hoisted(() => vi.fn());
 const listBatches = vi.hoisted(() => vi.fn());
+const listEnrolmentDestinations = vi.hoisted(() => vi.fn());
+const bulkTransferEnrollments = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/bulk', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/bulk')>('@/lib/bulk');
+  return { ...actual, bulkTransferEnrollments };
+});
 // Saved views load from the server; these tests are about the list itself.
 vi.mock('@/lib/saved-filters', () => ({
   listSavedFilters: vi.fn().mockResolvedValue([]),
@@ -23,7 +29,7 @@ vi.mock('@/lib/saved-filters', () => ({
 }));
 vi.mock('@/lib/batches', async () => {
   const actual = await vi.importActual<typeof import('@/lib/batches')>('@/lib/batches');
-  return { ...actual, listEnrollments, listBatches };
+  return { ...actual, listEnrollments, listBatches, listEnrolmentDestinations };
 });
 
 const listCourses = vi.hoisted(() => vi.fn());
@@ -35,9 +41,17 @@ vi.mock('@/lib/courses', async () => {
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock('@/components/auth-provider', () => ({ useAuth }));
 const exportFilters = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
+const exportSelected = vi.hoisted(() => ({ value: undefined as readonly string[] | undefined }));
 vi.mock('@/components/export-menu', () => ({
-  ExportMenu: ({ filters }: { filters?: Record<string, unknown> }) => {
-    exportFilters.value = filters ?? {};
+  ExportMenu: ({
+    filters,
+    selectedIds,
+  }: {
+    filters?: Record<string, unknown>;
+    selectedIds?: readonly string[];
+  }) => {
+    if (selectedIds) exportSelected.value = selectedIds;
+    else exportFilters.value = filters ?? {};
     return null;
   },
 }));
@@ -220,5 +234,79 @@ describe('AdmissionsPage — export', () => {
         expect.objectContaining({ course: 'course-uuid-1', status: 'active' }),
       ),
     );
+  });
+});
+
+describe('AdmissionsPage — acting on many enrolments', () => {
+  function signInAsCounsellor() {
+    useAuth.mockReturnValue({
+      user: { id: 'u-counsellor', role: 'counsellor' },
+      isLoading: false,
+      can: () => true,
+    });
+  }
+
+  it('moves the ticked enrolments to another batch with a reason, and exports them', async () => {
+    signInAsCounsellor();
+    listEnrollments.mockResolvedValue(
+      page([enrollmentRow(), enrollmentRow({ id: 'e-2', student_name: 'Bala K', student_id: 's-2' })]),
+    );
+    listEnrolmentDestinations.mockResolvedValue({
+      batches: [
+        {
+          id: 'b-2',
+          code: 'GRS-B-002',
+          name: 'Evening',
+          course_title: 'Linux',
+          seats_available: 1,
+          start_date: '2026-11-01',
+        },
+      ],
+      isComplete: true,
+    });
+    bulkTransferEnrollments.mockResolvedValue({
+      action: 'transfer',
+      total: 2,
+      done: 1,
+      skipped: [{ id: 'e-2', label: 'Bala K', reason: 'This batch is full.' }],
+    });
+    const user = userEvent.setup();
+    render(<AdmissionsPage />);
+
+    await screen.findByText('Bala K');
+    await user.click(screen.getByRole('checkbox', { name: 'Select Asha Rao on GRS-B-001' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Bala K on GRS-B-001' }));
+    expect(exportSelected.value).toEqual(['e-1', 'e-2']);
+
+    await user.click(screen.getByRole('button', { name: 'Move to another batch' }));
+    const dialog = screen.getByRole('dialog', { name: 'Move 2 students to another batch' });
+    await user.selectOptions(
+      await within(dialog).findByRole('listbox', { name: 'Move to batch results' }),
+      'b-2',
+    );
+    expect(dialog).toHaveTextContent('Only 1 seat open on Evening');
+    await user.type(within(dialog).getByLabelText(/^Reason/), 'Merged batches');
+    await user.click(within(dialog).getByRole('button', { name: 'Move 2 students' }));
+
+    await waitFor(() =>
+      expect(bulkTransferEnrollments).toHaveBeenCalledWith({
+        ids: ['e-1', 'e-2'],
+        batch_id: 'b-2',
+        reason: 'Merged batches',
+        is_upgrade: false,
+      }),
+    );
+    const result = await screen.findByRole('dialog', { name: 'Moved to another batch' });
+    expect(result).toHaveTextContent('1 enrolment moved, 1 skipped');
+    expect(result).toHaveTextContent('This batch is full.');
+  });
+
+  it('offers no move to somebody who cannot transfer', async () => {
+    listEnrollments.mockResolvedValue(page([enrollmentRow()]));
+    const user = userEvent.setup();
+    render(<AdmissionsPage />);
+    await screen.findByText('Asha Rao');
+    await user.click(screen.getByRole('checkbox', { name: 'Select Asha Rao on GRS-B-001' }));
+    expect(screen.queryByRole('button', { name: 'Move to another batch' })).not.toBeInTheDocument();
   });
 });

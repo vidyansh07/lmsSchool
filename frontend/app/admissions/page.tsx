@@ -23,6 +23,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
+import {
+  ENROLLMENT_FILTER_KEYS,
+  EnrollmentBulkActions,
+} from '@/components/admissions/enrollment-bulk-actions';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { exportFiltersFrom } from '@/lib/reporting';
@@ -37,7 +41,9 @@ import { EmptyState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
+import { useBulkSelection } from '@/hooks/use-bulk-selection';
 import { useList } from '@/hooks/use-list';
+import { selectionKey } from '@/lib/bulk';
 import { listBatches, listEnrollments } from '@/lib/batches';
 import {
   ENROLLMENT_STATUS_LABEL,
@@ -54,7 +60,7 @@ export function AdmissionsList() {
   const list = useList<Enrollment>(
     listEnrollments,
     { page_size: 20 },
-    { urlKeys: ['course', 'batch', 'status'] },
+    { urlKeys: [...ENROLLMENT_FILTER_KEYS] },
   );
   const [courses, setCourses] = useState<CourseListRow[]>([]);
   const [batches, setBatches] = useState<BatchListRow[]>([]);
@@ -88,6 +94,20 @@ export function AdmissionsList() {
   }, [list.data, registeredFrom, registeredTo]);
 
   const dateFilterActive = Boolean(registeredFrom || registeredTo);
+  // Ticked rows survive paging but never a change of filter.
+  const selection = useBulkSelection<string>(
+    selectionKey({ ...list.query, registeredFrom, registeredTo }, [
+      ...ENROLLMENT_FILTER_KEYS,
+      'registeredFrom',
+      'registeredTo',
+    ]),
+  );
+  const exportFilters = {
+    ...exportFiltersFrom(list.query, ['search', 'status', 'batch']),
+    // The course filter holds a slug (`course__slug` on the list);
+    // the report resolves a course by id inside the caller's reach.
+    course: courses.find((row) => row.slug === list.query.course)?.id,
+  };
 
   const columns: DataTableColumn<Enrollment>[] = [
     {
@@ -194,12 +214,7 @@ export function AdmissionsList() {
           </Button>
           <ExportMenu
             reportKey="enrollments"
-            filters={{
-              ...exportFiltersFrom(list.query, ['search', 'status', 'batch']),
-              // The course filter holds a slug (`course__slug` on the list);
-              // the report resolves a course by id inside the caller's reach.
-              course: courses.find((row) => row.slug === list.query.course)?.id,
-            }}
+            filters={exportFilters}
             count={list.data?.count ?? null}
             size="md"
           />
@@ -211,7 +226,7 @@ export function AdmissionsList() {
 
       <SavedViews
         screen="admissions"
-        keys={['search', 'ordering', 'course', 'batch', 'status']}
+        keys={['search', 'ordering', ...ENROLLMENT_FILTER_KEYS]}
         query={list.query}
         onApply={list.setQuery}
       />
@@ -336,12 +351,24 @@ export function AdmissionsList() {
             </p>
           ) : null}
 
-          <DataTable
+          <EnrollmentBulkActions
+            selection={selection}
+            query={list.query}
+            totalCount={list.data?.count}
+            exportFilters={exportFilters}
+            // The registration-date filter narrows only this page, so "every
+            // matching row" on the server would not be the rows on screen.
+            allowSelectAllMatching={!dateFilterActive}
+            onChanged={list.reload}
+          />
 
+          <DataTable
             onRowActivate={(row) => router.push(`/admissions/${row.student_id}`)}
             columns={columns}
             rows={visibleRows}
             getRowId={(row) => row.id}
+            selection={selection}
+            getRowLabel={(row) => `${row.student_name || row.student_code} on ${row.batch_code}`}
             isLoading={list.isLoading}
             loadingLabel="Loading admissions…"
             error={

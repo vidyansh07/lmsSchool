@@ -145,6 +145,14 @@ class EnrollmentStatusSerializer(StrictSerializer):
     note = SafeCharField(max_length=255, required=False, allow_blank=True, default="")
 
 
+class EnrollmentTransferSerializer(StrictSerializer):
+    """Move one enrolment to another batch (`transfer_student`)."""
+
+    batch_id = serializers.UUIDField()
+    reason = SafeCharField(max_length=255)
+    is_upgrade = serializers.BooleanField(required=False, default=False)
+
+
 class LessonProgressSerializer(serializers.ModelSerializer):
     lesson_title = serializers.CharField(source="lesson.title", read_only=True)
 
