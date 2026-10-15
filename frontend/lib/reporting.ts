@@ -81,6 +81,20 @@ export function reportExportUrl(
   return `${apiBaseUrl()}/api/v1/reports/${key}/export/${queryString({ ...filters, as: format })}`;
 }
 
+/**
+ * Hold ticked rows for an export and get back the token that names them.
+ * The ids travel once, in a POST body; the count, the download and a queued
+ * job carry `?selection=<token>` instead, because a request line full of ids
+ * is refused by the server long before a person runs out of rows to tick.
+ */
+export async function createExportSelection(ids: readonly string[]): Promise<string> {
+  const created = await apiMutate<{ selection: string; rows: number }>(
+    '/api/v1/reports/selections/',
+    { method: 'POST', body: { ids } },
+  );
+  return created.selection;
+}
+
 // --- Background exports ----------------------------------------------------
 
 /** Queue a report to be rendered off the request; a notification says when it is ready. */
@@ -105,6 +119,7 @@ export async function queueExport(payload: {
   branch?: string;
   min_experience?: string;
   attention?: string;
+  selection?: string;
 }): Promise<ExportJob> {
   return apiMutate<ExportJob>('/api/v1/reports/exports/', { method: 'POST', body: payload });
 }

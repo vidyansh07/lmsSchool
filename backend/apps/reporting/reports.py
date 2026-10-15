@@ -17,6 +17,8 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
+from django.utils import timezone
+
 
 @dataclass(frozen=True)
 class Column:
@@ -863,6 +865,42 @@ def batches(rows) -> Iterator[dict[str, Any]]:
         }
 
 
+ACCOUNTS = Report(
+    key="accounts",
+    label="Accounts",
+    description="Every account: whose it is, what they do, where, and whether they signed in.",
+    columns=(
+        Column("name", "Name"),
+        Column("email", "Email"),
+        Column("phone", "Phone"),
+        Column("role", "Role"),
+        Column("custom_role", "Custom role"),
+        Column("centre", "Centre"),
+        Column("status", "Status"),
+        Column("invitation", "Invitation"),
+        Column("last_login", "Last signed in"),
+        Column("joined_on", "Joined"),
+    ),
+)
+
+
+def accounts(users) -> Iterator[dict[str, Any]]:
+    rows = users.select_related("branch", "custom_role").order_by("email")
+    for user in rows.iterator(chunk_size=CHUNK):
+        yield {
+            "name": user.get_full_name(),
+            "email": user.email,
+            "phone": user.phone,
+            "role": user.get_role_display(),
+            "custom_role": user.custom_role.name if user.custom_role_id else "",
+            "centre": user.branch.name if user.branch_id else "",
+            "status": "Active" if user.is_active else "Inactive",
+            "invitation": "Accepted" if user.is_email_verified else "Not accepted",
+            "last_login": timezone.localtime(user.last_login).date() if user.last_login else "",
+            "joined_on": timezone.localtime(user.date_joined).date(),
+        }
+
+
 ACTIVITY = Report(
     key="activity",
     label="Activity record",
@@ -909,6 +947,7 @@ REPORTS.update(
         DAILY_REPORTS.key: (DAILY_REPORTS, daily_reports, "dsrs"),
         BATCHES.key: (BATCHES, batches, "batches"),
         ACTIVITY.key: (ACTIVITY, activity, "activity"),
+        ACCOUNTS.key: (ACCOUNTS, accounts, "users"),
     }
 )
 

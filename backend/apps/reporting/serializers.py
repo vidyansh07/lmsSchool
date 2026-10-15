@@ -40,6 +40,19 @@ class ReportCountSerializer(StrictSerializer):
     rows = serializers.IntegerField()
 
 
+class ReportSelectionRequestSerializer(StrictSerializer):
+    """`POST /reports/selections/`: the rows somebody ticked on a list."""
+
+    ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
+
+
+class ReportSelectionSerializer(StrictSerializer):
+    """The token an export carries as `?selection=` in place of the ids."""
+
+    selection = serializers.CharField()
+    rows = serializers.IntegerField()
+
+
 class MetricSerializer(StrictSerializer):
     """A number, and the definition §8.6 requires it to carry."""
 
@@ -467,6 +480,11 @@ class ExportJobRequestSerializer(StrictSerializer):
     min_experience = serializers.IntegerField(
         required=False, allow_null=True, min_value=0, max_value=70
     )
+    is_email_verified = serializers.ChoiceField(
+        choices=("true", "false"), required=False, allow_blank=True
+    )
+    # Ticked rows, as the token `POST /reports/selections/` returned.
+    selection = serializers.CharField(required=False, allow_blank=True, max_length=64)
 
 
 class ExportJobSerializer(StrictSerializer):

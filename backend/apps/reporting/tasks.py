@@ -111,6 +111,9 @@ def _rescope(job: ExportJob):
     from .views import EXTRA_FILTER_KEYS
 
     extra = {key: value for key, value in filters.items() if key in EXTRA_FILTER_KEYS and value}
+    if filters.get("ids"):
+        # Ticked rows, resolved to ids when the job was queued.
+        extra["ids"] = list(filters["ids"])
     queryset = _queryset_for_user(user, source, batch, course, extra)
     return definition, queryset
 

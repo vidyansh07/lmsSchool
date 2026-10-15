@@ -20,6 +20,10 @@
  * server's returned HTML (with its own print stylesheet) in a new tab.
  * Every export is the same scoped report the screen reads, through
  * `lib/reporting`.
+ *
+ * Given `selectedIds`, the menu exports those rows only ("Export 12
+ * selected"): the ids are posted once for a short-lived token, and every later
+ * request — the count, the file, a queued job — narrows by that token.
  */
 
 import { useState } from 'react';
@@ -39,7 +43,13 @@ import { DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/components/ui/toast';
 import { ApiError, errorMessage } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
-import { getReportCount, queueExport, reportExportUrl, type ReportFilters } from '@/lib/reporting';
+import {
+  createExportSelection,
+  getReportCount,
+  queueExport,
+  reportExportUrl,
+  type ReportFilters,
+} from '@/lib/reporting';
 import type { ExportFormat, QueuedExportFormat } from '@/types/api';
 
 /** The server renders Excel and PDF inline up to this many rows. */
@@ -65,6 +75,7 @@ export function ExportMenu({
   count,
   label = 'Export',
   size = 'sm',
+  selectedIds,
 }: {
   reportKey: string;
   /** The filters the screen is showing — batch, course, student, dates… */
@@ -74,6 +85,8 @@ export function ExportMenu({
   count?: number | null;
   label?: string;
   size?: 'sm' | 'md';
+  /** Ticked rows: export exactly these, inside the filters above. */
+  selectedIds?: readonly string[];
 }) {
   const { can } = useAuth();
   const { toast } = useToast();
@@ -84,11 +97,15 @@ export function ExportMenu({
   const [pendingCount, setPendingCount] = useState<number | null>(null);
   const [isCounting, setIsCounting] = useState(false);
   const [countError, setCountError] = useState<string | null>(null);
+  // The token for the ticked rows, made when a format is chosen and used by
+  // every request that follows it.
+  const [selection, setSelection] = useState<string | null>(null);
 
   if (!can(Capability.dataExport)) return null;
 
+  const bySelection = Boolean(selectedIds && selectedIds.length > 0);
   const clean: ReportFilters = Object.fromEntries(
-    Object.entries(filters).filter(
+    Object.entries({ ...filters, ...(bySelection && selection ? { selection } : {}) }).filter(
       ([, value]) => value !== undefined && value !== '' && value !== null,
     ),
   );
@@ -105,7 +122,15 @@ export function ExportMenu({
     setCountError(null);
     setIsCounting(true);
     try {
-      setPendingCount(await getReportCount(reportKey, clean));
+      let scoped = clean;
+      if (bySelection && selectedIds) {
+        // A fresh token each time: the rows ticked now, not the rows ticked
+        // when the menu was last opened.
+        const token = await createExportSelection(selectedIds);
+        setSelection(token);
+        scoped = { ...clean, selection: token };
+      }
+      setPendingCount(await getReportCount(reportKey, scoped));
     } catch (cause) {
       setCountError(errorMessage(cause, 'Could not resolve the row count.'));
     } finally {
@@ -197,7 +222,7 @@ export function ExportMenu({
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="outline" size={size} disabled={busy !== null}>
             <Download className="size-4" aria-hidden="true" />
-            {busy ? 'Exporting…' : label}
+            {busy ? 'Exporting…' : bySelection ? `${label} ${selectedIds?.length} selected` : label}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

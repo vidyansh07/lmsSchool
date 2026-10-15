@@ -154,6 +154,8 @@ def _filters_line(filters: dict[str, Any]) -> str:
         parts.append(f"Batch: {filters['batch_label']}")
     if filters.get("course_label"):
         parts.append(f"Course: {filters['course_label']}")
+    if filters.get("ids"):
+        parts.append(f"Selected rows: {len(filters['ids'])}")
     return " · ".join(parts) if parts else "No batch or course filter."
 
 

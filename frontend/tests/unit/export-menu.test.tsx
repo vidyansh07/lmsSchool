@@ -11,12 +11,13 @@ import { ExportMenu, INLINE_EXPORT_LIMIT } from '@/components/export-menu';
 
 const queueExport = vi.hoisted(() => vi.fn());
 const getReportCount = vi.hoisted(() => vi.fn());
+const createExportSelection = vi.hoisted(() => vi.fn());
 const toast = vi.hoisted(() => vi.fn());
 const canMock = vi.hoisted(() => ({ value: true }));
 
 vi.mock('@/lib/reporting', async () => {
   const actual = await vi.importActual<typeof import('@/lib/reporting')>('@/lib/reporting');
-  return { ...actual, queueExport, getReportCount };
+  return { ...actual, queueExport, getReportCount, createExportSelection };
 });
 vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ toast }) }));
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => ({ can: () => canMock.value }) }));
@@ -25,7 +26,28 @@ describe('ExportMenu', () => {
   afterEach(() => {
     queueExport.mockReset();
     getReportCount.mockReset();
+    createExportSelection.mockReset();
     toast.mockReset();
+  });
+
+  it('exports only the ticked rows, through a selection token', async () => {
+    const assign = vi.fn();
+    Object.defineProperty(window, 'location', { value: { assign }, writable: true });
+    createExportSelection.mockResolvedValue('tok-1');
+    getReportCount.mockResolvedValue(2);
+    render(<ExportMenu reportKey="accounts" filters={{ role: 'manager' }} selectedIds={['a', 'b']} />);
+    fireEvent.click(screen.getByRole('button', { name: /export 2 selected/i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /csv/i }));
+
+    expect(await screen.findByTestId('export-count-confirm')).toHaveTextContent('2');
+    expect(createExportSelection).toHaveBeenCalledWith(['a', 'b']);
+    expect(getReportCount).toHaveBeenCalledWith(
+      'accounts',
+      expect.objectContaining({ role: 'manager', selection: 'tok-1' }),
+    );
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^export$/i }));
+    await waitFor(() => expect(assign).toHaveBeenCalledOnce());
+    expect(String(assign.mock.calls[0]?.[0])).toContain('selection=tok-1');
   });
 
   it('offers Excel, PDF, CSV and Print', async () => {
