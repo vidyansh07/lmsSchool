@@ -262,7 +262,12 @@ Edge cases fixed on the way: a bulk filter the list does not declare is
 refused (an ignored filter would have widened "all matching" to every row);
 the "Has referred N students" link now filters the list (and its export);
 "Select all 4,000 rows" counts with separators and irregular plurals
-("3 enquiries").
+("3 enquiries"); "select all" past the 500-row cap says so before anyone
+confirms. The full backend run found the bulk request serializers outside the
+modules the security sweep checks (moved), and three showcase-seed failures
+that happen only after 21:00 — a test whose "later today" wrapped past
+midnight, evening follow-ups already overdue when seeded, and a 21:55 class's
+register stamped the next day — all fixed in the seed or the test.
 
 ## Remaining UX work
 
