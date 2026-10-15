@@ -45,11 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const [sessionEnded, setSessionEnded] = useState(false);
+  // Kept in step with every `setUser` call rather than by an effect after the
+  // render: an "authentication required" answer arriving in the same moment
+  // as a sign-in must already see the person as signed in.
   const signedIn = useRef(false);
-
-  useEffect(() => {
-    signedIn.current = user !== null;
-  }, [user]);
 
   // Any request answered `authentication_required` while somebody is signed
   // in means the session is gone. Forgetting the user lets `RequireAuth` send
@@ -67,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const setUser = useCallback((next: CurrentUser | null) => {
+    signedIn.current = next !== null;
     if (next) setSessionEnded(false);
     setUserState(next);
   }, []);

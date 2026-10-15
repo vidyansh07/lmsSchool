@@ -1,20 +1,28 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { ApiError } from '@/lib/api';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CreateTrainerDialog } from '@/app/admin/trainers/create-trainer-dialog';
 
 const createTrainer = vi.hoisted(() => vi.fn());
+const listUsers = vi.hoisted(() => vi.fn());
+const ensureTeachingProfile = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/people', async () => {
   const actual = await vi.importActual<typeof import('@/lib/people')>('@/lib/people');
-  return { ...actual, createTrainer };
+  return { ...actual, createTrainer, listUsers, ensureTeachingProfile };
 });
+const useAuth = vi.hoisted(() => vi.fn());
+vi.mock('@/components/auth-provider', () => ({ useAuth }));
 
 vi.mock('@/components/organisation/branch-field', () => ({ BranchField: () => null }));
 
 beforeEach(() => {
   createTrainer.mockReset();
   createTrainer.mockResolvedValue({});
+  listUsers.mockReset();
+  ensureTeachingProfile.mockReset();
+  useAuth.mockReturnValue({ can: (capability: string) => capability === 'user.view_any' });
 });
 
 describe('CreateTrainerDialog', () => {
@@ -66,5 +74,64 @@ describe('CreateTrainerDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Discard changes' }));
     expect(onClose).toHaveBeenCalledOnce();
     expect(screen.getByLabelText(/^Email/)).toHaveValue('');
+  });
+});
+
+describe('CreateTrainerDialog — an address that already has an account', () => {
+  async function submitTaken(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByLabelText(/^Email/), 'meera@example.com');
+    await user.type(screen.getByLabelText(/^First name/), 'Meera');
+    await user.click(screen.getByRole('button', { name: 'Create trainer' }));
+  }
+
+  it('says whose it is and lets a manager teach without changing role', async () => {
+    createTrainer.mockRejectedValue(
+      new ApiError(400, 'validation_error', 'Invalid.', 'r', {
+        email: ['An account with this email already exists.'],
+      }),
+    );
+    listUsers.mockResolvedValue({
+      count: 1,
+      page: 1,
+      page_size: 5,
+      total_pages: 1,
+      results: [
+        {
+          id: 'u-meera',
+          email: 'meera@example.com',
+          full_name: 'Meera Manager',
+          role: 'manager',
+          is_active: true,
+          profile_type: null,
+          profile_id: null,
+        },
+      ],
+    });
+    ensureTeachingProfile.mockResolvedValue({});
+    const onCreated = vi.fn();
+    const user = userEvent.setup();
+    render(<CreateTrainerDialog open onClose={vi.fn()} onCreated={onCreated} />);
+    await submitTaken(user);
+
+    expect(await screen.findByText(/A manager can teach without changing role/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open account' })).toHaveAttribute('href', '/admin/users/u-meera');
+    await user.click(screen.getByRole('button', { name: 'Let this manager teach' }));
+    await waitFor(() => expect(ensureTeachingProfile).toHaveBeenCalledWith('u-meera'));
+    expect(onCreated).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the plain message for someone who cannot read accounts', async () => {
+    useAuth.mockReturnValue({ can: () => false });
+    createTrainer.mockRejectedValue(
+      new ApiError(400, 'validation_error', 'Invalid.', 'r', {
+        email: ['An account with this email already exists.'],
+      }),
+    );
+    const user = userEvent.setup();
+    render(<CreateTrainerDialog open onClose={vi.fn()} onCreated={vi.fn()} />);
+    await submitTaken(user);
+
+    expect(await screen.findByText('An account with this email already exists.')).toBeInTheDocument();
+    expect(listUsers).not.toHaveBeenCalled();
   });
 });
