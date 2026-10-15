@@ -64,6 +64,18 @@ def _custom(client, **overrides):
     return client.post(ROLES, payload, format="json")
 
 
+def _assign(client, user, custom_role):
+    return client.post(
+        f"/api/v1/users/{user.id}/role-transition/",
+        {
+            "role": user.role,
+            "custom_role": custom_role,
+            "reason": "Authorization responsibilities changed.",
+        },
+        format="json",
+    )
+
+
 @pytest.mark.django_db
 def test_an_administrator_builds_a_narrower_role_and_assigns_it(
     api_client_no_csrf, admin_user, manager_user
@@ -77,9 +89,7 @@ def test_an_administrator_builds_a_narrower_role_and_assigns_it(
     assert "dsr.view_any" not in codes and "batch.view_any" in codes
 
     # Assign it: the holder's set becomes the custom set.
-    assigned = api_client_no_csrf.patch(
-        f"/api/v1/users/{manager_user.id}/", {"custom_role": "placement-coordinator"}, format="json"
-    )
+    assigned = _assign(api_client_no_csrf, manager_user, "placement-coordinator")
     assert assigned.status_code == 200, assigned.json()
     assert assigned.json()["custom_role"] == "placement-coordinator"
     manager_user.refresh_from_db()
@@ -141,9 +151,7 @@ def test_the_ladder_holds_for_custom_roles(api_client_no_csrf, admin_user, manag
     # A custom role of another kind cannot be put on this account.
     ok = _custom(api_client_no_csrf, slug="front-desk", kind=UserRole.COUNSELLOR, permissions=[])
     assert ok.status_code == 201
-    mismatch = api_client_no_csrf.patch(
-        f"/api/v1/users/{manager_user.id}/", {"custom_role": "front-desk"}, format="json"
-    )
+    mismatch = _assign(api_client_no_csrf, manager_user, "front-desk")
     assert mismatch.status_code == 400
     assert "custom_role" in mismatch.json()["error"]["details"]
 
@@ -161,9 +169,7 @@ def test_a_manager_with_a_custom_role_cannot_grant_more_than_it(
         permissions=[{"code": "student.view_any"}, {"code": "user.view_any"}],
     )
     assert narrow.status_code == 201
-    api_client_no_csrf.patch(
-        f"/api/v1/users/{manager_user.id}/", {"custom_role": "narrow-manager"}, format="json"
-    )
+    _assign(api_client_no_csrf, manager_user, "narrow-manager")
     manager_user.refresh_from_db()
     from apps.accounts.roles import can_administer, can_grant_role
 
@@ -186,16 +192,12 @@ def test_system_roles_are_protected_and_holders_block_removal(
     assert removed.status_code == 400
 
     assert _custom(api_client_no_csrf).status_code == 201
-    api_client_no_csrf.patch(
-        f"/api/v1/users/{manager_user.id}/", {"custom_role": "placement-coordinator"}, format="json"
-    )
+    _assign(api_client_no_csrf, manager_user, "placement-coordinator")
     blocked = api_client_no_csrf.delete(
         f"{ROLES}placement-coordinator/", {"reason": "done"}, format="json"
     )
     assert blocked.status_code == 409
-    api_client_no_csrf.patch(
-        f"/api/v1/users/{manager_user.id}/", {"custom_role": None}, format="json"
-    )
+    _assign(api_client_no_csrf, manager_user, None)
     gone = api_client_no_csrf.delete(
         f"{ROLES}placement-coordinator/", {"reason": "done"}, format="json"
     )
@@ -243,9 +245,7 @@ def test_a_disabled_custom_role_falls_back_to_the_kind(
 ):
     api_client_no_csrf.force_login(admin_user)
     _custom(api_client_no_csrf)
-    api_client_no_csrf.patch(
-        f"/api/v1/users/{manager_user.id}/", {"custom_role": "placement-coordinator"}, format="json"
-    )
+    _assign(api_client_no_csrf, manager_user, "placement-coordinator")
     manager_user.refresh_from_db()
     assert "dsr.view_any" not in manager_user.capabilities
     api_client_no_csrf.patch(

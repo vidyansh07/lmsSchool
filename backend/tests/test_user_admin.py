@@ -81,14 +81,29 @@ def test_admin_can_create_a_user_who_sets_their_own_password(
     with django_capture_on_commit_callbacks(execute=True):
         response = api_client_no_csrf.post(
             USERS_URL,
-            {"email": "New.Person@Example.test", "first_name": "New", "role": "trainer"},
+            {"email": "New.Person@Example.test", "first_name": "New", "role": "manager"},
         )
     assert response.status_code == 201
     created = User.objects.get(email="new.person@example.test")
-    assert created.role == UserRole.TRAINER
+    assert created.role == UserRole.MANAGER
     # No usable password, and an invitation link was sent instead.
     assert not created.has_usable_password()
     assert len(mail.outbox) == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("role", [UserRole.STUDENT, UserRole.TRAINER])
+def test_generic_user_creation_refuses_domain_personas(api_client_no_csrf, admin_user, role):
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.post(
+        USERS_URL,
+        {"email": f"incomplete-{role}@example.test", "first_name": "Incomplete", "role": role},
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert "role" in response.json()["error"]["details"]
+    assert not User.objects.filter(email=f"incomplete-{role}@example.test").exists()
 
 
 @pytest.mark.django_db
@@ -113,13 +128,78 @@ def test_admin_can_edit_a_user(api_client_no_csrf, admin_user, student):
 
 
 @pytest.mark.django_db
-def test_role_change_is_audited_separately(api_client_no_csrf, admin_user, student):
+def test_role_change_is_audited_separately(api_client_no_csrf, admin_user, manager_user):
     api_client_no_csrf.force_login(admin_user)
-    api_client_no_csrf.patch(f"{USERS_URL}{student.pk}/", {"role": "trainer"}, format="json")
+    response = api_client_no_csrf.post(
+        f"{USERS_URL}{manager_user.pk}/role-transition/",
+        {"role": "counsellor", "custom_role": None, "reason": "Moved to admissions."},
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
     entry = AuditLog.objects.filter(action=AuditAction.USER_ROLE_CHANGED).first()
     assert entry is not None
-    assert entry.context["from"] == "student"
-    assert entry.context["to"] == "trainer"
+    assert entry.context["from"] == "manager"
+    assert entry.context["to"] == "counsellor"
+    assert entry.context["reason"] == "Moved to admissions."
+
+
+@pytest.mark.django_db
+def test_role_is_not_an_ordinary_user_patch(api_client_no_csrf, admin_user, manager_user):
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.patch(
+        f"{USERS_URL}{manager_user.pk}/", {"role": "counsellor"}, format="json"
+    )
+
+    assert response.status_code == 400
+    assert "role" in response.json()["error"]["details"]
+    manager_user.refresh_from_db()
+    assert manager_user.role == UserRole.MANAGER
+
+
+@pytest.mark.django_db
+def test_student_role_conversion_is_refused_without_changing_the_profile(
+    api_client_no_csrf, admin_user, student_profile
+):
+    student = student_profile.user
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.post(
+        f"{USERS_URL}{student.pk}/role-transition/",
+        {"role": "manager", "custom_role": None, "reason": "New responsibilities."},
+        format="json",
+    )
+
+    assert response.status_code == 409
+    student.refresh_from_db()
+    assert student.role == UserRole.STUDENT
+    assert student.student_profile.pk == student_profile.pk
+
+
+@pytest.mark.django_db
+def test_student_detail_only_offers_its_existing_persona(
+    api_client_no_csrf, admin_user, student_profile
+):
+    api_client_no_csrf.force_login(admin_user)
+    body = api_client_no_csrf.get(f"{USERS_URL}{student_profile.user_id}/").json()
+
+    assert body["allowed_role_transitions"] == ["student"]
+    assert body["profile_type"] == "student"
+    assert body["profile_id"] == str(student_profile.pk)
+
+
+@pytest.mark.django_db
+def test_role_transition_ends_existing_sessions(api_client_no_csrf, admin_user, manager_user):
+    manager_client = api_client_no_csrf.__class__()
+    manager_client.force_login(manager_user)
+
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.post(
+        f"{USERS_URL}{manager_user.pk}/role-transition/",
+        {"role": "counsellor", "custom_role": None, "reason": "Moved to admissions."},
+        format="json",
+    )
+
+    assert response.status_code == 200, response.json()
+    assert manager_client.get("/api/v1/auth/me/").status_code in (401, 403)
 
 
 @pytest.mark.django_db

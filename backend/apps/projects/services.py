@@ -603,7 +603,9 @@ def review_project(
         work.feedback = feedback
     work.reviewed_at = timezone.now()
 
-    trainer = getattr(actor, "trainer_profile", None)
+    from apps.batches import access as batch_access
+
+    trainer = batch_access.trainer_profile(actor)
     if trainer is not None:
         work.reviewer = trainer
     work.save()

@@ -250,7 +250,7 @@ class MyFeesView(APIView):
 
     @extend_schema(summary="My fees", responses={200: StudentFeeSummarySerializer}, tags=FEES_TAG)
     def get(self, request):
-        student = getattr(request.user, "student_profile", None)
+        student = batch_access.student_profile(request.user)
         if student is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(StudentFeeSummarySerializer(services.student_fee_summary(student)).data)

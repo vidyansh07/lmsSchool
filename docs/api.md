@@ -113,9 +113,10 @@ matches `^[A-Za-z0-9._-]{8,64}$`.
 | Method | Path | Capability |
 | --- | --- | --- |
 | `GET` | `` | `user.view_any` |
-| `POST` | `` | `user.create` |
+| `POST` | `` | `user.create` — generic staff accounts only; students use `/students/` and trainers use `/trainers/` so the required profile is created atomically |
 | `GET` | `<id>/` | `user.view_any` |
-| `PATCH` | `<id>/` | `user.update_any` (plus `user.change_role` to alter a role) |
+| `PATCH` | `<id>/` | `user.update_any` — contact fields only: email, first name, last name and phone |
+| `POST` | `<id>/role-transition/` | `user.change_role` — `role`, optional `custom_role`, and required audit `reason` |
 | `POST` | `<id>/set-active/` | `user.set_active` |
 | `GET` | `<id>/profile-image/` | any authenticated, active user |
 | `DELETE` | `<id>/profile-image/remove/` | `user.update_any` |
@@ -125,6 +126,18 @@ matches `^[A-Za-z0-9._-]{8,64}$`.
 Listing supports `?search=`, `?role=`, `?is_active=`, `?is_email_verified=`,
 `?joined_after=`, `?joined_before=`, `?ordering=` and pagination. Search matches
 name, email, student ID and trainer ID.
+
+User detail responses include `allowed_role_transitions`, `profile_type` and
+`profile_id`. The transition list is resolved for the caller and target by the
+server. It is a UI aid only; the write service checks authority again.
+
+Direct transitions are limited to the staff-role family (`superadmin`, `admin`,
+`manager`, `counsellor`). Student and trainer roles carry domain profiles and
+cannot be converted by changing an account field; such a request returns 409
+and requires a dedicated conversion workflow. Self-role changes, removal of the
+last active superadmin, and removing the manager role from a teaching manager
+with active or upcoming batches are also refused. A successful role or custom
+role change is audited with its reason and revokes the target's sessions.
 
 ### Students — `/api/v1/students/`
 
@@ -184,6 +197,11 @@ the admin view adds `referrals_count`, and `?referred_by=` lists them.
 
 Filters: `?skill=`, `?is_accepting_assignments=`, `?min_experience=`,
 `?search=` (trainer ID, name, email, title), `?ordering=`.
+
+`POST /trainers/` is the canonical onboarding operation: it creates the user
+account and trainer profile in one transaction. The manager and administrator
+interface for this operation is `/manage/trainers`; `/admin/trainers` redirects
+there for compatibility.
 
 ### Categories — `/api/v1/categories/`
 
@@ -446,11 +464,13 @@ holds a different set — never a wider reach than the kind (its scope floor).
 | `DELETE` | `roles/<slug>/` | `role.manage`; `reason`; refused for system roles (400) and while accounts hold it (409); reversible from the recycle bin |
 | `GET` | `permissions/` | `role.view` — the catalog: `code`, `resource`, `action`, `category`, `description`, `is_lockable` |
 
-`PATCH /users/<id>/` accepts `custom_role` (a slug of the same kind as
-`role`, or null). Changing it needs `user.change_role`, is audited as
-`user.role_changed` with `custom_role_from/to`, and cannot assign a role
-holding more than the caller does. Every representation of a user carries
-`custom_role` and `custom_role_name`.
+`POST /users/<id>/role-transition/` accepts `custom_role` (a slug of the same
+kind as `role`, or null) together with the system `role` and an audit `reason`.
+Changing either role needs `user.change_role`, is audited as
+`user.role_changed` with `custom_role_from/to`, and cannot assign a role holding
+more than the caller does. `PATCH /users/<id>/` deliberately accepts neither
+field. Every representation of a user carries `custom_role` and
+`custom_role_name`.
 
 Scopes on a grant (`all`, `branch`, `assigned`, `own`) are enforced (ERP
 Phase 2, ADR-02): a role's grant may narrow below its kind's floor, never

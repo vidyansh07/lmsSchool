@@ -12,6 +12,20 @@ vi.mock('@/lib/manage', async () => {
   return { ...actual, listManageTrainers };
 });
 
+const updateTrainer = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/people', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/people')>('@/lib/people');
+  return { ...actual, updateTrainer };
+});
+
+const useAuth = vi.hoisted(() => vi.fn());
+vi.mock('@/components/auth-provider', () => ({ useAuth }));
+vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
+vi.mock('@/app/admin/trainers/create-trainer-dialog', () => ({
+  CreateTrainerDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog">Trainer onboarding</div> : null,
+}));
+
 vi.mock('@/components/manage/attention-strip', () => ({ ManagerAttentionStrip: () => null }));
 
 const push = vi.hoisted(() => vi.fn());
@@ -49,7 +63,12 @@ function trainerRow(overrides: Partial<ManageTrainerRow> = {}): ManageTrainerRow
 
 beforeEach(() => {
   listManageTrainers.mockReset();
+  updateTrainer.mockReset();
   push.mockReset();
+  useAuth.mockReturnValue({
+    can: (capability: string) =>
+      capability === 'trainer.create' || capability === 'trainer.update_any',
+  });
 });
 
 describe('TrainersHub', () => {
@@ -59,6 +78,14 @@ describe('TrainersHub', () => {
     await waitFor(() => expect(screen.getByText('Tina Trainer')).toBeInTheDocument());
     expect(screen.getByText('Senior trainer')).toBeInTheDocument();
     expect(screen.getByText('6 yrs')).toBeInTheDocument();
+  });
+
+  it('exposes trainer onboarding to a manager with the create capability', async () => {
+    listManageTrainers.mockResolvedValue(page([]));
+    render(<TrainersHub />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Add trainer' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Trainer onboarding');
   });
 
   it('renders "No data" for the workload columns the list endpoint does not carry yet', async () => {
@@ -101,6 +128,24 @@ describe('TrainersHub', () => {
     const user = userEvent.setup();
     await user.click(screen.getByText('Tina Trainer'));
     expect(push).toHaveBeenCalledWith('/manage/trainers/trainer-1');
+  });
+
+  it('lets an authorized manager change assignment availability without opening the row', async () => {
+    listManageTrainers.mockResolvedValue(page([trainerRow()]));
+    updateTrainer.mockResolvedValue({});
+    render(<TrainersHub />);
+    const user = userEvent.setup();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Pause assignments for Tina Trainer' }),
+    );
+
+    await waitFor(() =>
+      expect(updateTrainer).toHaveBeenCalledWith('trainer-1', {
+        is_accepting_assignments: false,
+      }),
+    );
+    expect(push).not.toHaveBeenCalled();
   });
 });
 

@@ -78,7 +78,12 @@ def assigned_batch_ids(user) -> list:
         from .models import ScopeGrant
 
         ids: set = set()
-        trainer_id = getattr(getattr(user, "trainer_profile", None), "pk", None)
+        trainer_profile = (
+            getattr(user, "trainer_profile", None)
+            if user.role in (UserRole.TRAINER, UserRole.MANAGER)
+            else None
+        )
+        trainer_id = getattr(trainer_profile, "pk", None)
         if trainer_id is not None:
             ids.update(Batch.objects.filter(trainer_id=trainer_id).values_list("pk", flat=True))
         grants = ScopeGrant.objects.filter(user=user)

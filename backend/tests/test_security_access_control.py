@@ -525,21 +525,26 @@ def test_an_administrator_cannot_promote_their_own_account(api_client_no_csrf, a
 
 
 @pytest.mark.django_db
-def test_an_administrator_may_still_appoint_a_manager(api_client_no_csrf, admin_user, student):
-    """A manager holds strictly less than an administrator, so this is allowed."""
+def test_an_administrator_cannot_turn_a_student_into_a_manager_in_place(
+    api_client_no_csrf, admin_user, student
+):
+    """Role seniority cannot bypass the domain-persona conversion guard."""
     api_client_no_csrf.force_login(admin_user)
-    response = api_client_no_csrf.patch(
-        f"/api/v1/users/{student.id}/", {"role": "manager"}, format="json"
+    response = api_client_no_csrf.post(
+        f"/api/v1/users/{student.id}/role-transition/",
+        {"role": "manager", "custom_role": None, "reason": "Appointed."},
+        format="json",
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 409
     student.refresh_from_db()
-    assert student.role == UserRole.MANAGER
+    assert student.role == UserRole.STUDENT
 
 
 @pytest.mark.django_db
-def test_a_superadmin_may_appoint_a_superadmin(api_client_no_csrf, db, student):
+def test_a_superadmin_may_appoint_a_superadmin(api_client_no_csrf, db):
     from apps.accounts.models import User
+    from apps.organisation.models import Branch
 
     boss = User.objects.create_user(
         email="boss@example.test",
@@ -547,14 +552,23 @@ def test_a_superadmin_may_appoint_a_superadmin(api_client_no_csrf, db, student):
         first_name="Root",
         role=UserRole.SUPERADMIN,
     )
+    candidate = User.objects.create_user(
+        email="candidate@example.test",
+        password="Sup3r-Str0ng-Pass!42",
+        first_name="Candidate",
+        role=UserRole.MANAGER,
+        branch=Branch.objects.get(code="MAIN"),
+    )
     api_client_no_csrf.force_login(boss)
-    response = api_client_no_csrf.patch(
-        f"/api/v1/users/{student.id}/", {"role": "superadmin"}, format="json"
+    response = api_client_no_csrf.post(
+        f"/api/v1/users/{candidate.id}/role-transition/",
+        {"role": "superadmin", "custom_role": None, "reason": "Platform co-owner."},
+        format="json",
     )
 
     assert response.status_code == 200
-    student.refresh_from_db()
-    assert student.role == UserRole.SUPERADMIN
+    candidate.refresh_from_db()
+    assert candidate.role == UserRole.SUPERADMIN
 
 
 @pytest.mark.django_db
@@ -580,7 +594,12 @@ def test_a_refused_promotion_is_recorded(admin_user, student):
     from apps.common.exceptions import ApplicationError
 
     with pytest.raises(ApplicationError):
-        update_user(user=student, actor=admin_user, role=UserRole.SUPERADMIN)
+        update_user(
+            user=student,
+            actor=admin_user,
+            role=UserRole.SUPERADMIN,
+            role_change_reason="Attempted escalation.",
+        )
 
     # A failure entry is queued rather than written inline, so it survives the
     # rollback of the request it describes. Calling the service directly, the

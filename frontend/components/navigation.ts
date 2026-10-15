@@ -222,9 +222,9 @@ export const STAFF_NAV: NavGroup[] = [
       },
       {
         href: "/manage/trainers",
-        label: "Trainer review",
+        label: "Trainers",
         icon: GraduationCap,
-        capability: Capability.performanceViewAny,
+        capability: Capability.trainerViewAny,
       },
       {
         href: "/manage/reviews",
@@ -559,12 +559,6 @@ export const ADMIN_NAV: NavGroup[] = [
         capability: Capability.dsrViewAny,
       },
       {
-        href: "/manage/trainers",
-        label: "Trainer review",
-        icon: GraduationCap,
-        capability: Capability.performanceViewAny,
-      },
-      {
         href: "/manage/batches",
         label: "Batch review",
         icon: Layers,
@@ -588,7 +582,7 @@ export const ADMIN_NAV: NavGroup[] = [
     title: "Trainers",
     items: [
       {
-        href: "/admin/trainers",
+        href: "/manage/trainers",
         label: "Trainers",
         icon: GraduationCap,
         capability: Capability.trainerViewAny,

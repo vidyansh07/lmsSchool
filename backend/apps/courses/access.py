@@ -64,9 +64,9 @@ def assigned_course_ids(user) -> list[str]:
 
 def _student_profile(user):
     """The caller's student profile, or None if they are not an active student."""
-    if not getattr(user, "is_authenticated", False) or not user.is_active:
-        return None
-    return getattr(user, "student_profile", None)
+    from apps.batches import access as batch_access
+
+    return batch_access.student_profile(user)
 
 
 def is_enrolled(user, course: Course) -> bool:

@@ -40,6 +40,28 @@ def test_admin_creates_trainer_with_account_and_profile(api_client_no_csrf, admi
 
 
 @pytest.mark.django_db
+def test_manager_creates_trainer_with_account_and_profile(api_client_no_csrf, manager_user):
+    api_client_no_csrf.force_login(manager_user)
+    response = api_client_no_csrf.post(
+        TRAINERS_URL,
+        {
+            "email": "manager.created.trainer@example.test",
+            "first_name": "Managed",
+            "phone": "+919876543210",
+            "profile": {"professional_title": "Network Trainer", "skills": ["Networking"]},
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201, response.json()
+    created = User.objects.get(email="manager.created.trainer@example.test")
+    assert created.role == "trainer"
+    assert created.branch_id == manager_user.branch_id
+    assert created.phone == "+919876543210"
+    assert TrainerProfile.objects.filter(user=created, branch=manager_user.branch).exists()
+
+
+@pytest.mark.django_db
 def test_trainer_reads_and_updates_own_profile(api_client_no_csrf, trainer_profile):
     api_client_no_csrf.force_login(trainer_profile.user)
     assert api_client_no_csrf.get(ME_URL).json()["trainer_id"] == trainer_profile.trainer_id

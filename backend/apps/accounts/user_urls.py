@@ -10,6 +10,7 @@ from .user_views import (
     UserCredentialActionView,
     UserDetailView,
     UserListCreateView,
+    UserRoleTransitionView,
     UserSessionListView,
     UserSessionRevokeView,
     UserSetActiveView,
@@ -22,6 +23,11 @@ urlpatterns = [
     path("", UserListCreateView.as_view(), name="list"),
     path("<uuid:user_id>/", UserDetailView.as_view(), name="detail"),
     path("<uuid:user_id>/set-active/", UserSetActiveView.as_view(), name="set-active"),
+    path(
+        "<uuid:user_id>/role-transition/",
+        UserRoleTransitionView.as_view(),
+        name="role-transition",
+    ),
     path(
         "<uuid:user_id>/credential-link/",
         UserCredentialActionView.as_view(),

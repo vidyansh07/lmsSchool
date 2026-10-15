@@ -16,7 +16,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.access import visible_accounts
-from apps.accounts.roles import has_capability
 from apps.common.permissions import Capability, HasCapability
 from apps.organisation.access import resolve_submitted_branch
 
@@ -31,6 +30,7 @@ from .serializers import (
     SetActiveSerializer,
     UserAuditEntrySerializer,
     UserBranchSerializer,
+    UserRoleTransitionSerializer,
 )
 from .stepup import StepUpRequired, is_fresh
 
@@ -162,27 +162,34 @@ class UserDetailView(RetrieveUpdateAPIView):
         serializer = AdminUserUpdateSerializer(instance=user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
 
-        # Changing a role is a privilege change and needs its own capability,
-        # so an operator with plain edit rights cannot promote anyone.
-        data = serializer.validated_data
-        role_changes = ("role" in data and data["role"] != user.role) or (
-            "custom_role" in data
-            and (data["custom_role"].pk if data["custom_role"] else None) != user.custom_role_id
-        )
-        if role_changes:
-            if not has_capability(request.user, Capability.USER_CHANGE_ROLE):
-                return Response(
-                    {
-                        "error": {
-                            "code": "permission_denied",
-                            "message": "You do not have permission to change a user's role.",
-                            "request_id": getattr(request, "request_id", "-"),
-                        }
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-
         updated = services.update_user(user=user, actor=request.user, **serializer.validated_data)
+        return Response(AdminUserDetailSerializer(updated, context={"request": request}).data)
+
+
+class UserRoleTransitionView(APIView):
+    """Change authorization role without treating it as an ordinary field edit."""
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.USER_CHANGE_ROLE
+
+    @extend_schema(
+        summary="Transition a user's role",
+        request=UserRoleTransitionSerializer,
+        responses={
+            200: AdminUserDetailSerializer,
+            409: OpenApiResponse(
+                description="A persona conversion or last-superadmin guard refused it."
+            ),
+        },
+        tags=USERS_TAG,
+    )
+    def post(self, request, user_id):
+        user = get_object_or_404(_scoped_users(request.user), pk=user_id)
+        serializer = UserRoleTransitionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        updated = services.transition_user_role(
+            user=user, actor=request.user, **serializer.validated_data
+        )
         return Response(AdminUserDetailSerializer(updated, context={"request": request}).data)
 
 

@@ -1351,3 +1351,37 @@ remaining high build-tool findings on every run. The exception ends when a
 compatible patched `braces` release reaches `eslint-config-next`; Dependabot
 continues to surface that update. Forcing an unrelated Next.js downgrade would
 reintroduce fixed runtime advisories and is the less safe choice.
+
+### D-142 · A role is authorization; a student or trainer profile is identity (15 October 2026)
+
+Changing a user's phone number and changing what they may do are no longer the
+same operation. `PATCH /users/<id>/` edits contact details only. A system or
+custom role change goes through `POST /users/<id>/role-transition/`, requires a
+human-readable reason, is audited separately, and revokes every session created
+under the old authority. The UI presents only the transitions the server says
+the actor may make, while the service remains authoritative.
+
+A direct transition is allowed within the staff family—superadmin,
+administrator, manager, and counsellor—subject to the existing authority and
+grant rules. Student and trainer are not labels that can be safely swapped onto
+an account: each owns a one-to-one domain profile and history. Generic role
+editing therefore refuses any transition into or out of those personas with a
+409. Generic user creation likewise refuses student and trainer roles; Admissions
+and Trainer onboarding create the account and required profile atomically. A
+future persona-conversion feature must explicitly migrate or preserve the
+domain history rather than pretending that changing one enum is sufficient.
+
+Existing profile rows do not themselves grant access. Student access requires
+the current `student` role; trainer access requires `trainer`, with one explicit
+exception for a manager who also teaches. A teaching manager cannot leave the
+manager role while active or upcoming batches still point to that trainer
+profile. Stale profiles on other roles are ignored by access helpers, current-
+user profile pointers, and trainer announcement targeting.
+
+Role administration also refuses self-changes and protects the last active
+superadmin from both demotion and deactivation under a database lock. These are
+service-layer rules, not merely disabled controls, so API clients and future
+product interfaces cannot bypass them. Django's built-in admin writes the model
+directly and remains a break-glass maintenance surface; it is not a supported
+route for routine account or role administration and still needs a separate
+hardening decision.
