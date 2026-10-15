@@ -136,6 +136,7 @@ EXTRA_FILTER_KEYS = (
     "branch",
     "min_experience",
     "is_email_verified",
+    "referred_by",
 )
 
 
@@ -197,7 +198,7 @@ LIST_NARROWING: dict[str, tuple[str, tuple[str, ...], tuple[str, ...]]] = {
             "user__last_name",
             "institution",
         ),
-        ("fee_status", "is_active", "institution", "branch"),
+        ("fee_status", "is_active", "institution", "branch", "referred_by"),
     ),
     "batches": (
         "apps.batches.views.BatchFilterSet",

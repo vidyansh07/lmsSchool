@@ -177,3 +177,15 @@ def _count_query(client, key: str, query: str) -> int:
     response = client.get(f"/api/v1/reports/{key}/count/?{query}")
     assert response.status_code == 200, response.content
     return response.json()["rows"]
+
+
+@pytest.mark.django_db
+def test_the_students_export_narrows_to_who_a_student_referred(
+    api_client_no_csrf, admin_user, student_profile, other_student_profile
+):
+    """The "Has referred N students" link opens the list filtered by
+    `referred_by`; its export is those students, not everyone."""
+    other_student_profile.referred_by = student_profile
+    other_student_profile.save(update_fields=["referred_by"])
+    api_client_no_csrf.force_login(admin_user)
+    assert _count_query(api_client_no_csrf, "students", f"referred_by={student_profile.pk}") == 1

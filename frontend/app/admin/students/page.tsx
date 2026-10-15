@@ -40,7 +40,8 @@ import { listStudents, setFeeStatus } from '@/lib/people';
 import type { FeeStatus, StudentListRow } from '@/types/api';
 import { CreateStudentDialog } from './create-student-dialog';
 
-const STUDENT_FILTER_KEYS = ['institution', 'fee_status', 'is_active', 'branch'] as const;
+// `referred_by` arrives from a student's "Has referred N students" link.
+const STUDENT_FILTER_KEYS = ['institution', 'fee_status', 'is_active', 'branch', 'referred_by'] as const;
 
 function StudentsTable() {
   const { user: viewer, can } = useAuth();
@@ -357,6 +358,7 @@ function StudentsTable() {
         onChange={list.setQuery}
         filters={[
           { key: 'search', label: 'Search' },
+          { key: 'referred_by', label: 'Referred by', display: () => 'the student you came from' },
           { key: 'institution', label: 'College or employer' },
           { key: 'fee_status', label: 'Fee status', display: (value) => labelFor(FEE_STATUS_LABEL, value) },
           { key: 'is_active', label: 'Status', display: (value) => (value === 'true' ? 'Active' : 'Inactive') },

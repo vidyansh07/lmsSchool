@@ -191,3 +191,22 @@ describe('AdminStudentsPage — acting on many students', () => {
     );
   });
 });
+
+describe('AdminStudentsPage — arriving from "Has referred N students"', () => {
+  it('opens filtered to the students that student referred, and says so', async () => {
+    window.history.replaceState(null, '', '/admin/students?referred_by=s-9');
+    listStudents.mockResolvedValue(page([studentRow()]));
+    render(<AdminStudentsPage />);
+
+    await waitFor(() =>
+      expect(listStudents).toHaveBeenCalledWith(
+        expect.objectContaining({ referred_by: 's-9' }),
+        expect.anything(),
+      ),
+    );
+    expect(
+      await screen.findByRole('button', { name: 'Remove filter Referred by: the student you came from' }),
+    ).toBeInTheDocument();
+    window.history.replaceState(null, '', '/');
+  });
+});

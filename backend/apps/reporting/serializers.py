@@ -483,6 +483,7 @@ class ExportJobRequestSerializer(StrictSerializer):
     is_email_verified = serializers.ChoiceField(
         choices=("true", "false"), required=False, allow_blank=True
     )
+    referred_by = serializers.UUIDField(required=False, allow_null=True)
     # Ticked rows, as the token `POST /reports/selections/` returned.
     selection = serializers.CharField(required=False, allow_blank=True, max_length=64)
 
