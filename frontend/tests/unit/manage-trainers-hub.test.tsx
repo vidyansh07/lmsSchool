@@ -143,6 +143,12 @@ describe('TrainersHub', () => {
     await waitFor(() => expect(exportFilters.value).toEqual(expect.objectContaining({ skill: 'linux' })));
   });
 
+  it('marks a manager who also teaches, rather than listing them as one more trainer', async () => {
+    listManageTrainers.mockResolvedValue(page([trainerRow({ role: 'manager', full_name: 'Meera Manager' })]));
+    render(<TrainersHub />);
+    expect(await screen.findByText('Manager · also teaches')).toBeInTheDocument();
+  });
+
   it('opens the trainer on row activation', async () => {
     listManageTrainers.mockResolvedValue(page([trainerRow()]));
     render(<TrainersHub />);

@@ -47,7 +47,11 @@ export function TrainersHub() {
   // narrowed to the thing the person clicked on, rather than to everything.
   const searchParams = useSearchParams();
   const attention = searchParams.get('attention') ?? '';
-  const list = useList<ManageTrainerRow>(listManageTrainers, { page_size: 20, ...(attention ? { attention } : {}) });
+  const list = useList<ManageTrainerRow>(
+    listManageTrainers,
+    { page_size: 20, ...(attention ? { attention } : {}) },
+    { urlKeys: ['attention', 'skill', 'is_accepting_assignments'] },
+  );
   const [showCreate, setShowCreate] = useState(false);
   // Typed into a box and applied after a pause (or on Enter) — not only on
   // blur, which left a typed skill doing nothing until focus moved away.
@@ -93,7 +97,16 @@ export function TrainersHub() {
       width: '9rem',
       render: (row) => <span className="font-mono text-xs">{fallback(row.trainer_id)}</span>,
     },
-    { key: 'full_name', header: 'Name', render: (row) => <span className="font-medium">{fallback(row.full_name)}</span> },
+    {
+      key: 'full_name',
+      header: 'Name',
+      render: (row) => (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <span className="font-medium">{fallback(row.full_name)}</span>
+          {row.role === 'manager' ? <Badge variant="neutral">Manager · also teaches</Badge> : null}
+        </span>
+      ),
+    },
     { key: 'professional_title', header: 'Title', render: (row) => fallback(row.professional_title) },
     {
       key: 'skills',

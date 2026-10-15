@@ -45,7 +45,11 @@ import { listCourses } from '@/lib/courses';
 import type { BatchListRow, CourseListRow, Enrollment } from '@/types/api';
 
 export function AdmissionsList() {
-  const list = useList<Enrollment>(listEnrollments, { page_size: 20 });
+  const list = useList<Enrollment>(
+    listEnrollments,
+    { page_size: 20 },
+    { urlKeys: ['course', 'batch', 'status'] },
+  );
   const [courses, setCourses] = useState<CourseListRow[]>([]);
   const [batches, setBatches] = useState<BatchListRow[]>([]);
   const [registeredFrom, setRegisteredFrom] = useState('');

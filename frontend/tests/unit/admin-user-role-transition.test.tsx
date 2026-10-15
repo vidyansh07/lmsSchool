@@ -177,3 +177,17 @@ describe('deactivating an account', () => {
     );
   });
 });
+
+describe('a manager who also teaches', () => {
+  it('says so on the record and links the teaching profile', async () => {
+    getUser.mockResolvedValue({ ...managedUser(), profile_type: 'trainer', profile_id: 'tp-1' });
+    render(<UserAdministration userId="manager-1" />);
+
+    expect(await screen.findByText('Also teaches')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open teaching profile' })).toHaveAttribute(
+      'href',
+      '/manage/trainers/tp-1',
+    );
+    expect(screen.getByText(/this manager also teaches/i)).toBeInTheDocument();
+  });
+});

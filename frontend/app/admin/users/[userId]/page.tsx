@@ -278,6 +278,10 @@ export function UserAdministration({ userId }: { userId: string }) {
   if (!user) return <LoadingState label="Loading account…" rows={6} />;
 
   const isSelf = user.id === currentUser?.id;
+  // A manager with a live trainer profile teaches batches as well as managing
+  // (one login, owner's call of 14 September 2026). Said on the record, since
+  // it is also why a role change can be refused.
+  const teachingManager = user.role === "manager" && user.profile_type === "trainer";
   const emailChanged =
     form.email.trim().toLowerCase() !== user.email.toLowerCase();
   // The server's answer, not a guess from capabilities. Viewing is wider than
@@ -366,6 +370,7 @@ export function UserAdministration({ userId }: { userId: string }) {
         <Badge variant={user.is_email_verified ? "success" : "warning"}>
           {user.is_email_verified ? "Email verified" : "Email unverified"}
         </Badge>
+        {teachingManager ? <Badge variant="neutral">Also teaches</Badge> : null}
         {user.profile_type && user.profile_id ? (
           <Link
             href={
@@ -379,7 +384,12 @@ export function UserAdministration({ userId }: { userId: string }) {
             }}
             className="text-sm font-medium text-action hover:underline"
           >
-            Open {user.profile_type === "student" ? "student 360" : "trainer profile"}
+            Open{" "}
+            {user.profile_type === "student"
+              ? "student 360"
+              : teachingManager
+                ? "teaching profile"
+                : "trainer profile"}
           </Link>
         ) : null}
       </div>
@@ -552,6 +562,12 @@ export function UserAdministration({ userId }: { userId: string }) {
                 onChange={(value) => setForm({ ...form, custom_role: value })}
               />
             </div>
+            {teachingManager ? (
+              <Alert variant="info">
+                This manager also teaches. Their role can change only once their active and
+                upcoming batches have another trainer.
+              </Alert>
+            ) : null}
             {form.role === "student" || form.role === "trainer" ? (
               <Alert variant="info">
                 This account keeps its {labelFor(ROLE_LABEL, form.role).toLowerCase()} identity.

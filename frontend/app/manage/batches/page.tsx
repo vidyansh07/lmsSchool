@@ -96,10 +96,14 @@ export function BatchesHub() {
   // narrowed to the thing the person clicked on, rather than to everything.
   const searchParams = useSearchParams();
   const attention = searchParams.get('attention') ?? '';
-  const list = useList<ManageBatchRow>(listManageBatches, {
-    page_size: 20,
-    ...(attention ? { attention } : {}),
-  });
+  const list = useList<ManageBatchRow>(
+    listManageBatches,
+    {
+      page_size: 20,
+      ...(attention ? { attention } : {}),
+    },
+    { urlKeys: ['attention', 'status'] },
+  );
 
   const columns: DataTableColumn<ManageBatchRow>[] = [
     {

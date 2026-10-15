@@ -97,6 +97,9 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  // Lists that keep their filters in the address bar would otherwise carry
+  // one test's search into the next test's first request.
+  window.history.replaceState(null, '', '/');
   // Cookies leak between tests otherwise, which would hide CSRF bugs.
   document.cookie.split('; ').forEach((entry) => {
     const name = entry.split('=')[0];

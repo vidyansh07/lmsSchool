@@ -25,7 +25,7 @@ import type { AdminUser } from '@/types/api';
 import { CreateStaffDialog } from './create-staff-dialog';
 
 function UsersTable() {
-  const list = useList<AdminUser>(listUsers);
+  const list = useList<AdminUser>(listUsers, {}, { urlKeys: ['role', 'is_active', 'branch'] });
   const router = useRouter();
   const { user: viewer, can } = useAuth();
   const [showCreate, setShowCreate] = useState(false);

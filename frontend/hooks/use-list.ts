@@ -25,11 +25,51 @@ export interface ListState<T> {
  * a filter resets to page 1, which is what a user expects and what stops them
  * landing on an empty page 7 of a 2-page result.
  */
+export interface ListOptions {
+  /**
+   * Keep the search, the sort, the page and these filters in the address bar,
+   * so a refresh, the Back button and a pasted link all return to the same
+   * rows. Opt-in, and only for a page's main list: two lists on one screen
+   * would fight over the same parameters.
+   */
+  urlKeys?: readonly string[];
+}
+
+/** Always in the address bar when a page opts in, alongside its own filters. */
+const URL_BASE_KEYS = ['search', 'ordering', 'page'] as const;
+
+function readUrlQuery(keys: readonly string[]): ListQuery {
+  // The lists that opt in render only after the session check, on the client
+  // (`RequireAuth`), so reading the address here cannot differ from a server
+  // render.
+  if (typeof window === 'undefined') return {};
+  const params = new URLSearchParams(window.location.search);
+  const query: ListQuery = {};
+  for (const key of keys) {
+    const value = params.get(key);
+    if (!value) continue;
+    if (key === 'page') {
+      const page = Number.parseInt(value, 10);
+      if (Number.isFinite(page) && page > 1) query.page = page;
+    } else {
+      query[key] = value;
+    }
+  }
+  return query;
+}
+
 export function useList<T>(
   fetcher: (query: ListQuery, signal?: AbortSignal) => Promise<Paginated<T>>,
   initialQuery: ListQuery = {},
+  options: ListOptions = {},
 ): ListState<T> {
-  const [query, setQueryState] = useState<ListQuery>({ page: 1, page_size: 20, ...initialQuery });
+  const urlKeys = options.urlKeys ? [...URL_BASE_KEYS, ...options.urlKeys] : null;
+  const [query, setQueryState] = useState<ListQuery>(() => ({
+    page: 1,
+    page_size: 20,
+    ...initialQuery,
+    ...(urlKeys ? readUrlQuery(urlKeys) : {}),
+  }));
   const [attempt, setAttempt] = useState(0);
 
   const key = `${JSON.stringify(query)}#${attempt}`;
@@ -96,6 +136,26 @@ export function useList<T>(
   }, []);
 
   const reload = useCallback(() => setAttempt((value) => value + 1), []);
+
+  // Mirror the query into the address bar. `replaceState`, not a push: a
+  // keystroke in the search box is not a page the Back button should visit,
+  // but the entry the person leaves from is what Back returns them to.
+  const urlKeyList = urlKeys?.join(',') ?? '';
+  useEffect(() => {
+    if (!urlKeyList || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    for (const key of urlKeyList.split(',')) {
+      const value = query[key];
+      const keep = value !== undefined && value !== null && value !== '' && !(key === 'page' && value === 1);
+      if (keep) params.set(key, String(value));
+      else params.delete(key);
+    }
+    const search = params.toString();
+    const next = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
+    if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+      window.history.replaceState(window.history.state, '', next);
+    }
+  }, [query, urlKeyList]);
 
   return {
     data: state.data,

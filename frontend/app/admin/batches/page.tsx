@@ -33,7 +33,7 @@ import { CreateBatchDialog } from './create-batch-dialog';
  */
 function BatchList() {
   const { can } = useAuth();
-  const list = useList<BatchListRow>(listBatches, { page_size: 20 });
+  const list = useList<BatchListRow>(listBatches, { page_size: 20 }, { urlKeys: ['status'] });
   const [showCreate, setShowCreate] = useState(false);
   const router = useRouter();
 

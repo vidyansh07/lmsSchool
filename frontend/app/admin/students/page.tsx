@@ -33,7 +33,9 @@ import { CreateStudentDialog } from './create-student-dialog';
 
 function StudentsTable() {
   const { can } = useAuth();
-  const list = useList<StudentListRow>(listStudents);
+  const list = useList<StudentListRow>(listStudents, {}, {
+    urlKeys: ['institution', 'fee_status', 'is_active'],
+  });
   const [actionError, setActionError] = useState('');
   const [showCreate, setShowCreate] = useState(false);
 

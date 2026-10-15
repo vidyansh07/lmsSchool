@@ -205,6 +205,8 @@ export interface TrainerListRow {
   id: string;
   trainer_id: string;
   user_id: string;
+  /** `manager` for a manager who also teaches; absent on older responses. */
+  role?: 'trainer' | 'manager';
   email: string;
   full_name: string;
   professional_title: string;

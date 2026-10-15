@@ -31,7 +31,11 @@ const STATUS_OPTIONS: PublishStatus[] = ['draft', 'in_review', 'published', 'arc
 function CourseAdminList() {
   const { can } = useAuth();
   const isAdmin = can(Capability.courseViewAny);
-  const list = useList<CourseListRow>(isAdmin ? listCourses : listMyCourses, { page_size: 12 });
+  const list = useList<CourseListRow>(
+    isAdmin ? listCourses : listMyCourses,
+    { page_size: 12 },
+    { urlKeys: ['status'] },
+  );
   const [showCreate, setShowCreate] = useState(false);
 
   return (
