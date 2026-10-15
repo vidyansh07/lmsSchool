@@ -29,6 +29,8 @@ const setEnrollmentFee = vi.hoisted(() => vi.fn());
 const recordPayment = vi.hoisted(() => vi.fn());
 
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => ({ user: null, can: () => false }) }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn() }) }));
 vi.mock('@/lib/people', () => ({
   createStudent,
   checkDuplicates,
@@ -343,6 +345,30 @@ describe('RegistrationWizard — duplicate detection', () => {
     await user.type(screen.getByLabelText('Email', { exact: false }), 'jo');
     await user.type(screen.getByLabelText('First name', { exact: false }), 'Jo');
     expect(checkDuplicates).not.toHaveBeenCalled();
+  });
+});
+
+describe('RegistrationWizard — leaving half way', () => {
+  it('asks before "Back to admissions" throws away a half-typed registration', async () => {
+    push.mockReset();
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+
+    await user.click(screen.getByRole('link', { name: 'Back to admissions' }));
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Leave this registration?');
+
+    await user.click(screen.getByRole('button', { name: 'Leave without registering' }));
+    expect(push).toHaveBeenCalledWith('/admissions');
+  });
+
+  it('leaves at once when nothing was typed', async () => {
+    push.mockReset();
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await user.click(screen.getByRole('link', { name: 'Back to admissions' }));
+    expect(push).toHaveBeenCalledWith('/admissions');
   });
 });
 

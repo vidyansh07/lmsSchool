@@ -136,6 +136,83 @@ models directly instead of calling the account service. Routine user and role
 administration must use the product UI/API described above. Protecting or
 removing the direct Django-admin role fields remains a separate hardening item.
 
+## Follow-up loop (15 October 2026, later the same day)
+
+A second pass re-read the audit, added a security review of the change above
+and a separate audit of the daily counsellor, trainer and student flows, and
+then fixed the findings one at a time, each with its own tests.
+
+### Security
+
+| Finding | Fix |
+| --- | --- |
+| An administrator could move their **own** sign-in email through `PATCH /users/<id>/` with no re-verification, session reset or audit entry | Refused in `accounts.services.update_user`; another administrator must do it |
+| A role change needed no step-up, unlike ending a session or locking a permission | `role-transition/` answers `403 step_up_required`; the role dialog opens the step-up dialog and retries |
+| Omitting `custom_role` on a transition silently removed it and ended the person's sessions | Omitted means unchanged (dropped only with a change of kind); `null` clears |
+| A leftover trainer profile on a non-teaching role stayed in the directory and could be given batches; a timetable slot's trainer was not checked at all, even across centres; a manager could edit a peer manager's teaching profile | One gate (`batches.services._check_assignable_trainer`, row-locked against a racing role change) for batch and slot trainers; the directory lists teaching roles only; trainer edits follow the authority ladder |
+| Session list/revoke, scope grants and profile-image removal checked the capability and centre but not the ladder; scope grants could be granted to oneself; the credential-link route looked accounts up across centres | `accounts.services.ensure_may_administer` on each; self-grants refused; scoped lookups |
+| A superadmin demoted to a centre-bound role kept no centre and saw nothing | Refused until the account is placed; those roles are not offered for a centreless account |
+| Two first requests for a manager's teaching profile could race into a 500 | Creation serialised on the account row |
+
+### Daily flows
+
+- **Errors that vanished.** `fieldErrors` now maps `non_field_errors`, nested
+  serializer errors (`{"profile": {...}}`), row lists and throttles (`429`)
+  onto what forms render, and `unshownError` puts any other refusal above the
+  form. Fee, payment, next-due, follow-up, requirement, policy, role-builder,
+  review, registration, class-report and trainer-onboarding forms use it.
+- **Payments after a timeout.** A timed-out "Record a payment" says the
+  payment may already be saved and refreshes the ledger instead of inviting a
+  second receipt.
+- **Landing.** Everyone used to land on a placeholder home page. Sign-in now
+  goes to the person's own first navigation entry (a manager to `/manage`),
+  and back to the page that sent them there (`?next=`, same-site only).
+- **Expired sessions.** Any `authentication_required` answer while signed in
+  forgets the user, so the page sends them to sign-in, which says the session
+  ended — instead of "Authentication is required." with a Retry that could
+  never work.
+- **Irreversible one-click actions now ask first:** withdrawing or
+  suspending an enrolment (withdraw needs a reason, stored as the status
+  note), deactivating an account (reason required and audited), moving an
+  account to another centre, removing a weekly timetable slot, and submitting
+  an exam paper (with the unanswered count). At zero the exam paper locks,
+  saves what was mid-typing and reads the result back from the server.
+- **Finish class.** Unmarked students are no longer silently recorded absent:
+  Finish and Save ask first and then mark them explicitly, so the report's
+  counts match the register. A report the autosave had just started no longer
+  fails Finish with a hidden 409, and any refusal is shown.
+- **Links that went nowhere.** `/activities/<id>` and `/dsr/<id>` — the links
+  notifications carry — now forward to the drawer, the review sheet, the
+  trainer's class or the student's own page. The timeline's attendance entry
+  links to the student's Enrolment tab.
+- **Students' activities.** `/my-activities` lists what trainers shared,
+  read-only, showing only the answers marked visible to students.
+- **Dashboards** show a failed chart as an error with Try again, not as
+  "Nothing is waiting on you".
+- **Dates** use the viewer's own calendar day (`localIsoDate`): "This month"
+  no longer starts on the last day of the previous month in India, and
+  "today" is right between midnight and 05:30.
+- **Registration wizard.** A failed duplicate check is said, not treated as
+  "no duplicates"; a duplicate the server finds brings the matches back up;
+  once the student record exists its fields are locked with an explanation
+  rather than edits being silently ignored.
+- **User accounts.** Centre column and filter for those who see every
+  centre; "Add staff account" for administrators, managers and counsellors
+  (trainers and students are pointed at their own onboarding). Scope grants
+  are chosen by searching batches, a failed load is an error with retry, and
+  a failed centre move keeps what was typed. A manager who also teaches is
+  marked as such here and in the trainer directory.
+- **Lists keep their state in the address bar** (search, sort, page and
+  filters) on users, students, batches, courses, admissions and the manager
+  hubs, so refresh, Back and shared links return to the same rows. The
+  trainer hub's export now carries its filters, and its skill filter applies
+  as you type.
+
+Verification for the loop: frontend 166 files / 1,524 tests (also green under
+`TZ=Asia/Kolkata`), ESLint and TypeScript clean, production build clean; the
+affected backend suites and a full backend run are recorded in the change
+summary that accompanies this branch.
+
 ## Remaining UX work
 
 The broader gap audit remains at `.lavish/lms-ux-functional-gap-audit.html`.

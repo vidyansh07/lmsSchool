@@ -115,16 +115,20 @@ matches `^[A-Za-z0-9._-]{8,64}$`.
 | `GET` | `` | `user.view_any` |
 | `POST` | `` | `user.create` — generic staff accounts only; students use `/students/` and trainers use `/trainers/` so the required profile is created atomically |
 | `GET` | `<id>/` | `user.view_any` |
-| `PATCH` | `<id>/` | `user.update_any` — contact fields only: email, first name, last name and phone |
-| `POST` | `<id>/role-transition/` | `user.change_role` plus a fresh step-up (`403 step_up_required` otherwise) — `role`, optional `custom_role`, and required audit `reason` |
-| `POST` | `<id>/set-active/` | `user.set_active` |
+| `PATCH` | `<id>/` | `user.update_any` — contact fields only: email, first name, last name and phone. An administrator cannot move their *own* sign-in email here (400 on `email`); another administrator does it, which re-verifies the address and ends their sessions |
+| `POST` | `<id>/role-transition/` | `user.change_role` plus a fresh step-up (`403 step_up_required` otherwise) — `role`, optional `custom_role` (omitted keeps the current one unless the kind changes; `null` clears it), and required audit `reason`. A centre-bound role (manager, counsellor) is refused with 409 for an account with no centre until it is moved into one |
+| `POST` | `<id>/set-active/` | `user.set_active` — `is_active`, optional `reason` (the UI requires one to deactivate; it is audited) |
 | `GET` | `<id>/profile-image/` | any authenticated, active user |
-| `DELETE` | `<id>/profile-image/remove/` | `user.update_any` |
-| `GET` | `<id>/sessions/` | `session.view_any` — see "Session management" below |
-| `DELETE` | `<id>/sessions/<session_id>/` | `session.revoke_any`, fresh step-up |
+| `DELETE` | `<id>/profile-image/remove/` | `user.update_any`, within the caller's centre and authority |
+| `GET` | `<id>/sessions/` | `session.view_any`, and authority over the account (403 for a peer or anyone above) — see "Session management" below |
+| `DELETE` | `<id>/sessions/<session_id>/` | `session.revoke_any`, authority over the account, fresh step-up |
+
+Every route above that names an account resolves it inside the caller's centre
+first (another centre's id is a 404) — including `credential-action/`, which
+used to look accounts up across all centres.
 
 Listing supports `?search=`, `?role=`, `?is_active=`, `?is_email_verified=`,
-`?joined_after=`, `?joined_before=`, `?ordering=` and pagination. Search matches
+`?branch=`, `?joined_after=`, `?joined_before=`, `?ordering=` and pagination. Search matches
 name, email, student ID and trainer ID.
 
 User detail responses include `allowed_role_transitions`, `profile_type` and
@@ -193,10 +197,13 @@ the admin view adds `referrals_count`, and `?referred_by=` lists them.
 | `GET` | `me/` | the signed-in trainer |
 | `PATCH` | `me/` | the signed-in trainer, self-editable fields only |
 | `GET` | `<id>/` | `trainer.view_any`, or the owner |
-| `PATCH` | `<id>/` | `trainer.update_any`, or the owner (restricted fields) |
+| `PATCH` | `<id>/` | `trainer.update_any` and authority over the account (a manager cannot edit a peer manager's teaching profile), or the owner (restricted fields) |
 
 Filters: `?skill=`, `?is_accepting_assignments=`, `?min_experience=`,
-`?search=` (trainer ID, name, email, title), `?ordering=`.
+`?search=` (trainer ID, name, email, title), `?ordering=`. The list holds only
+people who teach — trainers, and managers who also teach (each row carries
+`role`); a leftover profile on another role is reachable by its own address for
+history but is not listed and cannot be given a batch or a timetable slot.
 
 `POST /trainers/` is the canonical onboarding operation: it creates the user
 account and trainer profile in one transaction. The manager and administrator
@@ -489,8 +496,8 @@ without being its trainer.
 | Method | Path | Access |
 | --- | --- | --- |
 | `GET` | `` | `user.update_any`, within the caller's reach |
-| `POST` | `` | `user.update_any`; exactly one of `batch` or `course`; resolved through the caller's own `visible_batches`/`visible_courses`, so another centre's id (for a bounded caller) is a 404 |
-| `DELETE` | `<grant_id>/` | `user.update_any` |
+| `POST` | `` | `user.update_any`; exactly one of `batch` or `course`; resolved through the caller's own `visible_batches`/`visible_courses`, so another centre's id (for a bounded caller) is a 404. Follows the authority ladder, and never on your own account (403) — a grant widens reach |
+| `DELETE` | `<grant_id>/` | `user.update_any`; the same ladder and self rule |
 
 ### Step-up authentication — `/api/v1/auth/step-up/` (ERP Phase 2/4/5)
 
@@ -976,7 +983,9 @@ provider (a configured real one is a deployment step, not a code gap — see
 
 On top of the base export surface above: `GET /reports/<key>/count/
 ?filters` is the preflight a confirmation dialog reads before queuing a
-background job; `?as=print` renders HTML with a print stylesheet rather
+background job (`trainer_activity` takes the trainer hub's own `search`,
+`skill`, `is_accepting_assignments` and `attention`, so the export is the rows
+on screen — directly and when queued); `?as=print` renders HTML with a print stylesheet rather
 than a downloadable file; three new report sources cover the ERP surface
 itself (`work_activities`, `deliveries`, `automation_runs`); and a nightly
 beat task (`reporting.expire_exports`) deletes files past

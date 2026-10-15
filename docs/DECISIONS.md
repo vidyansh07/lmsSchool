@@ -1385,3 +1385,16 @@ product interfaces cannot bypass them. Django's built-in admin writes the model
 directly and remains a break-glass maintenance surface; it is not a supported
 route for routine account or role administration and still needs a separate
 hardening decision.
+
+### D-143 · Granting authority asks for a fresh step-up; reach follows the ladder everywhere (15 October 2026)
+
+A role transition now requires the same fresh step-up as ending somebody's
+session or locking a permission, because handing out authority is at least as
+dangerous. Every endpoint that acts on another person's account — sessions,
+scope grants, profile-image moderation, trainer-profile edits — checks the
+authority ladder (`can_administer`), not only the capability and the centre.
+A scope grant is never self-service. An administrator does not change their own
+sign-in email through the administration route. A centre-bound role is not given
+to an account with no centre until it is placed in one. A trainer profile on a
+role that no longer teaches is kept for history but cannot take batches or
+timetable slots, and the trainer directory lists only people who teach.

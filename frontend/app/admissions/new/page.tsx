@@ -25,9 +25,11 @@
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { DuplicateMatch } from '@/components/admissions/duplicate-match';
+import { Confirm } from '@/components/confirm';
 import { SearchPicker, type PickerOption } from '@/components/admissions/search-picker';
 import {
   backgroundToProfile,
@@ -46,6 +48,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
 import { errorMessage, fieldErrors, unshownError } from '@/lib/api';
 import { assignBatchTrainer, createBatch, enrolStudent, listBatches } from '@/lib/batches';
 import { formatDate, isoDaysFromNow, isoToday } from '@/lib/batch-labels';
@@ -133,6 +136,7 @@ interface Result {
 }
 
 export function RegistrationWizard() {
+  const router = useRouter();
   const [step, setStep] = useState<StepKey>('student');
   const [completed, setCompleted] = useState<Set<StepKey>>(new Set());
 
@@ -224,6 +228,19 @@ export function RegistrationWizard() {
   const [result, setResult] = useState<Result | null>(null);
 
   const batchHasTrainer = batchMode === 'pick' && Boolean(pickedBatch?.trainer_name);
+
+  // Half a registration is a counsellor's five minutes with a family at the
+  // desk. A refresh, a closed tab or "Back to admissions" asks first; nothing
+  // is kept once the registration is confirmed.
+  const hasUnsavedRegistration =
+    !result &&
+    Boolean(email.trim() || firstName.trim() || lastName.trim() || phone.trim() || course);
+  const {
+    isPrompting: isLeavePromptOpen,
+    guard: guardLeaving,
+    confirmDiscard: confirmLeave,
+    cancelDiscard: cancelLeave,
+  } = useUnsavedChanges(hasUnsavedRegistration);
 
   // Recomputed at render time rather than reset from the debounce effect
   // above: once the identifying fields are too short to search on, the
@@ -793,9 +810,26 @@ export function RegistrationWizard() {
           </p>
         </div>
         <Button asChild variant="outline">
-          <Link href="/admissions">Back to admissions</Link>
+          <Link
+            href="/admissions"
+            onClick={(event) => {
+              event.preventDefault();
+              guardLeaving(() => router.push('/admissions'));
+            }}
+          >
+            Back to admissions
+          </Link>
         </Button>
       </div>
+      <Confirm
+        open={isLeavePromptOpen}
+        title="Leave this registration?"
+        description="Nothing has been registered yet. The details typed here will be lost."
+        confirmLabel="Leave without registering"
+        cancelLabel="Keep registering"
+        onConfirm={confirmLeave}
+        onCancel={cancelLeave}
+      />
 
       <StepIndicator
         steps={STEPS}
