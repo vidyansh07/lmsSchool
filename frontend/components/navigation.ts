@@ -175,57 +175,127 @@ export const STUDENT_NAV: NavItem[] = [
   { href: "/profile", label: "My profile", icon: UserCircle2 },
 ];
 
-/** Everybody who runs the institution rather than studying at it. */
-export const STAFF_NAV: NavGroup[] = [
+// Shared entries, so a link reads and is gated the same in every sidebar.
+const INBOX: NavItem[] = [
+  { href: "/announcements", label: "Announcements", icon: Megaphone },
+  { href: "/notifications", label: "Notifications", icon: Bell },
+  { href: "/profile", label: "My profile", icon: UserCircle2 },
+];
+const FORM_INBOX: NavItem = { href: "/forms", label: "Form inbox", icon: ClipboardCheck };
+const CALENDAR: NavItem = {
+  // Every source on the calendar scopes itself to what the caller may see.
+  href: "/calendar",
+  label: "Calendar",
+  icon: CalendarDays,
+  scopedRoles: ["trainer", "counsellor", "manager", "admin", "superadmin"],
+};
+const TEACHING_ITEMS: NavItem[] = [
   {
-    items: [
-      {
-        href: "/dashboard",
-        label: "Dashboard",
-        icon: LayoutDashboard,
-        scopedRoles: ["trainer"],
-      },
-      // A counsellor's landing page is their pipeline, not an institution
-      // overview they hold no capability to read.
-      {
-        href: "/admissions/dashboard",
-        label: "Dashboard",
-        icon: LayoutDashboard,
-        capability: Capability.enrolmentCreate,
-        scopedRoles: ["counsellor"],
-      },
-      {
-        href: "/admin/overview",
-        label: "Institution overview",
-        icon: BarChart3,
-        capability: Capability.reportViewAny,
-      },
-      {
-        href: "/analytics",
-        label: "Analytics",
-        icon: TrendingUp,
-        capability: Capability.reportViewAny,
-      },
-    ],
+    href: "/teaching/today",
+    label: "Today's class",
+    icon: Sparkles,
+    capability: Capability.sessionManageAny,
+    scopedRoles: ["trainer"],
   },
   {
-    // The manager pages drill into the institution's day-to-day academic work
-    // rather than presenting another dashboard of widgets.
-    title: "Academic operations",
+    href: "/teaching",
+    label: "Class schedule",
+    icon: CalendarCheck,
+    capability: Capability.sessionManageAny,
+    scopedRoles: ["trainer"],
+  },
+];
+const CLASSROOM_ITEMS: NavItem[] = [
+  {
+    href: "/teaching/assignments",
+    label: "Assignments",
+    icon: ClipboardList,
+    capability: Capability.assignmentManageAny,
+    scopedRoles: ["trainer"],
+  },
+  {
+    href: "/teaching/assessments",
+    label: "Weekly tests",
+    icon: PenLine,
+    capability: Capability.assessmentManageAny,
+    scopedRoles: ["trainer"],
+  },
+  {
+    href: "/teaching/projects",
+    label: "Projects",
+    icon: FolderKanban,
+    capability: Capability.projectManageAny,
+    scopedRoles: ["trainer"],
+  },
+  {
+    href: "/teaching/exams",
+    label: "Exams",
+    icon: ScrollText,
+    capability: Capability.examManageAny,
+    scopedRoles: ["trainer"],
+  },
+  {
+    href: "/teaching/questions",
+    label: "Question bank",
+    icon: LibraryBig,
+    capability: Capability.questionViewAny,
+    scopedRoles: ["trainer"],
+  },
+];
+
+/**
+ * The manager's sidebar: running the centre's teaching — its batches, its
+ * trainers, its students — with the front office and the reports after it.
+ * A manager may do everything a counsellor does (D-130); only the order and
+ * the grouping differ, so the work each does most is the work at the top.
+ */
+export const MANAGER_NAV: NavGroup[] = [
+  {
     items: [
+      { href: "/manage", label: "Overview", icon: LayoutDashboard, capability: Capability.performanceViewAny },
       {
         href: "/activities",
         label: "Activities",
         icon: ListTodo,
         capability: Capability.activityViewAny,
-        scopedRoles: ["trainer"],
       },
+      CALENDAR,
+    ],
+  },
+  {
+    title: "Academics",
+    items: [
+      { href: "/admin/batches", label: "Batches", icon: Layers, capability: Capability.batchViewAny },
       {
         href: "/manage/batches",
         label: "Batch review",
-        icon: Layers,
+        icon: BarChart3,
         capability: Capability.performanceViewAny,
       },
+      { href: "/dsr", label: "Class reports", icon: FileText, capability: Capability.dsrViewAny },
+      {
+        href: "/admin/courses",
+        label: "Courses",
+        icon: LibraryBig,
+        capability: Capability.courseViewAny,
+      },
+      {
+        href: "/admin/completions",
+        label: "Completions",
+        icon: ClipboardCheck,
+        capability: Capability.completionApprove,
+      },
+      {
+        href: "/admin/certificates",
+        label: "Certificates",
+        icon: Award,
+        capability: Capability.certificateManage,
+      },
+    ],
+  },
+  {
+    title: "Staff",
+    items: [
       {
         href: "/manage/trainers",
         label: "Trainers",
@@ -239,32 +309,22 @@ export const STAFF_NAV: NavGroup[] = [
         capability: Capability.performanceViewAny,
       },
       {
-        href: "/dsr",
-        label: "Class reports",
-        icon: FileText,
-        capability: Capability.dsrViewAny,
-      },
-      {
-        // A manager's ask of the teaching staff. Trainers see it too: they
-        // are the people being asked, and answer on it (D-132).
         href: "/requirements",
         label: "Trainer requirements",
         icon: Megaphone,
         capability: Capability.requirementManage,
-        scopedRoles: ["trainer"],
       },
+      { href: "/admin/users", label: "User accounts", icon: Users, capability: Capability.userViewAny },
     ],
   },
   {
-    // Admissions is one job done many times a day, so its screens sit together
-    // and in the order somebody works through them.
-    title: "Admissions",
+    title: "Students",
     items: [
       {
-        href: "/enquiries",
-        label: "Enquiries",
-        icon: UserPlus,
-        capability: Capability.enquiryViewAny,
+        href: "/admin/students",
+        label: "Students",
+        icon: UsersRound,
+        capability: Capability.studentViewAny,
       },
       {
         href: "/admissions",
@@ -273,9 +333,118 @@ export const STAFF_NAV: NavGroup[] = [
         capability: Capability.studentCreate,
       },
       {
+        href: "/admissions/transfer",
+        label: "Transfers",
+        icon: Repeat,
+        capability: Capability.enrolmentUpdateAny,
+      },
+      {
+        href: "/admin/imports",
+        label: "Data import",
+        icon: Workflow,
+        capability: Capability.dataImport,
+      },
+    ],
+  },
+  {
+    title: "Front office",
+    items: [
+      {
+        href: "/admissions/dashboard",
+        label: "Admissions pipeline",
+        icon: TrendingUp,
+        capability: Capability.enrolmentCreate,
+      },
+      { href: "/enquiries", label: "Enquiries", icon: UserPlus, capability: Capability.enquiryViewAny },
+      {
         href: "/admissions/new",
         label: "Register a student",
         icon: UserPlus,
+        capability: Capability.studentCreate,
+      },
+      {
+        href: "/admissions/batches",
+        label: "Batch planning",
+        icon: CalendarDays,
+        capability: Capability.batchCreate,
+      },
+    ],
+  },
+  // A manager who also teaches keeps their own classes one click away.
+  { title: "Teaching", items: [...TEACHING_ITEMS, ...CLASSROOM_ITEMS] },
+  {
+    title: "Reports",
+    items: [
+      {
+        href: "/admin/reports",
+        label: "Reports",
+        icon: FileSpreadsheet,
+        capability: Capability.reportViewAny,
+      },
+      { href: "/analytics", label: "Analytics", icon: TrendingUp, capability: Capability.reportViewAny },
+      {
+        href: "/admin/overview",
+        label: "Institution overview",
+        icon: BarChart3,
+        capability: Capability.reportViewAny,
+      },
+    ],
+  },
+  { title: "My work", items: [FORM_INBOX, ...INBOX] },
+];
+
+/**
+ * The counsellor's sidebar: the front desk. Leads first, then turning a lead
+ * into a registered, placed, paying student, then the students themselves.
+ * The academic screens a counsellor may also open (D-130) are there, lower
+ * down, rather than gone.
+ */
+export const COUNSELLOR_NAV: NavGroup[] = [
+  {
+    items: [
+      {
+        // Their landing page is the pipeline, not an institution overview.
+        href: "/admissions/dashboard",
+        label: "Dashboard",
+        icon: LayoutDashboard,
+        capability: Capability.enrolmentCreate,
+        scopedRoles: ["counsellor"],
+      },
+      {
+        href: "/activities",
+        label: "Follow-ups and tasks",
+        icon: ListTodo,
+        capability: Capability.activityViewAny,
+      },
+      CALENDAR,
+    ],
+  },
+  {
+    title: "Leads",
+    items: [
+      { href: "/enquiries", label: "Enquiries", icon: UserPlus, capability: Capability.enquiryViewAny },
+      {
+        href: "/forms/fill/enquiry",
+        label: "New enquiry",
+        icon: PenLine,
+        capability: Capability.formAssign,
+      },
+      FORM_INBOX,
+    ],
+  },
+  {
+    title: "Admissions",
+    items: [
+      {
+        href: "/admissions/new",
+        label: "Register a student",
+        icon: UserPlus,
+        capability: Capability.studentCreate,
+      },
+      {
+        href: "/admissions",
+        label: "Registrations",
+        icon: ListChecks,
         capability: Capability.studentCreate,
       },
       {
@@ -290,127 +459,6 @@ export const STAFF_NAV: NavGroup[] = [
         icon: Repeat,
         capability: Capability.enrolmentUpdateAny,
       },
-    ],
-  },
-  {
-    title: "Teaching",
-    items: [
-      {
-        href: "/teaching/today",
-        label: "Today's class",
-        icon: Sparkles,
-        capability: Capability.sessionManageAny,
-        scopedRoles: ["trainer"],
-      },
-      {
-        href: "/teaching",
-        icon: CalendarCheck,
-        label: "Class schedule",
-        capability: Capability.sessionManageAny,
-        scopedRoles: ["trainer"],
-      },
-      {
-        href: "/teaching/assignments",
-        label: "Assignments",
-        icon: ClipboardList,
-        capability: Capability.assignmentManageAny,
-        scopedRoles: ["trainer"],
-      },
-      {
-        href: "/teaching/assessments",
-        label: "Weekly tests",
-        icon: ClipboardCheck,
-        capability: Capability.assessmentManageAny,
-        scopedRoles: ["trainer"],
-      },
-      {
-        href: "/teaching/projects",
-        label: "Projects",
-        icon: FolderKanban,
-        capability: Capability.projectManageAny,
-        scopedRoles: ["trainer"],
-      },
-      {
-        href: "/teaching/exams",
-        label: "Exams",
-        icon: ScrollText,
-        capability: Capability.examManageAny,
-        scopedRoles: ["trainer"],
-      },
-      {
-        href: "/teaching/questions",
-        label: "Question bank",
-        icon: LibraryBig,
-        capability: Capability.questionViewAny,
-        scopedRoles: ["trainer"],
-      },
-    ],
-  },
-  {
-    title: "People",
-    items: [
-      {
-        href: "/admin/users",
-        label: "User accounts",
-        icon: Users,
-        capability: Capability.userViewAny,
-      },
-      {
-        href: "/admin/students",
-        label: "Students",
-        icon: UsersRound,
-        capability: Capability.studentViewAny,
-      },
-      {
-        href: "/admin/trainers",
-        label: "Trainers",
-        icon: GraduationCap,
-        capability: Capability.trainerViewAny,
-      },
-    ],
-  },
-  {
-    title: "Courses and batches",
-    items: [
-      {
-        href: "/admin/courses",
-        label: "Course management",
-        icon: PenLine,
-        capability: Capability.courseViewAny,
-        scopedRoles: ["trainer"],
-      },
-      {
-        href: "/admin/batches",
-        label: "Batches",
-        icon: Layers,
-        capability: Capability.batchViewAny,
-        scopedRoles: ["trainer"],
-      },
-      { href: "/courses", label: "Course catalogue", icon: BookOpen },
-    ],
-  },
-  {
-    title: "Results and reports",
-    items: [
-      {
-        href: "/admin/completions",
-        label: "Completions",
-        icon: ClipboardCheck,
-        capability: Capability.completionApprove,
-      },
-      {
-        href: "/admin/certificates",
-        label: "Certificates",
-        icon: Award,
-        capability: Capability.certificateManage,
-      },
-      {
-        href: "/admin/reports",
-        label: "Reports",
-        icon: FileSpreadsheet,
-        capability: Capability.reportViewAny,
-        scopedRoles: ["trainer"],
-      },
       {
         href: "/admin/imports",
         label: "Data import",
@@ -420,111 +468,116 @@ export const STAFF_NAV: NavGroup[] = [
     ],
   },
   {
-    title: "Institution",
+    title: "Students and batches",
     items: [
       {
-        href: "/admin/academics",
-        label: "Academic rules",
-        icon: Settings2,
-        capability: Capability.academicConfigure,
+        href: "/admin/students",
+        label: "Students",
+        icon: UsersRound,
+        capability: Capability.studentViewAny,
+      },
+      { href: "/admin/batches", label: "Batches", icon: Layers, capability: Capability.batchViewAny },
+      { href: "/dsr", label: "Class reports", icon: FileText, capability: Capability.dsrViewAny },
+      { href: "/courses", label: "Course catalogue", icon: BookOpen },
+    ],
+  },
+  {
+    title: "Reports",
+    items: [
+      {
+        href: "/admin/reports",
+        label: "Reports",
+        icon: FileSpreadsheet,
+        capability: Capability.reportViewAny,
+      },
+      { href: "/analytics", label: "Analytics", icon: TrendingUp, capability: Capability.reportViewAny },
+    ],
+  },
+  { title: "My work", items: INBOX },
+];
+
+/**
+ * The trainer's sidebar: today's class first, then the classroom work they
+ * set and mark, then their batches. Most entries are scoped to what they
+ * teach, which the destination enforces.
+ */
+export const TRAINER_NAV: NavGroup[] = [
+  {
+    items: [
+      {
+        href: "/dashboard",
+        label: "Dashboard",
+        icon: LayoutDashboard,
+        scopedRoles: ["trainer"],
+      },
+      ...TEACHING_ITEMS,
+      CALENDAR,
+    ],
+  },
+  { title: "Classroom", items: CLASSROOM_ITEMS },
+  {
+    title: "My batches",
+    items: [
+      {
+        href: "/admin/batches",
+        label: "Batches",
+        icon: Layers,
+        capability: Capability.batchViewAny,
+        scopedRoles: ["trainer"],
       },
       {
-        href: "/admin/roles",
-        label: "Roles",
-        icon: ShieldCheck,
-        capability: Capability.roleView,
+        href: "/admin/courses",
+        label: "Course management",
+        icon: PenLine,
+        capability: Capability.courseViewAny,
+        scopedRoles: ["trainer"],
       },
       {
-        href: "/admin/policies",
-        label: "Rules and policies",
-        icon: ToggleLeft,
-        capability: Capability.policyView,
+        href: "/teaching/work",
+        label: "My work queue",
+        icon: ListTodo,
+        capability: Capability.activityViewAny,
+        scopedRoles: ["trainer"],
       },
       {
-        href: "/admin/forms",
-        label: "Form builder",
-        icon: FileText,
-        capability: Capability.formManage,
+        // A manager's ask of the teaching staff; trainers answer on it (D-132).
+        href: "/requirements",
+        label: "Trainer requirements",
+        icon: Megaphone,
+        capability: Capability.requirementManage,
+        scopedRoles: ["trainer"],
       },
       {
-        href: "/admin/activity-types",
-        label: "Activity types",
-        icon: ClipboardCheck,
-        capability: Capability.activityTypeManage,
-      },
-      {
-        href: "/admin/automation",
-        label: "Automation",
-        icon: Zap,
-        capability: Capability.automationManage,
-      },
-      {
-        href: "/admin/communication",
-        label: "Message templates",
-        icon: Send,
-        capability: Capability.templateManage,
-      },
-      {
-        href: "/admin/settings",
-        label: "Settings",
-        icon: SlidersHorizontal,
-        capability: Capability.settingsManage,
-      },
-      {
-        href: "/admin/recovery",
-        label: "Deleted records",
-        icon: Trash2,
-        capability: Capability.recordViewDeleted,
-      },
-      {
-        href: "/admin/branches",
-        label: "Centres",
-        icon: Building2,
-        capability: Capability.organisationViewAny,
-      },
-      {
-        href: "/admin/branding",
-        label: "Branding",
-        icon: Palette,
-        capability: Capability.platformConfigure,
-      },
-      // Every source on the calendar scopes itself to what the caller may see,
-      // so a manager gets every batch's classes and milestones and a trainer
-      // only theirs. The link was trainer-only by oversight, not by design.
-      {
-        href: "/calendar",
-        label: "Calendar",
-        icon: CalendarDays,
-        scopedRoles: ["trainer", "counsellor", "manager", "admin", "superadmin"],
+        href: "/admin/reports",
+        label: "Reports",
+        icon: FileSpreadsheet,
+        capability: Capability.reportViewAny,
+        scopedRoles: ["trainer"],
       },
     ],
   },
   {
-    title: "My work",
+    title: "Community",
     items: [
-      { href: "/announcements", label: "Announcements", icon: Megaphone },
       {
         href: "/discussions",
         label: "Discussions",
         icon: MessagesSquare,
         scopedRoles: ["trainer"],
       },
-      // Forms sent to you to fill — anyone may receive one — and, for those
-      // who send them, the ones you sent and "Fill in a form".
-      { href: "/forms", label: "Form inbox", icon: ClipboardCheck },
-      { href: "/notifications", label: "Notifications", icon: Bell },
-      { href: "/profile", label: "My profile", icon: UserCircle2 },
+      FORM_INBOX,
+      ...INBOX,
     ],
   },
 ];
 
-/** Roles that get the sidebar. Students get the shorter top bar. */
 /**
  * The administrator's sidebar, ranked by what the owner wants seen first
  * (14 September 2026): the activity review, then the manager's work, the
  * trainers, the counsellor's work, students and fees, batches and courses,
  * outcomes, the calendar, and only then the institution's own settings.
- * Managers, counsellors and trainers keep `STAFF_NAV` unchanged, by request.
+ * Managers, counsellors and trainers each have their own (above), grouped by
+ * the job each does all day (15 October 2026).
  */
 export const ADMIN_NAV: NavGroup[] = [
   {
@@ -840,9 +893,13 @@ export const ADMIN_NAV: NavGroup[] = [
   },
 ];
 
-/** Which sidebar a role gets. */
+/** Which sidebar a role gets. A configured role takes its kind's sidebar,
+ *  filtered by its own capabilities (`isVisible`). */
 export function navFor(role: string | undefined): NavGroup[] {
-  return role === "admin" || role === "superadmin" ? ADMIN_NAV : STAFF_NAV;
+  if (role === "admin" || role === "superadmin") return ADMIN_NAV;
+  if (role === "manager") return MANAGER_NAV;
+  if (role === "counsellor") return COUNSELLOR_NAV;
+  return TRAINER_NAV;
 }
 
 export const STAFF_ROLES = [
@@ -886,12 +943,6 @@ export function homeFor(
 ): string {
   if (!user) return "/login";
   if (!STAFF_ROLES.includes(user.role)) return "/dashboard";
-  // The sidebar's first entry for a manager is the counsellor's pipeline
-  // (both hold `enrolment.create`); their own overview at `/manage` is the
-  // landing screen the dashboards contract names (docs/erp/USER_JOURNEYS.md §6).
-  if (user.role === "manager" && user.capabilities.includes(Capability.performanceViewAny)) {
-    return "/manage";
-  }
   for (const group of navFor(user.role)) {
     const first = group.items.find((item) => isVisible(item, user));
     if (first) return first.href;

@@ -481,6 +481,48 @@ function Breadcrumb({ groups, active }: { groups: NavGroup[]; active: string | n
 }
 
 /**
+ * The other screens of the module this page belongs to, as tabs across the
+ * top of the page — "Enquiries · New enquiry · Form inbox" on the enquiries
+ * list — so moving sideways within one job never means going back to the
+ * sidebar. Built from the same filtered groups as the sidebar, so it offers
+ * exactly the screens this person's role and capabilities reach, and nothing
+ * for a module with only one of them.
+ */
+function ModuleTabs({ groups, active }: { groups: NavGroup[]; active: string | null }) {
+  const group = groups.find(
+    (candidate) => candidate.title && candidate.items.some((item) => item.href === active),
+  );
+  if (!group || group.items.length < 2) return null;
+  return (
+    <nav aria-label={group.title} className="-mx-1 mb-5 overflow-x-auto border-b border-line">
+      <ul className="flex min-w-max gap-1 px-1">
+        {group.items.map((item) => {
+          const Icon = item.icon;
+          const current = item.href === active;
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                aria-current={current ? 'page' : undefined}
+                className={cn(
+                  '-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors duration-150',
+                  current
+                    ? 'border-action font-semibold text-ink'
+                    : 'border-transparent text-ink-muted hover:border-line-strong hover:text-ink',
+                )}
+              >
+                <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                {item.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+/**
  * The link list itself, shared by the `lg:` sidebar (which passes its own
  * `collapsed` state) and the mobile drawer (which always passes `false` —
  * the drawer has the full width of a `Sheet` to work with and never needs
@@ -734,6 +776,7 @@ function Shell({
           tabIndex={-1}
           className="w-full max-w-[90rem] flex-1 px-4 py-6 sm:px-6 lg:px-8"
         >
+          <ModuleTabs groups={groups} active={active} />
           {children}
         </main>
       </div>
