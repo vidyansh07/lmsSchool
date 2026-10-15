@@ -34,6 +34,7 @@ from apps.accounts.models import User, UserRole
 from apps.common.identifiers import next_enrolment_code, next_student_id
 from apps.enrollments.models import Enrollment, EnrollmentStatus
 from apps.students.models import StudentProfile
+from tests.conftest import stepped_up
 
 MANAGER_URL = "/api/v1/dashboards/manager/"
 
@@ -725,7 +726,7 @@ def test_manager_dashboard_new_fields_are_zero_without_the_owning_capability(
     )
     assert narrowed.status_code == 201, narrowed.json()
 
-    assigned = api_client_no_csrf.post(
+    assigned = stepped_up(api_client_no_csrf).post(
         f"/api/v1/users/{manager_user.id}/role-transition/",
         {
             "role": manager_user.role,

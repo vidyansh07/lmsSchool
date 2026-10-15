@@ -177,6 +177,7 @@ class UserRoleTransitionView(APIView):
         request=UserRoleTransitionSerializer,
         responses={
             200: AdminUserDetailSerializer,
+            403: OpenApiResponse(description="Outside your authority, or step-up required."),
             409: OpenApiResponse(
                 description="A persona conversion or last-superadmin guard refused it."
             ),
@@ -187,6 +188,11 @@ class UserRoleTransitionView(APIView):
         user = get_object_or_404(_scoped_users(request.user), pk=user_id)
         serializer = UserRoleTransitionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        # Granting authority is at least as dangerous as ending a session or
+        # locking a permission, both of which already ask for a fresh step-up.
+        # Checked after the scoped lookup, so a cross-centre id still 404s.
+        if not is_fresh(request):
+            raise StepUpRequired()
         updated = services.transition_user_role(
             user=user, actor=request.user, **serializer.validated_data
         )

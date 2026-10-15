@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserAdministration } from '@/app/admin/users/[userId]/page';
+import { ApiError } from '@/lib/api';
 import type { AdminUser } from '@/types/api';
 
 const getUser = vi.hoisted(() => vi.fn());
@@ -17,7 +18,11 @@ vi.mock('@/lib/people', async () => {
   };
 });
 
+const stepUpWithPassword = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/roles', () => ({
+  stepUpWithPassword,
+  requestStepUpCode: vi.fn(),
+  stepUpWithCode: vi.fn(),
   listRoles: vi.fn().mockResolvedValue([]),
   listScopeGrants: vi.fn().mockResolvedValue([]),
   grantScope: vi.fn(),
@@ -96,6 +101,33 @@ describe('administrator role transition', () => {
       }),
     );
     expect(screen.getByRole('status')).toHaveTextContent(/sessions were ended/i);
+  });
+
+  it('asks the administrator to confirm it is them, then retries the same change', async () => {
+    transitionUserRole
+      .mockRejectedValueOnce(new ApiError(403, 'step_up_required', 'Confirm it is you.', 'req-1'))
+      .mockResolvedValueOnce({});
+    stepUpWithPassword.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<UserAdministration userId="manager-1" />);
+
+    await waitFor(() => expect(screen.getByText('Role and permissions')).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('System role'), 'counsellor');
+    await user.click(screen.getByRole('button', { name: 'Review role change' }));
+    await user.type(screen.getByLabelText(/^Reason for change/), 'Moved to admissions.');
+    await user.click(screen.getByRole('button', { name: 'Change role' }));
+
+    expect(await screen.findByRole('dialog', { name: /confirm it is you/i })).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/^Password/), 'secret-pass');
+    await user.click(screen.getByRole('button', { name: /^Confirm$/ }));
+
+    await waitFor(() => expect(transitionUserRole).toHaveBeenCalledTimes(2));
+    expect(transitionUserRole).toHaveBeenLastCalledWith('manager-1', {
+      role: 'counsellor',
+      custom_role: null,
+      reason: 'Moved to admissions.',
+    });
+    expect(await screen.findByRole('status')).toHaveTextContent(/sessions were ended/i);
   });
 
   it('warns before navigating away from an unsaved role selection', async () => {

@@ -17,12 +17,13 @@ import pytest
 
 from apps.accounts.roles import UserRole
 from apps.authorization.models import Role, RolePermission, ScopeGrant
+from tests.conftest import stepped_up
 
 ROLES = "/api/v1/roles/"
 
 
 def _assign(client, user, custom_role):
-    return client.post(
+    return stepped_up(client).post(
         f"/api/v1/users/{user.id}/role-transition/",
         {
             "role": user.role,

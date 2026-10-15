@@ -116,7 +116,7 @@ matches `^[A-Za-z0-9._-]{8,64}$`.
 | `POST` | `` | `user.create` — generic staff accounts only; students use `/students/` and trainers use `/trainers/` so the required profile is created atomically |
 | `GET` | `<id>/` | `user.view_any` |
 | `PATCH` | `<id>/` | `user.update_any` — contact fields only: email, first name, last name and phone |
-| `POST` | `<id>/role-transition/` | `user.change_role` — `role`, optional `custom_role`, and required audit `reason` |
+| `POST` | `<id>/role-transition/` | `user.change_role` plus a fresh step-up (`403 step_up_required` otherwise) — `role`, optional `custom_role`, and required audit `reason` |
 | `POST` | `<id>/set-active/` | `user.set_active` |
 | `GET` | `<id>/profile-image/` | any authenticated, active user |
 | `DELETE` | `<id>/profile-image/remove/` | `user.update_any` |

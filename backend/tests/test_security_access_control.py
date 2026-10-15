@@ -10,7 +10,7 @@ import pytest
 
 from apps.accounts.models import UserRole
 from apps.accounts.roles import Capability, capabilities_for
-from tests.conftest import TEST_PASSWORD
+from tests.conftest import TEST_PASSWORD, stepped_up
 
 # Since ERP Phase 1 the capability sets are read from seeded rows (ADR-01), so
 # even the pure-matrix assertions below need the database the seed lives in.
@@ -530,7 +530,7 @@ def test_an_administrator_cannot_turn_a_student_into_a_manager_in_place(
 ):
     """Role seniority cannot bypass the domain-persona conversion guard."""
     api_client_no_csrf.force_login(admin_user)
-    response = api_client_no_csrf.post(
+    response = stepped_up(api_client_no_csrf).post(
         f"/api/v1/users/{student.id}/role-transition/",
         {"role": "manager", "custom_role": None, "reason": "Appointed."},
         format="json",
@@ -560,7 +560,7 @@ def test_a_superadmin_may_appoint_a_superadmin(api_client_no_csrf, db):
         branch=Branch.objects.get(code="MAIN"),
     )
     api_client_no_csrf.force_login(boss)
-    response = api_client_no_csrf.post(
+    response = stepped_up(api_client_no_csrf).post(
         f"/api/v1/users/{candidate.id}/role-transition/",
         {"role": "superadmin", "custom_role": None, "reason": "Platform co-owner."},
         format="json",

@@ -20,6 +20,7 @@ from apps.accounts.models import User, UserRole
 from apps.accounts.roles import can_administer
 from apps.accounts.services import set_user_active, transition_user_role, update_user
 from apps.common.exceptions import ApplicationError, AuthorityError
+from tests.conftest import stepped_up
 
 PASSWORD = "Str0ng-Passphrase!42"
 
@@ -404,7 +405,7 @@ def test_a_superadmin_configures_an_administrator_over_the_api(api_client_no_csr
     )
 
     assert response.status_code == 200, response.json()
-    role_response = api_client_no_csrf.post(
+    role_response = stepped_up(api_client_no_csrf).post(
         f"/api/v1/users/{admin.id}/role-transition/",
         {
             "role": UserRole.MANAGER,

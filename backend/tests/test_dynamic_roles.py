@@ -20,6 +20,7 @@ from django.core.management import call_command
 
 from apps.accounts.roles import ROLE_CAPABILITIES, Capability, UserRole, capabilities_for
 from apps.authorization.models import Permission, Role, RolePermission
+from tests.conftest import stepped_up
 
 ROLES = "/api/v1/roles/"
 
@@ -65,7 +66,7 @@ def _custom(client, **overrides):
 
 
 def _assign(client, user, custom_role):
-    return client.post(
+    return stepped_up(client).post(
         f"/api/v1/users/{user.id}/role-transition/",
         {
             "role": user.role,

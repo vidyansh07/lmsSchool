@@ -9,6 +9,10 @@ import { UserSessionsCard } from "@/components/admin/user-sessions-card";
 import { useAuth } from "@/components/auth-provider";
 import { Confirm } from "@/components/confirm";
 import { RequireAuth } from "@/components/require-auth";
+import {
+  isStepUpRequired,
+  StepUpDialog,
+} from "@/components/roles/step-up-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -186,6 +190,7 @@ export function UserAdministration({ userId }: { userId: string }) {
   const [busy, setBusy] = useState("");
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [roleReason, setRoleReason] = useState("");
+  const [stepUpOpen, setStepUpOpen] = useState(false);
   const hasUnsavedChanges = Boolean(
     user &&
       (form.email.trim().toLowerCase() !== user.email.toLowerCase() ||
@@ -290,7 +295,16 @@ export function UserAdministration({ userId }: { userId: string }) {
       setNotice("Role changed. Their existing sessions were ended.");
       load();
     } catch (cause) {
-      setErrors(fieldErrors(cause));
+      if (isStepUpRequired(cause)) {
+        // The step-up is the confirmation the server asks for. The role
+        // dialog steps aside so two modals never compete for focus, and its
+        // selection and reason survive in state for the retry.
+        setRoleDialogOpen(false);
+        setStepUpOpen(true);
+      } else {
+        setErrors(fieldErrors(cause));
+        setRoleDialogOpen(true);
+      }
     } finally {
       setBusy("");
     }
@@ -540,9 +554,9 @@ export function UserAdministration({ userId }: { userId: string }) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {errors.role || errors.custom_role || errors.__all__ ? (
+            {errors.role || errors.custom_role || errors.user || errors.__all__ ? (
               <Alert variant="error">
-                {errors.role ?? errors.custom_role ?? errors.__all__}
+                {errors.role ?? errors.custom_role ?? errors.user ?? errors.__all__}
               </Alert>
             ) : null}
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -588,6 +602,18 @@ export function UserAdministration({ userId }: { userId: string }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StepUpDialog
+        open={stepUpOpen}
+        onConfirmed={() => {
+          setStepUpOpen(false);
+          void applyRoleTransition();
+        }}
+        onCancel={() => {
+          setStepUpOpen(false);
+          setRoleDialogOpen(true);
+        }}
+      />
 
       {mayAdminister && user.role !== "superadmin" ? (
         <CentreCard user={user} busy={busy} run={run} errors={errors} />

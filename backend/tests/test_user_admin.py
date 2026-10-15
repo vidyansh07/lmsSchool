@@ -7,6 +7,7 @@ from django.core import mail
 
 from apps.accounts.models import User, UserRole
 from apps.audit.models import AuditAction, AuditLog
+from tests.conftest import stepped_up
 
 USERS_URL = "/api/v1/users/"
 
@@ -130,7 +131,7 @@ def test_admin_can_edit_a_user(api_client_no_csrf, admin_user, student):
 @pytest.mark.django_db
 def test_role_change_is_audited_separately(api_client_no_csrf, admin_user, manager_user):
     api_client_no_csrf.force_login(admin_user)
-    response = api_client_no_csrf.post(
+    response = stepped_up(api_client_no_csrf).post(
         f"{USERS_URL}{manager_user.pk}/role-transition/",
         {"role": "counsellor", "custom_role": None, "reason": "Moved to admissions."},
         format="json",
@@ -141,6 +142,29 @@ def test_role_change_is_audited_separately(api_client_no_csrf, admin_user, manag
     assert entry.context["from"] == "manager"
     assert entry.context["to"] == "counsellor"
     assert entry.context["reason"] == "Moved to admissions."
+
+
+@pytest.mark.django_db
+def test_role_transition_requires_a_fresh_step_up(api_client_no_csrf, admin_user, manager_user):
+    from tests.conftest import TEST_PASSWORD
+
+    api_client_no_csrf.force_login(admin_user)
+    url = f"{USERS_URL}{manager_user.pk}/role-transition/"
+    payload = {"role": "counsellor", "custom_role": None, "reason": "Moved to admissions."}
+
+    refused = api_client_no_csrf.post(url, payload, format="json")
+    assert refused.status_code == 403
+    assert refused.json()["error"]["code"] == "step_up_required"
+    manager_user.refresh_from_db()
+    assert manager_user.role == UserRole.MANAGER
+
+    stepped = api_client_no_csrf.post(
+        "/api/v1/auth/step-up/", {"password": TEST_PASSWORD}, format="json"
+    )
+    assert stepped.status_code == 204, stepped.content
+    assert api_client_no_csrf.post(url, payload, format="json").status_code == 200
+    manager_user.refresh_from_db()
+    assert manager_user.role == UserRole.COUNSELLOR
 
 
 @pytest.mark.django_db
@@ -162,7 +186,7 @@ def test_student_role_conversion_is_refused_without_changing_the_profile(
 ):
     student = student_profile.user
     api_client_no_csrf.force_login(admin_user)
-    response = api_client_no_csrf.post(
+    response = stepped_up(api_client_no_csrf).post(
         f"{USERS_URL}{student.pk}/role-transition/",
         {"role": "manager", "custom_role": None, "reason": "New responsibilities."},
         format="json",
@@ -192,7 +216,7 @@ def test_role_transition_ends_existing_sessions(api_client_no_csrf, admin_user, 
     manager_client.force_login(manager_user)
 
     api_client_no_csrf.force_login(admin_user)
-    response = api_client_no_csrf.post(
+    response = stepped_up(api_client_no_csrf).post(
         f"{USERS_URL}{manager_user.pk}/role-transition/",
         {"role": "counsellor", "custom_role": None, "reason": "Moved to admissions."},
         format="json",
