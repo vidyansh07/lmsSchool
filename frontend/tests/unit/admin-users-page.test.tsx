@@ -4,7 +4,7 @@
  * still calls `listUsers` with the same query shape, row activation still
  * navigates to the account, and the density toggle persists.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,11 +15,23 @@ import type { AdminUser } from '@/types/api';
 const listUsers = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/people', async () => {
   const actual = await vi.importActual<typeof import('@/lib/people')>('@/lib/people');
-  return { ...actual, listUsers };
+  return { ...actual, listUsers, createUser };
 });
 
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock('@/components/auth-provider', () => ({ useAuth }));
+
+const createUser = vi.hoisted(() => vi.fn());
+vi.mock('@/components/organisation/branch-field', () => ({
+  useBranches: () => ({
+    branches: [
+      { id: 'b-jai', name: 'Jaipur', code: 'JAI', city: 'Jaipur', is_active: true },
+      { id: 'b-pun', name: 'Pune', code: 'PUN', city: 'Pune', is_active: true },
+    ],
+    failed: false,
+  }),
+  BranchField: () => null,
+}));
 
 const push = vi.hoisted(() => vi.fn());
 vi.mock('next/navigation', () => ({
@@ -127,5 +139,52 @@ describe('AdminUsersPage', () => {
     render(<AdminUsersPage />);
     await waitFor(() => expect(screen.getByText('asha@example.com')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /comfortable view/i })).toBeInTheDocument();
+  });
+});
+
+describe('AdminUsersPage — centres and adding staff', () => {
+  it('lets an administrator, who sees every centre, filter by one', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 'admin-1', role: 'admin', branch_name: null },
+      can: () => true,
+    });
+    listUsers.mockResolvedValue(page([userRow({ branch_name: 'Jaipur' })]));
+    const user = userEvent.setup();
+    render(<AdminUsersPage />);
+
+    expect(await screen.findByRole('cell', { name: 'Jaipur' })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Centre'), 'b-pun');
+    await waitFor(() =>
+      expect(listUsers).toHaveBeenLastCalledWith(
+        expect.objectContaining({ branch: 'b-pun' }),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it('adds a staff account and opens it', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 'admin-1', role: 'admin', branch_name: null },
+      can: () => true,
+    });
+    listUsers.mockResolvedValue(page([]));
+    createUser.mockResolvedValue(userRow({ id: 'new-1', role: 'counsellor' }));
+    const user = userEvent.setup();
+    render(<AdminUsersPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Add staff account' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add a staff account' });
+    expect(dialog).toHaveTextContent('Adding a trainer?');
+    await user.type(within(dialog).getByLabelText(/^Email/), 'chitra@example.com');
+    await user.type(within(dialog).getByLabelText(/^First name/), 'Chitra');
+    await user.selectOptions(within(dialog).getByLabelText(/^Role/), 'counsellor');
+    await user.click(screen.getByRole('button', { name: 'Add and send invitation' }));
+
+    await waitFor(() =>
+      expect(createUser).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'chitra@example.com', first_name: 'Chitra', role: 'counsellor' }),
+      ),
+    );
+    expect(push).toHaveBeenCalledWith('/admin/users/new-1');
   });
 });

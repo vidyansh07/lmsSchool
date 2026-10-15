@@ -2,7 +2,12 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronRight, UserPlus } from 'lucide-react';
+
+import { useAuth } from '@/components/auth-provider';
+import { useBranches } from '@/components/organisation/branch-field';
+import { Button } from '@/components/ui/button';
 
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ListToolbar } from '@/components/list-toolbar';
@@ -17,9 +22,18 @@ import { ROLE_LABEL, ROLE_OPTIONS, labelFor } from '@/lib/labels';
 import { listUsers } from '@/lib/people';
 import type { AdminUser } from '@/types/api';
 
+import { CreateStaffDialog } from './create-staff-dialog';
+
 function UsersTable() {
   const list = useList<AdminUser>(listUsers);
   const router = useRouter();
+  const { user: viewer, can } = useAuth();
+  const [showCreate, setShowCreate] = useState(false);
+  // Administrators and the platform operator see every centre, so they get a
+  // centre filter. Anyone bounded to one sees which one, not a control that
+  // could only ever hold a single value.
+  const seesEveryCentre = viewer?.role === 'superadmin' || viewer?.role === 'admin';
+  const { branches } = useBranches(seesEveryCentre);
 
   const columns: DataTableColumn<AdminUser>[] = [
     {
@@ -30,6 +44,16 @@ function UsersTable() {
       render: (row) => <span className="font-medium">{row.email}</span>,
     },
     { key: 'full_name', header: 'Name', render: (row) => row.full_name || '—' },
+    {
+      key: 'branch',
+      header: 'Centre',
+      render: (row) =>
+        row.branch_name ? (
+          <span className="whitespace-nowrap">{row.branch_name}</span>
+        ) : (
+          <span className="text-ink-muted">Every centre</span>
+        ),
+    },
     { key: 'role', header: 'Role', sortable: true, render: (row) => <Badge>{labelFor(ROLE_LABEL, row.role)}</Badge> },
     {
       key: 'is_active',
@@ -88,10 +112,27 @@ function UsersTable() {
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">User accounts</h1>
           <p className="text-sm text-ink-muted">
-            Every account on the platform, across all roles.
+            {seesEveryCentre || !viewer?.branch_name
+              ? 'Every account on the platform, across all roles.'
+              : `Every account at ${viewer.branch_name}, across all roles.`}
           </p>
         </div>
+        {can(Capability.userCreate) ? (
+          <Button type="button" onClick={() => setShowCreate(true)}>
+            <UserPlus className="size-4" aria-hidden="true" />
+            Add staff account
+          </Button>
+        ) : null}
       </div>
+
+      <CreateStaffDialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreated={(created) => {
+          setShowCreate(false);
+          router.push(`/admin/users/${created.id}`);
+        }}
+      />
 
       <ListToolbar
         search={String(list.query.search ?? '')}
@@ -129,6 +170,25 @@ function UsersTable() {
             <option value="false">Inactive</option>
           </Select>
         </div>
+        {seesEveryCentre && branches.length > 1 ? (
+          <div>
+            <label htmlFor="filter-branch" className="mb-1.5 block text-sm font-medium">
+              Centre
+            </label>
+            <Select
+              id="filter-branch"
+              value={String(list.query.branch ?? '')}
+              onChange={(event) => list.setQuery({ branch: event.target.value })}
+            >
+              <option value="">All centres</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name} ({branch.code})
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
       </ListToolbar>
 
       <DataTable
