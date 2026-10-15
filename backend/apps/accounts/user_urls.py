@@ -7,6 +7,7 @@ from apps.authorization.urls import user_scope_urlpatterns
 from .user_views import (
     UserAuditView,
     UserBranchView,
+    UserBulkView,
     UserCredentialActionView,
     UserDetailView,
     UserListCreateView,
@@ -21,6 +22,7 @@ app_name = "users"
 
 urlpatterns = [
     path("", UserListCreateView.as_view(), name="list"),
+    path("bulk/", UserBulkView.as_view(), name="bulk"),
     path("<uuid:user_id>/", UserDetailView.as_view(), name="detail"),
     path("<uuid:user_id>/set-active/", UserSetActiveView.as_view(), name="set-active"),
     path(

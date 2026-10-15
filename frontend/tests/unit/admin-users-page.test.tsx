@@ -39,6 +39,15 @@ vi.mock('@/components/organisation/branch-field', () => ({
   BranchField: () => null,
 }));
 
+const toast = vi.hoisted(() => vi.fn());
+vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ toast }) }));
+
+const bulkUsers = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/bulk', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/bulk')>('@/lib/bulk');
+  return { ...actual, bulkUsers };
+});
+
 const push = vi.hoisted(() => vi.fn());
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace: vi.fn() }),
@@ -193,5 +202,90 @@ describe('AdminUsersPage — centres and adding staff', () => {
       ),
     );
     expect(push).toHaveBeenCalledWith('/admin/users/new-1');
+  });
+});
+
+describe('AdminUsersPage — acting on many accounts', () => {
+  function signInAsAdmin() {
+    useAuth.mockReturnValue({
+      user: { id: 'admin-1', role: 'admin', branch_name: null },
+      can: () => true,
+    });
+  }
+
+  it('resends invitations to the ticked accounts and says which were skipped and why', async () => {
+    signInAsAdmin();
+    listUsers.mockResolvedValue(
+      page([
+        userRow({ id: 'u-1', email: 'one@example.com', full_name: 'One', is_email_verified: false }),
+        userRow({ id: 'u-2', email: 'two@example.com', full_name: 'Two' }),
+      ]),
+    );
+    bulkUsers.mockResolvedValue({
+      action: 'resend_invitation',
+      total: 2,
+      done: 1,
+      skipped: [{ id: 'u-2', label: 'Two', reason: 'They have already accepted their invitation.' }],
+    });
+    const user = userEvent.setup();
+    render(<AdminUsersPage />);
+
+    await screen.findByText('one@example.com');
+    await user.click(screen.getByRole('checkbox', { name: 'Select One' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Two' }));
+    const bar = screen.getByRole('region', { name: 'Bulk actions' });
+    expect(bar).toHaveTextContent('2 accounts selected');
+    await user.click(within(bar).getByRole('button', { name: 'Resend invitations' }));
+    await user.click(screen.getByRole('button', { name: 'Send invitations' }));
+
+    await waitFor(() =>
+      expect(bulkUsers).toHaveBeenCalledWith({ ids: ['u-1', 'u-2'], action: 'resend_invitation' }),
+    );
+    const result = await screen.findByRole('dialog', { name: 'Invitations' });
+    expect(result).toHaveTextContent('1 account sent a new invitation, 1 skipped');
+    expect(result).toHaveTextContent('They have already accepted their invitation.');
+  });
+
+  it('"select all matching" sends the filters, not a page of ids', async () => {
+    signInAsAdmin();
+    window.history.replaceState(null, '', '/admin/users?role=counsellor');
+    listUsers.mockResolvedValue({
+      ...page([userRow({ id: 'u-1', role: 'counsellor' })]),
+      count: 45,
+      total_pages: 3,
+    });
+    bulkUsers.mockResolvedValue({ action: 'move_centre', total: 45, done: 45, skipped: [] });
+    const user = userEvent.setup();
+    render(<AdminUsersPage />);
+
+    await screen.findByText('asha@example.com');
+    await user.click(screen.getByRole('checkbox', { name: 'Select Asha Rao' }));
+    await user.click(screen.getByRole('button', { name: /select all 45 accounts matching/i }));
+    await user.click(screen.getByRole('button', { name: 'Move to a centre' }));
+    const dialog = screen.getByRole('dialog', { name: /move 45 accounts to a centre/i });
+    await user.selectOptions(within(dialog).getByLabelText(/^Centre/), 'b-pun');
+    await user.type(within(dialog).getByLabelText(/^Reason/), 'Opening Pune');
+    await user.click(within(dialog).getByRole('button', { name: 'Move 45 accounts' }));
+
+    await waitFor(() =>
+      expect(bulkUsers).toHaveBeenCalledWith({
+        filters: { role: 'counsellor' },
+        action: 'move_centre',
+        branch_id: 'b-pun',
+        reason: 'Opening Pune',
+      }),
+    );
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('offers no account actions to somebody who may only read accounts', async () => {
+    listUsers.mockResolvedValue(page([userRow()]));
+    const user = userEvent.setup();
+    render(<AdminUsersPage />);
+    await screen.findByText('asha@example.com');
+    await user.click(screen.getByRole('checkbox', { name: 'Select Asha Rao' }));
+    const bar = screen.getByRole('region', { name: 'Bulk actions' });
+    expect(within(bar).queryByRole('button', { name: 'Resend invitations' })).not.toBeInTheDocument();
+    expect(within(bar).queryByRole('button', { name: 'Move to a centre' })).not.toBeInTheDocument();
   });
 });

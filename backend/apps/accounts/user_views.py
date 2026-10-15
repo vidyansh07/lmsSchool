@@ -9,7 +9,7 @@ from __future__ import annotations
 import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView, get_object_or_404
 from rest_framework.response import Response
@@ -17,11 +17,13 @@ from rest_framework.views import APIView
 
 from apps.accounts.access import visible_accounts
 from apps.audit.models import AuditAction
-from apps.common.permissions import Capability, HasCapability
+from apps.common import bulk
+from apps.common.permissions import Capability, HasCapability, IsActiveUser
+from apps.common.throttling import BurstThrottle
 from apps.organisation.access import resolve_submitted_branch
 
 from . import services, sessions
-from .models import User
+from .models import User, UserRole
 from .serializers import (
     AdminUserCreateSerializer,
     AdminUserDetailSerializer,
@@ -296,6 +298,115 @@ class UserCredentialActionView(APIView):
             {"detail": "If the account can receive it, a link has been sent."},
             status=status.HTTP_202_ACCEPTED,
         )
+
+
+class UserBulkRequestSerializer(bulk.BulkTargetSerializer):
+    """`POST /users/bulk/`: one action across many accounts."""
+
+    ACTIONS = ("resend_invitation", "move_centre")
+
+    action = serializers.ChoiceField(choices=ACTIONS)
+    branch_id = serializers.UUIDField(required=False)
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=255)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs["action"] == "move_centre":
+            if not attrs.get("branch_id"):
+                raise serializers.ValidationError({"branch_id": ["Choose the centre."]})
+            if not (attrs.get("reason") or "").strip():
+                raise serializers.ValidationError(
+                    {"reason": ["Say why these accounts are moving; it goes in the audit trail."]}
+                )
+        return attrs
+
+
+#: What each bulk action needs on top of reading the accounts list.
+_BULK_USER_CAPABILITY = {
+    "resend_invitation": Capability.USER_UPDATE_ANY,
+    "move_centre": Capability.ORGANISATION_ASSIGN_USERS,
+}
+
+
+class UserBulkView(APIView):
+    """Resend invitations to, or move to a centre, many accounts at once.
+
+    The rows are the ticked ids or everything the list's filters match, out of
+    the accounts this caller may see (`apps.common.bulk`). Each one goes
+    through the same service as the single-account screen — the authority
+    ladder, the centre rule and the audit entry all apply per account — and an
+    account a rule refuses is skipped with the reason, not failed silently.
+    """
+
+    permission_classes = (IsActiveUser,)
+    throttle_classes = (BurstThrottle,)
+
+    @extend_schema(
+        summary="Act on many accounts at once",
+        request=UserBulkRequestSerializer,
+        responses={200: bulk.BulkResultSerializer},
+        tags=USERS_TAG,
+    )
+    def post(self, request):
+        from apps.accounts.roles import has_capability
+        from apps.common.exceptions import AuthorityError
+        from apps.organisation import access as organisation_access
+
+        serializer = UserBulkRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        action = data["action"]
+        if not (
+            has_capability(request.user, Capability.USER_VIEW_ANY)
+            and has_capability(request.user, _BULK_USER_CAPABILITY[action])
+        ):
+            raise AuthorityError({"action": ["You cannot do this to accounts."]})
+
+        branch = None
+        if action == "move_centre":
+            branch = get_object_or_404(
+                organisation_access.visible_branches(request.user), pk=data["branch_id"]
+            )
+
+        rows, missing = bulk.resolve_targets(
+            _scoped_users(request.user),
+            data,
+            filterset="apps.accounts.user_views.UserFilterSet",
+            search_fields=UserListCreateView.search_fields,
+        )
+
+        def resend(user: User) -> str | None:
+            if user.pk == request.user.pk:
+                return "That is your own account."
+            if not user.is_active:
+                return "The account is inactive. Reactivate it first."
+            if user.is_email_verified:
+                return "They have already accepted their invitation."
+            services.send_credential_link(
+                user=user, actor=request.user, action="email_verification"
+            )
+            return None
+
+        def move(user: User) -> str | None:
+            if user.pk == request.user.pk:
+                return "You cannot move your own account."
+            if user.role == UserRole.STUDENT:
+                return "A student stays at the centre they were admitted to; transfer their class."
+            if user.branch_id == branch.pk:
+                return f"Already at {branch.name}."
+            services.move_user_to_branch(
+                user=user, branch=branch, actor=request.user, reason=data["reason"].strip()
+            )
+            return None
+
+        result = bulk.apply_each(
+            bulk.BulkResult(action=action),
+            rows,
+            missing,
+            resend if action == "resend_invitation" else move,
+            lambda user: user.get_full_name() or user.email,
+        )
+        return Response(bulk.BulkResultSerializer(result).data)
 
 
 class UserBranchView(APIView):

@@ -28,7 +28,7 @@ describe('BulkActionsBar', () => {
         actions={[]}
       />,
     );
-    expect(screen.getByText('Select all 4000 matching this filter')).toBeInTheDocument();
+    expect(screen.getByText('Select all 4,000 rows matching this filter')).toBeInTheDocument();
   });
 
   it('does not offer "select all matching" when the page already covers everything', () => {
@@ -57,7 +57,7 @@ describe('BulkActionsBar', () => {
       />,
     );
 
-    await user.click(screen.getByText('Select all 4000 matching this filter'));
+    await user.click(screen.getByText('Select all 4,000 rows matching this filter'));
     expect(onSelectAllMatching).toHaveBeenCalledOnce();
   });
 

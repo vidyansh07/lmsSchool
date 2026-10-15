@@ -9,6 +9,7 @@ import { useBranches } from '@/components/organisation/branch-field';
 import { Button } from '@/components/ui/button';
 
 import { DataTable, type DataTableColumn } from '@/components/data-table';
+import { ExportMenu } from '@/components/export-menu';
 import { SavedViews } from '@/components/saved-views';
 import { ActiveFilters } from '@/components/active-filters';
 import { ListToolbar } from '@/components/list-toolbar';
@@ -16,18 +17,24 @@ import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/input';
+import { useBulkSelection } from '@/hooks/use-bulk-selection';
 import { useCreateParam } from '@/hooks/use-create-param';
 import { useList } from '@/hooks/use-list';
 import { Capability } from '@/lib/capabilities';
 import { formatDate } from '@/lib/format';
 import { ROLE_LABEL, ROLE_OPTIONS, labelFor } from '@/lib/labels';
+import { selectionKey } from '@/lib/bulk';
 import { listUsers } from '@/lib/people';
+import { exportFiltersFrom } from '@/lib/reporting';
 import type { AdminUser } from '@/types/api';
 
 import { CreateStaffDialog } from './create-staff-dialog';
+import { USER_FILTER_KEYS, UsersBulkActions } from './users-bulk-actions';
 
 function UsersTable() {
-  const list = useList<AdminUser>(listUsers, {}, { urlKeys: ['role', 'is_active', 'branch'] });
+  const list = useList<AdminUser>(listUsers, {}, { urlKeys: [...USER_FILTER_KEYS] });
+  // Ticked rows survive paging but never a change of filter.
+  const selection = useBulkSelection<string>(selectionKey(list.query, USER_FILTER_KEYS));
   const router = useRouter();
   const { user: viewer, can } = useAuth();
   const [showCreate, setShowCreate] = useCreateParam(can(Capability.userCreate));
@@ -122,12 +129,19 @@ function UsersTable() {
               : `Every account at ${viewer.branch_name}, across all roles.`}
           </p>
         </div>
-        {can(Capability.userCreate) ? (
-          <Button type="button" onClick={() => setShowCreate(true)}>
-            <UserPlus className="size-4" aria-hidden="true" />
-            Add staff account
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportMenu
+            reportKey="accounts"
+            filters={exportFiltersFrom(list.query, ['search', ...USER_FILTER_KEYS])}
+            count={list.data?.count}
+          />
+          {can(Capability.userCreate) ? (
+            <Button type="button" onClick={() => setShowCreate(true)}>
+              <UserPlus className="size-4" aria-hidden="true" />
+              Add staff account
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       <CreateStaffDialog
@@ -141,7 +155,7 @@ function UsersTable() {
 
       <SavedViews
         screen="admin-users"
-        keys={['search', 'ordering', 'role', 'is_active', 'branch']}
+        keys={['search', 'ordering', ...USER_FILTER_KEYS]}
         query={list.query}
         onApply={list.setQuery}
       />
@@ -181,6 +195,20 @@ function UsersTable() {
             <option value="false">Inactive</option>
           </Select>
         </div>
+        <div>
+          <label htmlFor="filter-invitation" className="mb-1.5 block text-sm font-medium">
+            Invitation
+          </label>
+          <Select
+            id="filter-invitation"
+            value={String(list.query.is_email_verified ?? '')}
+            onChange={(event) => list.setQuery({ is_email_verified: event.target.value })}
+          >
+            <option value="">All</option>
+            <option value="false">Not accepted</option>
+            <option value="true">Accepted</option>
+          </Select>
+        </div>
         {seesEveryCentre && branches.length > 1 ? (
           <div>
             <label htmlFor="filter-branch" className="mb-1.5 block text-sm font-medium">
@@ -209,6 +237,11 @@ function UsersTable() {
           { key: 'role', label: 'Role', display: (value) => labelFor(ROLE_LABEL, value) },
           { key: 'is_active', label: 'Status', display: (value) => (value === 'true' ? 'Active' : 'Inactive') },
           {
+            key: 'is_email_verified',
+            label: 'Invitation',
+            display: (value) => (value === 'true' ? 'Accepted' : 'Not accepted'),
+          },
+          {
             key: 'branch',
             label: 'Centre',
             display: (value) => branches.find((branch) => branch.id === value)?.name ?? value,
@@ -216,10 +249,19 @@ function UsersTable() {
         ]}
       />
 
+      <UsersBulkActions
+        selection={selection}
+        query={list.query}
+        totalCount={list.data?.count}
+        onChanged={list.reload}
+      />
+
       <DataTable
         columns={columns}
         rows={list.data?.results ?? []}
         getRowId={(row) => row.id}
+        selection={selection}
+        getRowLabel={(row) => row.full_name || row.email}
         isLoading={list.isLoading}
         loadingLabel="Loading users…"
         error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}

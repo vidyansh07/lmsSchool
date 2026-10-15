@@ -12,6 +12,7 @@
  * "select all matching" is a distinct, deliberate second step — never the
  * silent behaviour of a page-level checkbox.
  */
+import type { ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
 import { Button, type ButtonProps } from '@/components/ui/button';
@@ -35,6 +36,7 @@ export function BulkActionsBar({
   actions,
   itemNoun = 'row',
   className,
+  children,
 }: {
   /** Rows individually selected (from the current page, typically). */
   selectedCount: number;
@@ -47,6 +49,8 @@ export function BulkActionsBar({
   actions: BulkAction[];
   itemNoun?: string;
   className?: string;
+  /** Controls that are not a plain button — an export menu, say. */
+  children?: ReactNode;
 }) {
   if (selectedCount === 0 && !selectAllMatching) return null;
 
@@ -77,7 +81,7 @@ export function BulkActionsBar({
           onClick={onSelectAllMatching}
           className="text-action underline-offset-2 hover:underline"
         >
-          Select all {totalMatchingCount} matching this filter
+          Select all {formatCount(totalMatchingCount ?? 0, itemNoun)} matching this filter
         </button>
       ) : null}
 
@@ -89,6 +93,7 @@ export function BulkActionsBar({
       ) : null}
 
       <div className="ml-auto flex flex-wrap items-center gap-2">
+        {children}
         {actions.map((action) => (
           <Button
             key={action.id}
