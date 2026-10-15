@@ -18,6 +18,17 @@ vi.mock('@/lib/student-360', () => ({ getStudent360 }));
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock('@/components/auth-provider', () => ({ useAuth }));
 
+const toast = vi.hoisted(() => vi.fn());
+vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ toast }) }));
+const sendCredentialLink = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/people', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/people')>('@/lib/people');
+  return { ...actual, sendCredentialLink };
+});
+vi.mock('@/components/admissions/plan-follow-up', () => ({
+  PlanFollowUp: () => <button type="button">Plan a follow-up</button>,
+}));
+
 const push = vi.hoisted(() => vi.fn());
 const searchParams = vi.hoisted(() => ({ value: '' }));
 vi.mock('next/navigation', () => ({
@@ -457,5 +468,48 @@ describe('Student360Content — messages and certificates', () => {
 
     expect(await screen.findByText('No messages yet')).toBeInTheDocument();
     expect(listDeliveries).toHaveBeenCalledWith(expect.objectContaining({ recipient: expect.any(String) }));
+  });
+});
+
+describe('Student360Content — actions for this student', () => {
+  it('offers the desk\'s actions by capability, each landing where the work is done', async () => {
+    const capabilities = [
+      'fee.manage_any',
+      'enrolment.create',
+      'enrolment.update_any',
+      'user.update_any',
+      'activity.create',
+    ];
+    useAuth.mockReturnValue({
+      user: { id: 'staff-1', role: 'counsellor', capabilities },
+      can: (capability: string) => capabilities.includes(capability),
+    });
+    getStudent360.mockResolvedValue(
+      student360({ profile: studentProfile({ user: user({ is_email_verified: false }) }) }),
+    );
+    sendCredentialLink.mockResolvedValue({ detail: 'ok' });
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByRole('button', { name: 'Plan a follow-up' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Record a payment' }));
+    expect(push).toHaveBeenCalledWith('/students/student-1?tab=fees');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move to another batch' }));
+    expect(push).toHaveBeenCalledWith('/admissions/transfer?student=student-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Resend invitation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
+    await waitFor(() => expect(sendCredentialLink).toHaveBeenCalledWith('user-1', 'email_verification'));
+  });
+
+  it('offers no actions to somebody who can only read', async () => {
+    getStudent360.mockResolvedValue(student360());
+    render(<Student360Content studentId="student-1" />);
+    await screen.findByText('GRS-S-00001');
+    expect(screen.queryByRole('button', { name: 'Actions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Plan a follow-up' })).not.toBeInTheDocument();
   });
 });

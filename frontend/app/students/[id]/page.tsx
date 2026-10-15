@@ -57,6 +57,7 @@ import { useAuth } from '@/components/auth-provider';
 import { RequireAuth } from '@/components/require-auth';
 import { StudentPerformance } from '@/app/manage/students/[enrollmentId]/page';
 import { StudentActivitiesTab } from '@/components/students/student-activities-tab';
+import { StudentQuickActions } from '@/components/students/student-quick-actions';
 import { FeeLedger, useStudentFees } from '@/components/fees/fee-ledger';
 import { StudentCertificatesTab, StudentMessagesTab } from '@/components/students/student-records-tabs';
 import { StudentTimeline } from '@/components/students/timeline';
@@ -602,6 +603,14 @@ export function Student360Content({ studentId }: { studentId: string }) {
               <Link href={`/admin/users/${data.profile.user.id}`}>Account</Link>
             </Button>
           ) : null}
+          <StudentQuickActions
+            studentId={studentId}
+            userId={data.profile.user.id}
+            email={data.profile.user.email}
+            isEmailVerified={data.profile.user.is_email_verified}
+            onOpenTab={setTab}
+            onChanged={load}
+          />
         </div>
       </div>
 
