@@ -28,7 +28,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select } from '@/components/ui/input';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
-import { fallback, formatDate, NO_DATA, UNKNOWN } from '@/lib/format';
+import { fallback, formatDate, localIsoDate, NO_DATA, UNKNOWN } from '@/lib/format';
 import { REVIEW_STATUS_LABEL, REVIEW_STATUS_VARIANT, REVIEW_TYPE_LABEL } from '@/lib/labels';
 import { listReviews } from '@/lib/performance';
 import type { PerformanceReview, PerformanceSubjectType } from '@/types/api';
@@ -78,7 +78,7 @@ export function ReviewsDueWorkspace() {
 
   useEffect(() => load(), [load]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localIsoDate();
   const rows = (reviews ?? [])
     .filter((review) => !filters.subjectType || review.subject_type === filters.subjectType)
     .filter((review) => !filters.dueOnly || isDue(review, today))

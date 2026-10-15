@@ -43,6 +43,7 @@ import { REVIEW_STATUS_OPTIONS, REVIEW_TYPE_OPTIONS } from '@/lib/labels';
 import { createReview, updateReview } from '@/lib/performance';
 import { cn } from '@/lib/utils';
 import type { PerformanceReview, PerformanceSubjectType, ReviewStatus, ReviewType } from '@/types/api';
+import { localIsoDate } from '@/lib/format';
 
 const RATING_VALUES = [1, 2, 3, 4, 5] as const;
 
@@ -62,7 +63,7 @@ interface FormState {
 }
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localIsoDate();
 }
 
 function formFromReview(review: PerformanceReview | null): FormState {

@@ -97,7 +97,7 @@ import {
   type DSRWritePayload,
   type SessionWithTopic,
 } from '@/lib/dsr';
-import { fallback, formatDate, formatNumber, formatPercent } from '@/lib/format';
+import { fallback, formatDate, formatNumber, formatPercent, localIsoDate } from '@/lib/format';
 import type {
   AttendanceMode,
   AttendanceStatus,
@@ -114,7 +114,7 @@ import type {
 const TODAY_PATH = '/teaching/today';
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localIsoDate();
 }
 
 function ClassCompleteSummary({

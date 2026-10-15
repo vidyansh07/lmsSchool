@@ -17,6 +17,7 @@ import {
 } from '@/lib/batch-labels';
 import { labelFor } from '@/lib/labels';
 import type { CalendarEvent } from '@/types/api';
+import { localIsoDate, parseLocalIsoDate } from '@/lib/format';
 
 /**
  * The one calendar.
@@ -63,11 +64,11 @@ export function CalendarView({ days = 28 }: { days?: number }) {
   }, [range.start, range.end, key]);
 
   function shift(offset: number) {
-    const start = new Date(range.start);
+    const start = parseLocalIsoDate(range.start);
     start.setDate(start.getDate() + offset);
     const end = new Date(start);
     end.setDate(end.getDate() + days);
-    setRange({ start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) });
+    setRange({ start: localIsoDate(start), end: localIsoDate(end) });
   }
 
   if (state.isLoading) return <LoadingState label="Loading your calendar…" rows={5} />;

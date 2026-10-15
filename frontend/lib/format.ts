@@ -234,3 +234,24 @@ export function formatCount(
   if (number === null || number < 0) return label;
   return `${number.toLocaleString()} ${number === 1 ? singular : plural}`;
 }
+
+/**
+ * A calendar day as `YYYY-MM-DD` in the viewer's own time zone.
+ *
+ * `date.toISOString().slice(0, 10)` is the UTC day, which in India is
+ * *yesterday* until 05:30 — and for a date built at local midnight (the first
+ * of the month, say) it is always the day before. Every "today" and every
+ * date-only value sent to the server goes through this instead.
+ */
+export function localIsoDate(date: Date = new Date()): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** `YYYY-MM-DD` read as local midnight, not UTC midnight (see above). */
+export function parseLocalIsoDate(value: string): Date {
+  const [yyyy, mm, dd] = value.split('-').map(Number);
+  return new Date(yyyy ?? 1970, (mm ?? 1) - 1, dd ?? 1);
+}

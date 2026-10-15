@@ -15,7 +15,7 @@
 
 import type { DeliveryTrendPoint, FeePlanBrief, TrendPoint } from '@/types/api';
 
-import { NOT_AVAILABLE } from '@/lib/format';
+import { localIsoDate, NOT_AVAILABLE } from '@/lib/format';
 
 /**
  * A week's Monday as an axis tick: `"2026-03-02"` -> `"2 Mar"`. Short, because
@@ -133,7 +133,7 @@ export const AGEING_BUCKETS = [
  */
 export function ageingBuckets(
   plans: readonly Pick<FeePlanBrief, 'next_due_on'>[],
-  today: string = new Date().toISOString().slice(0, 10),
+  today: string = localIsoDate(),
 ): { label: string; value: number }[] {
   const counts = new Map<string, number>(AGEING_BUCKETS.map((bucket) => [bucket.key, 0]));
   const now = Date.parse(`${today}T00:00:00Z`);

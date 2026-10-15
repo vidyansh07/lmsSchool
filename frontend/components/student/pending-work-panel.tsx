@@ -14,6 +14,7 @@
  */
 import { PendingActions, type PendingAction } from '@/components/pending-actions';
 import type { StudentAssignment, StudentProject } from '@/types/api';
+import { localIsoDate } from '@/lib/format';
 
 export interface WorkTally {
   count: number;
@@ -55,7 +56,7 @@ function isProjectOutstanding(project: StudentProject): boolean {
 /** Open project work still needing a hand-in, and how many are past their end date. */
 export function tallyProjects(projects: StudentProject[]): WorkTally {
   const outstanding = projects.filter(isProjectOutstanding);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localIsoDate();
   const overdueCount = outstanding.filter(
     (project) => project.end_date !== null && project.end_date < today,
   ).length;

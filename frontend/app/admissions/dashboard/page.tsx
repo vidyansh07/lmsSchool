@@ -115,7 +115,7 @@ import { Capability } from '@/lib/capabilities';
 import { ageingBuckets, formatWeekLabel, mergeByWeek, money, withCumulative } from '@/lib/analytics';
 import { getCounsellorDashboard, getCounsellorPipeline } from '@/lib/dashboards';
 import { feeCollectionsTrend, getFeesOverview } from '@/lib/fees';
-import { formatCurrency, formatNumber } from '@/lib/format';
+import { formatCurrency, formatNumber, localIsoDate } from '@/lib/format';
 import { greeting } from '@/lib/greeting';
 import { listStudents } from '@/lib/people';
 import type {
@@ -478,7 +478,7 @@ export function AdmissionsDashboardContent() {
   // `BatchWatchlist` is given the same date it counts by, so the tile, the
   // list under it and the "was due to start" wording in that list can never be
   // computed from two different days.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localIsoDate();
   const startingSoonCount = batches.data.filter((batch) => batch.status === 'upcoming').length;
 
   const quickActions: QuickAction[] = [

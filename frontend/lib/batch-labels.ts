@@ -1,6 +1,7 @@
 /** Display labels for batch, enrolment and calendar enumerations. */
 
 import type { BatchStatus, CalendarEventKind, EnrollmentStatus, Weekday } from '@/types/api';
+import { localIsoDate } from '@/lib/format';
 
 export const BATCH_STATUS_LABEL: Record<BatchStatus, string> = {
   upcoming: 'Upcoming',
@@ -147,11 +148,11 @@ export function formatDate(value: string | null | undefined): string {
 
 /** Today's date as an ISO day string, for calendar queries. */
 export function isoToday(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localIsoDate();
 }
 
 export function isoDaysFromNow(days: number): string {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+  return localIsoDate(date);
 }
