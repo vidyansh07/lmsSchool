@@ -14,6 +14,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.authorization.models import Role
+from apps.common import bulk
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
 from .mfa import MfaMethod
@@ -492,3 +493,24 @@ class UserAuditEntrySerializer(serializers.Serializer):
         from apps.audit.models import AuditAction
 
         return AuditAction(obj.action).label if obj.action in AuditAction.values else obj.action
+
+
+class UserBulkRequestSerializer(bulk.BulkTargetSerializer):
+    """`POST /users/bulk/`: one action across many accounts."""
+
+    ACTIONS = ("resend_invitation", "move_centre")
+
+    action = serializers.ChoiceField(choices=ACTIONS)
+    branch_id = serializers.UUIDField(required=False)
+    reason = serializers.CharField(required=False, allow_blank=True, max_length=255)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs["action"] == "move_centre":
+            if not attrs.get("branch_id"):
+                raise serializers.ValidationError({"branch_id": ["Choose the centre."]})
+            if not (attrs.get("reason") or "").strip():
+                raise serializers.ValidationError(
+                    {"reason": ["Say why these accounts are moving; it goes in the audit trail."]}
+                )
+        return attrs

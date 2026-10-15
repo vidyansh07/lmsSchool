@@ -16,6 +16,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserSerializer
+from apps.common import bulk
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 from apps.work.models import ActivityPriority
 
@@ -324,3 +325,7 @@ class FeeStatusUpdateSerializer(StrictSerializer):
 
     fee_status = serializers.ChoiceField(choices=FeeStatus.choices)
     note = SafeCharField(max_length=255, required=False, allow_blank=True, default="")
+
+
+class StudentBulkRequestSerializer(bulk.BulkTargetSerializer):
+    action = serializers.ChoiceField(choices=("resend_invitation",))

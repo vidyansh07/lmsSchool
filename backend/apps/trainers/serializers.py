@@ -5,6 +5,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserSerializer
+from apps.common import bulk
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
 from .models import MAX_SKILL_LENGTH, MAX_SKILLS, TrainerProfile
@@ -177,3 +178,7 @@ class TeachingProfileSerializer(StrictSerializer):
     """Which account should be able to teach. Resolved in the view."""
 
     user_id = serializers.UUIDField()
+
+
+class TrainerBulkRequestSerializer(bulk.BulkTargetSerializer):
+    action = serializers.ChoiceField(choices=("resend_invitation",))

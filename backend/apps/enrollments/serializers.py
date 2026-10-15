@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from apps.common import bulk
 from apps.common.serializers import SafeCharField, StrictSerializer
 
 from .models import Enrollment, EnrollmentStatus, LessonProgress
@@ -183,3 +184,7 @@ class CourseProgressSerializer(serializers.Serializer):
 
 class LessonCompletionSerializer(StrictSerializer):
     completed = serializers.BooleanField()
+
+
+class EnrollmentBulkTransferSerializer(bulk.BulkTargetSerializer, EnrollmentTransferSerializer):
+    """The ticked enrolments, or every one the list's filters match."""

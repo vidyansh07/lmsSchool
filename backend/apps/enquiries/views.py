@@ -13,7 +13,6 @@ import django_filters
 from django.db.models import Count, Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import serializers
 from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.response import Response
@@ -28,7 +27,12 @@ from apps.common.throttling import BurstThrottle
 
 from . import access, services
 from .models import SOURCE_CHOICES, Enquiry, EnquiryStage, LeadChannel
-from .serializers import EnquiryDetailSerializer, EnquirySerializer, EnquiryUpdateSerializer
+from .serializers import (
+    EnquiryBulkRequestSerializer,
+    EnquiryDetailSerializer,
+    EnquirySerializer,
+    EnquiryUpdateSerializer,
+)
 
 TAG = ["Enquiries"]
 
@@ -199,14 +203,6 @@ class EnquiryDetailView(APIView):
                 self._get(request, enquiry_id), context={"request": request}
             ).data
         )
-
-
-class EnquiryBulkRequestSerializer(bulk.BulkTargetSerializer):
-    """`POST /enquiries/bulk/`: hand many enquiries to one person."""
-
-    action = serializers.ChoiceField(choices=("assign_owner",))
-    #: Empty takes the owner off ("unassigned").
-    owner_id = serializers.UUIDField(allow_null=True)
 
 
 class EnquiryBulkView(APIView):

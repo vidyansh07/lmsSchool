@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from apps.common import bulk
 from apps.common.serializers import SafeCharField, StrictSerializer
 
 from .models import Enquiry, EnquiryStage, LeadChannel
@@ -126,3 +127,11 @@ class EnquiryUpdateSerializer(StrictSerializer):
     )
     next_follow_up_at = serializers.DateTimeField(required=False, allow_null=True)
     owner = serializers.UUIDField(required=False, allow_null=True)
+
+
+class EnquiryBulkRequestSerializer(bulk.BulkTargetSerializer):
+    """`POST /enquiries/bulk/`: hand many enquiries to one person."""
+
+    action = serializers.ChoiceField(choices=("assign_owner",))
+    #: Empty takes the owner off ("unassigned").
+    owner_id = serializers.UUIDField(allow_null=True)

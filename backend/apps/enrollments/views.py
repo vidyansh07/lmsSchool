@@ -31,6 +31,7 @@ from .models import Enrollment
 from .serializers import (
     AdminEnrollmentSerializer,
     CourseProgressSerializer,
+    EnrollmentBulkTransferSerializer,
     EnrollmentSerializer,
     EnrollmentStatusSerializer,
     EnrollmentTransferSerializer,
@@ -233,10 +234,6 @@ class EnrollmentTransferView(APIView):
             is_upgrade=data["is_upgrade"],
         )
         return Response(AdminEnrollmentSerializer(moved).data, status=http_status.HTTP_201_CREATED)
-
-
-class EnrollmentBulkTransferSerializer(bulk.BulkTargetSerializer, EnrollmentTransferSerializer):
-    """The ticked enrolments, or every one the list's filters match."""
 
 
 class EnrollmentBulkTransferView(APIView):

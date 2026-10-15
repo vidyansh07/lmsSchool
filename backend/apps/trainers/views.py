@@ -10,7 +10,7 @@ from __future__ import annotations
 import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import serializers, status
+from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView, get_object_or_404
@@ -29,6 +29,7 @@ from .models import TrainerProfile
 from .serializers import (
     AdminTrainerUpdateSerializer,
     TeachingProfileSerializer,
+    TrainerBulkRequestSerializer,
     TrainerCreateSerializer,
     TrainerListSerializer,
     TrainerProfileSerializer,
@@ -237,10 +238,6 @@ class TrainerMeView(APIView):
             **serializer.validated_data,
         )
         return Response(TrainerProfileSerializer(updated).data)
-
-
-class TrainerBulkRequestSerializer(bulk.BulkTargetSerializer):
-    action = serializers.ChoiceField(choices=("resend_invitation",))
 
 
 class TrainerBulkView(APIView):

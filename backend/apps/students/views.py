@@ -14,7 +14,7 @@ from __future__ import annotations
 import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
-from rest_framework import serializers, status
+from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView, get_object_or_404
@@ -39,6 +39,7 @@ from .serializers import (
     FeeAmountUpdateSerializer,
     FeeStatusUpdateSerializer,
     FollowUpCreateSerializer,
+    StudentBulkRequestSerializer,
     StudentCreateSerializer,
     StudentDuplicateSerializer,
     StudentDuplicatesResponseSerializer,
@@ -487,10 +488,6 @@ class Student360View(APIView):
             lambda: student_360.build(request.user, student),
         )
         return Response(data)
-
-
-class StudentBulkRequestSerializer(bulk.BulkTargetSerializer):
-    action = serializers.ChoiceField(choices=("resend_invitation",))
 
 
 class StudentBulkView(APIView):

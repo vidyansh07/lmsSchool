@@ -9,7 +9,7 @@ from __future__ import annotations
 import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import serializers, status
+from rest_framework import status
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView, get_object_or_404
 from rest_framework.response import Response
@@ -33,6 +33,7 @@ from .serializers import (
     SetActiveSerializer,
     UserAuditEntrySerializer,
     UserBranchSerializer,
+    UserBulkRequestSerializer,
     UserRoleTransitionSerializer,
 )
 from .stepup import StepUpRequired, is_fresh
@@ -298,27 +299,6 @@ class UserCredentialActionView(APIView):
             {"detail": "If the account can receive it, a link has been sent."},
             status=status.HTTP_202_ACCEPTED,
         )
-
-
-class UserBulkRequestSerializer(bulk.BulkTargetSerializer):
-    """`POST /users/bulk/`: one action across many accounts."""
-
-    ACTIONS = ("resend_invitation", "move_centre")
-
-    action = serializers.ChoiceField(choices=ACTIONS)
-    branch_id = serializers.UUIDField(required=False)
-    reason = serializers.CharField(required=False, allow_blank=True, max_length=255)
-
-    def validate(self, attrs):
-        attrs = super().validate(attrs)
-        if attrs["action"] == "move_centre":
-            if not attrs.get("branch_id"):
-                raise serializers.ValidationError({"branch_id": ["Choose the centre."]})
-            if not (attrs.get("reason") or "").strip():
-                raise serializers.ValidationError(
-                    {"reason": ["Say why these accounts are moving; it goes in the audit trail."]}
-                )
-        return attrs
 
 
 #: What each bulk action needs on top of reading the accounts list.
