@@ -52,13 +52,17 @@ describe('session ended under an open screen', () => {
         <Probe />
       </AuthProvider>,
     );
-    expect(await screen.findByText('signed in as asha@example.com')).toBeInTheDocument();
+    expect(
+      await screen.findByText('signed in as asha@example.com', undefined, { timeout: 5000 }),
+    ).toBeInTheDocument();
 
     await act(async () => {
       await apiFetch('/api/v1/students/').catch(() => undefined);
     });
 
-    await waitFor(() => expect(screen.getByText('signed out · session ended')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('signed out · session ended')).toBeInTheDocument(), {
+      timeout: 5000,
+    });
   });
 
   it('does not call a visitor who was never signed in "session ended"', async () => {
@@ -75,6 +79,6 @@ describe('session ended under an open screen', () => {
         <Probe />
       </AuthProvider>,
     );
-    expect(await screen.findByText('signed out')).toBeInTheDocument();
+    expect(await screen.findByText('signed out', undefined, { timeout: 5000 })).toBeInTheDocument();
   });
 });

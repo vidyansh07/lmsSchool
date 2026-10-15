@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.access import visible_accounts
+from apps.audit.models import AuditAction
 from apps.common.permissions import Capability, HasCapability
 from apps.organisation.access import resolve_submitted_branch
 
@@ -281,7 +282,9 @@ class UserCredentialActionView(APIView):
         tags=USERS_TAG,
     )
     def post(self, request, user_id):
-        user = get_object_or_404(User.objects.all(), pk=user_id)
+        # Scoped like its siblings: a 403 here for an account in another centre
+        # would confirm that the id is real.
+        user = get_object_or_404(_scoped_users(request.user), pk=user_id)
         serializer = CredentialActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         action = serializer.validated_data["action"]
@@ -393,6 +396,11 @@ class UserSessionListView(APIView):
         # Resolved out of the scoped queryset (rule §2): a cross-centre id
         # 404s here rather than confirming a real account exists elsewhere.
         target = get_object_or_404(_scoped_users(request.user), pk=user_id)
+        # Devices and addresses are as sensitive as the sign-out itself:
+        # nobody reads them for an account above their own.
+        services.ensure_may_administer(
+            actor=request.user, target=target, action=AuditAction.SESSION_REVOKED_BY_ADMIN
+        )
         rows = sessions.list_active_sessions(user=target)
         return Response(SessionSerializer(rows, many=True).data)
 
@@ -425,6 +433,9 @@ class UserSessionRevokeView(APIView):
         # step-up check answering a fixed 403 for an id that was never
         # reachable in the first place.
         target = get_object_or_404(_scoped_users(request.user), pk=user_id)
+        services.ensure_may_administer(
+            actor=request.user, target=target, action=AuditAction.SESSION_REVOKED_BY_ADMIN
+        )
         row = get_object_or_404(sessions.list_active_sessions(user=target), pk=session_id)
         if not is_fresh(request):
             raise StepUpRequired()

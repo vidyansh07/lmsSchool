@@ -693,7 +693,9 @@ export function UserAdministration({ userId }: { userId: string }) {
         <ScopeGrantsCard userId={user.id} />
       ) : null}
 
-      {can(Capability.sessionViewAny) ? (
+      {/* Devices and addresses follow the same ladder as everything else on
+          this screen: the server refuses them for an account above yours. */}
+      {can(Capability.sessionViewAny) && mayAdminister ? (
         <UserSessionsCard userId={user.id} />
       ) : null}
 

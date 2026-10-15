@@ -219,6 +219,18 @@ def _guard_administration(*, actor: User, target: User, action: str) -> None:
         raise AuthorityError({"user": ["You do not have authority over this account."]})
 
 
+def ensure_may_administer(*, actor: User, target: User, action: str) -> None:
+    """The ladder check, for acts on an account that live outside this module.
+
+    Sessions, scope grants and moderation each reach somebody else's account
+    from their own endpoint; without this they checked the capability and the
+    centre but not the ladder, so an administrator could sign a superadmin out
+    or read their devices. Self-service stays exempt, as in
+    :func:`_guard_administration`.
+    """
+    _guard_administration(actor=actor, target=target, action=action)
+
+
 @transaction.atomic
 def update_user(*, user: User, actor: User, role_change_reason: str = "", **fields: Any) -> User:
     """Update administrator-editable user fields.

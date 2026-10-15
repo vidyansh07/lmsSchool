@@ -815,7 +815,12 @@ class AdminProfileImageView(APIView):
         summary="Remove a user's profile image", responses={200: DetailSerializer}, tags=["users"]
     )
     def delete(self, request, user_id):
-        user = get_object_or_404(User, pk=user_id)
+        from apps.accounts.access import visible_accounts
+
+        user = get_object_or_404(visible_accounts(request.user), pk=user_id)
+        services.ensure_may_administer(
+            actor=request.user, target=user, action=AuditAction.PROFILE_IMAGE_REMOVED
+        )
         services.remove_profile_image(user=user, actor=request.user)
         return Response({"detail": "Profile image removed."})
 
