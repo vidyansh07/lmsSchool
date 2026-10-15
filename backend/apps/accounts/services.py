@@ -590,6 +590,16 @@ def move_user_to_branch(*, user: User, branch, actor: User, reason: str = "") ->
     user.branch = branch
     user.save(update_fields=["branch", "updated_at"])
 
+    # A trainer's profile names the centre they staff classes at; left behind,
+    # the trainer hub would list them in the old centre while their account
+    # sees the new one. Classes they already teach stay where they are.
+    from apps.trainers.models import TrainerProfile
+
+    if branch is not None:
+        TrainerProfile.objects.filter(user=user).exclude(branch=branch).update(
+            branch=branch, updated_at=timezone.now()
+        )
+
     record(
         action=AuditAction.USER_BRANCH_CHANGED,
         actor=actor,

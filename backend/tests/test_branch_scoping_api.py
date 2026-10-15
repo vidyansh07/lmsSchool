@@ -1159,6 +1159,27 @@ def test_an_administrator_moves_an_account_to_any_centre(
 
 
 @pytest.mark.django_db
+def test_moving_a_trainers_account_moves_their_trainer_profile(
+    api_client_no_csrf, admin_user, trainer_profile, other_branch, batch
+):
+    """The profile is what the trainer hub and the class-staffing rule read;
+    left behind, the hub would list them where their account no longer sees."""
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.post(
+        _user_branch_url(trainer_profile.user),
+        {"branch_id": str(other_branch.id), "reason": "Moved to Pune."},
+        format="json",
+    )
+
+    assert response.status_code == 200, response.data
+    trainer_profile.refresh_from_db()
+    assert trainer_profile.branch_id == other_branch.id
+    # The class they already teach stays theirs, at its own centre.
+    batch.refresh_from_db()
+    assert batch.trainer_id == trainer_profile.pk
+
+
+@pytest.mark.django_db
 def test_staffing_a_class_with_a_trainer_from_another_centre_is_a_404(
     api_client_no_csrf, manager_user, batch, other_branch_trainer, trainer_profile
 ):
