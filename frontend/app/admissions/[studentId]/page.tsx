@@ -410,6 +410,11 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               View 360 profile
             </Link>
           </Button>
+          {can(Capability.userViewAny) ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/admin/users/${student.user.id}`}>Account</Link>
+            </Button>
+          ) : null}
         </div>
       </div>
 

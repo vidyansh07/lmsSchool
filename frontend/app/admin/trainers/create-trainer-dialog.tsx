@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { TagInput } from '@/components/ui/tag-input';
 import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
 import { fieldErrors } from '@/lib/api';
 import { createTrainer } from '@/lib/people';
@@ -34,13 +35,13 @@ export function CreateTrainerDialog({
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [title, setTitle] = useState('');
-  const [skills, setSkills] = useState('');
+  const [skills, setSkills] = useState<string[]>([]);
   const [years, setYears] = useState('');
   const [branchId, setBranchId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const isDirty = Boolean(
-    email || firstName || lastName || phone || title || skills || years || branchId,
+    email || firstName || lastName || phone || title || skills.length || years || branchId,
   );
   const { isPrompting, guard, confirmDiscard, cancelDiscard } = useUnsavedChanges(
     open && isDirty,
@@ -52,7 +53,7 @@ export function CreateTrainerDialog({
     setLastName('');
     setPhone('');
     setTitle('');
-    setSkills('');
+    setSkills([]);
     setYears('');
     setBranchId('');
     setErrors({});
@@ -80,10 +81,7 @@ export function CreateTrainerDialog({
         phone: phone.trim(),
         profile: {
           professional_title: title.trim(),
-          skills: skills
-            .split(',')
-            .map((entry) => entry.trim())
-            .filter(Boolean),
+          skills,
           years_of_experience: years === '' ? null : Number(years),
         },
         ...(branchId ? { branch: branchId } : {}),
@@ -165,12 +163,13 @@ export function CreateTrainerDialog({
                 label="Skills"
                 htmlFor="t-skills"
                 error={errors.skills}
-                hint="Comma separated, e.g. Linux, Python"
+                hint="Type a skill and press Enter, e.g. Linux"
               >
-                <Input
+                <TagInput
                   id="t-skills"
                   value={skills}
-                  onChange={(event) => setSkills(event.target.value)}
+                  onChange={setSkills}
+                  aria-describedby="t-skills-hint"
                 />
               </Field>
               <Field

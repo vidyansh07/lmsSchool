@@ -24,6 +24,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { Stat, StatGrid } from '@/components/manage/stat';
 import { ReviewsPanel } from '@/components/manage/reviews-panel';
+import { TrainerProfileCard } from '@/components/manage/trainer-profile-card';
 import { TrainerWorkTab } from '@/components/manage/trainer-work-tab';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
@@ -140,6 +141,7 @@ export function TrainerDetail({ trainerId }: { trainerId: string }) {
 
         <TabsContent value="overview">
           <div className="space-y-6">
+            <TrainerProfileCard trainerId={trainer.id} />
             <Card>
               <CardHeader>
                 <CardTitle as="h2">Workload</CardTitle>
