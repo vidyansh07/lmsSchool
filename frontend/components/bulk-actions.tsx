@@ -19,6 +19,10 @@ import { Button, type ButtonProps } from '@/components/ui/button';
 import { formatCount } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
+/** The most rows one bulk change may touch (`apps/common/bulk.py`). Exports
+ *  are not bound by it. */
+export const MAX_BULK_ROWS = 500;
+
 export interface BulkAction {
   id: string;
   label: string;
@@ -57,6 +61,10 @@ export function BulkActionsBar({
 }) {
   if (selectedCount === 0 && !selectAllMatching) return null;
 
+  // Refused by the server past the cap; say so before anyone confirms.
+  const tooMany =
+    Boolean(selectAllMatching) && typeof totalMatchingCount === 'number' && totalMatchingCount > MAX_BULK_ROWS;
+
   const canOfferSelectAll =
     !selectAllMatching &&
     onSelectAllMatching &&
@@ -91,7 +99,9 @@ export function BulkActionsBar({
       {selectAllMatching ? (
         <span className="inline-flex items-center gap-1 text-xs text-warning">
           <AlertTriangle className="size-3.5" aria-hidden="true" />
-          Actions below apply to every matching row, not just this page
+          {tooMany
+            ? `Changes apply to at most ${MAX_BULK_ROWS} rows at once — narrow the filter to change these. Export still works.`
+            : 'Actions below apply to every matching row, not just this page'}
         </span>
       ) : null}
 
@@ -102,7 +112,7 @@ export function BulkActionsBar({
             key={action.id}
             size="sm"
             variant={action.variant ?? 'outline'}
-            disabled={action.disabled}
+            disabled={action.disabled || tooMany}
             onClick={action.onClick}
           >
             {action.label}
