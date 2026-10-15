@@ -459,6 +459,11 @@ class ExportJobRequestSerializer(StrictSerializer):
         choices=("true", "false"), required=False, allow_blank=True
     )
     attention = serializers.CharField(required=False, allow_blank=True, max_length=40)
+    status = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    fee_status = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    is_active = serializers.ChoiceField(choices=("true", "false"), required=False, allow_blank=True)
+    institution = serializers.CharField(required=False, allow_blank=True, max_length=150)
+    branch = serializers.UUIDField(required=False, allow_null=True)
 
 
 class ExportJobSerializer(StrictSerializer):

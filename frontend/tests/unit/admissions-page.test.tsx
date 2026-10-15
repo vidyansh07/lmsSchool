@@ -28,7 +28,13 @@ vi.mock('@/lib/courses', async () => {
 
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock('@/components/auth-provider', () => ({ useAuth }));
-vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
+const exportFilters = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
+vi.mock('@/components/export-menu', () => ({
+  ExportMenu: ({ filters }: { filters?: Record<string, unknown> }) => {
+    exportFilters.value = filters ?? {};
+    return null;
+  },
+}));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(window.location.search),
@@ -184,5 +190,29 @@ describe('AdmissionsPage', () => {
     render(<AdmissionsPage />);
     await waitFor(() => expect(screen.getByText('Asha Rao')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /comfortable view/i })).toBeInTheDocument();
+  });
+});
+
+describe('AdmissionsPage — export', () => {
+  it('exports the rows on screen, naming the course by id rather than by its slug', async () => {
+    useAuth.mockReturnValue({ user: { id: 'u', role: 'counsellor' }, can: () => true });
+    listEnrollments.mockResolvedValue(page([enrollmentRow()]));
+    listCourses.mockResolvedValue({
+      count: 1,
+      page: 1,
+      page_size: 100,
+      total_pages: 1,
+      next: null,
+      previous: null,
+      results: [{ id: 'course-uuid-1', slug: 'linux-essentials', title: 'Linux Essentials', status: 'published' }],
+    });
+    window.history.replaceState(null, '', '/admissions?course=linux-essentials&status=active');
+    render(<AdmissionsPage />);
+
+    await waitFor(() =>
+      expect(exportFilters.value).toEqual(
+        expect.objectContaining({ course: 'course-uuid-1', status: 'active' }),
+      ),
+    );
   });
 });

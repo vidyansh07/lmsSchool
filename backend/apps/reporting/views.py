@@ -120,11 +120,17 @@ EXTRA_FILTER_KEYS = (
     "actor",
     "kind",
     "role",
-    # The trainer hub's own filters, so its export is the rows on screen.
+    # The list screens' own filters, so "Export" is the rows on screen
+    # (see `_narrow_list`).
     "search",
     "skill",
     "is_accepting_assignments",
     "attention",
+    "status",
+    "fee_status",
+    "is_active",
+    "institution",
+    "branch",
 )
 
 
@@ -155,31 +161,59 @@ def _apply_student(rows, user, extra, path: str):
     return rows.filter(**{path: student.pk})
 
 
-def _narrow_trainers(rows, extra):
-    """Apply the trainer hub's filters — the same `TrainerFilterSet` and the
-    same search fields its list uses — so "Export" produces the rows the
-    screen shows rather than every trainer in the centre. Narrowing only."""
+#: Report source → the list screen's own FilterSet, its search fields and the
+#: filter keys it sends. Mirrored, not reinvented, so an export narrows exactly
+#: as the screen did. Keep in step with each list view's `search_fields`.
+LIST_NARROWING: dict[str, tuple[str, tuple[str, ...], tuple[str, ...]]] = {
+    "trainers": (
+        "apps.trainers.views.TrainerFilterSet",
+        ("trainer_id", "user__email", "user__first_name", "user__last_name", "professional_title"),
+        ("skill", "is_accepting_assignments", "attention"),
+    ),
+    "students": (
+        "apps.students.views.StudentFilterSet",
+        (
+            "student_id",
+            "roll_number",
+            "user__email",
+            "user__first_name",
+            "user__last_name",
+            "institution",
+        ),
+        ("fee_status", "is_active", "institution", "branch"),
+    ),
+    "batches": (
+        "apps.batches.views.BatchFilterSet",
+        ("code", "name", "course__title", "course__code"),
+        ("status", "attention"),
+    ),
+    "enrollments": (
+        "apps.enrollments.views.EnrollmentFilterSet",
+        ("code", "student__student_id", "student__user__email", "batch__code"),
+        ("status",),
+    ),
+}
+
+
+def _narrow_list(rows, source: str, extra):
+    """Apply a list screen's filters and search to its export. Narrowing only:
+    the rows are already the caller's visible set."""
     from django.db.models import Q
+    from django.utils.module_loading import import_string
 
-    from apps.trainers.views import TrainerFilterSet
-
-    extra = extra or {}
-    data = {
-        key: extra[key]
-        for key in ("skill", "is_accepting_assignments", "attention")
-        if extra.get(key) not in (None, "")
-    }
+    narrowing = LIST_NARROWING.get(source)
+    if narrowing is None or not extra:
+        return rows
+    filterset_path, search_fields, keys = narrowing
+    data = {key: extra[key] for key in keys if extra.get(key) not in (None, "")}
     if data:
-        rows = TrainerFilterSet(data=data, queryset=rows).qs
-    # DRF's SearchFilter: every whitespace-separated term must match one field.
+        rows = import_string(filterset_path)(data=data, queryset=rows).qs
+    # DRF's SearchFilter: every whitespace-separated term must match a field.
     for term in str(extra.get("search") or "").split():
-        rows = rows.filter(
-            Q(trainer_id__icontains=term)
-            | Q(user__email__icontains=term)
-            | Q(user__first_name__icontains=term)
-            | Q(user__last_name__icontains=term)
-            | Q(professional_title__icontains=term)
-        )
+        match = Q()
+        for field in search_fields:
+            match |= Q(**{f"{field}__icontains": term})
+        rows = rows.filter(match)
     return rows
 
 
@@ -199,7 +233,7 @@ def _queryset_for_user(user, source: str, batch, course, extra=None):
             rows = rows.filter(pk=batch.pk)
         if course is not None:
             rows = rows.filter(course=course)
-        return rows
+        return _narrow_list(rows, "batches", extra)
 
     if source == "trainers":
         from apps.trainers.models import TrainerProfile
@@ -218,7 +252,7 @@ def _queryset_for_user(user, source: str, batch, course, extra=None):
         rows = scope_to_branch(TrainerProfile.objects.all(), user, path="branch")
         if batch is not None:
             rows = rows.filter(batches=batch)
-        return _narrow_trainers(rows.distinct(), extra)
+        return _narrow_list(rows.distinct(), "trainers", extra)
 
     if source == "students":
         from apps.students import access as students_access
@@ -228,7 +262,8 @@ def _queryset_for_user(user, source: str, batch, course, extra=None):
             rows = rows.filter(enrollments__batch=batch)
         if course is not None:
             rows = rows.filter(enrollments__course=course)
-        return _apply_student(rows.distinct(), user, extra, "pk")
+        rows = _narrow_list(rows.distinct(), "students", extra)
+        return _apply_student(rows, user, extra, "pk")
     if source == "fee_payments":
         from apps.fees.models import FeePayment
 
@@ -311,6 +346,7 @@ def _queryset_for_user(user, source: str, batch, course, extra=None):
         rows = rows.filter(batch=batch)
     if course is not None:
         rows = rows.filter(course=course)
+    rows = _narrow_list(rows, "enrollments", extra)
     return _apply_student(rows, user, extra, "student_id")
 
 

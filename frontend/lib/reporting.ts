@@ -26,6 +26,24 @@ export interface ReportFilters {
   [key: string]: string | number | undefined;
 }
 
+/**
+ * The export filters for a list: exactly the named keys of what the table is
+ * showing, empty ones left out, so "Export" produces the rows on screen. The
+ * server narrows by the same FilterSet the list uses
+ * (`apps/reporting/views.py` `LIST_NARROWING`).
+ */
+export function exportFiltersFrom(
+  query: Record<string, string | number | undefined>,
+  keys: readonly string[],
+): ReportFilters {
+  const filters: ReportFilters = {};
+  for (const key of keys) {
+    const value = query[key];
+    if (value !== undefined && value !== null && String(value) !== '') filters[key] = String(value);
+  }
+  return filters;
+}
+
 // --- Reports ---------------------------------------------------------------
 
 export async function listReports(): Promise<ReportDefinition[]> {

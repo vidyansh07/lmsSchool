@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
+import { exportFiltersFrom } from '@/lib/reporting';
 import { money } from '@/components/fees/fee-ledger';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
@@ -189,8 +190,10 @@ export function AdmissionsList() {
           <ExportMenu
             reportKey="enrollments"
             filters={{
-              batch: String(list.query.batch ?? '') || undefined,
-              course: String(list.query.course ?? '') || undefined,
+              ...exportFiltersFrom(list.query, ['search', 'status', 'batch']),
+              // The course filter holds a slug (`course__slug` on the list);
+              // the report resolves a course by id inside the caller's reach.
+              course: courses.find((row) => row.slug === list.query.course)?.id,
             }}
             count={list.data?.count ?? null}
             size="md"

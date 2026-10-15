@@ -207,3 +207,31 @@ def test_the_trainer_hub_export_counts_the_rows_the_hub_shows(
     assert count("is_accepting_assignments=false") == 1
     assert count("search=Sunil") == 1
     assert count("search=Sunil&skill=linux") == 0
+
+
+@pytest.mark.django_db
+def test_list_exports_narrow_by_the_filters_their_screens_send(
+    api_client_no_csrf, admin_user, student_profile, other_student_profile, batch, enrollment
+):
+    """Students, enrolments and batches export the rows their screens show:
+    the same FilterSet and search fields as the list, not the whole table."""
+    api_client_no_csrf.force_login(admin_user)
+
+    def count(key: str, query: str) -> int:
+        response = api_client_no_csrf.get(f"/api/v1/reports/{key}/count/?{query}")
+        assert response.status_code == 200, response.content
+        return response.json()["rows"]
+
+    every_student = count("students", "")
+    assert every_student >= 2
+    assert count("students", "search=Other") == 1
+    assert count("students", "is_active=false") == 0
+
+    assert count("enrollments", "") >= 1
+    assert count("enrollments", f"status={enrollment.status}") >= 1
+    assert count("enrollments", "status=cancelled") == 0
+    assert count("enrollments", f"search={enrollment.code}") == 1
+
+    assert count("batches", "") >= 1
+    assert count("batches", "status=archived") == 0
+    assert count("batches", f"search={batch.code}") == 1

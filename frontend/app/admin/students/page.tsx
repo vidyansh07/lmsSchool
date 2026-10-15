@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
+import { exportFiltersFrom } from '@/lib/reporting';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -219,7 +220,7 @@ function StudentsTable() {
         <div className="flex gap-2">
           <ExportMenu
             reportKey="students"
-            filters={{ search: String(list.query.search ?? '') || undefined }}
+            filters={exportFiltersFrom(list.query, ['search', 'institution', 'fee_status', 'is_active'])}
             count={list.data?.count ?? null}
             size="md"
           />
