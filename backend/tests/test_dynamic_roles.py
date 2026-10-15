@@ -263,3 +263,37 @@ def test_the_switch_falls_back_to_the_code_matrix(settings, admin_user, manager_
 
     cache.clear()
     assert manager_user.capabilities == ROLE_CAPABILITIES[UserRole.MANAGER]
+
+
+@pytest.mark.django_db
+def test_omitting_custom_role_keeps_it_rather_than_stripping_it(
+    api_client_no_csrf, admin_user, manager_user
+):
+    """`custom_role` is optional on the transition. Leaving it out is "no
+    change", not "clear" — otherwise a reason-only call to the same role would
+    silently remove a configured role and end the person's sessions."""
+    api_client_no_csrf.force_login(admin_user)
+    created = _custom(api_client_no_csrf)
+    assert created.status_code == 201, created.json()
+    assert _assign(api_client_no_csrf, manager_user, "placement-coordinator").status_code == 200
+
+    response = stepped_up(api_client_no_csrf).post(
+        f"/api/v1/users/{manager_user.id}/role-transition/",
+        {"role": "manager", "reason": "Confirming the same responsibilities."},
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
+    manager_user.refresh_from_db()
+    assert manager_user.custom_role is not None
+    assert manager_user.custom_role.slug == "placement-coordinator"
+
+    # Changing the kind without naming one still drops the old kind's role.
+    response = stepped_up(api_client_no_csrf).post(
+        f"/api/v1/users/{manager_user.id}/role-transition/",
+        {"role": "counsellor", "reason": "Moved to admissions."},
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
+    manager_user.refresh_from_db()
+    assert manager_user.role == UserRole.COUNSELLOR
+    assert manager_user.custom_role is None

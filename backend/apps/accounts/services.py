@@ -389,27 +389,37 @@ def update_user(*, user: User, actor: User, role_change_reason: str = "", **fiel
     return user
 
 
+#: "The caller did not mention a custom role" — distinct from ``None``, which
+#: means "clear it". The API documents ``custom_role`` as optional, and
+#: leaving it out must not silently strip a configured role.
+_CUSTOM_ROLE_UNCHANGED = object()
+
+
 @transaction.atomic
 def transition_user_role(
     *,
     user: User,
     actor: User,
     role: str,
-    custom_role=None,
+    custom_role=_CUSTOM_ROLE_UNCHANGED,
     reason: str,
 ) -> User:
     """Apply one governed authorization-role transition.
 
     Student/trainer conversions are refused by :func:`update_user`; this
-    action handles staff-role and same-kind custom-role changes only.
+    action handles staff-role and same-kind custom-role changes only. An
+    omitted ``custom_role`` keeps the current one when the kind stays the same
+    and drops it with the kind otherwise (see :func:`update_user`).
     """
 
+    changes: dict[str, Any] = {"role": role}
+    if custom_role is not _CUSTOM_ROLE_UNCHANGED:
+        changes["custom_role"] = custom_role
     return update_user(
         user=user,
         actor=actor,
-        role=role,
-        custom_role=custom_role,
         role_change_reason=reason.strip(),
+        **changes,
     )
 
 
