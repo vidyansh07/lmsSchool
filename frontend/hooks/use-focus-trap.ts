@@ -36,8 +36,12 @@ export function useFocusTrap<T extends HTMLElement>({
     if (!open) return;
 
     previouslyFocused.current = document.activeElement as HTMLElement | null;
+    // A field marked `data-autofocus` wins over the first focusable element,
+    // so a form opens on its first input rather than on a help link above it.
     (
-      initialFocusRef?.current ?? containerRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+      initialFocusRef?.current ??
+      containerRef.current?.querySelector<HTMLElement>('[data-autofocus]') ??
+      containerRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
     )?.focus();
 
     const previousOverflow = document.body.style.overflow;

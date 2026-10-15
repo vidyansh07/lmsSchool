@@ -144,7 +144,8 @@ describe('CommandPalette — quick actions', () => {
     expect(screen.getByRole('option', { name: /Add a trainer/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Add a staff account/ })).toBeNull();
 
-    await user.type(screen.getByRole('combobox', { name: 'Command palette' }), 'onboard');
+    // Words in any order, not one exact phrase: "trainer add" finds "Add a trainer".
+    await user.type(screen.getByRole('combobox', { name: 'Command palette' }), 'trainer add');
     await user.keyboard('{Enter}');
     expect(push).toHaveBeenCalledWith('/manage/trainers?create=1');
   });

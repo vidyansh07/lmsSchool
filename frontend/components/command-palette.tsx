@@ -102,6 +102,17 @@ const QUICK_ACTIONS: {
   },
 ];
 
+/** Every typed word appears somewhere in the text, in any order — "add
+ *  staff" finds "Add a staff account", "reports class" finds "Class reports". */
+function matchesWords(text: string, query: string): boolean {
+  const haystack = text.toLowerCase();
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => haystack.includes(word));
+}
+
 function localGroupsFor(user: { role: string; capabilities: string[] } | null): NavGroup[] {
   if (!user) return [];
   return STAFF_ROLES.includes(user.role) ? navFor(user.role) : [{ items: STUDENT_NAV }];
@@ -144,7 +155,7 @@ export function CommandPalette({
     for (const group of localGroupsFor(user)) {
       for (const item of group.items) {
         if (!isVisible(item, user)) continue;
-        if (trimmed && !item.label.toLowerCase().includes(trimmed)) continue;
+        if (trimmed && !matchesWords(item.label, trimmed)) continue;
         items.push({ id: `nav:${item.href}`, title: item.label, subtitle: group.title ?? 'Navigate', href: item.href });
         if (items.length >= MAX_LOCAL_RESULTS) return items;
       }
@@ -157,7 +168,7 @@ export function CommandPalette({
     return QUICK_ACTIONS.filter(
       (action) =>
         can(action.capability) &&
-        (!trimmed || `${action.title} ${action.keywords}`.toLowerCase().includes(trimmed)),
+        (!trimmed || matchesWords(`${action.title} ${action.keywords}`, trimmed)),
     ).map((action) => ({ id: action.id, title: action.title, subtitle: 'Do', href: action.href }));
   }, [can, query]);
 

@@ -99,6 +99,9 @@ function UsersTable() {
         <Link
           href={`/admin/users/${row.id}`}
           onClick={(event) => event.stopPropagation()}
+          // Twenty links all called "Manage" are indistinguishable to a
+          // screen reader listing the page's links.
+          aria-label={`Manage ${row.full_name || row.email}`}
           className="inline-flex items-center gap-0.5 text-sm font-medium text-ink-muted hover:text-action hover:underline"
         >
           Manage

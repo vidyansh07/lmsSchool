@@ -11,7 +11,15 @@ import { useCallback, useState } from 'react';
  */
 export function useCreateParam(allowed: boolean): [boolean, (open: boolean) => void] {
   const searchParams = useSearchParams();
-  const [open, setOpenState] = useState(() => allowed && searchParams?.get('create') === '1');
+  const wanted = allowed && searchParams?.get('create') === '1';
+  const [open, setOpenState] = useState(wanted);
+  // Also when the parameter arrives on a page already open — the palette
+  // used from the screen it points at changes the address, not the page.
+  const [seenWanted, setSeenWanted] = useState(wanted);
+  if (wanted !== seenWanted) {
+    setSeenWanted(wanted);
+    if (wanted) setOpenState(true);
+  }
 
   const setOpen = useCallback((next: boolean) => {
     setOpenState(next);

@@ -150,6 +150,8 @@ export function CreateStaffDialog({
               <Field label="Email" htmlFor="s-email" error={errors.email} required>
                 <Input
                   id="s-email"
+                  // The first thing to type, not the help link above it.
+                  data-autofocus
                   type="email"
                   autoComplete="off"
                   value={email}
