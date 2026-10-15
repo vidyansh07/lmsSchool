@@ -20,7 +20,13 @@ vi.mock('@/lib/people', async () => {
 
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock('@/components/auth-provider', () => ({ useAuth }));
-vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
+const exportFilters = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
+vi.mock('@/components/export-menu', () => ({
+  ExportMenu: ({ filters }: { filters?: Record<string, unknown> }) => {
+    exportFilters.value = filters ?? {};
+    return null;
+  },
+}));
 vi.mock('@/app/admin/trainers/create-trainer-dialog', () => ({
   CreateTrainerDialog: ({ open }: { open: boolean }) =>
     open ? <div role="dialog">Trainer onboarding</div> : null,
@@ -119,6 +125,22 @@ describe('TrainersHub', () => {
         expect.anything(),
       ),
     );
+  });
+
+  it('applies a typed skill without waiting for the field to lose focus', async () => {
+    listManageTrainers.mockResolvedValue(page([trainerRow()]));
+    render(<TrainersHub />);
+    await waitFor(() => expect(listManageTrainers).toHaveBeenCalledTimes(1));
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Skill'), 'linux');
+    await waitFor(() =>
+      expect(listManageTrainers).toHaveBeenLastCalledWith(
+        expect.objectContaining({ skill: 'linux' }),
+        expect.anything(),
+      ),
+    );
+    // And the export receives the same narrowing as the table.
+    await waitFor(() => expect(exportFilters.value).toEqual(expect.objectContaining({ skill: 'linux' })));
   });
 
   it('opens the trainer on row activation', async () => {

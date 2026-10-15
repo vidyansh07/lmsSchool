@@ -453,6 +453,12 @@ class ExportJobRequestSerializer(StrictSerializer):
     actor = serializers.UUIDField(required=False, allow_null=True)
     kind = serializers.CharField(required=False, allow_blank=True, max_length=20)
     role = serializers.CharField(required=False, allow_blank=True, max_length=20)
+    search = serializers.CharField(required=False, allow_blank=True, max_length=100)
+    skill = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    is_accepting_assignments = serializers.ChoiceField(
+        choices=("true", "false"), required=False, allow_blank=True
+    )
+    attention = serializers.CharField(required=False, allow_blank=True, max_length=40)
 
 
 class ExportJobSerializer(StrictSerializer):

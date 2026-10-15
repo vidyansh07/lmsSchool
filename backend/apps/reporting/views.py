@@ -113,7 +113,19 @@ def _filters(request):
 #: Filters beyond batch and course that some reports take. Read from the query
 #: string on a direct export and from `job.filters` on a queued one; never
 #: authorization, only narrowing inside an already visible set.
-EXTRA_FILTER_KEYS = ("student", "since", "until", "actor", "kind", "role")
+EXTRA_FILTER_KEYS = (
+    "student",
+    "since",
+    "until",
+    "actor",
+    "kind",
+    "role",
+    # The trainer hub's own filters, so its export is the rows on screen.
+    "search",
+    "skill",
+    "is_accepting_assignments",
+    "attention",
+)
 
 
 def _extra_filters(params) -> dict:
@@ -141,6 +153,34 @@ def _apply_student(rows, user, extra, path: str):
     if student is None:
         return rows.none()
     return rows.filter(**{path: student.pk})
+
+
+def _narrow_trainers(rows, extra):
+    """Apply the trainer hub's filters — the same `TrainerFilterSet` and the
+    same search fields its list uses — so "Export" produces the rows the
+    screen shows rather than every trainer in the centre. Narrowing only."""
+    from django.db.models import Q
+
+    from apps.trainers.views import TrainerFilterSet
+
+    extra = extra or {}
+    data = {
+        key: extra[key]
+        for key in ("skill", "is_accepting_assignments", "attention")
+        if extra.get(key) not in (None, "")
+    }
+    if data:
+        rows = TrainerFilterSet(data=data, queryset=rows).qs
+    # DRF's SearchFilter: every whitespace-separated term must match one field.
+    for term in str(extra.get("search") or "").split():
+        rows = rows.filter(
+            Q(trainer_id__icontains=term)
+            | Q(user__email__icontains=term)
+            | Q(user__first_name__icontains=term)
+            | Q(user__last_name__icontains=term)
+            | Q(professional_title__icontains=term)
+        )
+    return rows
 
 
 def _queryset_for_user(user, source: str, batch, course, extra=None):
@@ -178,7 +218,7 @@ def _queryset_for_user(user, source: str, batch, course, extra=None):
         rows = scope_to_branch(TrainerProfile.objects.all(), user, path="branch")
         if batch is not None:
             rows = rows.filter(batches=batch)
-        return rows.distinct()
+        return _narrow_trainers(rows.distinct(), extra)
 
     if source == "students":
         from apps.students import access as students_access

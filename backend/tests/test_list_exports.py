@@ -178,3 +178,32 @@ def test_a_voided_receipt_still_renders(api_client_no_csrf, counsellor_user, man
     response = api_client_no_csrf.get(f"/api/v1/fees/payments/{ledger.pk}/receipt/")
     assert response.status_code == 200
     assert response.content[:4] == b"%PDF"
+
+
+@pytest.mark.django_db
+def test_the_trainer_hub_export_counts_the_rows_the_hub_shows(
+    api_client_no_csrf, admin_user, trainer_profile, trainer_profile_two
+):
+    """`Export` on the trainer hub receives its skill, availability and search
+    filters, and the report narrows by them — not every trainer in the centre."""
+    from apps.trainers.services import update_trainer_profile
+
+    update_trainer_profile(
+        profile=trainer_profile_two,
+        actor=admin_user,
+        allowed_fields=("skills", "is_accepting_assignments"),
+        skills=["Python"],
+        is_accepting_assignments=False,
+    )
+    api_client_no_csrf.force_login(admin_user)
+
+    def count(query: str) -> int:
+        response = api_client_no_csrf.get(f"/api/v1/reports/trainer_activity/count/?{query}")
+        assert response.status_code == 200, response.content
+        return response.json()["rows"]
+
+    assert count("") >= 2
+    assert count("skill=linux") == 1
+    assert count("is_accepting_assignments=false") == 1
+    assert count("search=Sunil") == 1
+    assert count("search=Sunil&skill=linux") == 0

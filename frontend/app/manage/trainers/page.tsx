@@ -31,6 +31,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/layout';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useList } from '@/hooks/use-list';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
@@ -48,6 +49,21 @@ export function TrainersHub() {
   const attention = searchParams.get('attention') ?? '';
   const list = useList<ManageTrainerRow>(listManageTrainers, { page_size: 20, ...(attention ? { attention } : {}) });
   const [showCreate, setShowCreate] = useState(false);
+  // Typed into a box and applied after a pause (or on Enter) — not only on
+  // blur, which left a typed skill doing nothing until focus moved away.
+  const [skillDraft, setSkillDraft] = useState(String(list.query.skill ?? ''));
+  const debouncedSkill = useDebouncedValue(skillDraft.trim(), 400);
+  const appliedSkill = String(list.query.skill ?? '');
+  if (debouncedSkill !== appliedSkill && debouncedSkill === skillDraft.trim()) {
+    list.setQuery({ skill: debouncedSkill });
+  }
+  // Exactly what the table is showing, so "Export" produces these rows.
+  const exportFilters = {
+    search: String(list.query.search ?? '') || undefined,
+    skill: appliedSkill || undefined,
+    is_accepting_assignments: String(list.query.is_accepting_assignments ?? '') || undefined,
+    attention: String(list.query.attention ?? '') || undefined,
+  };
   const [actionError, setActionError] = useState('');
   const [busyTrainerId, setBusyTrainerId] = useState<string | null>(null);
 
@@ -168,7 +184,12 @@ export function TrainersHub() {
         title="Trainers"
         meta="People, assignment readiness, workload and review in one place."
       >
-        <ExportMenu reportKey="trainer_activity" count={list.data?.count ?? null} size="md" />
+        <ExportMenu
+          reportKey="trainer_activity"
+          filters={exportFilters}
+          count={list.data?.count ?? null}
+          size="md"
+        />
         {can(Capability.trainerCreate) ? (
           <Button type="button" onClick={() => setShowCreate(true)}>
             Add trainer
@@ -205,8 +226,11 @@ export function TrainersHub() {
             <Input
               id="filter-skill"
               placeholder="e.g. Linux"
-              defaultValue={String(list.query.skill ?? '')}
-              onBlur={(event) => list.setQuery({ skill: event.target.value })}
+              value={skillDraft}
+              onChange={(event) => setSkillDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') list.setQuery({ skill: skillDraft.trim() });
+              }}
             />
           </div>
           <div>

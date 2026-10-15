@@ -108,11 +108,9 @@ def _rescope(job: ExportJob):
                 "The course this export was scoped to is no longer visible to you."
             )
 
-    extra = {
-        key: value
-        for key, value in filters.items()
-        if key in ("student", "since", "until", "actor", "kind", "role") and value
-    }
+    from .views import EXTRA_FILTER_KEYS
+
+    extra = {key: value for key, value in filters.items() if key in EXTRA_FILTER_KEYS and value}
     queryset = _queryset_for_user(user, source, batch, course, extra)
     return definition, queryset
 
