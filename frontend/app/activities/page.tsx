@@ -137,7 +137,9 @@ function initialFiltersFromParams(params: URLSearchParams): Filters {
 function ActivitiesWorkspace() {
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<Filters>(() => initialFiltersFromParams(searchParams));
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // `?activity=<id>` opens that activity's drawer — where a notification's
+  // "Open" lands (`/activities/<id>` forwards here).
+  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("activity"));
   const [types, setTypes] = useState<ActivityType[]>([]);
 
   useEffect(() => {

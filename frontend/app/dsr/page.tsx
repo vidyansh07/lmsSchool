@@ -24,7 +24,8 @@
  * that is `DSR`'s own model ordering.
  */
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 
 import { DsrReportSheet } from '@/components/manage/dsr-report-sheet';
 
@@ -34,6 +35,7 @@ import { DateRangePicker, type DateRange } from '@/components/date-range-picker'
 import { Pagination } from '@/components/pagination';
 import { ExportMenu } from '@/components/export-menu';
 import { RequireAuth } from '@/components/require-auth';
+import { LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -75,13 +77,13 @@ interface PendingDecision {
 
 const REVIEWABLE_STATUSES = new Set<DSRListItem['status']>(['submitted', 'under_review']);
 
-export function DsrQueue() {
+export function DsrQueue({ initialReadingId = null }: { initialReadingId?: string | null } = {}) {
   const { can } = useAuth();
   const list = useList<DSRListItem>(listDsr, {
     ordering: '-report_date',
     page_size: 20,
   });
-  const [readingId, setReadingId] = useState<string | null>(null);
+  const [readingId, setReadingId] = useState<string | null>(initialReadingId);
 
   const [batchOptions, setBatchOptions] = useState<BatchListRow[]>([]);
   const [trainerOptions, setTrainerOptions] = useState<TrainerListRow[]>([]);
@@ -528,10 +530,18 @@ function MissingReports() {
   );
 }
 
+/** `?report=<id>` opens that report — where `/dsr/<id>` forwards a reviewer. */
+function DsrQueueFromAddress() {
+  const searchParams = useSearchParams();
+  return <DsrQueue initialReadingId={searchParams.get('report')} />;
+}
+
 export default function DsrPage() {
   return (
     <RequireAuth capability={Capability.dsrViewAny}>
-      <DsrQueue />
+      <Suspense fallback={<LoadingState label="Loading class reports…" rows={6} />}>
+        <DsrQueueFromAddress />
+      </Suspense>
     </RequireAuth>
   );
 }
