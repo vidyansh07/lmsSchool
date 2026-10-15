@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
@@ -17,6 +16,7 @@ import { RequireAuth } from '@/components/require-auth';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/input';
+import { useCreateParam } from '@/hooks/use-create-param';
 import { useList } from '@/hooks/use-list';
 import {
   BATCH_STATUS_LABEL,
@@ -38,7 +38,7 @@ import { CreateBatchDialog } from './create-batch-dialog';
 function BatchList() {
   const { can } = useAuth();
   const list = useList<BatchListRow>(listBatches, { page_size: 20 }, { urlKeys: ['status'] });
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useCreateParam(can(Capability.batchCreate));
   const router = useRouter();
 
   const isAdmin = can(Capability.batchViewAny);

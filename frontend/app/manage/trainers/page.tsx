@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/layout';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useCreateParam } from '@/hooks/use-create-param';
 import { useList } from '@/hooks/use-list';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
@@ -57,7 +58,7 @@ export function TrainersHub() {
     { page_size: 20, ...(attention ? { attention } : {}) },
     { urlKeys: ['attention', 'skill', 'is_accepting_assignments', 'branch', 'min_experience'] },
   );
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useCreateParam(can(Capability.trainerCreate));
   // Typed into a box and applied after a pause (or on Enter) — not only on
   // blur, which left a typed skill doing nothing until focus moved away.
   const [skillDraft, setSkillDraft] = useState(String(list.query.skill ?? ''));

@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { ChevronRight, UserPlus } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
@@ -17,6 +16,7 @@ import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/input';
+import { useCreateParam } from '@/hooks/use-create-param';
 import { useList } from '@/hooks/use-list';
 import { Capability } from '@/lib/capabilities';
 import { formatDate } from '@/lib/format';
@@ -30,7 +30,7 @@ function UsersTable() {
   const list = useList<AdminUser>(listUsers, {}, { urlKeys: ['role', 'is_active', 'branch'] });
   const router = useRouter();
   const { user: viewer, can } = useAuth();
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate, setShowCreate] = useCreateParam(can(Capability.userCreate));
   // Administrators and the platform operator see every centre, so they get a
   // centre filter. Anyone bounded to one sees which one, not a control that
   // could only ever hold a single value.
