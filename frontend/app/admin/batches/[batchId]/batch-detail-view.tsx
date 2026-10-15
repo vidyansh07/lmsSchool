@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CalendarPlus, Trash2, UserPlus } from 'lucide-react';
 
 import { generateSessions, listSessions } from '@/lib/academics';
+import { Confirm } from '@/components/confirm';
 import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { Pagination } from '@/components/pagination';
@@ -217,7 +218,7 @@ function TrainerPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () 
   );
 }
 
-function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () => void }) {
+export function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () => void }) {
   const [weekday, setWeekday] = useState<Weekday>(0);
   const [start, setStart] = useState('09:00');
   const [end, setEnd] = useState('11:00');
@@ -311,12 +312,23 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
     }
   }
 
-  async function onRemove(scheduleId: string) {
+  // Removing a weekly slot is a hard delete on the server, so it is asked
+  // first and names the slot; generated classes already on the calendar stay.
+  const [removing, setRemoving] = useState<BatchDetail['schedules'][number] | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+
+  async function onRemove() {
+    if (!removing) return;
+    setIsRemoving(true);
     try {
-      await deleteSchedule(scheduleId);
+      await deleteSchedule(removing.id);
+      setRemoving(null);
       onChanged();
     } catch (cause) {
+      setRemoving(null);
       setErrors(fieldErrors(cause));
+    } finally {
+      setIsRemoving(false);
     }
   }
 
@@ -351,7 +363,7 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
                   size="sm"
                   variant="ghost"
                   className="ml-auto"
-                  onClick={() => void onRemove(schedule.id)}
+                  onClick={() => setRemoving(schedule)}
                   aria-label={`Remove the ${schedule.weekday_label} class`}
                 >
                   <Trash2 className="size-3.5" aria-hidden="true" />
@@ -429,6 +441,20 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
           ) : null}
         </div>
       </CardContent>
+      <Confirm
+        open={removing !== null}
+        title={`Remove the ${removing?.weekday_label ?? ''} class?`}
+        description={
+          removing
+            ? `${removing.weekday_label} ${removing.start_time.slice(0, 5)}–${removing.end_time.slice(0, 5)} stops repeating. Classes already generated from it stay on the calendar; this cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Remove"
+        cancelLabel="Keep it"
+        isConfirming={isRemoving}
+        onConfirm={() => void onRemove()}
+        onCancel={() => setRemoving(null)}
+      />
     </Card>
   );
 }
