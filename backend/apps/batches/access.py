@@ -37,6 +37,11 @@ from apps.organisation.scoping import scope_to_branch
 
 from .models import Batch
 
+#: Roles whose trainer profile is live: a trainer, and a manager who also
+#: teaches. Anyone else holding one (a manager who moved to admissions) keeps
+#: it for history only — it grants no teaching access and takes no classes.
+TEACHING_ROLES = frozenset({UserRole.TRAINER, UserRole.MANAGER})
+
 
 def _profile_of(user, attribute: str):
     """The caller's student or trainer profile, or None."""
@@ -44,10 +49,7 @@ def _profile_of(user, attribute: str):
         return None
     if attribute == "student_profile" and user.role != UserRole.STUDENT:
         return None
-    if attribute == "trainer_profile" and user.role not in (
-        UserRole.TRAINER,
-        UserRole.MANAGER,
-    ):
+    if attribute == "trainer_profile" and user.role not in TEACHING_ROLES:
         return None
     return getattr(user, attribute, None)
 

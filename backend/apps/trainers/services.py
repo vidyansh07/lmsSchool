@@ -7,6 +7,7 @@ from typing import Any
 from django.db import transaction
 
 from apps.accounts.models import User, UserRole
+from apps.accounts.roles import can_administer
 from apps.accounts.services import create_user, resolve_branch_for_new_record
 from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
@@ -74,6 +75,12 @@ def update_trainer_profile(
     ``allowed_fields`` is derived from the caller's authorization level, never
     from the request body, so a trainer cannot widen it by sending extra keys.
     """
+    if actor.pk != profile.user_id and not can_administer(actor, profile.user):
+        # Holding `trainer.update_any` is the capability; the ladder is the
+        # reach. A manager may change a trainer's availability, not a peer
+        # manager's teaching profile or an administrator's leftover one.
+        raise AuthorityError({"trainer": ["You do not have authority over this account."]})
+
     rejected = sorted(set(fields) - set(allowed_fields))
     if rejected:
         raise ApplicationError(

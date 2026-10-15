@@ -444,8 +444,11 @@ def _has_open_teaching_assignments(user: User) -> bool:
     """Whether a teaching manager still owns work that needs their role."""
 
     from apps.batches.models import BatchStatus
+    from apps.trainers.models import TrainerProfile
 
-    profile = getattr(user, "trainer_profile", None)
+    # Locked, so an assignment racing this role change waits and then sees the
+    # new role (`batches.services._check_assignable_trainer` takes this lock).
+    profile = TrainerProfile.objects.select_for_update().filter(user=user).first()
     if profile is None:
         return False
     return profile.batches.filter(status__in=(BatchStatus.UPCOMING, BatchStatus.ACTIVE)).exists()
