@@ -15,6 +15,12 @@ import type {
   TrainerListRow,
 } from '@/types/api';
 
+
+// Whole-registration journeys type into a dozen fields each; under a full
+// parallel run that can pass vitest's 5-second default without anything
+// being wrong.
+vi.setConfig({ testTimeout: 15_000 });
+
 const createStudent = vi.hoisted(() => vi.fn());
 const checkDuplicates = vi.hoisted(() => vi.fn());
 const listStudents = vi.hoisted(() => vi.fn());
