@@ -36,6 +36,7 @@ vi.mock('@/components/organisation/branch-field', () => ({
 const push = vi.hoisted(() => vi.fn());
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 function page(results: AdminUser[]) {

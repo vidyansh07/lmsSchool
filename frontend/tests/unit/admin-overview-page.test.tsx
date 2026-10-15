@@ -41,6 +41,7 @@ vi.mock('@/components/auth-provider', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   usePathname: () => '/admin/overview',
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 function dashboard(overrides: Partial<AdminDashboard> = {}): AdminDashboard {

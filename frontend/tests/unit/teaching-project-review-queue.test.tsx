@@ -32,6 +32,7 @@ vi.mock('@/components/require-auth', () => ({
 }));
 vi.mock('next/navigation', () => ({
   useParams: () => ({ projectId: 'p1' }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 import TeachingProjectPage from '@/app/teaching/projects/[projectId]/page';

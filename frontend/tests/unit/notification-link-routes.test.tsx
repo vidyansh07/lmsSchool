@@ -10,7 +10,9 @@ import { ActivityLinkForward } from '@/app/activities/[activityId]/page';
 import { DsrLinkForward } from '@/app/dsr/[dsrId]/page';
 
 const replace = vi.hoisted(() => vi.fn());
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ replace, push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock('@/components/auth-provider', () => ({ useAuth }));
 const getDsr = vi.hoisted(() => vi.fn());

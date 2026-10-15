@@ -43,6 +43,7 @@ vi.mock("@/components/auth-provider", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   usePathname: () => "/admin/policies",
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 function entry(overrides: Partial<PolicyEntry>): PolicyEntry {

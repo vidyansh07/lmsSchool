@@ -22,7 +22,9 @@ vi.mock('@/lib/exams', () => ({
   saveAnswer: vi.fn(),
   submitAttempt,
 }));
-vi.mock('next/navigation', () => ({ useParams: () => ({ examId: 'e-1' }) }));
+vi.mock('next/navigation', () => ({ useParams: () => ({ examId: 'e-1' }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 vi.mock('@/components/require-auth', () => ({
   RequireAuth: ({ children }: { children: React.ReactNode }) => children,
 }));

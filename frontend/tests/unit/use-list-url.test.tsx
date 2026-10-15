@@ -6,6 +6,11 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useList } from '@/hooks/use-list';
+
+// What the app router hands a page: the target route's own parameters.
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 import type { ListQuery } from '@/lib/people';
 import type { Paginated } from '@/types/api';
 

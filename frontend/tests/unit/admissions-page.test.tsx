@@ -31,6 +31,7 @@ vi.mock('@/components/auth-provider', () => ({ useAuth }));
 vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 function page(results: Enrollment[]) {

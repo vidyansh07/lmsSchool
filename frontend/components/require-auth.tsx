@@ -12,7 +12,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, type ReactNode } from 'react';
+import { Suspense, useEffect, type ReactNode } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
 import { EmptyState, LoadingState } from '@/components/states';
@@ -60,5 +60,8 @@ export function RequireAuth({
     );
   }
 
-  return <>{children}</>;
+  // A boundary for pages whose lists read the address bar (`useSearchParams`
+  // in `hooks/use-list.ts`): Next requires one above any such read, and every
+  // signed-in page already passes through here.
+  return <Suspense fallback={<LoadingState label="Loading…" rows={4} />}>{children}</Suspense>;
 }

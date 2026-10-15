@@ -25,6 +25,7 @@ vi.mock('@/components/auth-provider', () => ({ useAuth: () => mockAuth.value }))
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   usePathname: () => '/admin/settings',
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 function settings(overrides: Partial<SystemSettings> = {}): SystemSettings {

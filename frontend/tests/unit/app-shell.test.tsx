@@ -22,6 +22,7 @@ const mockAuth = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 vi.mock('next/navigation', () => ({
   usePathname: () => '/',
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 vi.mock('@/components/auth-provider', () => ({

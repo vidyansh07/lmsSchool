@@ -1,5 +1,6 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { ApiError } from '@/lib/api';
@@ -38,12 +39,11 @@ export interface ListOptions {
 /** Always in the address bar when a page opts in, alongside its own filters. */
 const URL_BASE_KEYS = ['search', 'ordering', 'page'] as const;
 
-function readUrlQuery(keys: readonly string[]): ListQuery {
-  // The lists that opt in render only after the session check, on the client
-  // (`RequireAuth`), so reading the address here cannot differ from a server
-  // render.
-  if (typeof window === 'undefined') return {};
-  const params = new URLSearchParams(window.location.search);
+function readUrlQuery(params: URLSearchParams | null, keys: readonly string[]): ListQuery {
+  // From `useSearchParams`, not `window.location`: on a client navigation the
+  // new page renders before the address bar changes, so the window still
+  // shows the page being left (a sign-in page's `?next=`) at this moment.
+  if (!params) return {};
   const query: ListQuery = {};
   for (const key of keys) {
     const value = params.get(key);
@@ -64,11 +64,12 @@ export function useList<T>(
   options: ListOptions = {},
 ): ListState<T> {
   const urlKeys = options.urlKeys ? [...URL_BASE_KEYS, ...options.urlKeys] : null;
+  const searchParams = useSearchParams();
   const [query, setQueryState] = useState<ListQuery>(() => ({
     page: 1,
     page_size: 20,
     ...initialQuery,
-    ...(urlKeys ? readUrlQuery(urlKeys) : {}),
+    ...(urlKeys ? readUrlQuery(searchParams, urlKeys) : {}),
   }));
   const [attempt, setAttempt] = useState(0);
 

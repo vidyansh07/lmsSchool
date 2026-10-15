@@ -27,6 +27,7 @@ vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
 vi.mock('@/app/admin/students/create-student-dialog', () => ({ CreateStudentDialog: () => null }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 function page(results: StudentListRow[]) {

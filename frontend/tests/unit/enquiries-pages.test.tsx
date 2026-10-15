@@ -20,7 +20,9 @@ vi.mock("@/lib/enquiries", async () => {
   return { ...actual, updateEnquiry };
 });
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 
 vi.mock("@/components/work/activity-drawer", () => ({ ActivityDrawer: () => null }));
 

@@ -25,7 +25,9 @@ vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
 vi.mock('@/app/admin/batches/create-batch-dialog', () => ({ CreateBatchDialog: () => null }));
 
 const push = vi.hoisted(() => vi.fn());
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 
 function page(results: BatchListRow[]) {
   return { count: results.length, page: 1, page_size: 20, total_pages: 1, next: null, previous: null, results };

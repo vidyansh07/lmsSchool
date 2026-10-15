@@ -24,7 +24,9 @@ vi.mock("@/components/auth-provider", () => ({
 }));
 
 const replace = vi.hoisted(() => vi.fn());
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 
 const USER = { id: "u1", email: "a@b.test", mfa_enabled: true } as CurrentUser;
 const MFA_REQUIRED: MfaRequired = {
