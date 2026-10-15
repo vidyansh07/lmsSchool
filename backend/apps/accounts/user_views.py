@@ -376,16 +376,7 @@ class UserBulkView(APIView):
         )
 
         def resend(user: User) -> str | None:
-            if user.pk == request.user.pk:
-                return "That is your own account."
-            if not user.is_active:
-                return "The account is inactive. Reactivate it first."
-            if user.is_email_verified:
-                return "They have already accepted their invitation."
-            services.send_credential_link(
-                user=user, actor=request.user, action="email_verification"
-            )
-            return None
+            return services.resend_invitation(user=user, actor=request.user)
 
         def move(user: User) -> str | None:
             if user.pk == request.user.pk:

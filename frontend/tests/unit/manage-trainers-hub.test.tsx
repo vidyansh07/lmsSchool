@@ -39,6 +39,12 @@ vi.mock('@/app/admin/trainers/create-trainer-dialog', () => ({
 }));
 
 vi.mock('@/components/manage/attention-strip', () => ({ ManagerAttentionStrip: () => null }));
+vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+const bulkTrainers = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/bulk', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/bulk')>('@/lib/bulk');
+  return { ...actual, bulkTrainers };
+});
 
 const push = vi.hoisted(() => vi.fn());
 // The hub reads `?attention=` from the address bar and the filter chip
@@ -229,5 +235,44 @@ describe('TrainersHub — arriving from the attention strip', () => {
     );
     expect(replace).toHaveBeenCalledWith('/manage/hub');
     searchParams.value = '';
+  });
+});
+
+describe('TrainersHub — acting on many trainers', () => {
+  it('resends invitations to the ticked trainers', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 'admin-1', role: 'admin' },
+      isLoading: false,
+      can: () => true,
+    });
+    listManageTrainers.mockResolvedValue(
+      page([
+        trainerRow({ is_email_verified: false }),
+        trainerRow({ id: 'trainer-2', full_name: 'Ravi Kumar', email: 'ravi@example.com' }),
+      ]),
+    );
+    bulkTrainers.mockResolvedValue({
+      action: 'resend_invitation',
+      total: 2,
+      done: 1,
+      skipped: [{ id: 'trainer-2', label: 'Ravi Kumar', reason: 'They have already accepted their invitation.' }],
+    });
+    const user = userEvent.setup();
+    render(<TrainersHub />);
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Select Tina Trainer' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Ravi Kumar' }));
+    await user.click(screen.getByRole('button', { name: 'Resend invitations' }));
+    await user.click(screen.getByRole('button', { name: 'Send invitations' }));
+
+    await waitFor(() =>
+      expect(bulkTrainers).toHaveBeenCalledWith({
+        ids: ['trainer-1', 'trainer-2'],
+        action: 'resend_invitation',
+      }),
+    );
+    expect(await screen.findByRole('dialog', { name: 'Invitations' })).toHaveTextContent(
+      'They have already accepted their invitation.',
+    );
   });
 });

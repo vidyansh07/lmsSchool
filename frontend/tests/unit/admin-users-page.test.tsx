@@ -242,7 +242,7 @@ describe('AdminUsersPage — acting on many accounts', () => {
       expect(bulkUsers).toHaveBeenCalledWith({ ids: ['u-1', 'u-2'], action: 'resend_invitation' }),
     );
     const result = await screen.findByRole('dialog', { name: 'Invitations' });
-    expect(result).toHaveTextContent('1 account sent a new invitation, 1 skipped');
+    expect(result).toHaveTextContent('1 account invited again, 1 skipped');
     expect(result).toHaveTextContent('They have already accepted their invitation.');
   });
 

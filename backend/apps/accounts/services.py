@@ -924,6 +924,23 @@ def record_permission_denied(*, actor: Any, resource_type: str, resource_id: Any
     )
 
 
+def resend_invitation(*, user: User, actor: User) -> str | None:
+    """Send a new set-password invitation, or say in words why not.
+
+    The bulk screens (accounts, trainers) skip rather than fail: your own
+    account, an inactive one, and one that already accepted are each a
+    reason, not an error. Anything the authority ladder refuses still raises.
+    """
+    if user.pk == actor.pk:
+        return "That is your own account."
+    if not user.is_active:
+        return "The account is inactive. Reactivate it first."
+    if user.is_email_verified:
+        return "They have already accepted their invitation."
+    send_credential_link(user=user, actor=actor, action="email_verification")
+    return None
+
+
 @transaction.atomic
 def send_credential_link(*, user: User, actor: User, action: str) -> None:
     """Send this person a password-reset or email-verification link.

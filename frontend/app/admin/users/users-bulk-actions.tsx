@@ -16,8 +16,8 @@ import { useState } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { BulkActionsBar, type BulkAction } from '@/components/bulk-actions';
 import { BulkResultDialog } from '@/components/bulk-result-dialog';
-import { Confirm } from '@/components/confirm';
 import { ExportMenu } from '@/components/export-menu';
+import { useResendInvitations } from '@/components/resend-invitations-action';
 import { useBranches } from '@/components/organisation/branch-field';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -31,9 +31,8 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
-import { useToast } from '@/components/ui/toast';
 import type { UseBulkSelectionResult } from '@/hooks/use-bulk-selection';
-import { errorMessage, fieldErrors } from '@/lib/api';
+import { fieldErrors } from '@/lib/api';
 import { bulkTarget, bulkUsers, type BulkResult } from '@/lib/bulk';
 import { Capability } from '@/lib/capabilities';
 import { formatCount } from '@/lib/format';
@@ -41,7 +40,7 @@ import { exportFiltersFrom } from '@/lib/reporting';
 
 export const USER_FILTER_KEYS = ['role', 'is_active', 'is_email_verified', 'branch'] as const;
 
-type Pending = 'resend' | 'move' | null;
+type Pending = 'move' | null;
 
 export function UsersBulkActions({
   selection,
@@ -55,7 +54,6 @@ export function UsersBulkActions({
   onChanged: () => void;
 }) {
   const { can } = useAuth();
-  const { toast } = useToast();
   const mayMove = can(Capability.organisationAssignUsers);
   const { branches } = useBranches(mayMove);
   const [pending, setPending] = useState<Pending>(null);
@@ -70,28 +68,20 @@ export function UsersBulkActions({
   const count = selection.selectAllMatching ? (totalCount ?? 0) : selection.selectedCount;
   const who = formatCount(count, 'account');
   const target = bulkTarget(selection, query, USER_FILTER_KEYS);
+  const resend = useResendInvitations({
+    count,
+    itemNoun: 'account',
+    send: () => bulkUsers({ ...target, action: 'resend_invitation' }),
+    onDone: () => {
+      selection.clear();
+      onChanged();
+    },
+  });
 
   function finished(title: string, done: string, value: BulkResult) {
     setResult({ title, done, value });
     selection.clear();
     onChanged();
-  }
-
-  async function resend() {
-    setBusy(true);
-    try {
-      finished(
-        'Invitations',
-        'sent a new invitation',
-        await bulkUsers({ ...target, action: 'resend_invitation' }),
-      );
-      setPending(null);
-    } catch (cause) {
-      setPending(null);
-      toast({ title: 'Could not send the invitations', description: errorMessage(cause), variant: 'error' });
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function move(event: React.FormEvent) {
@@ -125,7 +115,7 @@ export function UsersBulkActions({
 
   const actions: BulkAction[] = [];
   if (can(Capability.userUpdateAny)) {
-    actions.push({ id: 'resend', label: 'Resend invitations', onClick: () => setPending('resend') });
+    actions.push({ id: 'resend', label: 'Resend invitations', onClick: resend.open });
   }
   if (mayMove && branches.length > 1) {
     actions.push({ id: 'move', label: 'Move to a centre', onClick: () => setPending('move') });
@@ -152,16 +142,7 @@ export function UsersBulkActions({
         />
       </BulkActionsBar>
 
-      <Confirm
-        open={pending === 'resend'}
-        title={`Resend invitations to ${who}?`}
-        description="Each gets a new link to set their password. Accounts that already accepted, or are inactive, are skipped and listed."
-        confirmLabel="Send invitations"
-        confirmVariant="primary"
-        isConfirming={busy}
-        onConfirm={() => void resend()}
-        onCancel={() => setPending(null)}
-      />
+      {resend.dialogs}
 
       <Dialog
         open={pending === 'move'}

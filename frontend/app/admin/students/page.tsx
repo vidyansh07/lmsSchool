@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
+import { BulkActionsBar, type BulkAction } from '@/components/bulk-actions';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { exportFiltersFrom } from '@/lib/reporting';
@@ -14,6 +15,7 @@ import { ActiveFilters } from '@/components/active-filters';
 import { useBranches } from '@/components/organisation/branch-field';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
+import { useResendInvitations } from '@/components/resend-invitations-action';
 import { RequireAuth } from '@/components/require-auth';
 import { Alert } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -21,7 +23,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { Tooltip } from '@/components/ui/tooltip';
+import { useBulkSelection } from '@/hooks/use-bulk-selection';
 import { useList } from '@/hooks/use-list';
+import { bulkStudents, bulkTarget, selectionKey } from '@/lib/bulk';
 import { ApiError } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { Capability } from '@/lib/capabilities';
@@ -36,11 +40,32 @@ import { listStudents, setFeeStatus } from '@/lib/people';
 import type { FeeStatus, StudentListRow } from '@/types/api';
 import { CreateStudentDialog } from './create-student-dialog';
 
+const STUDENT_FILTER_KEYS = ['institution', 'fee_status', 'is_active', 'branch'] as const;
+
 function StudentsTable() {
   const { user: viewer, can } = useAuth();
   const list = useList<StudentListRow>(listStudents, {}, {
-    urlKeys: ['institution', 'fee_status', 'is_active', 'branch'],
+    urlKeys: [...STUDENT_FILTER_KEYS],
   });
+  // Ticked rows survive paging but never a change of filter.
+  const selection = useBulkSelection<string>(selectionKey(list.query, STUDENT_FILTER_KEYS));
+  const exportFilters = exportFiltersFrom(list.query, ['search', ...STUDENT_FILTER_KEYS]);
+  const resend = useResendInvitations({
+    count: selection.selectAllMatching ? (list.data?.count ?? 0) : selection.selectedCount,
+    itemNoun: 'student',
+    send: () =>
+      bulkStudents({
+        ...bulkTarget(selection, list.query, STUDENT_FILTER_KEYS),
+        action: 'resend_invitation',
+      }),
+    onDone: () => {
+      selection.clear();
+      list.reload();
+    },
+  });
+  const bulkActions: BulkAction[] = can(Capability.userUpdateAny)
+    ? [{ id: 'resend', label: 'Resend invitations', onClick: resend.open }]
+    : [];
   // Administrators and the platform operator see every centre; a centre
   // filter only means something to them.
   const seesEveryCentre = viewer?.role === 'superadmin' || viewer?.role === 'admin';
@@ -234,7 +259,7 @@ function StudentsTable() {
         <div className="flex gap-2">
           <ExportMenu
             reportKey="students"
-            filters={exportFiltersFrom(list.query, ['search', 'institution', 'fee_status', 'is_active', 'branch'])}
+            filters={exportFilters}
             count={list.data?.count ?? null}
             size="md"
           />
@@ -256,7 +281,7 @@ function StudentsTable() {
 
       <SavedViews
         screen="admin-students"
-        keys={['search', 'ordering', 'institution', 'fee_status', 'is_active', 'branch']}
+        keys={['search', 'ordering', ...STUDENT_FILTER_KEYS]}
         query={list.query}
         onApply={list.setQuery}
       />
@@ -350,12 +375,31 @@ function StudentsTable() {
         </Alert>
       ) : null}
 
-      <DataTable
+      <BulkActionsBar
+        selectedCount={selection.selectedCount}
+        totalMatchingCount={list.data?.count}
+        selectAllMatching={selection.selectAllMatching}
+        onSelectAllMatching={selection.selectAllMatchingFilter}
+        onClear={selection.clear}
+        actions={bulkActions}
+        itemNoun="student"
+      >
+        <ExportMenu
+          reportKey="students"
+          label={selection.selectAllMatching ? 'Export all matching' : 'Export'}
+          filters={exportFilters}
+          selectedIds={selection.selectAllMatching ? undefined : [...selection.selectedIds]}
+        />
+      </BulkActionsBar>
+      {resend.dialogs}
 
+      <DataTable
         onRowActivate={(row) => router.push(`/admissions/${row.id}`)}
         columns={columns}
         rows={list.data?.results ?? []}
         getRowId={(row) => row.id}
+        selection={selection}
+        getRowLabel={(row) => row.full_name || row.email}
         isLoading={list.isLoading}
         loadingLabel="Loading students…"
         error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}

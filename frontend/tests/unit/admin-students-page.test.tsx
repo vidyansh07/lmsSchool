@@ -28,8 +28,20 @@ vi.mock('@/lib/people', async () => {
 
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock('@/components/auth-provider', () => ({ useAuth }));
+vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
-vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
+const exportSelected = vi.hoisted(() => ({ value: undefined as readonly string[] | undefined }));
+vi.mock('@/components/export-menu', () => ({
+  ExportMenu: ({ selectedIds }: { selectedIds?: readonly string[] }) => {
+    if (selectedIds) exportSelected.value = selectedIds;
+    return null;
+  },
+}));
+const bulkStudents = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/bulk', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/bulk')>('@/lib/bulk');
+  return { ...actual, bulkStudents };
+});
 vi.mock('@/app/admin/students/create-student-dialog', () => ({ CreateStudentDialog: () => null }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -148,5 +160,34 @@ describe('AdminStudentsPage', () => {
     render(<AdminStudentsPage />);
     await waitFor(() => expect(screen.getByText('Asha Rao')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /comfortable view/i })).toBeInTheDocument();
+  });
+});
+
+describe('AdminStudentsPage — acting on many students', () => {
+  it('exports the ticked students and resends their invitations', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 'u-admin', role: 'admin' },
+      isLoading: false,
+      can: () => true,
+    });
+    listStudents.mockResolvedValue(
+      page([studentRow(), studentRow({ id: 's-2', full_name: 'Bala K', email: 'bala@example.com' })]),
+    );
+    bulkStudents.mockResolvedValue({ action: 'resend_invitation', total: 2, done: 2, skipped: [] });
+    const user = userEvent.setup();
+    render(<AdminStudentsPage />);
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Select Asha Rao' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Bala K' }));
+    expect(exportSelected.value).toEqual(['s-1', 's-2']);
+
+    await user.click(screen.getByRole('button', { name: 'Resend invitations' }));
+    await user.click(screen.getByRole('button', { name: 'Send invitations' }));
+    await waitFor(() =>
+      expect(bulkStudents).toHaveBeenCalledWith({ ids: ['s-1', 's-2'], action: 'resend_invitation' }),
+    );
+    expect(await screen.findByRole('dialog', { name: 'Invitations' })).toHaveTextContent(
+      '2 students invited again.',
+    );
   });
 });

@@ -73,6 +73,7 @@ vi.mock('@/lib/saved-filters', () => ({
   deleteSavedFilter: vi.fn(),
 }));
 vi.mock('@/components/admin/user-sessions-card', () => ({ UserSessionsCard: () => null }));
+vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('@/components/organisation/branch-field', () => ({
   BranchField: () => null,
   useBranches: () => ({

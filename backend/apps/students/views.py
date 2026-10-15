@@ -14,7 +14,7 @@ from __future__ import annotations
 import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView, get_object_or_404
@@ -22,9 +22,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.roles import UserRole, has_capability
+from apps.common import bulk
 from apps.common.caching import MINUTE, remember
 from apps.common.exceptions import AuthorityError
 from apps.common.permissions import Capability, HasCapability, IsActiveUser, IsOwnerOrHasCapability
+from apps.common.throttling import BurstThrottle
 from apps.fees.queries import annotate_student_fee_totals
 from apps.organisation.access import resolve_submitted_branch
 from apps.work.serializers import ActivityDetailSerializer
@@ -485,3 +487,53 @@ class Student360View(APIView):
             lambda: student_360.build(request.user, student),
         )
         return Response(data)
+
+
+class StudentBulkRequestSerializer(bulk.BulkTargetSerializer):
+    action = serializers.ChoiceField(choices=("resend_invitation",))
+
+
+class StudentBulkView(APIView):
+    """Resend invitations to many students at once, from the students list —
+    the ticked ones, or every student the list's filters match.
+
+    The accounts list's rule (`accounts.services.resend_invitation`): students
+    who already set a password, or whose account is inactive, are skipped.
+    """
+
+    permission_classes = (IsActiveUser,)
+    throttle_classes = (BurstThrottle,)
+
+    @extend_schema(
+        summary="Act on many students at once",
+        request=StudentBulkRequestSerializer,
+        responses={200: bulk.BulkResultSerializer},
+        tags=STUDENTS_TAG,
+    )
+    def post(self, request):
+        from apps.accounts import services as account_services
+
+        if not (
+            has_capability(request.user, Capability.STUDENT_VIEW_ANY)
+            and has_capability(request.user, Capability.USER_UPDATE_ANY)
+        ):
+            raise AuthorityError({"action": ["You cannot resend students' invitations."]})
+        serializer = StudentBulkRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        rows, missing = bulk.resolve_targets(
+            access.visible_students(request.user).select_related("user"),
+            serializer.validated_data,
+            filterset="apps.students.views.StudentFilterSet",
+            search_fields=StudentListCreateView.search_fields,
+            request=request,
+        )
+        result = bulk.apply_each(
+            bulk.BulkResult(action="resend_invitation"),
+            rows,
+            missing,
+            lambda student: account_services.resend_invitation(
+                user=student.user, actor=request.user
+            ),
+            lambda student: student.user.get_full_name() or student.student_id,
+        )
+        return Response(bulk.BulkResultSerializer(result).data)

@@ -73,3 +73,15 @@ export async function bulkTransferEnrollments(
 ): Promise<BulkResult> {
   return apiMutate<BulkResult>('/api/v1/enrollments/bulk-transfer/', { method: 'POST', body });
 }
+
+export async function bulkTrainers(
+  body: BulkTarget & { action: 'resend_invitation' },
+): Promise<BulkResult> {
+  return apiMutate<BulkResult>('/api/v1/trainers/bulk/', { method: 'POST', body });
+}
+
+export async function bulkStudents(
+  body: BulkTarget & { action: 'resend_invitation' },
+): Promise<BulkResult> {
+  return apiMutate<BulkResult>('/api/v1/students/bulk/', { method: 'POST', body });
+}

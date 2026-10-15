@@ -18,6 +18,7 @@ import { Suspense, useState } from 'react';
 
 import { CreateTrainerDialog } from '@/app/admin/trainers/create-trainer-dialog';
 import { useAuth } from '@/components/auth-provider';
+import { BulkActionsBar, type BulkAction } from '@/components/bulk-actions';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
@@ -27,6 +28,7 @@ import { useBranches } from '@/components/organisation/branch-field';
 import { ListToolbar } from '@/components/list-toolbar';
 import { AttentionChip } from '@/components/manage/attention-chip';
 import { Pagination } from '@/components/pagination';
+import { useResendInvitations } from '@/components/resend-invitations-action';
 import { RequireAuth } from '@/components/require-auth';
 import { LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
@@ -35,13 +37,23 @@ import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { PageHeader } from '@/components/ui/layout';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useBulkSelection } from '@/hooks/use-bulk-selection';
 import { useCreateParam } from '@/hooks/use-create-param';
 import { useList } from '@/hooks/use-list';
 import { ApiError } from '@/lib/api';
+import { bulkTarget, bulkTrainers, selectionKey } from '@/lib/bulk';
 import { Capability } from '@/lib/capabilities';
 import { fallback, NO_DATA } from '@/lib/format';
 import { listManageTrainers, type ManageTrainerRow } from '@/lib/manage';
 import { updateTrainer } from '@/lib/people';
+
+const TRAINER_FILTER_KEYS = [
+  'attention',
+  'skill',
+  'is_accepting_assignments',
+  'branch',
+  'min_experience',
+] as const;
 
 export function TrainersHub() {
   const router = useRouter();
@@ -56,8 +68,10 @@ export function TrainersHub() {
   const list = useList<ManageTrainerRow>(
     listManageTrainers,
     { page_size: 20, ...(attention ? { attention } : {}) },
-    { urlKeys: ['attention', 'skill', 'is_accepting_assignments', 'branch', 'min_experience'] },
+    { urlKeys: [...TRAINER_FILTER_KEYS] },
   );
+  // Ticked rows survive paging but never a change of filter.
+  const selection = useBulkSelection<string>(selectionKey(list.query, TRAINER_FILTER_KEYS));
   const [showCreate, setShowCreate] = useCreateParam(can(Capability.trainerCreate));
   // Typed into a box and applied after a pause (or on Enter) — not only on
   // blur, which left a typed skill doing nothing until focus moved away.
@@ -86,6 +100,25 @@ export function TrainersHub() {
   const [actionError, setActionError] = useState('');
   const [notice, setNotice] = useState('');
   const [busyTrainerId, setBusyTrainerId] = useState<string | null>(null);
+  const selectedCount = selection.selectAllMatching
+    ? (list.data?.count ?? 0)
+    : selection.selectedCount;
+  const resend = useResendInvitations({
+    count: selectedCount,
+    itemNoun: 'trainer',
+    send: () =>
+      bulkTrainers({
+        ...bulkTarget(selection, list.query, TRAINER_FILTER_KEYS),
+        action: 'resend_invitation',
+      }),
+    onDone: () => {
+      selection.clear();
+      list.reload();
+    },
+  });
+  const bulkActions: BulkAction[] = can(Capability.userUpdateAny)
+    ? [{ id: 'resend', label: 'Resend invitations', onClick: resend.open }]
+    : [];
 
   async function toggleAvailability(row: ManageTrainerRow) {
     setBusyTrainerId(row.id);
@@ -353,10 +386,30 @@ export function TrainersHub() {
           </Alert>
         ) : null}
 
+        <BulkActionsBar
+          selectedCount={selection.selectedCount}
+          totalMatchingCount={list.data?.count}
+          selectAllMatching={selection.selectAllMatching}
+          onSelectAllMatching={selection.selectAllMatchingFilter}
+          onClear={selection.clear}
+          actions={bulkActions}
+          itemNoun="trainer"
+        >
+          <ExportMenu
+            reportKey="trainer_activity"
+            label={selection.selectAllMatching ? 'Export all matching' : 'Export'}
+            filters={exportFilters}
+            selectedIds={selection.selectAllMatching ? undefined : [...selection.selectedIds]}
+          />
+        </BulkActionsBar>
+        {resend.dialogs}
+
         <DataTable
           columns={columns}
           rows={list.data?.results ?? []}
           getRowId={(row) => row.id}
+          selection={selection}
+          getRowLabel={(row) => row.full_name || row.email}
           isLoading={list.isLoading}
           error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}
           onRetry={list.reload}

@@ -230,3 +230,80 @@ def test_too_broad_a_filter_is_refused(api_client_no_csrf, admin_user, branch, m
     )
     assert response.status_code == 400
     assert "Narrow it" in str(response.json())
+
+
+TRAINERS_URL = "/api/v1/trainers/bulk/"
+
+
+@pytest.mark.django_db
+def test_resending_trainer_invitations_from_the_trainers_hub(
+    api_client_no_csrf, admin_user, trainer_profile, trainer_profile_two
+):
+    """The hub works in trainer ids and the hub's own filters; the rule is the
+    accounts list's."""
+    trainer_profile.user.is_email_verified = False
+    trainer_profile.user.save(update_fields=["is_email_verified"])
+    trainer_profile_two.user.is_email_verified = True
+    trainer_profile_two.user.save(update_fields=["is_email_verified"])
+
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.post(
+        TRAINERS_URL,
+        {
+            "action": "resend_invitation",
+            "ids": [str(trainer_profile.pk), str(trainer_profile_two.pk)],
+        },
+        format="json",
+    )
+
+    assert response.status_code == 200, response.content
+    body = response.json()
+    assert body["done"] == 1
+    assert "already accepted" in body["skipped"][0]["reason"]
+    assert _invited(trainer_profile.user)
+
+    by_filter = api_client_no_csrf.post(
+        TRAINERS_URL,
+        {"action": "resend_invitation", "filters": {"search": trainer_profile.trainer_id}},
+        format="json",
+    )
+    assert by_filter.json()["total"] == 1
+
+
+@pytest.mark.django_db
+def test_a_manager_cannot_resend_trainer_invitations(
+    api_client_no_csrf, manager_user, trainer_profile
+):
+    api_client_no_csrf.force_login(manager_user)
+    response = api_client_no_csrf.post(
+        TRAINERS_URL,
+        {"action": "resend_invitation", "ids": [str(trainer_profile.pk)]},
+        format="json",
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_resending_student_invitations_from_the_students_list(
+    api_client_no_csrf, admin_user, student_profile, other_student_profile, manager_user
+):
+    other_student_profile.user.is_email_verified = True
+    other_student_profile.user.save(update_fields=["is_email_verified"])
+    api_client_no_csrf.force_login(admin_user)
+    response = api_client_no_csrf.post(
+        "/api/v1/students/bulk/",
+        {"action": "resend_invitation", "filters": {"search": "Learner"}},
+        format="json",
+    )
+    assert response.status_code == 200, response.content
+    body = response.json()
+    assert body["total"] == 2
+    assert body["done"] == (0 if student_profile.user.is_email_verified else 1)
+
+    api_client_no_csrf.force_login(manager_user)
+    refused = api_client_no_csrf.post(
+        "/api/v1/students/bulk/",
+        {"action": "resend_invitation", "ids": [str(student_profile.pk)]},
+        format="json",
+    )
+    assert refused.status_code == 403

@@ -487,6 +487,11 @@ SPECTACULAR_SETTINGS = {
         # The export request's yes/no list filters (`is_active`,
         # `is_accepting_assignments`) share one "true"/"false" choice set.
         "TrueFalseEnum": ("true", "false"),
+        # The bulk endpoints each name their verb `action`; the trainers and
+        # students lists offer the same single one.
+        "BulkResendInvitationActionEnum": ("resend_invitation",),
+        "BulkUserActionEnum": ("resend_invitation", "move_centre"),
+        "BulkEnquiryActionEnum": ("assign_owner",),
         "PermissionScopeEnum": "apps.authorization.models.PermissionScope.choices",
         "RoleStatusEnum": "apps.authorization.models.RoleStatus.choices",
         # `Permission.category` was the only field named `category` with no
