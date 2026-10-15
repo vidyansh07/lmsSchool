@@ -5,7 +5,7 @@
  * Covers that a fast double-click on a row action only fires the mutation
  * once.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RosterPanel } from '@/app/admin/batches/[batchId]/page';
@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe('RosterPanel — double-submission protection', () => {
-  it('disables Suspend while the request is in flight and only calls it once on a fast double-click', async () => {
+  it('asks before suspending, then disables the confirm button and calls the server once', async () => {
     getBatchRoster.mockResolvedValue([entry()]);
     let resolve!: () => void;
     setEnrollmentStatus.mockReturnValue(
@@ -92,15 +92,42 @@ describe('RosterPanel — double-submission protection', () => {
 
     render(<RosterPanel batch={batch()} onChanged={() => {}} />);
 
-    const suspendButton = await screen.findByRole('button', { name: 'Suspend' });
-    fireEvent.click(suspendButton);
-    fireEvent.click(suspendButton);
+    fireEvent.click(await screen.findByRole('button', { name: 'Suspend' }));
+    expect(setEnrollmentStatus).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog', { name: /suspend this enrolment/i });
+    const confirm = within(dialog).getByRole('button', { name: 'Suspend' });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
 
-    await waitFor(() => expect(suspendButton).toBeDisabled());
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: /suspending/i })).toBeDisabled());
     expect(setEnrollmentStatus).toHaveBeenCalledOnce();
-    expect(setEnrollmentStatus).toHaveBeenCalledWith('roster-1', 'suspended');
+    expect(setEnrollmentStatus).toHaveBeenCalledWith('roster-1', 'suspended', '');
 
     resolve();
-    await waitFor(() => expect(suspendButton).not.toBeDisabled());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+});
+
+describe('RosterPanel — withdrawing is never one click', () => {
+  it('needs a reason before the enrolment is ended, and sends it with the change', async () => {
+    getBatchRoster.mockResolvedValue([entry()]);
+    setEnrollmentStatus.mockResolvedValue(undefined);
+
+    render(<RosterPanel batch={batch()} onChanged={() => {}} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+    const dialog = await screen.findByRole('dialog', { name: /withdraw from this batch/i });
+    expect(dialog).toHaveTextContent(/cannot be reopened/i);
+    const withdraw = within(dialog).getByRole('button', { name: 'Withdraw' });
+    expect(withdraw).toBeDisabled();
+
+    fireEvent.change(within(dialog).getByLabelText(/^Reason/), {
+      target: { value: 'Moved to another city.' },
+    });
+    fireEvent.click(withdraw);
+
+    await waitFor(() =>
+      expect(setEnrollmentStatus).toHaveBeenCalledWith('roster-1', 'cancelled', 'Moved to another city.'),
+    );
   });
 });

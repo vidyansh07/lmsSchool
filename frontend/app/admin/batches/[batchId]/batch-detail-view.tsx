@@ -11,6 +11,10 @@ import { Pagination } from '@/components/pagination';
 import { ScheduleList } from '@/components/schedule-list';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { StatusActions, type StatusAction } from '@/components/status-actions';
+import {
+  EnrollmentStatusDialog,
+  type EnrollmentStatusChange,
+} from '@/components/students/enrollment-status-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -439,6 +443,7 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isBusy, setIsBusy] = useState(false);
   const [busyEntryId, setBusyEntryId] = useState('');
+  const [pendingChange, setPendingChange] = useState<EnrollmentStatusChange | null>(null);
 
   const loadRoster = useCallback(() => {
     getBatchRoster(batch.id)
@@ -489,6 +494,15 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
     } finally {
       setIsBusy(false);
     }
+  }
+
+  function ask(entry: RosterEntry, status: EnrollmentStatusChange['status']) {
+    setMessage('');
+    setPendingChange({
+      enrollmentId: entry.id,
+      subject: `${entry.full_name || entry.email} (${entry.student_code}) on ${batch.code}`,
+      status,
+    });
   }
 
   async function onSetStatus(entry: RosterEntry, status: RosterEntry['status']) {
@@ -559,7 +573,7 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
                               size="sm"
                               variant="outline"
                               disabled={busyEntryId === entry.id}
-                              onClick={() => void onSetStatus(entry, 'suspended')}
+                              onClick={() => ask(entry, 'suspended')}
                             >
                               Suspend
                             </Button>
@@ -579,7 +593,7 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
                               size="sm"
                               variant="ghost"
                               disabled={busyEntryId === entry.id}
-                              onClick={() => void onSetStatus(entry, 'cancelled')}
+                              onClick={() => ask(entry, 'cancelled')}
                             >
                               Remove
                             </Button>
@@ -613,6 +627,14 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
           </div>
         ) : null}
       </CardContent>
+      <EnrollmentStatusDialog
+        change={pendingChange}
+        onClose={() => setPendingChange(null)}
+        onChanged={() => {
+          loadRoster();
+          onChanged();
+        }}
+      />
     </Card>
   );
 }

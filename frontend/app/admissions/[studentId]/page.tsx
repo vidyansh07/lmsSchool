@@ -22,6 +22,10 @@ import { FeeLedger, useStudentFees } from '@/components/fees/fee-ledger';
 import { useAuth } from '@/components/auth-provider';
 import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
+import {
+  EnrollmentStatusDialog,
+  type EnrollmentStatusChange,
+} from '@/components/students/enrollment-status-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -173,6 +177,7 @@ function EnrolmentHistory({
   const [failed, setFailed] = useState(false);
   const [busyId, setBusyId] = useState('');
   const [message, setMessage] = useState('');
+  const [pendingChange, setPendingChange] = useState<EnrollmentStatusChange | null>(null);
 
   const load = useCallback(() => {
     listStudentEnrollments(studentCode)
@@ -182,7 +187,16 @@ function EnrolmentHistory({
 
   useEffect(load, [load, refreshToken]);
 
-  async function onTransition(entry: Enrollment, status: 'suspended' | 'active' | 'cancelled') {
+  function ask(entry: Enrollment, status: EnrollmentStatusChange['status']) {
+    setMessage('');
+    setPendingChange({
+      enrollmentId: entry.id,
+      subject: `${entry.course_title || 'This course'} · ${entry.batch_name || entry.batch_code || 'batch'}`,
+      status,
+    });
+  }
+
+  async function onTransition(entry: Enrollment, status: 'active') {
     setBusyId(entry.id);
     setMessage('');
     try {
@@ -250,7 +264,7 @@ function EnrolmentHistory({
                             size="sm"
                             variant="outline"
                             disabled={busyId === entry.id}
-                            onClick={() => void onTransition(entry, 'suspended')}
+                            onClick={() => ask(entry, 'suspended')}
                           >
                             Suspend
                           </Button>
@@ -271,7 +285,7 @@ function EnrolmentHistory({
                               size="sm"
                               variant="ghost"
                               disabled={busyId === entry.id}
-                              onClick={() => void onTransition(entry, 'cancelled')}
+                              onClick={() => ask(entry, 'cancelled')}
                             >
                               Withdraw
                             </Button>
@@ -293,6 +307,11 @@ function EnrolmentHistory({
           </TableWrapper>
         ) : null}
       </CardContent>
+      <EnrollmentStatusDialog
+        change={pendingChange}
+        onClose={() => setPendingChange(null)}
+        onChanged={load}
+      />
     </Card>
   );
 }
