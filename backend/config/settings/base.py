@@ -484,6 +484,9 @@ SPECTACULAR_SETTINGS = {
     "SORT_OPERATIONS": False,
     "ENUM_NAME_OVERRIDES": {
         "UserRoleEnum": "apps.accounts.roles.UserRole.choices",
+        # The export request's yes/no list filters (`is_active`,
+        # `is_accepting_assignments`) share one "true"/"false" choice set.
+        "TrueFalseEnum": ("true", "false"),
         "PermissionScopeEnum": "apps.authorization.models.PermissionScope.choices",
         "RoleStatusEnum": "apps.authorization.models.RoleStatus.choices",
         # `Permission.category` was the only field named `category` with no
