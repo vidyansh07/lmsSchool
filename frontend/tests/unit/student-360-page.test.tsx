@@ -36,6 +36,16 @@ vi.mock('@/components/students/timeline', () => ({
   StudentTimeline: ({ studentId }: { studentId: string }) => <div>Timeline for {studentId}</div>,
 }));
 vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
+const listCertificates = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/progress', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/progress')>('@/lib/progress');
+  return { ...actual, listCertificates };
+});
+const listDeliveries = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/communication', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/communication')>('@/lib/communication');
+  return { ...actual, listDeliveries };
+});
 const getStudentFees = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/fees', async () => {
   const actual = await vi.importActual<typeof import('@/lib/fees')>('@/lib/fees');
@@ -402,5 +412,50 @@ describe('Student360Content — fees and the other records', () => {
     expect(await screen.findByRole('tab', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Fees' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Account' })).toBeNull();
+  });
+});
+
+describe('Student360Content — messages and certificates', () => {
+  it('lists the certificates awarded to this student, with a verify link', async () => {
+    getStudent360.mockResolvedValue(student360());
+    listCertificates.mockResolvedValue({
+      count: 1,
+      page: 1,
+      page_size: 20,
+      total_pages: 1,
+      results: [
+        {
+          id: 'c1',
+          number: 'GRS-CERT-0001',
+          verification_code: 'ABC123',
+          course_title: 'Linux Essentials',
+          batch_code: 'GRS-B-001',
+          completion_date: '2026-09-30',
+          status: 'issued',
+          is_live: true,
+          issued_at: '2026-10-01T00:00:00Z',
+        },
+      ],
+    });
+    searchParams.value = 'tab=certificates';
+    render(<Student360Content studentId="student-1" />);
+
+    await waitFor(() => expect(listCertificates).toHaveBeenCalledWith({ student: 'student-1' }));
+    expect(await screen.findByText('GRS-CERT-0001')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Verify' })).toHaveAttribute('href', '/verify/ABC123');
+  });
+
+  it('shows the messages tab only to someone who reads the delivery log', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 'staff-1', role: 'admin', capabilities: [] },
+      can: (capability: string) => capability === 'communication.view_any',
+    });
+    getStudent360.mockResolvedValue(student360());
+    listDeliveries.mockResolvedValue({ count: 0, page: 1, page_size: 20, total_pages: 1, results: [] });
+    searchParams.value = 'tab=messages';
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByText('No messages yet')).toBeInTheDocument();
+    expect(listDeliveries).toHaveBeenCalledWith(expect.objectContaining({ recipient: expect.any(String) }));
   });
 });

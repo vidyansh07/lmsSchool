@@ -58,6 +58,7 @@ import { RequireAuth } from '@/components/require-auth';
 import { StudentPerformance } from '@/app/manage/students/[enrollmentId]/page';
 import { StudentActivitiesTab } from '@/components/students/student-activities-tab';
 import { FeeLedger, useStudentFees } from '@/components/fees/fee-ledger';
+import { StudentCertificatesTab, StudentMessagesTab } from '@/components/students/student-records-tabs';
 import { StudentTimeline } from '@/components/students/timeline';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -90,9 +91,26 @@ import type {
   Student360RiskTrigger,
 } from '@/types/api';
 
-type TabKey = 'overview' | 'activities' | 'timeline' | 'enrollment' | 'fees' | 'risk';
+type TabKey =
+  | 'overview'
+  | 'activities'
+  | 'timeline'
+  | 'enrollment'
+  | 'fees'
+  | 'messages'
+  | 'certificates'
+  | 'risk';
 const DEFAULT_TAB: TabKey = 'overview';
-const VALID_TABS: TabKey[] = ['overview', 'activities', 'timeline', 'enrollment', 'fees', 'risk'];
+const VALID_TABS: TabKey[] = [
+  'overview',
+  'activities',
+  'timeline',
+  'enrollment',
+  'fees',
+  'messages',
+  'certificates',
+  'risk',
+];
 
 function isTabKey(value: string | null): value is TabKey {
   return value !== null && (VALID_TABS as string[]).includes(value);
@@ -596,6 +614,10 @@ export function Student360Content({ studentId }: { studentId: string }) {
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="enrollment">Enrolment</TabsTrigger>
           {mayReadFees ? <TabsTrigger value="fees">Fees</TabsTrigger> : null}
+          {can(Capability.communicationViewAny) ? (
+            <TabsTrigger value="messages">Messages</TabsTrigger>
+          ) : null}
+          <TabsTrigger value="certificates">Certificates</TabsTrigger>
           <TabsTrigger value="risk">Risk</TabsTrigger>
         </TabsList>
 
@@ -616,6 +638,14 @@ export function Student360Content({ studentId }: { studentId: string }) {
             <FeesTab studentId={studentId} studentCode={data.profile.student_id} />
           </TabsContent>
         ) : null}
+        {can(Capability.communicationViewAny) ? (
+          <TabsContent value="messages">
+            <StudentMessagesTab userId={data.profile.user.id} />
+          </TabsContent>
+        ) : null}
+        <TabsContent value="certificates">
+          <StudentCertificatesTab studentId={studentId} />
+        </TabsContent>
         <TabsContent value="risk">
           <RiskTab data={data} />
         </TabsContent>
