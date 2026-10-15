@@ -57,6 +57,7 @@ import { useAuth } from '@/components/auth-provider';
 import { RequireAuth } from '@/components/require-auth';
 import { StudentPerformance } from '@/app/manage/students/[enrollmentId]/page';
 import { StudentActivitiesTab } from '@/components/students/student-activities-tab';
+import { FeeLedger, useStudentFees } from '@/components/fees/fee-ledger';
 import { StudentTimeline } from '@/components/students/timeline';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -79,12 +80,19 @@ import {
   RISK_SEVERITY_LABEL,
   RISK_SEVERITY_VARIANT,
 } from '@/lib/labels';
+import { listStudentEnrollments } from '@/lib/batches';
+import { getStudentFees } from '@/lib/fees';
 import { getStudent360 } from '@/lib/student-360';
-import type { Student360FeedItem, Student360Response, Student360RiskTrigger } from '@/types/api';
+import type {
+  Enrollment,
+  Student360FeedItem,
+  Student360Response,
+  Student360RiskTrigger,
+} from '@/types/api';
 
-type TabKey = 'overview' | 'activities' | 'timeline' | 'enrollment' | 'risk';
+type TabKey = 'overview' | 'activities' | 'timeline' | 'enrollment' | 'fees' | 'risk';
 const DEFAULT_TAB: TabKey = 'overview';
-const VALID_TABS: TabKey[] = ['overview', 'activities', 'timeline', 'enrollment', 'risk'];
+const VALID_TABS: TabKey[] = ['overview', 'activities', 'timeline', 'enrollment', 'fees', 'risk'];
 
 function isTabKey(value: string | null): value is TabKey {
   return value !== null && (VALID_TABS as string[]).includes(value);
@@ -423,7 +431,49 @@ function RiskTab({ data }: { data: Student360Response }) {
 // [enrollmentId]/page.tsx`'s `StudentPerformance` is the same convention,
 // sidestepping `use(params)`, `Suspense` and `RequireAuth` in a test that is
 // really about this component's own states and tab wiring.
+/**
+ * The fee ledger on the 360 — the same component and the same endpoints the
+ * counsellor's admissions record uses, so the two can never disagree. Loaded
+ * only when the tab is opened; writable only with `fee.manage_any`.
+ */
+function FeesTab({ studentId, studentCode }: { studentId: string; studentCode: string }) {
+  const { can } = useAuth();
+  const [reloadToken, setReloadToken] = useState(0);
+  const fees = useStudentFees(() => getStudentFees(studentId), [studentId, reloadToken]);
+  const [enrollments, setEnrollments] = useState<Enrollment[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listStudentEnrollments(studentCode)
+      .then((rows) => {
+        if (!cancelled) setEnrollments(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setEnrollments([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [studentCode, reloadToken]);
+
+  return (
+    <FeeLedger
+      studentId={studentId}
+      summary={fees.summary}
+      enrollments={enrollments}
+      mayManage={can(Capability.feeManageAny)}
+      isLoading={fees.isLoading}
+      error={fees.error}
+      onChanged={() => {
+        fees.reload();
+        setReloadToken((value) => value + 1);
+      }}
+    />
+  );
+}
+
 export function Student360Content({ studentId }: { studentId: string }) {
+  const { can } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -506,18 +556,36 @@ export function Student360Content({ studentId }: { studentId: string }) {
   if (!data) return <LoadingState label="Loading student…" rows={6} />;
 
   const name = data.profile.user.full_name || data.profile.user.email;
+  const mayReadFees = can(Capability.feeViewAny);
 
   return (
     <div className="space-y-6">
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
-        <Link href="/admin/students" className="text-ink-muted transition-colors hover:text-ink">
-          Students
-        </Link>
-        <ChevronRight className="size-3.5 text-ink-muted/60" aria-hidden="true" />
-        <span aria-current="page" className="truncate font-medium text-ink">
-          {name}
-        </span>
-      </nav>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-sm">
+          <Link href="/admin/students" className="text-ink-muted transition-colors hover:text-ink">
+            Students
+          </Link>
+          <ChevronRight className="size-3.5 text-ink-muted/60" aria-hidden="true" />
+          <span aria-current="page" className="truncate font-medium text-ink">
+            {name}
+          </span>
+        </nav>
+        {/* The other two records about the same person, one click away: the
+            counsellor's desk (fees, follow-ups, enrolment changes) and the
+            sign-in account. */}
+        <div className="flex flex-wrap gap-2">
+          {can(Capability.enrolmentCreate) ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/admissions/${studentId}`}>Admissions record</Link>
+            </Button>
+          ) : null}
+          {can(Capability.userViewAny) ? (
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/admin/users/${data.profile.user.id}`}>Account</Link>
+            </Button>
+          ) : null}
+        </div>
+      </div>
 
       <Header data={data} onOpenRiskTab={() => setTab('risk')} />
 
@@ -527,6 +595,7 @@ export function Student360Content({ studentId }: { studentId: string }) {
           <TabsTrigger value="activities">Activities</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="enrollment">Enrolment</TabsTrigger>
+          {mayReadFees ? <TabsTrigger value="fees">Fees</TabsTrigger> : null}
           <TabsTrigger value="risk">Risk</TabsTrigger>
         </TabsList>
 
@@ -542,6 +611,11 @@ export function Student360Content({ studentId }: { studentId: string }) {
         <TabsContent value="enrollment">
           <EnrollmentTab data={data} />
         </TabsContent>
+        {mayReadFees ? (
+          <TabsContent value="fees">
+            <FeesTab studentId={studentId} studentCode={data.profile.student_id} />
+          </TabsContent>
+        ) : null}
         <TabsContent value="risk">
           <RiskTab data={data} />
         </TabsContent>

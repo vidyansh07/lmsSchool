@@ -5,7 +5,7 @@
  * state), and the tab shown follows `?tab=` so Back and sharing work
  * (DESIGN_DECISIONS.md "Student 360").
  */
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Student360Content } from '@/app/students/[id]/page';
@@ -35,6 +35,17 @@ vi.mock('@/components/students/student-activities-tab', () => ({
 vi.mock('@/components/students/timeline', () => ({
   StudentTimeline: ({ studentId }: { studentId: string }) => <div>Timeline for {studentId}</div>,
 }));
+vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
+const getStudentFees = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/fees', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/fees')>('@/lib/fees');
+  return { ...actual, getStudentFees };
+});
+const listStudentEnrollments = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/batches', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/batches')>('@/lib/batches');
+  return { ...actual, listStudentEnrollments };
+});
 vi.mock('@/app/manage/students/[enrollmentId]/page', () => ({
   StudentPerformance: ({ enrollmentId }: { enrollmentId: string }) => <div>Enrolment performance for {enrollmentId}</div>,
 }));
@@ -355,5 +366,41 @@ describe('Student360Content', () => {
     render(<Student360Content studentId="student-1" />);
 
     expect(await screen.findByText('Not available')).toBeInTheDocument();
+  });
+});
+
+describe('Student360Content — fees and the other records', () => {
+  it('offers the fee ledger to someone who reads fees, and links the admissions record and the account', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 'staff-1', role: 'counsellor', capabilities: [] },
+      can: (capability: string) =>
+        ['fee.view_any', 'enrolment.create', 'user.view_any'].includes(capability),
+    });
+    getStudent360.mockResolvedValue(student360());
+    getStudentFees.mockResolvedValue({
+      student_id: 'student-1',
+      fee_status: 'paid',
+      plans: [],
+      totals: { agreed: '0', discount: '0', payable: '0', paid: '0', balance: '0' },
+    });
+    listStudentEnrollments.mockResolvedValue([]);
+    searchParams.value = 'tab=fees';
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByRole('tab', { name: 'Fees' })).toBeInTheDocument();
+    await waitFor(() => expect(getStudentFees).toHaveBeenCalledWith('student-1'));
+    expect(screen.getByRole('link', { name: 'Admissions record' })).toHaveAttribute(
+      'href',
+      '/admissions/student-1',
+    );
+    expect(screen.getByRole('link', { name: 'Account' })).toBeInTheDocument();
+  });
+
+  it('has no Fees tab for someone who cannot read fees', async () => {
+    getStudent360.mockResolvedValue(student360());
+    render(<Student360Content studentId="student-1" />);
+    expect(await screen.findByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Fees' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Account' })).toBeNull();
   });
 });
