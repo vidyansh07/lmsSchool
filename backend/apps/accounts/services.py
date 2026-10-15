@@ -258,6 +258,14 @@ def update_user(*, user: User, actor: User, role_change_reason: str = "", **fiel
         # address would count as a change and reset somebody's verification.
         new_email = User.objects.normalize_email(new_email).strip().lower()
         fields["email"] = new_email
+        if new_email != previous_email and actor.pk == user.pk:
+            # The self-service exemption in `_guard_administration` covers a
+            # name or a phone number, not the login identifier: moving it
+            # without re-verification, a session reset or an audit entry is
+            # how a borrowed session becomes a permanent takeover.
+            raise ApplicationError(
+                {"email": ["Ask another administrator to change your own sign-in email."]}
+            )
         if new_email != previous_email and User.objects.filter(email=new_email).exists():
             raise ApplicationError({"email": ["Another account already uses that address."]})
 

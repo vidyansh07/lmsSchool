@@ -222,6 +222,35 @@ def test_admin_can_deactivate_and_reactivate(api_client_no_csrf, admin_user, stu
 
 
 @pytest.mark.django_db
+def test_admin_cannot_move_their_own_sign_in_email(api_client_no_csrf, admin_user):
+    # The self-service exemption is for names and phone numbers. Moving the
+    # login identifier through the admin route would skip re-verification,
+    # the session reset and the audit entry another administrator's change gets.
+    api_client_no_csrf.force_login(admin_user)
+    original = admin_user.email
+    response = api_client_no_csrf.patch(
+        f"{USERS_URL}{admin_user.pk}/",
+        {"email": "taken-over@example.com", "first_name": "Still allowed"},
+        format="json",
+    )
+    assert response.status_code == 400
+    assert "email" in response.json()["error"]["details"]
+    admin_user.refresh_from_db()
+    assert admin_user.email == original
+    assert admin_user.first_name != "Still allowed"
+
+    # Re-sending the same address in another case is not a change.
+    response = api_client_no_csrf.patch(
+        f"{USERS_URL}{admin_user.pk}/",
+        {"email": original.upper(), "first_name": "Renamed"},
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
+    admin_user.refresh_from_db()
+    assert admin_user.first_name == "Renamed"
+
+
+@pytest.mark.django_db
 def test_admin_cannot_deactivate_their_own_account(api_client_no_csrf, admin_user):
     api_client_no_csrf.force_login(admin_user)
     response = api_client_no_csrf.post(
