@@ -718,10 +718,16 @@ def allowed_role_transitions(actor, target) -> tuple[str, ...]:
     candidates = tuple(STAFF_ROLE_FAMILY) if target.role in STAFF_ROLE_FAMILY else (target.role,)
     # Preserve declaration order instead of exposing a frozenset's arbitrary
     # order to the select control.
+    # A centre-bound role is not offered to an account with no centre: the
+    # service refuses it until the account is placed (see `update_user`).
+    centreless = getattr(target, "branch_id", None) is None
+    centre_free = (UserRole.SUPERADMIN, UserRole.ADMIN)
     return tuple(
         role
         for role, _label in UserRole.choices
-        if role in candidates and (role == target.role or can_grant_role(actor, role))
+        if role in candidates
+        and (role == target.role or can_grant_role(actor, role))
+        and (role == target.role or not centreless or role in centre_free)
     )
 
 

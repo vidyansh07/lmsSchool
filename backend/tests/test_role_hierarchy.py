@@ -626,3 +626,38 @@ def test_scope_grants_follow_the_ladder_and_are_never_self_service(
         f"/api/v1/users/{manager_user.pk}/scope-grants/", {"batch": str(batch.pk)}, format="json"
     )
     assert downward.status_code == 201, downward.content
+
+
+@pytest.mark.django_db
+def test_a_centreless_account_is_placed_before_it_gets_a_centre_bound_role(branch):
+    """A superadmin has no centre; made a manager as they are, they would be
+    bounded to nothing — every screen empty, nobody to administer."""
+    from apps.accounts.services import move_user_to_branch
+    from apps.common.exceptions import ConflictError
+
+    boss = User.objects.create_user(
+        email="root-one@example.test",
+        password="Sup3r-Str0ng-Pass!42",
+        first_name="Root",
+        role=UserRole.SUPERADMIN,
+    )
+    other = User.objects.create_user(
+        email="root-two@example.test",
+        password="Sup3r-Str0ng-Pass!42",
+        first_name="Second",
+        role=UserRole.SUPERADMIN,
+    )
+    with pytest.raises(ConflictError, match="centre"):
+        transition_user_role(user=other, actor=boss, role=UserRole.MANAGER, reason="Steps back.")
+    other.refresh_from_db()
+    assert other.role == UserRole.SUPERADMIN
+
+    # An unbounded role needs no centre.
+    transition_user_role(user=other, actor=boss, role=UserRole.ADMIN, reason="Steps back a little.")
+    other.refresh_from_db()
+    assert other.role == UserRole.ADMIN
+
+    move_user_to_branch(user=other, branch=branch, actor=boss, reason="Runs Jaipur now.")
+    transition_user_role(user=other, actor=boss, role=UserRole.MANAGER, reason="Runs Jaipur now.")
+    other.refresh_from_db()
+    assert other.role == UserRole.MANAGER

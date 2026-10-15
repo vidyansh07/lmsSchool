@@ -123,6 +123,13 @@ def get_or_create_profile_for(user: User, *, actor: User | None = None) -> Train
     if profile is not None:
         return profile
     with transaction.atomic():
+        # Two first requests at once (two tabs opening `/trainers/me/`) would
+        # both see no profile and the second create would hit the one-to-one
+        # constraint as a 500. The account row is the lock both must take.
+        User.objects.select_for_update().filter(pk=user.pk).first()
+        profile = TrainerProfile.objects.filter(user=user).first()
+        if profile is not None:
+            return profile
         profile = TrainerProfile.objects.create(
             user=user, trainer_id=next_trainer_id(), branch=user.branch
         )
@@ -153,6 +160,8 @@ def ensure_teaching_profile(*, user: User, actor: User) -> TrainerProfile:
         raise ApplicationError({"user_id": ["Only a trainer or a manager can teach a batch."]})
     if not user.is_active:
         raise ApplicationError({"user_id": ["That account is not active."]})
+    # Serialised on the account row, for the reason in `get_or_create_profile_for`.
+    User.objects.select_for_update().filter(pk=user.pk).first()
     existing = TrainerProfile.objects.filter(user=user).first()
     if existing is not None:
         return existing

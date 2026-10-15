@@ -357,6 +357,18 @@ def update_user(*, user: User, actor: User, role_change_reason: str = "", **fiel
         and _is_last_active_superadmin(user)
     ):
         raise ConflictError({"role": ["The last active superadmin cannot be reassigned."]})
+    if (
+        new_role is not None
+        and new_role != user.role
+        and new_role not in CENTRE_FREE_ROLES
+        and user.branch_id is None
+    ):
+        # A superadmin has no centre. Made a manager or counsellor as they
+        # are, they would be bounded to nothing: every screen empty, nobody
+        # to administer. Place them first, then change the role.
+        raise ConflictError(
+            {"role": ["Move this account into a centre before giving it a centre-bound role."]}
+        )
 
     for field, value in fields.items():
         if getattr(user, field) != value:
@@ -433,6 +445,10 @@ def transition_user_role(
         role_change_reason=reason.strip(),
         **changes,
     )
+
+
+#: Roles that see every centre and so need none of their own (D-129 amended).
+CENTRE_FREE_ROLES = frozenset({UserRole.SUPERADMIN, UserRole.ADMIN})
 
 
 def _is_last_active_superadmin(user: User) -> bool:
