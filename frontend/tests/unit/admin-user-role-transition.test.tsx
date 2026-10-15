@@ -102,6 +102,7 @@ describe('administrator role transition', () => {
         role: 'counsellor',
         custom_role: null,
         reason: 'Moved to admissions.',
+        expected_updated_at: '2026-01-01T00:00:00Z',
       }),
     );
     expect(screen.getByRole('status')).toHaveTextContent(/sessions were ended/i);
@@ -130,6 +131,7 @@ describe('administrator role transition', () => {
       role: 'counsellor',
       custom_role: null,
       reason: 'Moved to admissions.',
+      expected_updated_at: '2026-01-01T00:00:00Z',
     });
     expect(await screen.findByRole('status')).toHaveTextContent(/sessions were ended/i);
   });
@@ -191,5 +193,28 @@ describe('a manager who also teaches', () => {
       '/manage/trainers/tp-1',
     );
     expect(screen.getByText(/this manager also teaches/i)).toBeInTheDocument();
+  });
+});
+
+describe('an edit someone else overtook', () => {
+  it('refuses to overwrite, says so, and reloads on request', async () => {
+    transitionUserRole.mockRejectedValue(
+      new ApiError(409, 'stale_write', 'Conflict.', 'r', {
+        user: ['Someone else changed this since you opened it. Reload to see their changes, then make yours again.'],
+      }),
+    );
+    const user = userEvent.setup();
+    render(<UserAdministration userId="manager-1" />);
+
+    await waitFor(() => expect(screen.getByText('Role and permissions')).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('System role'), 'counsellor');
+    await user.click(screen.getByRole('button', { name: 'Review role change' }));
+    await user.type(screen.getByLabelText(/^Reason for change/), 'Moved.');
+    await user.click(screen.getByRole('button', { name: 'Change role' }));
+
+    expect(await screen.findByText(/Someone else changed this/)).toBeInTheDocument();
+    const callsBefore = getUser.mock.calls.length;
+    await user.click(screen.getByRole('button', { name: 'Reload this account' }));
+    await waitFor(() => expect(getUser.mock.calls.length).toBe(callsBefore + 1));
   });
 });

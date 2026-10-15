@@ -22,7 +22,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.audit.services import AuditAction, AuditResult, record
-from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
+from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError, StaleWriteError
 from apps.common.uploads import normalise_profile_image
 
 from .emails import (
@@ -232,7 +232,14 @@ def ensure_may_administer(*, actor: User, target: User, action: str) -> None:
 
 
 @transaction.atomic
-def update_user(*, user: User, actor: User, role_change_reason: str = "", **fields: Any) -> User:
+def update_user(
+    *,
+    user: User,
+    actor: User,
+    role_change_reason: str = "",
+    expected_updated_at=None,
+    **fields: Any,
+) -> User:
     """Update administrator-editable user fields.
 
     Role changes are audited separately because they are a privilege change, and
@@ -252,6 +259,15 @@ def update_user(*, user: User, actor: User, role_change_reason: str = "", **fiel
     changed: list[str] = []
 
     _guard_administration(actor=actor, target=user, action=AuditAction.USER_UPDATED)
+
+    if expected_updated_at is not None:
+        # Locked for the rest of this transaction, so the check and the save
+        # below cannot be split by another administrator's write.
+        stored = (
+            User.objects.select_for_update().values_list("updated_at", flat=True).get(pk=user.pk)
+        )
+        if stored != expected_updated_at:
+            raise StaleWriteError({"user": [StaleWriteError.default_detail]})
 
     requested_role = fields.get("role", user.role)
     requested_custom_role = fields.get("custom_role", user.custom_role)
@@ -427,6 +443,7 @@ def transition_user_role(
     role: str,
     custom_role=_CUSTOM_ROLE_UNCHANGED,
     reason: str,
+    expected_updated_at=None,
 ) -> User:
     """Apply one governed authorization-role transition.
 
@@ -443,6 +460,7 @@ def transition_user_role(
         user=user,
         actor=actor,
         role_change_reason=reason.strip(),
+        expected_updated_at=expected_updated_at,
         **changes,
     )
 

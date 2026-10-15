@@ -115,7 +115,7 @@ matches `^[A-Za-z0-9._-]{8,64}$`.
 | `GET` | `` | `user.view_any` |
 | `POST` | `` | `user.create` — generic staff accounts only; students use `/students/` and trainers use `/trainers/` so the required profile is created atomically |
 | `GET` | `<id>/` | `user.view_any` |
-| `PATCH` | `<id>/` | `user.update_any` — contact fields only: email, first name, last name and phone. An administrator cannot move their *own* sign-in email here (400 on `email`); another administrator does it, which re-verifies the address and ends their sessions |
+| `PATCH` | `<id>/` | `user.update_any` — contact fields only: email, first name, last name and phone. Send `expected_updated_at` (the `updated_at` the form loaded) and a write based on an older copy is refused with `409 stale_write` instead of overwriting another administrator's change; `role-transition/` takes the same field. An administrator cannot move their *own* sign-in email here (400 on `email`); another administrator does it, which re-verifies the address and ends their sessions |
 | `POST` | `<id>/role-transition/` | `user.change_role` plus a fresh step-up (`403 step_up_required` otherwise) — `role`, optional `custom_role` (omitted keeps the current one unless the kind changes; `null` clears it), and required audit `reason`. A centre-bound role (manager, counsellor) is refused with 409 for an account with no centre until it is moved into one |
 | `POST` | `<id>/set-active/` | `user.set_active` — `is_active`, optional `reason` (the UI requires one to deactivate; it is audited) |
 | `GET` | `<id>/profile-image/` | any authenticated, active user |

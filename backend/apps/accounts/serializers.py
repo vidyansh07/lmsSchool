@@ -251,10 +251,13 @@ class AdminUserUpdateSerializer(StrictModelSerializer):
     first_name = SafeCharField(max_length=100, required=False)
     last_name = SafeCharField(max_length=100, required=False, allow_blank=True)
     phone = SafeCharField(max_length=20, required=False, allow_blank=True)
+    #: The `updated_at` the form was loaded with. When given, a write based on
+    #: an older copy is refused with 409 `stale_write` instead of overwriting.
+    expected_updated_at = serializers.DateTimeField(required=False, write_only=True)
 
     class Meta:
         model = User
-        fields = ("email", "first_name", "last_name", "phone")
+        fields = ("email", "first_name", "last_name", "phone", "expected_updated_at")
 
 
 class UserRoleTransitionSerializer(StrictSerializer):
@@ -268,6 +271,7 @@ class UserRoleTransitionSerializer(StrictSerializer):
         allow_null=True,
     )
     reason = SafeCharField(max_length=255, allow_blank=False)
+    expected_updated_at = serializers.DateTimeField(required=False)
 
 
 class SelfUserUpdateSerializer(StrictModelSerializer):

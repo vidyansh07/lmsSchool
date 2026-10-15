@@ -194,6 +194,9 @@ export function UserAdministration({ userId }: { userId: string }) {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+  // Somebody else saved this account after it was loaded here; the edit was
+  // refused rather than written over theirs.
+  const [stale, setStale] = useState(false);
   const [roleReason, setRoleReason] = useState("");
   const [stepUpOpen, setStepUpOpen] = useState(false);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
@@ -222,6 +225,7 @@ export function UserAdministration({ userId }: { userId: string }) {
   const load = useCallback(() => {
     getUser(userId)
       .then((row) => {
+        setStale(false);
         setUser(row);
         setForm({
           email: row.email,
@@ -252,6 +256,7 @@ export function UserAdministration({ userId }: { userId: string }) {
       return true;
     } catch (cause) {
       setErrors(fieldErrors(cause));
+      setStale(cause instanceof ApiError && cause.code === 'stale_write');
       return false;
     } finally {
       setBusy("");
@@ -305,6 +310,7 @@ export function UserAdministration({ userId }: { userId: string }) {
         role: form.role,
         custom_role: form.custom_role || null,
         reason: roleReason.trim(),
+        expected_updated_at: user.updated_at,
       });
       setRoleDialogOpen(false);
       setRoleReason("");
@@ -317,6 +323,10 @@ export function UserAdministration({ userId }: { userId: string }) {
         // selection and reason survive in state for the retry.
         setRoleDialogOpen(false);
         setStepUpOpen(true);
+      } else if (cause instanceof ApiError && cause.code === 'stale_write') {
+        setErrors(fieldErrors(cause));
+        setStale(true);
+        setRoleDialogOpen(false);
       } else {
         setErrors(fieldErrors(cause));
         setRoleDialogOpen(true);
@@ -400,7 +410,14 @@ export function UserAdministration({ userId }: { userId: string }) {
         </Alert>
       ) : null}
       {errors.__all__ || errors.user ? (
-        <Alert variant="error">{errors.user ?? errors.__all__}</Alert>
+        <Alert variant="error" className="flex flex-wrap items-center justify-between gap-2">
+          <span>{errors.user ?? errors.__all__}</span>
+          {stale ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => load()}>
+              Reload this account
+            </Button>
+          ) : null}
+        </Alert>
       ) : null}
 
       {!mayAdminister ? (
@@ -504,6 +521,7 @@ export function UserAdministration({ userId }: { userId: string }) {
                       first_name: form.first_name.trim(),
                       last_name: form.last_name.trim(),
                       phone: form.phone.trim(),
+                      expected_updated_at: user.updated_at,
                     }),
                   "Saved.",
                 )

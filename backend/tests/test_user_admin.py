@@ -306,3 +306,40 @@ def test_user_detail_never_exposes_credentials(api_client_no_csrf, admin_user, s
     body = api_client_no_csrf.get(f"{USERS_URL}{student.pk}/").content.decode()
     assert "password" not in body
     assert "is_superuser" not in body
+
+
+@pytest.mark.django_db
+def test_an_edit_based_on_an_older_copy_is_refused_not_applied(
+    api_client_no_csrf, admin_user, manager_user
+):
+    """Two administrators editing one account: the second save names the
+    version it loaded, and is refused once the first has moved it on."""
+    api_client_no_csrf.force_login(admin_user)
+    loaded = api_client_no_csrf.get(f"{USERS_URL}{manager_user.pk}/").json()["updated_at"]
+
+    first = api_client_no_csrf.patch(
+        f"{USERS_URL}{manager_user.pk}/",
+        {"first_name": "First", "expected_updated_at": loaded},
+        format="json",
+    )
+    assert first.status_code == 200, first.json()
+
+    second = api_client_no_csrf.patch(
+        f"{USERS_URL}{manager_user.pk}/",
+        {"first_name": "Second", "expected_updated_at": loaded},
+        format="json",
+    )
+    assert second.status_code == 409
+    assert second.json()["error"]["code"] == "stale_write"
+    manager_user.refresh_from_db()
+    assert manager_user.first_name == "First"
+
+    # A role change based on the old copy is refused the same way.
+    stale_role = stepped_up(api_client_no_csrf).post(
+        f"{USERS_URL}{manager_user.pk}/role-transition/",
+        {"role": "counsellor", "reason": "Moved.", "expected_updated_at": loaded},
+        format="json",
+    )
+    assert stale_role.status_code == 409
+    manager_user.refresh_from_db()
+    assert manager_user.role == UserRole.MANAGER

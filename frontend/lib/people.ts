@@ -61,14 +61,22 @@ export async function createUser(payload: {
 
 export async function updateUser(
   id: string,
-  changes: Partial<Pick<AdminUser, 'email' | 'first_name' | 'last_name' | 'phone'>>,
+  changes: Partial<Pick<AdminUser, 'email' | 'first_name' | 'last_name' | 'phone'>> & {
+    /** The `updated_at` the form was loaded with; an older copy gets 409 `stale_write`. */
+    expected_updated_at?: string;
+  },
 ): Promise<AdminUser> {
   return apiMutate<AdminUser>(`/api/v1/users/${id}/`, { method: 'PATCH', body: changes });
 }
 
 export async function transitionUserRole(
   id: string,
-  changes: { role: AdminUser['role']; custom_role: string | null; reason: string },
+  changes: {
+    role: AdminUser['role'];
+    custom_role: string | null;
+    reason: string;
+    expected_updated_at?: string;
+  },
 ): Promise<AdminUser> {
   return apiMutate<AdminUser>(`/api/v1/users/${id}/role-transition/`, {
     method: 'POST',
