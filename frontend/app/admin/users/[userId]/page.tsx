@@ -8,6 +8,7 @@ import { ArrowLeft, KeyRound, MailCheck } from "lucide-react";
 import { UserSessionsCard } from "@/components/admin/user-sessions-card";
 import { useAuth } from "@/components/auth-provider";
 import { Confirm } from "@/components/confirm";
+import { SearchPicker, type PickerOption } from "@/components/admissions/search-picker";
 import { RequireAuth } from "@/components/require-auth";
 import {
   isStepUpRequired,
@@ -38,6 +39,7 @@ import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { ApiError, errorMessage, fieldErrors } from "@/lib/api";
 import { Capability } from "@/lib/capabilities";
 import { formatDateTime } from "@/lib/format";
+import { BATCH_STATUS_LABEL } from "@/lib/batch-labels";
 import { ROLE_LABEL, ROLE_OPTIONS, labelFor } from "@/lib/labels";
 import {
   listRoles,
@@ -56,9 +58,12 @@ import {
 } from "@/lib/people";
 import { useBranches } from "@/components/organisation/branch-field";
 import { moveUserToBranch } from "@/lib/organisation";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { listBatches } from "@/lib/batches";
 import type {
   AdminUser,
+  BatchListRow,
   RoleSummary,
   UserAuditEntry,
   UserRole,
@@ -234,7 +239,9 @@ export function UserAdministration({ userId }: { userId: string }) {
 
   useEffect(load, [load]);
 
-  async function run(key: string, work: () => Promise<unknown>, said: string) {
+  /** Run one action; true when it succeeded, so a caller clears its own
+   *  inputs only then and a failed attempt keeps what was typed for a retry. */
+  async function run(key: string, work: () => Promise<unknown>, said: string): Promise<boolean> {
     setBusy(key);
     setErrors({});
     setNotice("");
@@ -242,8 +249,10 @@ export function UserAdministration({ userId }: { userId: string }) {
       await work();
       setNotice(said);
       load();
+      return true;
     } catch (cause) {
       setErrors(fieldErrors(cause));
+      return false;
     } finally {
       setBusy("");
     }
@@ -820,7 +829,7 @@ function CentreCard({
     key: string,
     work: () => Promise<unknown>,
     said: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   errors: Record<string, string>;
 }) {
   const { can } = useAuth();
@@ -828,7 +837,24 @@ function CentreCard({
   const { branches } = useBranches(mayMove);
   const [target, setTarget] = useState("");
   const [reason, setReason] = useState("");
+  const [confirming, setConfirming] = useState(false);
   const others = branches.filter((branch) => branch.id !== user.branch_id);
+  const destination = others.find((branch) => branch.id === target) ?? null;
+
+  async function move() {
+    setConfirming(false);
+    const moved = await run(
+      "branch",
+      () => moveUserToBranch(user.id, target, reason.trim()),
+      `Moved to ${destination?.name ?? "the other centre"}.`,
+    );
+    // Only a move that happened clears the form; a refusal keeps the choice
+    // and the reason on screen to correct and try again.
+    if (moved) {
+      setTarget("");
+      setReason("");
+    }
+  }
 
   return (
     <Card>
@@ -842,8 +868,8 @@ function CentreCard({
       </CardHeader>
       {mayMove ? (
         <CardContent className="space-y-3">
-          {errors.branch_id ? (
-            <Alert variant="error">{errors.branch_id}</Alert>
+          {errors.branch_id || errors.branch ? (
+            <Alert variant="error">{errors.branch_id ?? errors.branch}</Alert>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
             <Field label="Move to" htmlFor="user-branch">
@@ -868,6 +894,7 @@ function CentreCard({
               <Input
                 id="user-branch-reason"
                 value={reason}
+                maxLength={255}
                 onChange={(event) => setReason(event.target.value)}
               />
             </Field>
@@ -875,22 +902,23 @@ function CentreCard({
               type="button"
               variant="outline"
               disabled={busy === "branch" || target === ""}
-              onClick={() =>
-                void run(
-                  "branch",
-                  () => moveUserToBranch(user.id, target, reason.trim()),
-                  "Moved to the other centre.",
-                ).then(() => {
-                  setTarget("");
-                  setReason("");
-                })
-              }
+              onClick={() => setConfirming(true)}
             >
-              Move
+              {busy === "branch" ? "Moving…" : "Move"}
             </Button>
           </div>
         </CardContent>
       ) : null}
+      <Confirm
+        open={confirming}
+        title={`Move ${user.full_name || user.email} to ${destination?.name ?? "another centre"}?`}
+        description={`From their next request they see ${destination?.name ?? "that centre"}'s students, batches and records${user.branch_name ? ` instead of ${user.branch_name}'s` : ""}. Anything they were working on here stays here.`}
+        confirmLabel="Move"
+        cancelLabel="Keep them here"
+        confirmVariant="primary"
+        onConfirm={() => void move()}
+        onCancel={() => setConfirming(false)}
+      />
     </Card>
   );
 }
@@ -903,47 +931,103 @@ function CentreCard({
  */
 function ScopeGrantsCard({ userId }: { userId: string }) {
   const [grants, setGrants] = useState<ScopeGrantRow[] | null>(null);
-  const [batchId, setBatchId] = useState("");
+  const [loadError, setLoadError] = useState<ApiError | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query.trim(), 300);
+  const [options, setOptions] = useState<BatchListRow[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(() => {
-    listScopeGrants(userId)
-      .then(setGrants)
-      .catch(() => setGrants([]));
-  }, [userId]);
-
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    listScopeGrants(userId)
+      .then((rows) => {
+        if (!cancelled) {
+          setGrants(rows);
+          setLoadError(null);
+        }
+      })
+      .catch((cause: unknown) => {
+        // A failed read is not "no grants": keep whatever was on screen and
+        // say it could not be refreshed.
+        if (!cancelled) {
+          setLoadError(
+            cause instanceof ApiError
+              ? cause
+              : new ApiError(0, "error", "Could not load the scope grants.", ""),
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, attempt]);
 
-  async function addGrant(event: React.FormEvent) {
-    event.preventDefault();
-    if (!batchId.trim()) return;
+  const reload = useCallback(() => setAttempt((value) => value + 1), []);
+
+  // Search batches by code or name, inside what the caller can see, instead
+  // of asking an administrator to paste an id they would have to go and find.
+  const [searchedFor, setSearchedFor] = useState("");
+  if (debouncedQuery !== searchedFor) {
+    setSearchedFor(debouncedQuery);
+    setIsSearching(debouncedQuery !== "");
+    if (debouncedQuery === "") setOptions([]);
+  }
+  useEffect(() => {
+    if (!debouncedQuery) return;
+    let cancelled = false;
+    listBatches({ search: debouncedQuery, page_size: 8 })
+      .then((page) => {
+        if (!cancelled) setOptions(page.results);
+      })
+      .catch(() => {
+        if (!cancelled) setOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsSearching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery]);
+
+  const granted = new Set((grants ?? []).map((grant) => grant.batch).filter(Boolean));
+  const pickerOptions: PickerOption[] = options
+    .filter((row) => !granted.has(row.id))
+    .map((row) => ({
+      value: row.id,
+      label: `${row.code} · ${row.name}`,
+      hint: `${row.course_title} · ${BATCH_STATUS_LABEL[row.status]}`,
+    }));
+
+  async function addGrant(option: PickerOption) {
     setBusy(true);
     setError(null);
     try {
-      await grantScope(userId, { batch: batchId.trim() });
-      setBatchId("");
-      load();
+      await grantScope(userId, { batch: option.value });
+      setQuery("");
+      reload();
     } catch (cause) {
-      setError(fieldErrors(cause).batch ?? "That batch could not be granted.");
+      setError(errorMessage(cause, "That batch could not be granted."));
     } finally {
       setBusy(false);
     }
   }
 
-  async function remove(grantId: string) {
+  async function remove(grant: ScopeGrantRow) {
     setBusy(true);
+    setError(null);
     try {
-      await revokeScope(userId, grantId);
-      load();
+      await revokeScope(userId, grant.id);
+      reload();
+    } catch (cause) {
+      setError(errorMessage(cause, "That grant could not be revoked."));
     } finally {
       setBusy(false);
     }
   }
-
-  if (grants === null) return null;
 
   return (
     <Card>
@@ -957,9 +1041,21 @@ function ScopeGrantsCard({ userId }: { userId: string }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {error ? <Alert variant="error">{error}</Alert> : null}
-        {grants.length === 0 ? (
+        {loadError ? (
+          <ErrorState
+            title="Could not load the scope grants"
+            message={loadError.message}
+            requestId={loadError.requestId || undefined}
+            onRetry={reload}
+          />
+        ) : null}
+        {grants === null && !loadError ? (
+          <LoadingState label="Loading scope grants…" rows={2} />
+        ) : null}
+        {grants !== null && grants.length === 0 && !loadError ? (
           <p className="text-sm text-ink-muted">No direct grants.</p>
-        ) : (
+        ) : null}
+        {grants !== null && grants.length > 0 ? (
           <ul className="space-y-2">
             {grants.map((grant) => (
               <li
@@ -976,27 +1072,29 @@ function ScopeGrantsCard({ userId }: { userId: string }) {
                   variant="ghost"
                   size="sm"
                   disabled={busy}
-                  onClick={() => void remove(grant.id)}
+                  aria-label={`Revoke ${grant.batch_code ?? grant.course_code ?? "this grant"}`}
+                  onClick={() => void remove(grant)}
                 >
                   Revoke
                 </Button>
               </li>
             ))}
           </ul>
-        )}
-        <form onSubmit={addGrant} className="flex flex-wrap items-end gap-2">
-          <Field label="Batch ID" htmlFor="scope-grant-batch">
-            <Input
-              id="scope-grant-batch"
-              placeholder="Batch UUID"
-              value={batchId}
-              onChange={(event) => setBatchId(event.target.value)}
-            />
-          </Field>
-          <Button type="submit" disabled={busy || !batchId.trim()}>
-            Grant batch
-          </Button>
-        </form>
+        ) : null}
+        {grants !== null ? (
+          <SearchPicker
+            label="Grant a batch"
+            query={query}
+            onQueryChange={setQuery}
+            options={pickerOptions}
+            selected=""
+            onSelect={(option) => void addGrant(option)}
+            placeholder="Batch code or name"
+            isLoading={isSearching || busy}
+            hint="Search, then choose a batch to grant it."
+            emptyMessage={debouncedQuery ? "No batch you can see matches." : "Type to search batches."}
+          />
+        ) : null}
       </CardContent>
     </Card>
   );
