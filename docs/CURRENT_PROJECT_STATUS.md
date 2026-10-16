@@ -1,12 +1,24 @@
 # Current project status and role guide
 
-Snapshot date: **12 October 2026**
+Snapshot date: **15 October 2026**
 Local baseline: `main` at `cd00122` (25 September 2026)
 Purpose: one short, current guide to what is built, who owns each workflow, and
 what should be agreed before the next implementation pass.
 
 This document describes the code that is on local `main`. Work on remote
 feature branches is listed separately and must not be treated as shipped.
+
+### Working-tree update: trainer and role-administration hardening
+
+The 15 October working tree adds one canonical trainer hub at
+`/manage/trainers`, atomic trainer onboarding, and a governed role-transition
+action separate from ordinary account edits. Generic user creation no longer
+accepts student or trainer roles; those identities must be created through
+their domain onboarding so their profile is never missing. Student/trainer
+persona conversions, self-role changes, last-superadmin removal and role
+changes that would strand a teaching manager's active batches are refused.
+Stale domain profiles no longer grant access. Full behavior and verification
+details are recorded in `docs/uiux/UX_HARDENING_2026-10-15.md` and D-142.
 
 ## 1. Status in one page
 

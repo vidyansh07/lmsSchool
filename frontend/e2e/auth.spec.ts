@@ -44,8 +44,8 @@ test.describe('Authentication', () => {
     // to the main nav to keep the locator unambiguous.
     const nav = page.getByRole('navigation', { name: 'Main' });
 
-    await nav.getByRole('link', { name: 'Users' }).click();
-    await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
+    await nav.getByRole('link', { name: 'User accounts' }).click();
+    await expect(page.getByRole('heading', { name: 'User accounts' })).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
 
     await nav.getByRole('link', { name: 'Students' }).click();
@@ -57,7 +57,7 @@ test.describe('Authentication', () => {
 
     const nav = page.getByRole('navigation', { name: 'Main' });
     await expect(nav.getByRole('link', { name: 'My profile' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: 'User accounts' })).toHaveCount(0);
     await expect(nav.getByRole('link', { name: 'Students' })).toHaveCount(0);
   });
 

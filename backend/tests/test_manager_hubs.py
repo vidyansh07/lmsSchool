@@ -725,9 +725,13 @@ def test_manager_dashboard_new_fields_are_zero_without_the_owning_capability(
     )
     assert narrowed.status_code == 201, narrowed.json()
 
-    assigned = api_client_no_csrf.patch(
-        f"/api/v1/users/{manager_user.id}/",
-        {"custom_role": "hub-summary-only"},
+    assigned = api_client_no_csrf.post(
+        f"/api/v1/users/{manager_user.id}/role-transition/",
+        {
+            "role": manager_user.role,
+            "custom_role": "hub-summary-only",
+            "reason": "Restrict this dashboard role.",
+        },
         format="json",
     )
     assert assigned.status_code == 200, assigned.json()

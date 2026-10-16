@@ -8,10 +8,12 @@ import { DEMO_PASSWORD, signIn, signOut } from './helpers';
  * The theme's contrast is measured in a unit test, which can read the palette
  * exactly. What a browser adds is everything the palette cannot tell you: that
  * the page is actually light whatever the viewer's operating system says, that
- * staff get a sidebar and students do not, and that the whole thing can be
- * driven from a keyboard.
+ * every signed-in role gets a sidebar ranked for its job, and that the whole
+ * thing can be driven from a keyboard.
  */
 const ADMIN = 'admin@demo.grras.invalid';
+const MANAGER = 'manager@demo.grras.invalid';
+const COUNSELLOR = 'counsellor@demo.grras.invalid';
 const TRAINER = 'trainer1@demo.grras.invalid';
 const STUDENT = 'student1@demo.grras.invalid';
 
@@ -57,8 +59,8 @@ test.describe('Staff navigation', () => {
     await expect(nav).toBeVisible();
 
     // Grouped by the job being done, not by the system's tables.
-    await expect(nav.getByText('People', { exact: true })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Users' })).toBeVisible();
+    await expect(nav.getByText('Student records', { exact: true })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'User accounts' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Students' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Trainers' })).toBeVisible();
 
@@ -84,21 +86,37 @@ test.describe('Staff navigation', () => {
     await signIn(page, TRAINER);
 
     const nav = page.getByRole('navigation', { name: 'Main' });
-    await expect(nav.getByRole('link', { name: 'Classes today' })).toBeVisible();
-    await expect(nav.getByRole('link', { name: 'Users' })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: "Today's class" })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Work to review' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'User accounts' })).toHaveCount(0);
     await expect(nav.getByRole('link', { name: 'Academic rules' })).toHaveCount(0);
 
     await signOut(page);
   });
 
-  test('a student keeps the top bar and gets no sidebar', async ({ page }) => {
+  test('manager and counsellor get different first-class workspaces', async ({ page }) => {
+    await signIn(page, MANAGER);
+    let nav = page.getByRole('navigation', { name: 'Main' });
+    await expect(nav.getByRole('link', { name: 'Operations overview' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Trainers' })).toBeVisible();
+    await signOut(page);
+
+    await signIn(page, COUNSELLOR);
+    nav = page.getByRole('navigation', { name: 'Main' });
+    await expect(nav.getByRole('link', { name: 'Admissions pipeline' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Fees & collections' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Reviews due' })).toHaveCount(0);
+    await signOut(page);
+  });
+
+  test('a student gets a grouped student workspace and no staff administration', async ({ page }) => {
     await signIn(page, STUDENT);
 
     const nav = page.getByRole('navigation', { name: 'Main' });
     await expect(nav.getByRole('link', { name: 'My learning' })).toBeVisible();
-    // The staff groups are the tell: a student should never see them.
-    await expect(nav.getByText('People', { exact: true })).toHaveCount(0);
-    await expect(nav.getByText('Outcomes', { exact: true })).toHaveCount(0);
+    await expect(nav.getByRole('button', { name: 'To do' })).toBeVisible();
+    await expect(nav.getByRole('button', { name: 'My progress' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'User accounts' })).toHaveCount(0);
 
     await signOut(page);
   });
@@ -133,26 +151,19 @@ test.describe('Narrow screens', () => {
     await signIn(page, ADMIN);
     await page.goto('/admin/overview');
 
-    const toggle = page.getByRole('button', { name: /open the menu/i });
+    const toggle = page.getByRole('button', { name: 'Open navigation menu' });
     await expect(toggle).toBeVisible();
-    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 
     await toggle.click();
-    await expect(page.getByRole('button', { name: /close the menu/i })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
+    await expect(page.getByRole('dialog', { name: 'Navigation' })).toBeVisible();
 
     const nav = page.getByRole('navigation', { name: 'Main' });
-    await nav.getByRole('link', { name: 'Users' }).first().click();
+    await nav.getByRole('link', { name: 'User accounts' }).first().click();
 
     // Leaving the menu open over the page somebody just asked for is the most
     // irritating thing a mobile menu can do.
-    await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /open the menu/i })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
+    await expect(page.getByRole('heading', { name: 'User accounts' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Navigation' })).toHaveCount(0);
 
     await signOut(page);
   });

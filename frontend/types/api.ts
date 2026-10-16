@@ -68,6 +68,11 @@ export interface AdminUser extends User {
    *  screen can show a read-only record rather than a form that cannot save.
    *  It informs the interface; the server enforces the rule again on write. */
   can_administer: boolean;
+  /** Server-resolved options for the dedicated role-transition action. */
+  allowed_role_transitions: UserRole[];
+  /** Related domain record, when the account's current role makes it active. */
+  profile_type: "student" | "trainer" | null;
+  profile_id: string | null;
   last_login: string | null;
   email_verified_at: string | null;
   created_at: string;

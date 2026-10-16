@@ -26,7 +26,7 @@ vi.mock("@/components/auth-provider", () => ({
 const replace = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
 
-const USER = { id: "u1", email: "a@b.test", mfa_enabled: true } as CurrentUser;
+const USER = { id: "u1", email: "a@b.test", role: "manager", mfa_enabled: true } as CurrentUser;
 const MFA_REQUIRED: MfaRequired = {
   mfa_required: true,
   methods: ["totp", "email"],
@@ -60,7 +60,7 @@ describe("LoginPage", () => {
     fillCredentials();
 
     await waitFor(() => expect(setUser).toHaveBeenCalledWith(USER));
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/manage"));
     expect(screen.queryByText("Verify it's you")).not.toBeInTheDocument();
   });
 
@@ -102,7 +102,7 @@ describe("LoginPage", () => {
       expect(verifyMfa).toHaveBeenCalledWith("totp", "123456"),
     );
     await waitFor(() => expect(setUser).toHaveBeenCalledWith(USER));
-    await waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/manage"));
   });
 
   it("returns to the credentials form from the MFA step without signing in", async () => {

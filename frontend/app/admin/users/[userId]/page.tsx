@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
 import { ArrowLeft, KeyRound, MailCheck } from "lucide-react";
 
 import { UserSessionsCard } from "@/components/admin/user-sessions-card";
 import { useAuth } from "@/components/auth-provider";
+import { Confirm } from "@/components/confirm";
 import { RequireAuth } from "@/components/require-auth";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Alert } from "@/components/ui/alert";
@@ -18,6 +20,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
@@ -37,10 +47,12 @@ import {
   getUserAudit,
   sendCredentialLink,
   setUserActive,
+  transitionUserRole,
   updateUser,
 } from "@/lib/people";
 import { useBranches } from "@/components/organisation/branch-field";
 import { moveUserToBranch } from "@/lib/organisation";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import type {
   AdminUser,
   RoleSummary,
@@ -156,7 +168,8 @@ function History({ userId }: { userId: string }) {
   );
 }
 
-function UserAdministration({ userId }: { userId: string }) {
+export function UserAdministration({ userId }: { userId: string }) {
+  const router = useRouter();
   const { user: currentUser, can } = useAuth();
   const [user, setUser] = useState<AdminUser | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
@@ -171,6 +184,27 @@ function UserAdministration({ userId }: { userId: string }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+  const [roleReason, setRoleReason] = useState("");
+  const hasUnsavedChanges = Boolean(
+    user &&
+      (form.email.trim().toLowerCase() !== user.email.toLowerCase() ||
+        form.first_name.trim() !== user.first_name ||
+        form.last_name.trim() !== user.last_name ||
+        form.phone.trim() !== (user.phone ?? "") ||
+        form.role !== user.role ||
+        (form.custom_role || null) !== (user.custom_role ?? null)),
+  );
+  const {
+    isPrompting: isDiscardPromptOpen,
+    guard: guardNavigation,
+    confirmDiscard,
+    cancelDiscard,
+  } = useUnsavedChanges(hasUnsavedChanges);
+
+  function navigateWithGuard(href: string) {
+    guardNavigation(() => router.push(href));
+  }
 
   const load = useCallback(() => {
     getUser(userId)
@@ -233,11 +267,44 @@ function UserAdministration({ userId }: { userId: string }) {
   // administering — an administrator may see that a superadmin exists — and
   // without asking we would offer controls that cannot work.
   const mayAdminister = user.can_administer;
+  const roleChanged =
+    form.role !== user.role ||
+    (form.custom_role || null) !== (user.custom_role ?? null);
+  const allowedRoleOptions = ROLE_OPTIONS.filter((option) =>
+    user.allowed_role_transitions.includes(option.value),
+  );
+
+  async function applyRoleTransition() {
+    if (!user || !roleChanged || !roleReason.trim()) return;
+    setBusy("role");
+    setErrors({});
+    setNotice("");
+    try {
+      await transitionUserRole(user.id, {
+        role: form.role,
+        custom_role: form.custom_role || null,
+        reason: roleReason.trim(),
+      });
+      setRoleDialogOpen(false);
+      setRoleReason("");
+      setNotice("Role changed. Their existing sessions were ended.");
+      load();
+    } catch (cause) {
+      setErrors(fieldErrors(cause));
+    } finally {
+      setBusy("");
+    }
+  }
 
   return (
-    <div className="space-y-4">
+    <>
+      <div className="space-y-4">
       <Link
         href="/admin/users"
+        onClick={(event) => {
+          event.preventDefault();
+          navigateWithGuard("/admin/users");
+        }}
         className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"
       >
         <ArrowLeft className="size-4" aria-hidden="true" />
@@ -255,6 +322,22 @@ function UserAdministration({ userId }: { userId: string }) {
         <Badge variant={user.is_email_verified ? "success" : "warning"}>
           {user.is_email_verified ? "Email verified" : "Email unverified"}
         </Badge>
+        {user.profile_type && user.profile_id ? (
+          <Link
+            href={
+              user.profile_type === "student"
+                ? `/students/${user.profile_id}`
+                : `/manage/trainers/${user.profile_id}`
+            }
+            onClick={(event) => {
+              event.preventDefault();
+              navigateWithGuard(event.currentTarget.getAttribute("href") ?? "/admin/users");
+            }}
+            className="text-sm font-medium text-action hover:underline"
+          >
+            Open {user.profile_type === "student" ? "student 360" : "trainer profile"}
+          </Link>
+        ) : null}
       </div>
 
       {notice ? (
@@ -292,7 +375,9 @@ function UserAdministration({ userId }: { userId: string }) {
               required
             >
               <Input
+                id="user-email"
                 type="email"
+                autoComplete="email"
                 value={form.email}
                 disabled={!mayAdminister}
                 onChange={(event) =>
@@ -302,6 +387,9 @@ function UserAdministration({ userId }: { userId: string }) {
             </Field>
             <Field label="Phone" htmlFor="user-phone" error={errors.phone}>
               <Input
+                id="user-phone"
+                type="tel"
+                autoComplete="tel"
                 value={form.phone}
                 disabled={!mayAdminister}
                 onChange={(event) =>
@@ -316,6 +404,8 @@ function UserAdministration({ userId }: { userId: string }) {
               required
             >
               <Input
+                id="user-first"
+                autoComplete="given-name"
                 value={form.first_name}
                 disabled={!mayAdminister}
                 onChange={(event) =>
@@ -329,6 +419,8 @@ function UserAdministration({ userId }: { userId: string }) {
               error={errors.last_name}
             >
               <Input
+                id="user-last"
+                autoComplete="family-name"
                 value={form.last_name}
                 disabled={!mayAdminister}
                 onChange={(event) =>
@@ -336,35 +428,6 @@ function UserAdministration({ userId }: { userId: string }) {
                 }
               />
             </Field>
-            {can(Capability.userChangeRole) && mayAdminister && !isSelf ? (
-              <Field
-                label="Role"
-                htmlFor="user-role"
-                error={errors.role}
-                hint="You can only grant a role that holds no more than your own."
-              >
-                <Select
-                  value={form.role}
-                  onChange={(event) =>
-                    setForm({ ...form, role: event.target.value as UserRole })
-                  }
-                >
-                  {ROLE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            ) : null}
-            {can(Capability.userChangeRole) && mayAdminister && !isSelf ? (
-              <CustomRoleField
-                kind={form.role}
-                value={form.custom_role}
-                error={errors.custom_role}
-                onChange={(value) => setForm({ ...form, custom_role: value })}
-              />
-            ) : null}
           </div>
 
           {emailChanged ? (
@@ -387,12 +450,6 @@ function UserAdministration({ userId }: { userId: string }) {
                       first_name: form.first_name.trim(),
                       last_name: form.last_name.trim(),
                       phone: form.phone.trim(),
-                      ...(can(Capability.userChangeRole) && !isSelf
-                        ? {
-                            role: form.role,
-                            custom_role: form.custom_role || null,
-                          }
-                        : {}),
                     }),
                   "Saved.",
                 )
@@ -403,6 +460,134 @@ function UserAdministration({ userId }: { userId: string }) {
           ) : null}
         </CardContent>
       </Card>
+
+      {can(Capability.userChangeRole) && mayAdminister && !isSelf ? (
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2">Role and permissions</CardTitle>
+            <CardDescription>
+              Role changes are reviewed separately from contact details because they alter access.
+              Student and trainer identities require a dedicated conversion workflow.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {errors.role || errors.custom_role || errors.reason ? (
+              <Alert variant="error">
+                {errors.role ?? errors.custom_role ?? errors.reason}
+              </Alert>
+            ) : null}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field
+                label="System role"
+                htmlFor="user-role"
+                hint="Only transitions approved by the server are offered."
+              >
+                <Select
+                  id="user-role"
+                  value={form.role}
+                  onChange={(event) => {
+                    setErrors({});
+                    setForm({
+                      ...form,
+                      role: event.target.value as UserRole,
+                      custom_role: "",
+                    });
+                  }}
+                >
+                  {allowedRoleOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <CustomRoleField
+                kind={form.role}
+                value={form.custom_role}
+                error={errors.custom_role}
+                onChange={(value) => setForm({ ...form, custom_role: value })}
+              />
+            </div>
+            {form.role === "student" || form.role === "trainer" ? (
+              <Alert variant="info">
+                This account keeps its {labelFor(ROLE_LABEL, form.role).toLowerCase()} identity.
+                Converting it to a different persona is intentionally unavailable here so academic
+                history and profile access cannot become inconsistent.
+              </Alert>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!roleChanged || busy === "role"}
+              onClick={() => setRoleDialogOpen(true)}
+            >
+              Review role change
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Dialog
+        open={roleDialogOpen}
+        onOpenChange={(open) => (busy === "role" ? null : setRoleDialogOpen(open))}
+      >
+        <DialogContent size="md" hideCloseButton>
+          <DialogHeader>
+            <DialogTitle>Change this account&rsquo;s role?</DialogTitle>
+            <DialogDescription>
+              This changes their permissions immediately and ends every session established under
+              the previous role.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {errors.role || errors.custom_role || errors.__all__ ? (
+              <Alert variant="error">
+                {errors.role ?? errors.custom_role ?? errors.__all__}
+              </Alert>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Badge>{labelFor(ROLE_LABEL, user.role)}</Badge>
+              <span className="text-ink-muted" aria-hidden="true">→</span>
+              <Badge variant="warning">{labelFor(ROLE_LABEL, form.role)}</Badge>
+            </div>
+            <Alert variant="warning">
+              Existing sessions will end. Capabilities and centre-scoped access may change on the
+              next sign-in. The person&rsquo;s domain record is not converted by this action.
+            </Alert>
+            <Field
+              label="Reason for change"
+              htmlFor="role-change-reason"
+              hint="Required and recorded in the account history."
+              error={errors.reason}
+              required
+            >
+              <Input
+                id="role-change-reason"
+                value={roleReason}
+                maxLength={255}
+                onChange={(event) => setRoleReason(event.target.value)}
+              />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy === "role"}
+              onClick={() => setRoleDialogOpen(false)}
+            >
+              Go back
+            </Button>
+            <Button
+              type="button"
+              disabled={busy === "role" || !roleReason.trim()}
+              onClick={() => void applyRoleTransition()}
+            >
+              {busy === "role" ? "Changing…" : "Change role"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {mayAdminister && user.role !== "superadmin" ? (
         <CentreCard user={user} busy={busy} run={run} errors={errors} />
@@ -496,7 +681,18 @@ function UserAdministration({ userId }: { userId: string }) {
       ) : null}
 
       <History userId={user.id} />
-    </div>
+      </div>
+      <Confirm
+        open={isDiscardPromptOpen}
+        title="Discard unsaved account changes?"
+        description="The details or role selection on this page have not been saved."
+        confirmLabel="Discard changes"
+        cancelLabel="Keep editing"
+        isConfirming={false}
+        onConfirm={confirmDiscard}
+        onCancel={cancelDiscard}
+      />
+    </>
   );
 }
 

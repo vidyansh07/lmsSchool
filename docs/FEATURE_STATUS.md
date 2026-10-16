@@ -8,6 +8,14 @@ tested and verified running — not when the code exists.
 Totals at last full run (12 September 2026): **1,981 backend** (3 skipped) ·
 **866 frontend unit** · **82 end-to-end** = 2,929 tests, all passing locally.
 
+Latest focused verification (15 October 2026): the trainer/user-administration
+UX hardening has **1,476 frontend tests**, **122 directly affected backend
+tests**, and **86 affected showcase regression tests** passing. The broad
+backend rerun reached 2,942 passed / 4 skipped / 0 failed before stalling in a
+long PostgreSQL-bound showcase section, so a clean uninterrupted full rerun and
+live browser walkthrough remain release checks. See
+`docs/uiux/UX_HARDENING_2026-10-15.md`.
+
 ---
 
 ## Phase 0–3 — delivered
@@ -136,6 +144,7 @@ Totals at last full run (12 September 2026): **1,981 backend** (3 skipped) ·
 | 12.18 Everything exportable | 12 | DONE | `apps/reporting/reports.py` (students, enrolments, fee payments, daily reports, batches, activity record as reports), `views.py` (`?as=xlsx|pdf` inline up to 2,000 rows, 409 past it), `tasks.py` (a notification when a queued export is ready or fails), `apps/fees/receipts.py` (receipt PDF per payment); `frontend/components/export-menu.tsx` on every list, `export-jobs-panel.tsx` on Reports | `test_list_exports` (13), `test_reporting` (every report in every format), `export-menu` (3), `export-jobs-panel` (1) | Same scoped querysets as the screens; `student`, `since/until`, `actor`, `kind`, `role` narrow and never widen; the activity export needs `audit.view`; a receipt is for staff who see the enrolment or the student it belongs to | Excel, PDF and CSV from students, admissions, batches, trainers, daily reports, the activity review, a student's ledger and the reports screen; a receipt link on every payment; "Your exports" with download and cancel | PDF is capped at 2,000 rows whichever route | 2026-09-14 |
 | 12.19 Hardening: soft delete for content, caching, timeouts, backups | 12 | DONE | `apps/common/caching.py`; `SoftDeleteBaseModel` on Module, Lesson, LessonResource, Assignment, Project, Question, Assessment (+ migrations); `apps/common/recovery.py` (`CASCADES`, centre paths); `config/settings/base.py` (statement timeout); `infra/scripts/backend-entrypoint.sh` (30 s); `frontend/lib/api.ts` (20 s); `scripts/install-backup-timer.sh` | `test_content_soft_delete` (6), `test_caching` (4), plus every existing delete test | Deleted rows leave every normal query and are restorable by an administrator within their centre; caches are per person and forgotten on write; nothing purges on a schedule | Deleted a lesson: gone from the tree and the player, listed in the bin, restored with its resources; dashboards served from cache for a minute; nightly dump and Sunday restore check on the host | Tests run in eager mode; the Redis-backed cache is exercised on staging only | 2026-09-14 |
 | 12.20 Trainer requirements and announcements to the trainers | 12 | DONE | `apps/requirements/` (model, access, services, API), `apps/announcements` (`Audience.TRAINERS`), `apps/activity/services.py` (feed lines), `frontend/components/requirements/requirements-board.tsx`, `app/requirements/page.tsx`, sidebar entries for managers, trainers and administrators | `test_requirements` (11), `requirements-board` (5) | `requirement.manage` (manager and up; not the counsellor) raises, closes and removes; a trainer reads and answers on their own centre's; a student is refused; another centre's is a 404 | A manager raises "cover Linux next week": every trainer of the centre is notified, a trainer answers, the manager marks it fulfilled naming them, and the activity review shows all three steps | Replies are not editable; no attachments | 2026-09-14 |
+| UX-1 Trainer onboarding and governed role transitions | UX | IN_PROGRESS | `apps/accounts/{roles,services,serializers,user_views}.py`, `app/manage/trainers`, `app/admin/users/[userId]` | 1,476 frontend; 122 affected backend; 86 showcase regression | Student/trainer generic creation refused; role reason and authority enforced; sessions revoked; last-superadmin, self-change, teaching-manager and stale-profile guards | Automated journeys cover atomic trainer creation, canonical redirect, filters, availability, confirmation and error states | Code and affected automation are complete; live browser walkthrough and one uninterrupted full backend run remain | 2026-10-15 |
 
 ## Phase 12 — ERP foundation
 

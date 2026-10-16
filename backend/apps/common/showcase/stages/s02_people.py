@@ -805,7 +805,12 @@ def _ensure_roles(ctx: Context) -> None:
     else:
         # Through `update_user`, which checks the kind matches and audits the
         # privilege change; a raw save would do neither.
-        update_user(user=holder, actor=owner, custom_role=role)
+        update_user(
+            user=holder,
+            actor=owner,
+            custom_role=role,
+            role_change_reason="Apply the showcase placement coordinator role.",
+        )
         ctx.created("custom_role_assignment")
         ctx.out(f"custom role on {holder.email}: created")
 

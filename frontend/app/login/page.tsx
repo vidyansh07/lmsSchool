@@ -13,6 +13,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { fieldErrors } from "@/lib/api";
 import { login } from "@/lib/auth";
+import { workspaceHomeForUser } from "@/lib/workspace";
 import type { CurrentUser, MfaMethodName } from "@/types/api";
 
 export default function LoginPage() {
@@ -28,12 +29,12 @@ export default function LoginPage() {
   const [mfaMethods, setMfaMethods] = useState<MfaMethodName[] | null>(null);
 
   useEffect(() => {
-    if (user) router.replace("/");
+    if (user) router.replace(workspaceHomeForUser(user));
   }, [user, router]);
 
   function finishSignIn(signedIn: CurrentUser) {
     setUser(signedIn);
-    router.replace("/");
+    router.replace(workspaceHomeForUser(signedIn));
   }
 
   async function onSubmit(event: React.FormEvent) {

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from django.db.models import QuerySet
 
-from apps.accounts.roles import Capability, has_capability
+from apps.accounts.roles import Capability, UserRole, has_capability
 from apps.organisation.scoping import scope_to_branch
 
 from .models import Batch
@@ -41,6 +41,13 @@ from .models import Batch
 def _profile_of(user, attribute: str):
     """The caller's student or trainer profile, or None."""
     if not getattr(user, "is_authenticated", False) or not user.is_active:
+        return None
+    if attribute == "student_profile" and user.role != UserRole.STUDENT:
+        return None
+    if attribute == "trainer_profile" and user.role not in (
+        UserRole.TRAINER,
+        UserRole.MANAGER,
+    ):
         return None
     return getattr(user, attribute, None)
 

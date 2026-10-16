@@ -39,6 +39,20 @@ class UserRole(models.TextChoices):
     STUDENT = "student", _("Student")
 
 
+# Account-role changes inside this family do not change which domain record a
+# person is. Student and trainer are deliberately absent: those roles carry
+# their own one-to-one profile and academic history, so crossing that boundary
+# needs a conversion workflow rather than a generic account edit.
+STAFF_ROLE_FAMILY = frozenset(
+    {
+        UserRole.SUPERADMIN,
+        UserRole.ADMIN,
+        UserRole.MANAGER,
+        UserRole.COUNSELLOR,
+    }
+)
+
+
 class Capability(models.TextChoices):
     """Every distinct thing an actor may be permitted to do.
 
@@ -682,6 +696,33 @@ def can_administer(actor, target) -> bool:
 
     theirs = effective_capabilities(target)
     return theirs < held
+
+
+def is_direct_role_transition(current_role: str, new_role: str) -> bool:
+    """Whether a role change can happen without converting domain identity."""
+
+    if current_role == new_role:
+        return True
+    return current_role in STAFF_ROLE_FAMILY and new_role in STAFF_ROLE_FAMILY
+
+
+def allowed_role_transitions(actor, target) -> tuple[str, ...]:
+    """Role kinds the account administration UI may offer for ``target``.
+
+    This informs the interface only. Authority, grantability and transition
+    safety are all checked again by the write service.
+    """
+
+    if not has_capability(actor, Capability.USER_CHANGE_ROLE) or not can_administer(actor, target):
+        return ()
+    candidates = tuple(STAFF_ROLE_FAMILY) if target.role in STAFF_ROLE_FAMILY else (target.role,)
+    # Preserve declaration order instead of exposing a frozenset's arbitrary
+    # order to the select control.
+    return tuple(
+        role
+        for role, _label in UserRole.choices
+        if role in candidates and (role == target.role or can_grant_role(actor, role))
+    )
 
 
 def has_capability(user, capability: str) -> bool:

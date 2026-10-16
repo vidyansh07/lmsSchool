@@ -222,9 +222,9 @@ export const STAFF_NAV: NavGroup[] = [
       },
       {
         href: "/manage/trainers",
-        label: "Trainer review",
+        label: "Trainers",
         icon: GraduationCap,
-        capability: Capability.performanceViewAny,
+        capability: Capability.trainerViewAny,
       },
       {
         href: "/manage/reviews",
@@ -237,6 +237,7 @@ export const STAFF_NAV: NavGroup[] = [
         label: "Class reports",
         icon: FileText,
         capability: Capability.dsrViewAny,
+        scopedRoles: ["trainer"],
       },
       {
         // A manager's ask of the teaching staff. Trainers see it too: they
@@ -518,7 +519,8 @@ export const STAFF_NAV: NavGroup[] = [
  * (14 September 2026): the activity review, then the manager's work, the
  * trainers, the counsellor's work, students and fees, batches and courses,
  * outcomes, the calendar, and only then the institution's own settings.
- * Managers, counsellors and trainers keep `STAFF_NAV` unchanged, by request.
+ * The role-ranked manager, counsellor and trainer trees below reuse this
+ * catalogue but put each job's daily work first.
  */
 export const ADMIN_NAV: NavGroup[] = [
   {
@@ -559,12 +561,6 @@ export const ADMIN_NAV: NavGroup[] = [
         capability: Capability.dsrViewAny,
       },
       {
-        href: "/manage/trainers",
-        label: "Trainer review",
-        icon: GraduationCap,
-        capability: Capability.performanceViewAny,
-      },
-      {
         href: "/manage/batches",
         label: "Batch review",
         icon: Layers,
@@ -588,7 +584,7 @@ export const ADMIN_NAV: NavGroup[] = [
     title: "Trainers",
     items: [
       {
-        href: "/admin/trainers",
+        href: "/manage/trainers",
         label: "Trainers",
         icon: GraduationCap,
         capability: Capability.trainerViewAny,
@@ -603,6 +599,12 @@ export const ADMIN_NAV: NavGroup[] = [
         label: "Admissions pipeline",
         icon: LayoutDashboard,
         capability: Capability.enrolmentCreate,
+      },
+      {
+        href: "/fees",
+        label: "Fees & collections",
+        icon: Wallet,
+        capability: Capability.feeViewAny,
       },
       {
         href: "/enquiries",
@@ -840,9 +842,287 @@ export const ADMIN_NAV: NavGroup[] = [
   },
 ];
 
-/** Which sidebar a role gets. */
+/**
+ * Role workspaces are deliberately different even where backend permissions
+ * overlap. A manager and counsellor can cover much of the same work (D-130),
+ * but their first five links should still describe different jobs. The
+ * capability filter remains authoritative for what is offered inside each
+ * tree, including custom roles.
+ */
+
+const STAFF_CATALOGUE = STAFF_NAV.flatMap((group) => group.items);
+
+function staffItem(href: string): NavItem {
+  const item = STAFF_CATALOGUE.find((candidate) => candidate.href === href);
+  if (!item) throw new Error(`No staff navigation item registered for ${href}`);
+  return item;
+}
+
+function studentItem(href: string): NavItem {
+  const item = STUDENT_NAV.find((candidate) => candidate.href === href);
+  if (!item) throw new Error(`No student navigation item registered for ${href}`);
+  return item;
+}
+
+const MANAGER_HOME: NavItem = {
+  href: "/manage",
+  label: "Operations overview",
+  icon: LayoutDashboard,
+  capability: Capability.performanceViewAny,
+};
+
+const FEES_HOME: NavItem = {
+  href: "/fees",
+  label: "Fees & collections",
+  icon: Wallet,
+  capability: Capability.feeViewAny,
+};
+
+const TRAINER_WORK: NavItem = {
+  href: "/teaching/work",
+  label: "Work to review",
+  icon: ListChecks,
+  scopedRoles: ["trainer"],
+};
+
+export const MANAGER_NAV: NavGroup[] = [
+  {
+    items: [MANAGER_HOME, staffItem("/analytics")],
+  },
+  {
+    title: "Academic operations",
+    items: [
+      staffItem("/activities"),
+      staffItem("/manage/batches"),
+      staffItem("/manage/reviews"),
+      staffItem("/dsr"),
+      staffItem("/requirements"),
+    ],
+  },
+  {
+    title: "People",
+    items: [
+      staffItem("/manage/trainers"),
+      staffItem("/admin/students"),
+      staffItem("/admin/users"),
+    ],
+  },
+  {
+    title: "Admissions and fees",
+    items: [
+      staffItem("/admissions/dashboard"),
+      staffItem("/enquiries"),
+      staffItem("/admissions"),
+      staffItem("/admissions/new"),
+      FEES_HOME,
+      staffItem("/admissions/batches"),
+      staffItem("/admissions/transfer"),
+    ],
+  },
+  {
+    title: "Teaching and content",
+    items: [
+      staffItem("/teaching/today"),
+      staffItem("/teaching"),
+      staffItem("/teaching/assignments"),
+      staffItem("/teaching/assessments"),
+      staffItem("/teaching/projects"),
+      staffItem("/teaching/exams"),
+      staffItem("/teaching/questions"),
+      staffItem("/admin/courses"),
+      staffItem("/admin/batches"),
+      staffItem("/courses"),
+    ],
+  },
+  {
+    title: "Reports and tools",
+    items: [
+      staffItem("/admin/reports"),
+      staffItem("/admin/imports"),
+      staffItem("/admin/policies"),
+      staffItem("/calendar"),
+    ],
+  },
+  {
+    title: "My work",
+    items: [
+      staffItem("/announcements"),
+      staffItem("/discussions"),
+      staffItem("/forms"),
+      staffItem("/notifications"),
+      staffItem("/profile"),
+    ],
+  },
+];
+
+export const COUNSELLOR_NAV: NavGroup[] = [
+  {
+    items: [staffItem("/admissions/dashboard"), staffItem("/enquiries"), FEES_HOME],
+  },
+  {
+    title: "Admissions",
+    items: [
+      staffItem("/admissions"),
+      staffItem("/admissions/new"),
+      staffItem("/admissions/batches"),
+      staffItem("/admissions/transfer"),
+    ],
+  },
+  {
+    title: "Student care",
+    items: [
+      staffItem("/activities"),
+      staffItem("/admin/students"),
+      staffItem("/admin/users"),
+      staffItem("/calendar"),
+    ],
+  },
+  {
+    title: "Academic support",
+    items: [
+      staffItem("/manage/batches"),
+      staffItem("/dsr"),
+      staffItem("/teaching"),
+      staffItem("/teaching/assignments"),
+      staffItem("/teaching/assessments"),
+      staffItem("/teaching/projects"),
+      staffItem("/teaching/exams"),
+      staffItem("/teaching/questions"),
+      staffItem("/admin/courses"),
+      staffItem("/admin/batches"),
+      staffItem("/courses"),
+      staffItem("/manage/trainers"),
+    ],
+  },
+  {
+    title: "Reports and data",
+    items: [
+      staffItem("/analytics"),
+      staffItem("/admin/reports"),
+      staffItem("/admin/imports"),
+    ],
+  },
+  {
+    title: "Communication and my work",
+    items: [
+      staffItem("/announcements"),
+      staffItem("/discussions"),
+      staffItem("/forms"),
+      staffItem("/notifications"),
+      staffItem("/profile"),
+    ],
+  },
+];
+
+export const TRAINER_NAV: NavGroup[] = [
+  {
+    items: [staffItem("/dashboard"), staffItem("/teaching/today"), TRAINER_WORK],
+  },
+  {
+    title: "Teaching",
+    items: [
+      staffItem("/teaching"),
+      staffItem("/teaching/assignments"),
+      staffItem("/teaching/assessments"),
+      staffItem("/teaching/projects"),
+      staffItem("/teaching/exams"),
+      staffItem("/teaching/questions"),
+    ],
+  },
+  {
+    title: "Learners and content",
+    items: [
+      staffItem("/activities"),
+      staffItem("/admin/batches"),
+      staffItem("/admin/courses"),
+      staffItem("/courses"),
+      staffItem("/dsr"),
+      staffItem("/requirements"),
+    ],
+  },
+  {
+    title: "Planning and communication",
+    items: [
+      staffItem("/calendar"),
+      staffItem("/announcements"),
+      staffItem("/discussions"),
+      staffItem("/forms"),
+    ],
+  },
+  {
+    title: "My account",
+    items: [staffItem("/notifications"), staffItem("/profile")],
+  },
+];
+
+export const STUDENT_NAV_GROUPS: NavGroup[] = [
+  {
+    items: [studentItem("/dashboard"), studentItem("/my-learning")],
+  },
+  {
+    title: "To do",
+    items: [
+      studentItem("/my-assignments"),
+      studentItem("/my-projects"),
+      studentItem("/exams"),
+      studentItem("/forms"),
+    ],
+  },
+  {
+    title: "My progress",
+    items: [
+      studentItem("/my-results"),
+      studentItem("/my-attendance"),
+      studentItem("/my-progress"),
+      studentItem("/my-fees"),
+      studentItem("/my-batches"),
+    ],
+  },
+  {
+    title: "Explore and connect",
+    items: [
+      studentItem("/courses"),
+      studentItem("/calendar"),
+      studentItem("/announcements"),
+      studentItem("/discussions"),
+    ],
+  },
+  {
+    title: "My account",
+    items: [studentItem("/notifications"), studentItem("/profile")],
+  },
+];
+
+/** Superadmins see the same permitted destinations as administrators, but
+ * governance is raised immediately below the overview instead of buried near
+ * the foot of a day-to-day operations menu. */
+export const SUPERADMIN_NAV: NavGroup[] = [
+  ...ADMIN_NAV.filter((group) => !group.title),
+  ...ADMIN_NAV.filter((group) => group.title === "Institution").map((group) => ({
+    ...group,
+    title: "Platform and governance",
+  })),
+  ...ADMIN_NAV.filter((group) => group.title && group.title !== "Institution"),
+];
+
+/** Which role-ranked sidebar a person gets. */
 export function navFor(role: string | undefined): NavGroup[] {
-  return role === "admin" || role === "superadmin" ? ADMIN_NAV : STAFF_NAV;
+  switch (role) {
+    case "superadmin":
+      return SUPERADMIN_NAV;
+    case "admin":
+      return ADMIN_NAV;
+    case "manager":
+      return MANAGER_NAV;
+    case "counsellor":
+      return COUNSELLOR_NAV;
+    case "trainer":
+      return TRAINER_NAV;
+    case "student":
+      return STUDENT_NAV_GROUPS;
+    default:
+      return [{ items: STUDENT_NAV }];
+  }
 }
 
 export const STAFF_ROLES = [

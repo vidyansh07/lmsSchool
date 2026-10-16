@@ -31,7 +31,7 @@ from .emails import (
     send_password_reset_email,
 )
 from .models import AccountToken, TokenPurpose, User, UserRole
-from .roles import can_administer, can_grant_role
+from .roles import can_administer, can_grant_role, is_direct_role_transition
 from .sessions import UserSession, hash_session_key
 
 logger = logging.getLogger("grras.security")
@@ -220,7 +220,7 @@ def _guard_administration(*, actor: User, target: User, action: str) -> None:
 
 
 @transaction.atomic
-def update_user(*, user: User, actor: User, **fields: Any) -> User:
+def update_user(*, user: User, actor: User, role_change_reason: str = "", **fields: Any) -> User:
     """Update administrator-editable user fields.
 
     Role changes are audited separately because they are a privilege change, and
@@ -240,6 +240,17 @@ def update_user(*, user: User, actor: User, **fields: Any) -> User:
     changed: list[str] = []
 
     _guard_administration(actor=actor, target=user, action=AuditAction.USER_UPDATED)
+
+    requested_role = fields.get("role", user.role)
+    requested_custom_role = fields.get("custom_role", user.custom_role)
+    requested_custom_role_id = getattr(requested_custom_role, "pk", None)
+    role_change_requested = requested_role != user.role or (
+        "custom_role" in fields and requested_custom_role_id != user.custom_role_id
+    )
+    if role_change_requested and actor.pk == user.pk:
+        raise ConflictError("Change your own role through another authorized administrator.")
+    if role_change_requested and not role_change_reason.strip():
+        raise ApplicationError({"reason": ["Explain why this role change is needed."]})
 
     new_email = fields.get("email")
     if new_email is not None:
@@ -279,6 +290,53 @@ def update_user(*, user: User, actor: User, **fields: Any) -> User:
             context={"from": previous_role, "attempted": new_role, "refused": "not_held_by_actor"},
         )
         raise ApplicationError({"role": ["You cannot grant a role that holds more than your own."]})
+    if (
+        new_role is not None
+        and new_role != user.role
+        and not is_direct_role_transition(user.role, new_role)
+    ):
+        record(
+            action=AuditAction.USER_ROLE_CHANGED,
+            actor=actor,
+            resource_type="user",
+            resource_id=user.pk,
+            result=AuditResult.FAILURE,
+            context={
+                "from": previous_role,
+                "attempted": new_role,
+                "refused": "persona_conversion_required",
+            },
+        )
+        raise ConflictError(
+            {
+                "role": [
+                    "Student and trainer identities cannot be changed as an account role. "
+                    "Use the dedicated onboarding or conversion workflow."
+                ]
+            }
+        )
+    if (
+        new_role is not None
+        and new_role != user.role
+        and user.role == UserRole.MANAGER
+        and _has_open_teaching_assignments(user)
+    ):
+        raise ConflictError(
+            {
+                "role": [
+                    "Reassign this manager's active or upcoming batches before changing their role."
+                ]
+            }
+        )
+    if (
+        new_role is not None
+        and new_role != user.role
+        and user.role == UserRole.SUPERADMIN
+        and user.is_active
+        and new_role != UserRole.SUPERADMIN
+        and _is_last_active_superadmin(user)
+    ):
+        raise ConflictError({"role": ["The last active superadmin cannot be reassigned."]})
 
     for field, value in fields.items():
         if getattr(user, field) != value:
@@ -310,6 +368,7 @@ def update_user(*, user: User, actor: User, **fields: Any) -> User:
                 "to": user.role,
                 "custom_role_from": previous_custom_role,
                 "custom_role_to": user.custom_role.slug if user.custom_role_id else None,
+                "reason": role_change_reason,
             },
         )
         # A privilege change must not be usable from a session established under
@@ -320,6 +379,58 @@ def update_user(*, user: User, actor: User, **fields: Any) -> User:
         _handle_email_change(user=user, actor=actor, previous_email=previous_email)
 
     return user
+
+
+@transaction.atomic
+def transition_user_role(
+    *,
+    user: User,
+    actor: User,
+    role: str,
+    custom_role=None,
+    reason: str,
+) -> User:
+    """Apply one governed authorization-role transition.
+
+    Student/trainer conversions are refused by :func:`update_user`; this
+    action handles staff-role and same-kind custom-role changes only.
+    """
+
+    return update_user(
+        user=user,
+        actor=actor,
+        role=role,
+        custom_role=custom_role,
+        role_change_reason=reason.strip(),
+    )
+
+
+def _is_last_active_superadmin(user: User) -> bool:
+    """Lock the active top-level accounts before deciding whether one is last.
+
+    The lock matters when two operators try to demote or deactivate each other
+    at the same time: at least one transaction must still observe an active
+    superadmin after the other commits.
+    """
+
+    active_ids = list(
+        User.objects.select_for_update()
+        .filter(role=UserRole.SUPERADMIN, is_active=True)
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
+    return active_ids == [user.pk]
+
+
+def _has_open_teaching_assignments(user: User) -> bool:
+    """Whether a teaching manager still owns work that needs their role."""
+
+    from apps.batches.models import BatchStatus
+
+    profile = getattr(user, "trainer_profile", None)
+    if profile is None:
+        return False
+    return profile.batches.filter(status__in=(BatchStatus.UPCOMING, BatchStatus.ACTIVE)).exists()
 
 
 def _handle_email_change(*, user: User, actor: User, previous_email: str) -> None:
@@ -367,6 +478,9 @@ def set_user_active(*, user: User, is_active: bool, actor: User, reason: str = "
 
     if user.is_active == is_active:
         return user
+
+    if not is_active and user.role == UserRole.SUPERADMIN and _is_last_active_superadmin(user):
+        raise ConflictError("The last active superadmin cannot be deactivated.")
 
     user.is_active = is_active
     user.save(update_fields=["is_active", "updated_at"])

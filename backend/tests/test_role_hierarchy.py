@@ -18,7 +18,7 @@ import pytest
 
 from apps.accounts.models import User, UserRole
 from apps.accounts.roles import can_administer
-from apps.accounts.services import set_user_active, update_user
+from apps.accounts.services import set_user_active, transition_user_role, update_user
 from apps.common.exceptions import ApplicationError, AuthorityError
 
 PASSWORD = "Str0ng-Passphrase!42"
@@ -241,6 +241,7 @@ def test_a_superadmin_may_edit_every_field_of_an_administrator():
         last_name="Entirely",
         phone="+911234567890",
         role=UserRole.MANAGER,
+        role_change_reason="Responsibilities changed.",
     )
 
     assert updated.first_name == "Configured"
@@ -260,6 +261,39 @@ def test_a_superadmin_may_deactivate_another_superadmin():
 
     two.refresh_from_db()
     assert two.is_active is False
+
+
+@pytest.mark.django_db
+def test_the_last_active_superadmin_cannot_be_reassigned():
+    operator = _person(UserRole.ADMIN, "-operator")
+    operator.is_superuser = True
+    operator.save(update_fields=["is_superuser"])
+    owner = _person(UserRole.SUPERADMIN, "-only")
+
+    with pytest.raises(ApplicationError, match="last active superadmin"):
+        transition_user_role(
+            user=owner,
+            actor=operator,
+            role=UserRole.ADMIN,
+            reason="Unsafe demotion.",
+        )
+
+    owner.refresh_from_db()
+    assert owner.role == UserRole.SUPERADMIN
+
+
+@pytest.mark.django_db
+def test_the_last_active_superadmin_cannot_be_deactivated():
+    operator = _person(UserRole.ADMIN, "-operator")
+    operator.is_superuser = True
+    operator.save(update_fields=["is_superuser"])
+    owner = _person(UserRole.SUPERADMIN, "-only")
+
+    with pytest.raises(ApplicationError, match="last active superadmin"):
+        set_user_active(user=owner, is_active=False, actor=operator)
+
+    owner.refresh_from_db()
+    assert owner.is_active is True
 
 
 @pytest.mark.django_db
@@ -365,12 +399,21 @@ def test_a_superadmin_configures_an_administrator_over_the_api(api_client_no_csr
             "first_name": "Configured",
             "last_name": "Entirely",
             "phone": "+911234567890",
-            "role": UserRole.MANAGER,
         },
         format="json",
     )
 
     assert response.status_code == 200, response.json()
+    role_response = api_client_no_csrf.post(
+        f"/api/v1/users/{admin.id}/role-transition/",
+        {
+            "role": UserRole.MANAGER,
+            "custom_role": None,
+            "reason": "Responsibilities changed.",
+        },
+        format="json",
+    )
+    assert role_response.status_code == 200, role_response.json()
     admin.refresh_from_db()
     assert (admin.first_name, admin.role) == ("Configured", UserRole.MANAGER)
 

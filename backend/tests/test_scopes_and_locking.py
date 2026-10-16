@@ -21,6 +21,18 @@ from apps.authorization.models import Role, RolePermission, ScopeGrant
 ROLES = "/api/v1/roles/"
 
 
+def _assign(client, user, custom_role):
+    return client.post(
+        f"/api/v1/users/{user.id}/role-transition/",
+        {
+            "role": user.role,
+            "custom_role": custom_role,
+            "reason": "Authorization scope changed.",
+        },
+        format="json",
+    )
+
+
 def _build(client, **overrides):
     payload = {
         "slug": "front-line-counsellor",
@@ -48,11 +60,7 @@ def test_assigned_scope_reaches_exactly_the_trainers_batch(
     students of a batch they were granted — not their whole centre."""
     api_client_no_csrf.force_login(admin_user)
     _build(api_client_no_csrf)
-    api_client_no_csrf.patch(
-        f"/api/v1/users/{counsellor_user.id}/",
-        {"custom_role": "front-line-counsellor"},
-        format="json",
-    )
+    _assign(api_client_no_csrf, counsellor_user, "front-line-counsellor")
     # Grant the batch explicitly (the counsellor is not its trainer).
     granted = api_client_no_csrf.post(
         f"/api/v1/users/{counsellor_user.id}/scope-grants/",
@@ -84,9 +92,7 @@ def test_own_scope_reaches_only_the_callers_own_requirements(
         format="json",
     )
     assert narrowed.status_code == 201, narrowed.json()
-    api_client_no_csrf.patch(
-        f"/api/v1/users/{manager_user.id}/", {"custom_role": "requirement-raiser"}, format="json"
-    )
+    _assign(api_client_no_csrf, manager_user, "requirement-raiser")
     api_client_no_csrf.force_login(manager_user)
     raised = api_client_no_csrf.post(
         "/api/v1/requirements/", {"title": "Need a trainer"}, format="json"
@@ -106,9 +112,7 @@ def test_own_scope_reaches_only_the_callers_own_requirements(
         branch=manager_user.branch,
     )
     api_client_no_csrf.force_login(admin_user)
-    api_client_no_csrf.patch(
-        f"/api/v1/users/{other.id}/", {"custom_role": "requirement-raiser"}, format="json"
-    )
+    _assign(api_client_no_csrf, other, "requirement-raiser")
     api_client_no_csrf.force_login(other)
     seen = api_client_no_csrf.get("/api/v1/requirements/").json()["results"]
     assert seen == []

@@ -13,6 +13,7 @@ import type {
   TrainerListRow,
   TrainerProfile,
   UserAuditEntry,
+  UserRole,
 } from '@/types/api';
 
 export interface ListQuery {
@@ -53,18 +54,26 @@ export async function createUser(payload: {
   first_name: string;
   last_name?: string;
   phone?: string;
-  role: string;
+  role: Exclude<UserRole, 'student' | 'trainer'>;
 }): Promise<AdminUser> {
   return apiMutate<AdminUser>('/api/v1/users/', { method: 'POST', body: payload });
 }
 
 export async function updateUser(
   id: string,
-  changes: Partial<
-    Pick<AdminUser, 'email' | 'first_name' | 'last_name' | 'phone' | 'role' | 'custom_role'>
-  >,
+  changes: Partial<Pick<AdminUser, 'email' | 'first_name' | 'last_name' | 'phone'>>,
 ): Promise<AdminUser> {
   return apiMutate<AdminUser>(`/api/v1/users/${id}/`, { method: 'PATCH', body: changes });
+}
+
+export async function transitionUserRole(
+  id: string,
+  changes: { role: AdminUser['role']; custom_role: string | null; reason: string },
+): Promise<AdminUser> {
+  return apiMutate<AdminUser>(`/api/v1/users/${id}/role-transition/`, {
+    method: 'POST',
+    body: changes,
+  });
 }
 
 /**

@@ -165,7 +165,7 @@ function UsersTable() {
           Students
         </Link>{' '}
         and{' '}
-        <Link href="/admin/trainers" className="underline hover:text-ink">
+        <Link href="/manage/trainers" className="underline hover:text-ink">
           Trainers
         </Link>
         .

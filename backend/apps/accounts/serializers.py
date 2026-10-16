@@ -18,7 +18,7 @@ from apps.common.serializers import SafeCharField, StrictModelSerializer, Strict
 
 from .mfa import MfaMethod
 from .models import User
-from .roles import UserRole
+from .roles import UserRole, allowed_role_transitions
 
 PASSWORD_STYLE = {"input_type": "password"}
 
@@ -114,14 +114,22 @@ class CurrentUserSerializer(UserSerializer):
         return sorted(obj.capabilities)
 
     def get_profile_type(self, obj: User) -> str | None:
-        if obj.role == UserRole.STUDENT:
+        if obj.role == UserRole.STUDENT and getattr(obj, "student_profile", None) is not None:
             return "student"
-        if obj.role == UserRole.TRAINER:
+        if (
+            obj.role in (UserRole.TRAINER, UserRole.MANAGER)
+            and getattr(obj, "trainer_profile", None) is not None
+        ):
             return "trainer"
         return None
 
     def get_profile_id(self, obj: User) -> str | None:
-        profile = getattr(obj, "student_profile", None) or getattr(obj, "trainer_profile", None)
+        if obj.role == UserRole.STUDENT:
+            profile = getattr(obj, "student_profile", None)
+        elif obj.role in (UserRole.TRAINER, UserRole.MANAGER):
+            profile = getattr(obj, "trainer_profile", None)
+        else:
+            profile = None
         return str(profile.pk) if profile else None
 
 
@@ -129,6 +137,9 @@ class AdminUserDetailSerializer(UserSerializer):
     """Administrator view of a user. Still never exposes credential material."""
 
     can_administer = serializers.SerializerMethodField()
+    allowed_role_transitions = serializers.SerializerMethodField()
+    profile_type = serializers.SerializerMethodField()
+    profile_id = serializers.SerializerMethodField()
 
     class Meta(UserSerializer.Meta):
         fields = (
@@ -139,6 +150,9 @@ class AdminUserDetailSerializer(UserSerializer):
             "created_at",
             "updated_at",
             "can_administer",
+            "allowed_role_transitions",
+            "profile_type",
+            "profile_id",
         )
         read_only_fields = fields
 
@@ -158,6 +172,16 @@ class AdminUserDetailSerializer(UserSerializer):
 
         request = self.context.get("request")
         return can_administer(getattr(request, "user", None), obj)
+
+    def get_allowed_role_transitions(self, obj: User) -> list[str]:
+        request = self.context.get("request")
+        return list(allowed_role_transitions(getattr(request, "user", None), obj))
+
+    def get_profile_type(self, obj: User) -> str | None:
+        return CurrentUserSerializer().get_profile_type(obj)
+
+    def get_profile_id(self, obj: User) -> str | None:
+        return CurrentUserSerializer().get_profile_id(obj)
 
 
 class AdminUserCreateSerializer(StrictModelSerializer):
@@ -194,6 +218,17 @@ class AdminUserCreateSerializer(StrictModelSerializer):
             raise serializers.ValidationError("An account with this email already exists.")
         return normalised
 
+    def validate_role(self, value: str) -> str:
+        if value == UserRole.STUDENT:
+            raise serializers.ValidationError(
+                "Register students through Admissions so their student record is created too."
+            )
+        if value == UserRole.TRAINER:
+            raise serializers.ValidationError(
+                "Add trainers through Trainer onboarding so their trainer profile is created too."
+            )
+        return value
+
 
 class AdminUserUpdateSerializer(StrictModelSerializer):
     """Administrator editing an account.
@@ -216,19 +251,23 @@ class AdminUserUpdateSerializer(StrictModelSerializer):
     first_name = SafeCharField(max_length=100, required=False)
     last_name = SafeCharField(max_length=100, required=False, allow_blank=True)
     phone = SafeCharField(max_length=20, required=False, allow_blank=True)
-    role = serializers.ChoiceField(choices=UserRole.choices, required=False)
-    # The slug of a configured role of the same kind, or null for the system
-    # role. Resolved to the row here so the service sees an object.
+
+    class Meta:
+        model = User
+        fields = ("email", "first_name", "last_name", "phone")
+
+
+class UserRoleTransitionSerializer(StrictSerializer):
+    """A governed role change, separate from ordinary account details."""
+
+    role = serializers.ChoiceField(choices=UserRole.choices)
     custom_role = serializers.SlugRelatedField(
         slug_field="slug",
         queryset=Role.objects.filter(is_system=False),
         required=False,
         allow_null=True,
     )
-
-    class Meta:
-        model = User
-        fields = ("email", "first_name", "last_name", "phone", "role", "custom_role")
+    reason = SafeCharField(max_length=255, allow_blank=False)
 
 
 class SelfUserUpdateSerializer(StrictModelSerializer):

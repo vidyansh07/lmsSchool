@@ -7,38 +7,66 @@
  * a second implementation of that would only be a second place to keep in
  * sync with it.
  *
- * This table stays close to `admin/trainers/page.tsx`'s column set (reused,
- * not duplicated — see `lib/manage.ts#listManageTrainers`) because that is
- * what the trainer list endpoint reliably returns today. The real "review the
+ * This is the canonical trainer workspace for both administrators and
+ * managers; the former admin-only URL redirects here. The real "review the
  * trainer" experience — performance figures, reviews, student feedback — is
- * one click away on `/manage/trainers/[trainerId]`; this hub's job is to get
- * a manager to the right trainer quickly, not to repeat that screen in
- * miniature.
+ * one click away on `/manage/trainers/[trainerId]`; this hub's job is to get a
+ * manager to the right trainer quickly, not to repeat that screen in miniature.
  */
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 
+import { CreateTrainerDialog } from '@/app/admin/trainers/create-trainer-dialog';
+import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
+import { ExportMenu } from '@/components/export-menu';
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
 import { ListToolbar } from '@/components/list-toolbar';
 import { AttentionChip } from '@/components/manage/attention-chip';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
 import { LoadingState } from '@/components/states';
+import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input, Select } from '@/components/ui/input';
+import { PageHeader } from '@/components/ui/layout';
 import { useList } from '@/hooks/use-list';
+import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
 import { fallback, NO_DATA } from '@/lib/format';
 import { listManageTrainers, type ManageTrainerRow } from '@/lib/manage';
+import { updateTrainer } from '@/lib/people';
 
 export function TrainersHub() {
   const router = useRouter();
+  const { can } = useAuth();
   // The attention strip links here with `?attention=…` — "the batches running
   // behind", "the trainers with no review" — so the list opens already
   // narrowed to the thing the person clicked on, rather than to everything.
   const searchParams = useSearchParams();
   const attention = searchParams.get('attention') ?? '';
   const list = useList<ManageTrainerRow>(listManageTrainers, { page_size: 20, ...(attention ? { attention } : {}) });
+  const [showCreate, setShowCreate] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [busyTrainerId, setBusyTrainerId] = useState<string | null>(null);
+
+  async function toggleAvailability(row: ManageTrainerRow) {
+    setBusyTrainerId(row.id);
+    setActionError('');
+    try {
+      await updateTrainer(row.id, {
+        is_accepting_assignments: !row.is_accepting_assignments,
+      });
+      list.reload();
+    } catch (cause) {
+      setActionError(
+        cause instanceof ApiError ? cause.message : 'Could not update trainer availability.',
+      );
+    } finally {
+      setBusyTrainerId(null);
+    }
+  }
 
   const columns: DataTableColumn<ManageTrainerRow>[] = [
     {
@@ -98,11 +126,34 @@ export function TrainersHub() {
     {
       key: 'is_accepting_assignments',
       header: 'Availability',
-      render: (row) => (
-        <Badge variant={row.is_accepting_assignments ? 'success' : 'neutral'}>
-          {row.is_accepting_assignments ? 'Accepting' : 'Not accepting'}
-        </Badge>
-      ),
+      render: (row) =>
+        can(Capability.trainerUpdateAny) ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={busyTrainerId === row.id}
+            aria-label={
+              row.is_accepting_assignments
+                ? `Pause assignments for ${row.full_name || row.email}`
+                : `Accept assignments for ${row.full_name || row.email}`
+            }
+            onClick={(event) => {
+              event.stopPropagation();
+              void toggleAvailability(row);
+            }}
+          >
+            {busyTrainerId === row.id
+              ? 'Updating…'
+              : row.is_accepting_assignments
+                ? 'Pause assignments'
+                : 'Accept assignments'}
+          </Button>
+        ) : (
+          <Badge variant={row.is_accepting_assignments ? 'success' : 'neutral'}>
+            {row.is_accepting_assignments ? 'Accepting' : 'Not accepting'}
+          </Badge>
+        ),
     },
     {
       key: 'is_active',
@@ -113,13 +164,26 @@ export function TrainersHub() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Trainers</h1>
-        <p className="text-sm text-ink-muted">
-          Every trainer on staff. Open one for their performance, the reviews written about them and
-          the feedback their students have left.
-        </p>
-      </div>
+      <PageHeader
+        title="Trainers"
+        meta="People, assignment readiness, workload and review in one place."
+      >
+        <ExportMenu reportKey="trainer_activity" count={list.data?.count ?? null} size="md" />
+        {can(Capability.trainerCreate) ? (
+          <Button type="button" onClick={() => setShowCreate(true)}>
+            Add trainer
+          </Button>
+        ) : null}
+      </PageHeader>
+
+      <CreateTrainerDialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreated={() => {
+          setShowCreate(false);
+          list.reload();
+        }}
+      />
 
       <ManagerAttentionStrip />
 
@@ -133,7 +197,37 @@ export function TrainersHub() {
           search={String(list.query.search ?? '')}
           onSearchChange={(value) => list.setQuery({ search: value })}
           placeholder="Trainer ID, name, email or title"
-        />
+        >
+          <div>
+            <label htmlFor="filter-skill" className="mb-1.5 block text-sm font-medium">
+              Skill
+            </label>
+            <Input
+              id="filter-skill"
+              placeholder="e.g. Linux"
+              defaultValue={String(list.query.skill ?? '')}
+              onBlur={(event) => list.setQuery({ skill: event.target.value })}
+            />
+          </div>
+          <div>
+            <label htmlFor="filter-availability" className="mb-1.5 block text-sm font-medium">
+              Availability
+            </label>
+            <Select
+              id="filter-availability"
+              value={String(list.query.is_accepting_assignments ?? '')}
+              onChange={(event) =>
+                list.setQuery({ is_accepting_assignments: event.target.value })
+              }
+            >
+              <option value="">All</option>
+              <option value="true">Accepting</option>
+              <option value="false">Not accepting</option>
+            </Select>
+          </div>
+        </ListToolbar>
+
+        {actionError ? <Alert variant="error">{actionError}</Alert> : null}
 
         <DataTable
           columns={columns}
@@ -143,7 +237,7 @@ export function TrainersHub() {
           error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}
           onRetry={list.reload}
           emptyTitle="No trainers match these filters"
-          emptyDescription="Try a different search term."
+          emptyDescription="Try a different search or filter, or add the first trainer."
           sort={list.query.ordering}
           onSortChange={list.toggleSort}
           onRowActivate={(row) => router.push(`/manage/trainers/${row.id}`)}

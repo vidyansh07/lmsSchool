@@ -163,7 +163,7 @@ def teaching_staff_of(branch_id):
     from apps.accounts.models import UserRole
 
     people = UserModel.objects.filter(is_active=True).filter(
-        Q(role=UserRole.TRAINER) | Q(trainer_profile__isnull=False)
+        Q(role=UserRole.TRAINER) | Q(role=UserRole.MANAGER, trainer_profile__isnull=False)
     )
     if branch_id is not None:
         people = people.filter(branch_id=branch_id)
