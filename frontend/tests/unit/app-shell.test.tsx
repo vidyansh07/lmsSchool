@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppShell } from '@/components/app-shell';
+import { homeFor } from '@/components/navigation';
 import { Capability } from '@/lib/capabilities';
 
 const SIDEBAR_STORAGE_KEY = 'grras.sidebar-collapsed';
@@ -41,12 +42,13 @@ function renderShell() {
 describe('AppShell', () => {
   beforeEach(() => window.localStorage.clear());
 
-  it('provides a skip link, navigation and a main landmark', () => {
+  it('provides a skip link and main landmark without role navigation for a visitor', () => {
     mockAuth.value = { user: null, isLoading: false, signOut: vi.fn(), can: () => false };
     renderShell();
 
     expect(screen.getByRole('link', { name: /skip to content/i })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open navigation menu' })).not.toBeInTheDocument();
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main-content');
     expect(screen.getByText('Content')).toBeInTheDocument();
   });
@@ -153,6 +155,33 @@ describe('AppShell sidebar collapse', () => {
     renderShell();
 
     expect(screen.getByRole('button', { name: 'Collapse navigation' })).toBeInTheDocument();
+  });
+
+  it('names the role workspace and lets expanded sections be collapsed persistently', async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, 'expanded');
+    mockAuth.value = staffAuth();
+    renderShell();
+
+    expect(screen.getByText('Administrator workspace')).toBeInTheDocument();
+    // The brand link goes where sign-in lands: the first page the sidebar offers.
+    const home = homeFor(mockAuth.value.user as Parameters<typeof homeFor>[0]);
+    expect(home).not.toBe('/');
+    for (const link of screen.getAllByRole('link', { name: /Grras LMS/ })) {
+      expect(link).toHaveAttribute('href', home);
+    }
+
+    const institution = screen.getByRole('button', { name: 'Institution' });
+    expect(institution).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('link', { name: 'User accounts' })).toBeInTheDocument();
+
+    await user.click(institution);
+
+    expect(institution).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('link', { name: 'User accounts' })).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('grras.nav-groups-collapsed.admin')).toContain(
+      'Institution',
+    );
   });
 
   it('still gives every collapsed nav item an accessible name', () => {

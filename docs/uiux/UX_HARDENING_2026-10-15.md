@@ -1,6 +1,6 @@
 # Trainer and user-administration UX hardening
 
-**Implemented:** 15 October 2026  
+**Implemented:** 15 October 2026
 **Scope:** trainer onboarding and discovery, safe role changes, and role/profile consistency
 
 ## Outcome

@@ -50,8 +50,8 @@ export default function HomePage() {
       <section className="space-y-4">
         <h1 className="text-3xl font-semibold tracking-tight">Grras LMS</h1>
         <p className="max-w-prose text-ink-muted">
-          Identity and people management for students, trainers and administrators. Sign in to
-          continue.
+          Run admissions, teaching, fees, student progress and communication from one role-aware
+          workspace.
         </p>
         <Button asChild>
           <Link href="/login">Sign in</Link>

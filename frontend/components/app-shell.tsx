@@ -42,6 +42,7 @@ import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import {
   Bell,
+  ChevronDown,
   ChevronRight,
   LogOut,
   Menu,
@@ -54,9 +55,8 @@ import {
 import { useAuth } from '@/components/auth-provider';
 import { CommandPalette } from '@/components/command-palette';
 import {
+  homeFor,
   navFor,
-  STAFF_ROLES,
-  STUDENT_NAV,
   isVisible,
   type NavGroup,
   type NavItem,
@@ -71,11 +71,13 @@ import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { env } from '@/lib/env';
 import { cn } from '@/lib/utils';
+import { workspaceLabel } from '@/lib/workspace';
 
 /** `localStorage` key for the sidebar's expanded/collapsed preference. Once a
  *  person picks one, it always wins over the breakpoint default below —
  *  see `useSidebarCollapsed`. */
 const SIDEBAR_STORAGE_KEY = 'grras.sidebar-collapsed';
+const NAV_GROUPS_STORAGE_PREFIX = 'grras.nav-groups-collapsed';
 
 type SidebarPreference = 'expanded' | 'collapsed' | null;
 
@@ -94,6 +96,28 @@ function writeSidebarPreference(value: 'expanded' | 'collapsed'): void {
   } catch {
     // No persistence available (private window, storage disabled). The
     // toggle still works for the rest of this session.
+  }
+}
+
+function readCollapsedGroups(scope: string): Set<string> {
+  try {
+    const value = window.localStorage.getItem(`${NAV_GROUPS_STORAGE_PREFIX}.${scope}`);
+    const parsed: unknown = value ? JSON.parse(value) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeCollapsedGroups(scope: string, groups: Set<string>): void {
+  try {
+    window.localStorage.setItem(
+      `${NAV_GROUPS_STORAGE_PREFIX}.${scope}`,
+      JSON.stringify([...groups]),
+    );
+  } catch {
+    // The section still opens and closes for this mounted shell when storage
+    // is unavailable; persistence is an enhancement, not a prerequisite.
   }
 }
 
@@ -215,16 +239,18 @@ function Brand({
   compact = false,
   showEnvDot = false,
   tone = 'surface',
+  homeHref = '/',
 }: {
   compact?: boolean;
   showEnvDot?: boolean;
   tone?: NavTone;
+  homeHref?: string;
 }) {
   const nonProduction = env.appEnv !== 'production';
   const onRail = tone === 'rail';
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <Link href="/" className="relative flex min-w-0 items-center gap-2.5">
+      <Link href={homeHref} className="relative flex min-w-0 items-center gap-2.5">
         <span
           aria-hidden="true"
           className="flex size-9 shrink-0 items-center justify-center rounded-card text-base font-bold text-white"
@@ -454,12 +480,20 @@ function HeaderAccount() {
  * "Home › Section › Page", derived from the navigation rather than the URL, so
  * it names screens the way the sidebar does and never shows a raw slug.
  */
-function Breadcrumb({ groups, active }: { groups: NavGroup[]; active: string | null }) {
+function Breadcrumb({
+  groups,
+  active,
+  homeHref,
+}: {
+  groups: NavGroup[];
+  active: string | null;
+  homeHref: string;
+}) {
   const group = groups.find((candidate) => candidate.items.some((item) => item.href === active));
   const item = group?.items.find((candidate) => candidate.href === active);
   return (
     <nav aria-label="Breadcrumb" className="hidden min-w-0 items-center gap-1.5 text-sm sm:flex">
-      <Link href="/" className="text-ink-muted transition-colors duration-150 hover:text-ink">
+      <Link href={homeHref} className="text-ink-muted transition-colors duration-150 hover:text-ink">
         Home
       </Link>
       {group?.title ? (
@@ -533,63 +567,103 @@ function NavGroups({
   active,
   collapsed,
   tone = 'surface',
+  storageScope,
+  workspaceName,
 }: {
   groups: NavGroup[];
   active: string | null;
   collapsed: boolean;
   tone?: NavTone;
+  storageScope: string;
+  workspaceName?: string;
 }) {
   const onRail = tone === 'rail';
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() =>
+    readCollapsedGroups(storageScope),
+  );
+
+  function toggleGroup(title: string) {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(title)) next.delete(title);
+      else next.add(title);
+      writeCollapsedGroups(storageScope, next);
+      return next;
+    });
+  }
+
   return (
     <nav
       aria-label="Main"
       className={cn('flex h-full flex-col gap-4 overflow-y-auto py-3', collapsed ? 'px-1.5' : 'px-3')}
     >
-      {groups.map((group, index) => (
-        <div key={group.title ?? `group-${index}`} className="space-y-1">
-          {/* Plain text, with no ARIA association to the list.
-              As an <h2> it entered the document outline and competed with the
-              page's own <h1>. Bound to the list with `aria-labelledby` it gave
-              the <ul> an accessible name, and a list called "Courses and
-              batches" then answered to a search for a form field named "Batch".
-              The grouping here is visual; the links carry their own names, and
-              the label is read in order like any other text. Collapsed, the
-              heading text itself would wrap or overflow an 80px column, so it
-              is replaced with a plain divider — the links underneath still
-              carry their own names either way. */}
-          {group.title ? (
-            collapsed ? (
-              index > 0 ? (
-                <hr
-                  aria-hidden="true"
-                  className={cn('mx-2 border-t', onRail ? 'border-white/10' : 'border-line')}
-                />
-              ) : null
-            ) : (
-              <p
-                className={cn(
-                  'px-3 pb-1.5 text-2xs font-semibold uppercase tracking-[0.12em]',
-                  onRail ? 'text-rail-fg/45' : 'text-ink-faint',
-                )}
-              >
-                {group.title}
-              </p>
-            )
-          ) : null}
-          <ul className="space-y-0.5">
-            {group.items.map((item) => (
-              <li key={item.href}>
-                <NavLink
-                  item={item}
-                  active={item.href === active}
-                  collapsed={collapsed}
-                  tone={tone}
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+      {!collapsed && workspaceName ? (
+        <p className={cn('px-3 text-2xs font-semibold', onRail ? 'text-rail-fg/60' : 'text-ink-faint')}>
+          {workspaceName}
+        </p>
+      ) : null}
+      {groups.map((group, index) => {
+        const containsActive = group.items.some((item) => item.href === active);
+        const groupOpen =
+          collapsed || !group.title || containsActive || !collapsedGroups.has(group.title);
+        const groupId = `nav-group-${storageScope}-${index}`;
+        return (
+          <div key={group.title ?? `group-${index}`} className="space-y-1">
+            {/* A button gives a long role menu progressive disclosure without
+                putting another heading into the page outline. In the compact
+                rail it becomes a divider and every destination stays visible. */}
+            {group.title ? (
+              collapsed ? (
+                index > 0 ? (
+                  <hr
+                    aria-hidden="true"
+                    className={cn('mx-2 border-t', onRail ? 'border-white/10' : 'border-line')}
+                  />
+                ) : null
+              ) : (
+                <button
+                  type="button"
+                  aria-expanded={groupOpen}
+                  aria-controls={groupId}
+                  onClick={() => toggleGroup(group.title as string)}
+                  className={cn(
+                    'flex min-h-11 w-full items-center justify-between gap-2 rounded-control px-3 text-left text-2xs font-semibold uppercase tracking-[0.12em] transition-colors duration-150',
+                    onRail ? 'text-rail-fg/45' : 'text-ink-faint',
+                    onRail
+                      ? 'hover:bg-white/5 hover:text-rail-fg'
+                      : 'hover:bg-sunken hover:text-ink',
+                  )}
+                >
+                  <span className="truncate">{group.title}</span>
+                  <ChevronDown
+                    className={cn(
+                      'size-3.5 shrink-0 transition-transform duration-150',
+                      groupOpen ? '' : '-rotate-90',
+                    )}
+                    aria-hidden="true"
+                  />
+                </button>
+              )
+            ) : null}
+            <ul
+              id={group.title ? groupId : undefined}
+              hidden={!groupOpen}
+              className="space-y-0.5"
+            >
+              {group.items.map((item) => (
+                <li key={item.href}>
+                  <NavLink
+                    item={item}
+                    active={item.href === active}
+                    collapsed={collapsed}
+                    tone={tone}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
     </nav>
   );
 }
@@ -626,10 +700,18 @@ function SidebarToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: 
 
 function Shell({
   groups,
+  homeHref,
+  navigationLabel,
+  navigationScope,
+  showNavigation,
   onOpenSearch,
   children,
 }: {
   groups: NavGroup[];
+  homeHref: string;
+  navigationLabel: string;
+  navigationScope: string;
+  showNavigation: boolean;
   /** Opens the command palette (Phase 11) — see the module docstring. */
   onOpenSearch: () => void;
   children: ReactNode;
@@ -675,63 +757,70 @@ function Shell({
           `globals.css`), the same mechanism the R2 chart components and
           `Sparkline` opt into explicitly via `useReducedMotion` for their
           own JS-driven motion. */}
-      <aside
-        className={cn(
-          // The one dark surface in the product, and the reason the rest of
-          // the interface can stay light without looking unframed. 68px
-          // collapsed, matching the reference: wide enough for an icon with a
-          // readable word under it, narrow enough that the table beside it
-          // keeps its columns.
-          'relative hidden shrink-0 bg-rail transition-[width] duration-200 lg:block',
-          collapsed ? 'lg:w-[4.25rem]' : 'lg:w-[17rem]',
-        )}
-      >
-        {/* No `overflow-hidden` here: the collapsed sidebar's nav-item
-            tooltips (`side="right"`) are positioned `left-full` off an icon
-            near the sidebar's *left* edge, so they land past this column's
-            own right edge on purpose — clip that and a collapsed tooltip
-            would be cut off exactly where it needs to be readable. The
-            content itself never overflows horizontally either way (each
-            state is a fixed layout, not something that grows mid-transition),
-            so there is nothing here that actually needs containing. */}
-        <div className="sticky top-0 flex h-dvh flex-col">
-          <div
-            className={cn(
-              'flex h-16 shrink-0 items-center border-b border-white/10',
-              collapsed ? 'justify-center px-2' : 'px-4',
-            )}
-          >
-            <Brand compact={collapsed} showEnvDot={collapsed} tone="rail" />
+      {showNavigation ? (
+        <aside
+          className={cn(
+            // The one dark surface in the product, and the reason the rest of
+            // the interface can stay light without looking unframed. 68px
+            // collapsed, matching the reference: wide enough for an icon with a
+            // readable word under it, narrow enough that the table beside it
+            // keeps its columns.
+            'relative hidden shrink-0 bg-rail transition-[width] duration-200 lg:block',
+            collapsed ? 'lg:w-[4.25rem]' : 'lg:w-[17rem]',
+          )}
+        >
+          {/* No `overflow-hidden` here: the collapsed sidebar's nav-item
+              tooltips (`side="right"`) are positioned `left-full` off an icon
+              near the sidebar's *left* edge, so they land past this column's
+              own right edge on purpose — clip that and a collapsed tooltip
+              would be cut off exactly where it needs to be readable. The
+              content itself never overflows horizontally either way (each
+              state is a fixed layout, not something that grows mid-transition),
+              so there is nothing here that actually needs containing. */}
+          <div className="sticky top-0 flex h-dvh flex-col">
+            <div
+              className={cn(
+                'flex h-16 shrink-0 items-center border-b border-white/10',
+                collapsed ? 'justify-center px-2' : 'px-4',
+              )}
+            >
+              <Brand compact={collapsed} showEnvDot={collapsed} tone="rail" homeHref={homeHref} />
+            </div>
+            <NavGroups
+              key={`desktop-${navigationScope}`}
+              groups={groups}
+              active={active}
+              collapsed={collapsed}
+              tone="rail"
+              storageScope={navigationScope}
+              workspaceName={navigationLabel}
+            />
+            <div className={cn('border-t border-white/10', collapsed ? 'p-2' : 'p-3')}>
+              <AccountCard collapsed={collapsed} tone="rail" />
+            </div>
           </div>
-          <NavGroups groups={groups} active={active} collapsed={collapsed} tone="rail" />
-          <div className={cn('border-t border-white/10', collapsed ? 'p-2' : 'p-3')}>
-            <AccountCard collapsed={collapsed} tone="rail" />
-          </div>
-        </div>
-        <SidebarToggle collapsed={collapsed} onToggle={toggleCollapsed} />
-      </aside>
+          <SidebarToggle collapsed={collapsed} onToggle={toggleCollapsed} />
+        </aside>
+      ) : null}
 
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 border-b border-line bg-surface">
           <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="size-9 p-0 text-ink-muted lg:hidden"
-              aria-label="Open navigation menu"
-              onClick={() => setOpen(true)}
-            >
-              {/* size-[18px], matching Search/Bell/Settings below — this was
-                  the one real icon-size inconsistency found in the header
-                  (was size-5/20px, the only header control not on the same
-                  18px scale as every other icon in an identical size-9
-                  button). */}
-              <Menu className="size-[18px]" aria-hidden="true" />
-            </Button>
-            <div className="lg:hidden">
-              <Brand compact />
+            {showNavigation ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="size-9 p-0 text-ink-muted lg:hidden"
+                aria-label="Open navigation menu"
+                onClick={() => setOpen(true)}
+              >
+                <Menu className="size-[18px]" aria-hidden="true" />
+              </Button>
+            ) : null}
+            <div className={showNavigation ? 'lg:hidden' : ''}>
+              <Brand compact homeHref={homeHref} showEnvDot={!showNavigation} />
             </div>
-            <Breadcrumb groups={groups} active={active} />
+            <Breadcrumb groups={groups} active={active} homeHref={homeHref} />
             <div className="ml-auto flex items-center gap-1 sm:gap-2">
               {/* Opens the command palette. A labelled box rather than a bare
                   magnifier, and the chord printed inside it: a keyboard
@@ -740,23 +829,25 @@ function Shell({
                   had already found the button. Below `sm` there is no room
                   for the words, so it falls back to the icon and keeps its
                   accessible name either way. */}
-              <Button
-                variant="outline"
-                size="sm"
-                // One control, two shapes. Below `sm` it is a square icon
-                // button; from `sm` up it grows into a labelled box. Rendering
-                // two buttons and hiding one would give the page two elements
-                // with the accessible name "Search".
-                className="size-9 justify-center gap-2 p-0 text-ink-faint sm:h-9 sm:w-56 sm:justify-start sm:px-2.5 lg:w-72"
-                aria-label="Search"
-                onClick={onOpenSearch}
-              >
-                <Search className="size-[18px] shrink-0" aria-hidden="true" />
-                <span className="hidden truncate sm:inline">Search everything</span>
-                <kbd className="ml-auto hidden rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-2xs text-ink-faint sm:inline">
-                  ⌘K
-                </kbd>
-              </Button>
+              {showNavigation ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  // One control, two shapes. Below `sm` it is a square icon
+                  // button; from `sm` up it grows into a labelled box. Rendering
+                  // two buttons and hiding one would give the page two elements
+                  // with the accessible name "Search".
+                  className="size-9 justify-center gap-2 p-0 text-ink-faint sm:h-9 sm:w-56 sm:justify-start sm:px-2.5 lg:w-72"
+                  aria-label="Search"
+                  onClick={onOpenSearch}
+                >
+                  <Search className="size-[18px] shrink-0" aria-hidden="true" />
+                  <span className="hidden truncate sm:inline">Search everything</span>
+                  <kbd className="ml-auto hidden rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-2xs text-ink-faint sm:inline">
+                    ⌘K
+                  </kbd>
+                </Button>
+              ) : null}
               <HeaderAccount />
             </div>
           </div>
@@ -786,22 +877,31 @@ function Shell({
           Always the expanded link list (`collapsed={false}`) — the icon-only
           state exists to save width on a screen that already has a sidebar,
           which is not what a `Sheet` drawer is for. */}
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent size="sm" className="flex flex-col">
-          <SheetHeader>
-            {/* The lockup is a link and a badge, which do not belong inside a
-                heading element; the title is for the dialog's accessible name. */}
-            <SheetTitle className="sr-only">Navigation</SheetTitle>
-            <Brand />
-          </SheetHeader>
-          <div className="-mx-5 flex-1 overflow-y-auto border-y border-line">
-            <NavGroups groups={groups} active={active} collapsed={false} />
-          </div>
-          <SheetFooter className="justify-start">
-            <AccountCard />
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+      {showNavigation ? (
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetContent size="sm" className="flex flex-col">
+            <SheetHeader>
+              {/* The lockup is a link and a badge, which do not belong inside a
+                  heading element; the title is for the dialog's accessible name. */}
+              <SheetTitle className="sr-only">Navigation</SheetTitle>
+              <Brand homeHref={homeHref} />
+            </SheetHeader>
+            <div className="-mx-5 flex-1 overflow-y-auto border-y border-line">
+              <NavGroups
+                key={`drawer-${navigationScope}`}
+                groups={groups}
+                active={active}
+                collapsed={false}
+                storageScope={navigationScope}
+                workspaceName={navigationLabel}
+              />
+            </div>
+            <SheetFooter className="justify-start">
+              <AccountCard />
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+      ) : null}
     </div>
   );
 }
@@ -832,7 +932,6 @@ function EmailVerificationNotice() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const isStaff = Boolean(user && STAFF_ROLES.includes(user.role));
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   // The one place `mod+k` is registered — every page under this shell shares
@@ -842,16 +941,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     Boolean(user),
   );
 
-  // The student's links are a flat list; give them the one untitled group the
-  // sidebar already knows how to draw, so both audiences share one shell.
-  const groups: NavGroup[] = isStaff
-    ? navFor(user?.role)
+  const groups: NavGroup[] = user
+    ? navFor(user.role)
         .map((group) => ({
           ...group,
           items: group.items.filter((item) => isVisible(item, user)),
         }))
         .filter((group) => group.items.length > 0)
-    : [{ items: STUDENT_NAV.filter((item) => isVisible(item, user)) }];
+    : [];
+  const homeHref = user ? homeFor(user) : '/';
+  const navigationLabel = user ? workspaceLabel(user.role) : 'Explore Grras LMS';
 
   return (
     <>
@@ -861,7 +960,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         Skip to content
       </a>
-      <Shell groups={groups} onOpenSearch={() => setPaletteOpen(true)}>
+      <Shell
+        groups={groups}
+        homeHref={homeHref}
+        navigationLabel={navigationLabel}
+        navigationScope={user?.role ?? 'public'}
+        showNavigation={Boolean(user)}
+        onOpenSearch={() => setPaletteOpen(true)}
+      >
         <EmailVerificationNotice />
         {children}
       </Shell>

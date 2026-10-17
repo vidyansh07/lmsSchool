@@ -30,7 +30,7 @@ import { type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
-import { navFor, STAFF_ROLES, STUDENT_NAV, isVisible, type NavGroup } from '@/components/navigation';
+import { navFor, isVisible, type NavGroup } from '@/components/navigation';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
@@ -115,7 +115,7 @@ function matchesWords(text: string, query: string): boolean {
 
 function localGroupsFor(user: { role: string; capabilities: string[] } | null): NavGroup[] {
   if (!user) return [];
-  return STAFF_ROLES.includes(user.role) ? navFor(user.role) : [{ items: STUDENT_NAV }];
+  return navFor(user.role);
 }
 
 export function CommandPalette({

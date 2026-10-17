@@ -189,6 +189,12 @@ const CALENDAR: NavItem = {
   icon: CalendarDays,
   scopedRoles: ["trainer", "counsellor", "manager", "admin", "superadmin"],
 };
+const FEES_HOME: NavItem = {
+  href: "/fees",
+  label: "Fees & collections",
+  icon: Wallet,
+  capability: Capability.feeViewAny,
+};
 const TEACHING_ITEMS: NavItem[] = [
   {
     href: "/teaching/today",
@@ -326,6 +332,7 @@ export const MANAGER_NAV: NavGroup[] = [
         icon: UsersRound,
         capability: Capability.studentViewAny,
       },
+      FEES_HOME,
       {
         href: "/admissions",
         label: "Registrations",
@@ -447,6 +454,7 @@ export const COUNSELLOR_NAV: NavGroup[] = [
         icon: ListChecks,
         capability: Capability.studentCreate,
       },
+      FEES_HOME,
       {
         href: "/admissions/batches",
         label: "Batch planning",
@@ -540,6 +548,14 @@ export const TRAINER_NAV: NavGroup[] = [
         scopedRoles: ["trainer"],
       },
       {
+        // Scoped to the batches they teach, like the other teaching pages.
+        href: "/dsr",
+        label: "Class reports",
+        icon: FileText,
+        capability: Capability.dsrViewAny,
+        scopedRoles: ["trainer"],
+      },
+      {
         // A manager's ask of the teaching staff; trainers answer on it (D-132).
         href: "/requirements",
         label: "Trainer requirements",
@@ -577,7 +593,8 @@ export const TRAINER_NAV: NavGroup[] = [
  * trainers, the counsellor's work, students and fees, batches and courses,
  * outcomes, the calendar, and only then the institution's own settings.
  * Managers, counsellors and trainers each have their own (above), grouped by
- * the job each does all day (15 October 2026).
+ * the job each does all day (15 October 2026); superadmins get this one with
+ * governance raised (below).
  */
 export const ADMIN_NAV: NavGroup[] = [
   {
@@ -656,6 +673,12 @@ export const ADMIN_NAV: NavGroup[] = [
         label: "Admissions pipeline",
         icon: LayoutDashboard,
         capability: Capability.enrolmentCreate,
+      },
+      {
+        href: "/fees",
+        label: "Fees & collections",
+        icon: Wallet,
+        capability: Capability.feeViewAny,
       },
       {
         href: "/enquiries",
@@ -893,13 +916,85 @@ export const ADMIN_NAV: NavGroup[] = [
   },
 ];
 
+/** Superadmins see the same permitted destinations as administrators, but
+ * governance is raised immediately below the overview instead of buried near
+ * the foot of a day-to-day operations menu. */
+export const SUPERADMIN_NAV: NavGroup[] = [
+  ...ADMIN_NAV.filter((group) => !group.title),
+  ...ADMIN_NAV.filter((group) => group.title === "Institution").map((group) => ({
+    ...group,
+    title: "Platform and governance",
+  })),
+  ...ADMIN_NAV.filter((group) => group.title && group.title !== "Institution"),
+];
+
+function studentItem(href: string): NavItem {
+  const item = STUDENT_NAV.find((candidate) => candidate.href === href);
+  if (!item) throw new Error(`No student navigation item registered for ${href}`);
+  return item;
+}
+
+/** The student's links, grouped for the sidebar: learning, what is due, how
+ *  they are doing, then the community and their own account. */
+export const STUDENT_NAV_GROUPS: NavGroup[] = [
+  {
+    items: [studentItem("/dashboard"), studentItem("/my-learning")],
+  },
+  {
+    title: "To do",
+    items: [
+      studentItem("/my-assignments"),
+      studentItem("/my-projects"),
+      studentItem("/exams"),
+      studentItem("/my-activities"),
+      studentItem("/forms"),
+    ],
+  },
+  {
+    title: "My progress",
+    items: [
+      studentItem("/my-results"),
+      studentItem("/my-attendance"),
+      studentItem("/my-progress"),
+      studentItem("/my-fees"),
+      studentItem("/my-batches"),
+    ],
+  },
+  {
+    title: "Explore and connect",
+    items: [
+      studentItem("/courses"),
+      studentItem("/calendar"),
+      studentItem("/announcements"),
+      studentItem("/discussions"),
+    ],
+  },
+  {
+    title: "My account",
+    items: [studentItem("/notifications"), studentItem("/profile")],
+  },
+];
+
 /** Which sidebar a role gets. A configured role takes its kind's sidebar,
- *  filtered by its own capabilities (`isVisible`). */
+ *  filtered by its own capabilities (`isVisible`). A signed-out visitor or an
+ *  unknown role gets the student's flat list, which is itself role-scoped. */
 export function navFor(role: string | undefined): NavGroup[] {
-  if (role === "admin" || role === "superadmin") return ADMIN_NAV;
-  if (role === "manager") return MANAGER_NAV;
-  if (role === "counsellor") return COUNSELLOR_NAV;
-  return TRAINER_NAV;
+  switch (role) {
+    case "superadmin":
+      return SUPERADMIN_NAV;
+    case "admin":
+      return ADMIN_NAV;
+    case "manager":
+      return MANAGER_NAV;
+    case "counsellor":
+      return COUNSELLOR_NAV;
+    case "trainer":
+      return TRAINER_NAV;
+    case "student":
+      return STUDENT_NAV_GROUPS;
+    default:
+      return [{ items: STUDENT_NAV }];
+  }
 }
 
 export const STAFF_ROLES = [

@@ -5,6 +5,8 @@ import {
   COUNSELLOR_NAV,
   MANAGER_NAV,
   STUDENT_NAV,
+  STUDENT_NAV_GROUPS,
+  SUPERADMIN_NAV,
   TRAINER_NAV,
   homeFor,
   isVisible,
@@ -57,12 +59,30 @@ describe("navigation authorization hints", () => {
     const enquiries = itemAt(ADMIN_NAV, "/enquiries");
     expect(enquiries.capability).toBe(Capability.enquiryViewAny);
   });
+
+  it("shows fees only when the account holds fee visibility", () => {
+    const fees = itemAt(COUNSELLOR_NAV, "/fees");
+    expect(isVisible(fees, { role: "counsellor", capabilities: [] })).toBe(false);
+    expect(
+      isVisible(fees, {
+        role: "counsellor",
+        capabilities: [Capability.feeViewAny],
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("navigation wording and structure", () => {
   it("uses distinct destinations in each navigation tree", () => {
     expectUniqueDestinations(STUDENT_NAV);
-    for (const nav of [ADMIN_NAV, MANAGER_NAV, COUNSELLOR_NAV, TRAINER_NAV]) {
+    for (const nav of [
+      ADMIN_NAV,
+      SUPERADMIN_NAV,
+      MANAGER_NAV,
+      COUNSELLOR_NAV,
+      TRAINER_NAV,
+      STUDENT_NAV_GROUPS,
+    ]) {
       expectUniqueDestinations(nav.flatMap((group) => group.items));
     }
   });
@@ -85,6 +105,29 @@ describe("navigation wording and structure", () => {
     expect(labels).not.toContain("Bulk import");
     expect(labels).not.toContain("Authoring");
   });
+
+  it("ranks each role's daily workspace first", () => {
+    expect(navFor("admin")[0]?.items[0]?.href).toBe("/admin/activity");
+    expect(navFor("manager")[0]?.items[0]?.href).toBe("/manage");
+    expect(navFor("counsellor")[0]?.items[0]?.href).toBe("/admissions/dashboard");
+    expect(navFor("trainer")[0]?.items[0]?.href).toBe("/dashboard");
+    expect(navFor("student")[0]?.items[0]?.href).toBe("/dashboard");
+  });
+
+  it("specializes manager and counsellor navigation despite their overlapping permissions", () => {
+    expect(itemAt(MANAGER_NAV, "/manage/trainers")).toBeDefined();
+    expect(itemAt(COUNSELLOR_NAV, "/fees")).toBeDefined();
+    expect(COUNSELLOR_NAV.flatMap((group) => group.items).some((item) => item.href === "/manage/reviews")).toBe(false);
+    expect(COUNSELLOR_NAV.flatMap((group) => group.items).some((item) => item.href === "/requirements")).toBe(false);
+  });
+
+  it("keeps a trainer's assigned-record work discoverable", () => {
+    expect(itemAt(TRAINER_NAV, "/teaching/work").scopedRoles).toContain("trainer");
+    expect(itemAt(TRAINER_NAV, "/dsr").scopedRoles).toContain("trainer");
+    expect(
+      TRAINER_NAV.flatMap((group) => group.items).some((item) => item.href === "/admin/users"),
+    ).toBe(false);
+  });
 });
 
 describe("a sidebar for each role", () => {
@@ -93,7 +136,8 @@ describe("a sidebar for each role", () => {
 
   it("gives each staff role its own sidebar", () => {
     expect(navFor("admin")).toBe(ADMIN_NAV);
-    expect(navFor("superadmin")).toBe(ADMIN_NAV);
+    expect(navFor("superadmin")).toBe(SUPERADMIN_NAV);
+    expect(navFor("student")).toBe(STUDENT_NAV_GROUPS);
     expect(navFor("manager")).toBe(MANAGER_NAV);
     expect(navFor("counsellor")).toBe(COUNSELLOR_NAV);
     expect(navFor("trainer")).toBe(TRAINER_NAV);
