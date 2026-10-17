@@ -153,3 +153,40 @@ def on_dsr_missing(sender, *, dsr, **kwargs) -> None:
             logger.exception("Failed to enqueue DSR_MISSING dispatch for %s", dsr_id)
 
     transaction.on_commit(_enqueue)
+
+
+def on_fee_payment_recorded(sender, *, payment, actor=None, **kwargs) -> None:
+    """A recorded payment is a `FEE_PAYMENT_RECORDED` occurrence."""
+    payment_id = str(payment.pk)
+
+    def _enqueue() -> None:
+        try:
+            from .tasks import dispatch_fee_payment_recorded
+
+            dispatch_fee_payment_recorded.delay(payment_id)
+        except Exception:
+            logger.exception("Failed to enqueue FEE_PAYMENT_RECORDED dispatch for %s", payment_id)
+
+    transaction.on_commit(_enqueue)
+
+
+def _on_instalment(trigger: str, installment, days: int) -> None:
+    installment_id = str(installment.pk)
+
+    def _enqueue() -> None:
+        try:
+            from .tasks import dispatch_fee_instalment
+
+            dispatch_fee_instalment.delay(installment_id, trigger, int(days))
+        except Exception:
+            logger.exception("Failed to enqueue %s dispatch for %s", trigger, installment_id)
+
+    transaction.on_commit(_enqueue)
+
+
+def on_instalment_due(sender, *, installment, days, **kwargs) -> None:
+    _on_instalment("FEE_INSTALMENT_DUE", installment, days)
+
+
+def on_instalment_overdue(sender, *, installment, days, **kwargs) -> None:
+    _on_instalment("FEE_INSTALMENT_OVERDUE", installment, days)

@@ -57,6 +57,7 @@ from .models import (
     PaymentMethod,
     installment_rows,
 )
+from .signals import payment_recorded
 
 HUNDRED = Decimal("100")
 
@@ -532,6 +533,8 @@ def record_payment(
     )
     sync_student_fee_status(plan.enrollment.student, actor=actor)
     mail.queue_safely(mail.email_receipt, payment)
+    if not mail.is_suppressed():
+        payment_recorded.send(sender=FeePayment, payment=payment, actor=actor)
     return payment
 
 

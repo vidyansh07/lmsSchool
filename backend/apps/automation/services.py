@@ -547,6 +547,24 @@ def _build(trigger: str, obj: Any, extra: dict[str, Any]) -> tuple[dict[str, Any
         rctx = RunContext(enquiry=enquiry, branch=enquiry.branch)
         return context, rctx, enquiry
 
+    if trigger == AutomationTrigger.FEE_PAYMENT_RECORDED:
+        payment = obj
+        enrollment = payment.plan.enrollment
+        context = context_for(trigger, payment)
+        rctx = RunContext(
+            student=enrollment.student, enrollment=enrollment, branch=_batch_branch(enrollment)
+        )
+        return context, rctx, payment
+
+    if trigger in (AutomationTrigger.FEE_INSTALMENT_DUE, AutomationTrigger.FEE_INSTALMENT_OVERDUE):
+        installment = obj
+        enrollment = installment.plan.enrollment
+        context = context_for(trigger, installment, **extra)
+        rctx = RunContext(
+            student=enrollment.student, enrollment=enrollment, branch=_batch_branch(enrollment)
+        )
+        return context, rctx, installment
+
     raise ValueError(f"Unknown trigger: {trigger!r}")
 
 
@@ -647,6 +665,14 @@ def _occurrence_for(trigger: str, target: Any, extra: dict[str, Any], depth: int
     if trigger == AutomationTrigger.ENQUIRY_UPDATED:
         moment = getattr(target, "updated_at", None) or timezone.now()
         return f"{_compact_datetime(moment)}-{depth}"
+
+    if trigger == AutomationTrigger.FEE_PAYMENT_RECORDED:
+        return "recorded"
+
+    if trigger in (AutomationTrigger.FEE_INSTALMENT_DUE, AutomationTrigger.FEE_INSTALMENT_OVERDUE):
+        # Once a day per instalment: the morning sweep offers it every day of
+        # the window and the rule's own condition picks the day.
+        return _compact_date()
 
     raise ValueError(f"Unknown trigger: {trigger!r}")
 

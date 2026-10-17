@@ -355,6 +355,15 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60,
         "options": {"expires": 50},
     },
+    # Fee schedules: every morning at 08:00, each unpaid instalment due within
+    # the week or already late is offered to automation (`FEE_INSTALMENT_*`),
+    # so a reminder rule can mail the student three days before, on the day,
+    # or a week after.
+    "fees-sweep-instalments": {
+        "task": "fees.sweep_instalments",
+        "schedule": crontab(hour=8, minute=0),
+        "options": {"expires": 3600},
+    },
     # Exports (ERP Phase 20): once a night, well outside business hours, so a
     # file's `SystemSetting.export_retention_days` lifetime is enforced daily
     # rather than left to accumulate in storage indefinitely.

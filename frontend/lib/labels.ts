@@ -592,11 +592,20 @@ export const AUTOMATION_TRIGGER_LABEL: Record<AutomationTrigger, string> = {
   DSR_SUBMITTED: "Class report submitted",
   DSR_MISSING: "Class report missing",
   DSR_STUDENT_FLAGGED: "Student flagged in a class report",
+  FEE_PAYMENT_RECORDED: "Fee payment recorded",
+  FEE_INSTALMENT_DUE: "Fee instalment due soon",
+  FEE_INSTALMENT_OVERDUE: "Fee instalment overdue",
 };
 
 /** The record a trigger is about — the builder's "When" picks the record
  *  first, then one of its events, the way a Meritto workflow does. */
-export type AutomationRecord = "enquiry" | "activity" | "form" | "class_report" | "student";
+export type AutomationRecord =
+  | "enquiry"
+  | "activity"
+  | "form"
+  | "class_report"
+  | "student"
+  | "fee";
 
 export const AUTOMATION_RECORD_LABEL: Record<AutomationRecord, string> = {
   enquiry: "Enquiry",
@@ -604,6 +613,7 @@ export const AUTOMATION_RECORD_LABEL: Record<AutomationRecord, string> = {
   form: "Form",
   class_report: "Class report",
   student: "Student",
+  fee: "Fee",
 };
 
 export const AUTOMATION_RECORD_TRIGGERS: Record<AutomationRecord, AutomationTrigger[]> = {
@@ -618,6 +628,7 @@ export const AUTOMATION_RECORD_TRIGGERS: Record<AutomationRecord, AutomationTrig
     "PROJECT_OVERDUE",
     "ASSIGNMENT_OVERDUE",
   ],
+  fee: ["FEE_PAYMENT_RECORDED", "FEE_INSTALMENT_DUE", "FEE_INSTALMENT_OVERDUE"],
 };
 
 /** The event's own name once its record is already chosen ("Stage changed",
@@ -637,6 +648,9 @@ export const AUTOMATION_EVENT_LABEL: Record<AutomationTrigger, string> = {
   DSR_SUBMITTED: "Submitted",
   DSR_MISSING: "Missing after the deadline",
   DSR_STUDENT_FLAGGED: "A student was flagged",
+  FEE_PAYMENT_RECORDED: "Payment recorded",
+  FEE_INSTALMENT_DUE: "Instalment due soon",
+  FEE_INSTALMENT_OVERDUE: "Instalment overdue",
 };
 
 export function automationRecordOf(trigger: AutomationTrigger): AutomationRecord {

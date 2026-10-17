@@ -3130,7 +3130,10 @@ export type AutomationTrigger =
   | "ENQUIRY_UPDATED"
   | "DSR_SUBMITTED"
   | "DSR_MISSING"
-  | "DSR_STUDENT_FLAGGED";
+  | "DSR_STUDENT_FLAGGED"
+  | "FEE_PAYMENT_RECORDED"
+  | "FEE_INSTALMENT_DUE"
+  | "FEE_INSTALMENT_OVERDUE";
 
 export type AutomationConditionOperator =
   | "eq"

@@ -98,6 +98,10 @@ class NotificationKind(models.TextChoices):
     FORM_ASSIGNED = "form.assigned", _("Form sent to you to fill")
     FORM_SUBMITTED = "form.submitted", _("Form you sent was submitted")
 
+    # --- Fees: what an automation rule tells a student or a counsellor
+    FEE_PAYMENT_RECEIVED = "fee.payment", _("Fee payment received")
+    FEE_REMINDER = "fee.reminder", _("Fee instalment reminder")
+
 
 class NotificationCategory(models.TextChoices):
     ACADEMIC = "academic", _("Coursework and results")
@@ -148,6 +152,8 @@ KIND_CATEGORY: dict[str, str] = {
     NotificationKind.DSR_OVERDUE: NotificationCategory.SCHEDULE,
     NotificationKind.FORM_ASSIGNED: NotificationCategory.SCHEDULE,
     NotificationKind.FORM_SUBMITTED: NotificationCategory.ACADEMIC,
+    NotificationKind.FEE_PAYMENT_RECEIVED: NotificationCategory.ADMINISTRATIVE,
+    NotificationKind.FEE_REMINDER: NotificationCategory.SCHEDULE,
 }
 
 

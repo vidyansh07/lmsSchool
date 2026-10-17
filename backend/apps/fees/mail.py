@@ -83,9 +83,13 @@ _STATEMENT_COALESCE = timedelta(minutes=10)
 _SUPPRESSED: ContextVar[bool] = ContextVar("fee_mail_suppressed", default=False)
 
 
+def is_suppressed() -> bool:
+    return _SUPPRESSED.get()
+
+
 @contextmanager
 def suppressed() -> Iterator[None]:
-    """No automatic fee mail inside this block."""
+    """No automatic fee mail — and no fee automation — inside this block."""
     token = _SUPPRESSED.set(True)
     try:
         yield
