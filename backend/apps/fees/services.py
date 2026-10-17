@@ -27,7 +27,7 @@ Rules, and the reason for each:
 from __future__ import annotations
 
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from django.db import transaction
@@ -57,6 +57,8 @@ from .models import (
     installment_rows,
 )
 
+HUNDRED = Decimal("100")
+
 RESOURCE_PLAN = "fee_plan"
 RESOURCE_PAYMENT = "fee_payment"
 
@@ -76,6 +78,25 @@ def _money(value: Any, field: str) -> Decimal:
             {field: ["Amounts are kept to the paisa; use at most two decimals."]}
         )
     return amount.quantize(Decimal("0.01"))
+
+
+def _percent(value: Any) -> Decimal:
+    try:
+        percent = Decimal(str(value))
+    except Exception as exc:
+        raise ApplicationError({"discount_percent": ["Enter a percentage, like 10."]}) from exc
+    if percent != percent.quantize(Decimal("0.01")):
+        raise ApplicationError(
+            {"discount_percent": ["Use at most two decimals, like 12.5."]}
+        )
+    if percent < ZERO or percent > HUNDRED:
+        raise ApplicationError({"discount_percent": ["A percentage is between 0 and 100."]})
+    return percent.quantize(Decimal("0.01"))
+
+
+def discount_for_percent(agreed: Decimal, percent: Decimal) -> Decimal:
+    """The rupee discount a percentage of the fee comes to, to the paisa."""
+    return (agreed * percent / HUNDRED).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _plan_context(plan: FeePlan) -> dict[str, Any]:
@@ -100,6 +121,7 @@ def set_fee_plan(
     actor: User,
     agreed_amount: Any,
     discount_amount: Any = ZERO,
+    discount_percent: Any = None,
     discount_reason: str = "",
     notes: str | None = None,
     installments: list[dict[str, Any]] | None = None,
@@ -113,10 +135,19 @@ def set_fee_plan(
     instalments, default six, thirty days apart from today), and an existing
     plan keeps its dates with the amounts re-spread over them if the fee
     changed.
+
+    A discount is given either as rupees (`discount_amount`) or as a
+    percentage of the fee (`discount_percent`, what a counsellor types: `10`
+    is 10%). Given as a percentage, the rupee amount is worked out here and
+    both are kept, so the receipt and the ledger never round it differently.
     """
     _require_manage(actor)
     agreed = _money(agreed_amount, "agreed_amount")
-    discount = _money(discount_amount, "discount_amount")
+    percent = None if discount_percent in (None, "") else _percent(discount_percent)
+    if percent is not None:
+        discount = discount_for_percent(agreed, percent)
+    else:
+        discount = _money(discount_amount, "discount_amount")
     problems: dict[str, list[str]] = {}
     if agreed < ZERO:
         problems["agreed_amount"] = ["The fee cannot be negative."]
@@ -137,6 +168,7 @@ def set_fee_plan(
             enrollment=enrollment,
             agreed_amount=agreed,
             discount_amount=discount,
+            discount_percent=percent,
             discount_reason=discount_reason.strip(),
             notes=(notes or "").strip(),
             created_by=actor,
@@ -153,6 +185,7 @@ def set_fee_plan(
                 **_plan_context(plan),
                 "agreed_amount": str(agreed),
                 "discount_amount": str(discount),
+                "discount_percent": None if percent is None else str(percent),
                 "discount_reason": plan.discount_reason,
             },
         )
@@ -181,6 +214,7 @@ def set_fee_plan(
     for field, new_value in (
         ("agreed_amount", agreed),
         ("discount_amount", discount),
+        ("discount_percent", percent),
         ("discount_reason", discount_reason.strip()),
         ("notes", (notes if notes is not None else plan.notes).strip()),
     ):

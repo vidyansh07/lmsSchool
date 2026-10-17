@@ -31,6 +31,9 @@ export async function setEnrollmentFee(
   payload: {
     agreed_amount: string | number;
     discount_amount?: string | number;
+    /** Sent: the discount is this percentage of the fee and the server works
+     *  out the rupees. Null or left out: `discount_amount` is a flat discount. */
+    discount_percent?: string | number | null;
     discount_reason?: string;
     notes?: string;
     /** Sent: this is the schedule (empty = ad hoc). Left out: the server's default six. */

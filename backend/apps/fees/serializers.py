@@ -99,6 +99,7 @@ class FeePlanSerializer(serializers.ModelSerializer):
             "batch_name",
             "agreed_amount",
             "discount_amount",
+            "discount_percent",
             "discount_reason",
             "payable",
             "paid",
@@ -152,6 +153,17 @@ class SetInstallmentsSerializer(StrictSerializer):
 class SetFeePlanSerializer(StrictSerializer):
     agreed_amount = serializers.DecimalField(min_value=0, **MONEY)
     discount_amount = serializers.DecimalField(min_value=0, required=False, default=0, **MONEY)
+    # Sent: the discount is this percentage of the fee and `discount_amount` is
+    # ignored (the server works it out). Left out or null: a flat discount.
+    discount_percent = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        min_value=0,
+        max_value=100,
+        required=False,
+        allow_null=True,
+        default=None,
+    )
     discount_reason = SafeCharField(max_length=200, required=False, allow_blank=True, default="")
     notes = SafeCharField(max_length=1000, required=False, allow_blank=True)
     # Left out: a new fee gets the default schedule, an existing one keeps its

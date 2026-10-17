@@ -830,6 +830,51 @@ describe('RegistrationWizard — confirming', () => {
     expect(createFollowUp).not.toHaveBeenCalled();
   });
 
+  it('takes a percentage discount, spreads the schedule over what is left and needs a reason', async () => {
+    createStudent.mockResolvedValue(student());
+    assignBatchTrainer.mockResolvedValue({});
+    enrolStudent.mockResolvedValue(enrollment());
+    setEnrollmentFee.mockResolvedValue({});
+    recordPayment.mockResolvedValue({ amount: '1000.00', receipt_number: 'GRS-R-00010' });
+
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+    await user.type(screen.getByLabelText(/Agreed fee/), '25000');
+    await user.type(screen.getByLabelText('Discount (%)'), '10');
+    expect(screen.getByText('₹2,500 off the fee.')).toBeInTheDocument();
+    expect(await screen.findByText(/adds up to ₹22,500/i)).toBeInTheDocument();
+
+    // A discount without a reason does not get past this step.
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    expect(await screen.findByText(/say why the discount was given/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/reason for the discount/i), 'Early bird');
+
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+    await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
+    await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search trainers results'), 'trainer-1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
+    expect(screen.getByText('₹25,000 less 10% (₹2,500) = ₹22,500')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
+    await waitFor(() => expect(setEnrollmentFee).toHaveBeenCalledOnce());
+    const [, payload] = setEnrollmentFee.mock.calls[0] as [
+      string,
+      { installments: { amount: string }[]; discount_percent: string; discount_reason: string },
+    ];
+    expect(payload).toMatchObject({
+      agreed_amount: '25000',
+      discount_percent: '10',
+      discount_amount: 0,
+      discount_reason: 'Early bird',
+    });
+    expect(payload.installments.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(22500);
+  });
+
   it('plans a follow-up with a note when a date is given', async () => {
     createStudent.mockResolvedValue(student());
     assignBatchTrainer.mockResolvedValue({});

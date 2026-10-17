@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
@@ -112,6 +112,18 @@ class FeePlan(BaseModel):
         decimal_places=2,
         default=ZERO,
         validators=[MinValueValidator(ZERO)],
+    )
+    discount_percent = models.DecimalField(
+        _("discount percentage"),
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(ZERO), MaxValueValidator(Decimal("100"))],
+        help_text=_(
+            "Set when the discount was given as a percentage of the fee; "
+            "`discount_amount` is then worked out from it. Empty for a flat discount."
+        ),
     )
     discount_reason = models.CharField(
         _("discount reason"),

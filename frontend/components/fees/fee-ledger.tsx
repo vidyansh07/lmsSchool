@@ -33,6 +33,13 @@ import {
 
 import { ExportMenu } from '@/components/export-menu';
 import {
+  DiscountField,
+  discountPayload,
+  discountRupees,
+  initialDiscount,
+  type DiscountMode,
+} from '@/components/fees/discount-field';
+import {
   InstallmentEditor,
   InstallmentTable,
   installmentsAddUp,
@@ -184,9 +191,8 @@ interface SetFeeProps {
  */
 function SetFeeForm({ onOpenChange, enrollmentId, plan, onSaved }: SetFeeProps) {
   const [agreed, setAgreed] = useState(plan?.agreed_amount ?? '');
-  const [discount, setDiscount] = useState(
-    plan && Number(plan.discount_amount) > 0 ? plan.discount_amount : '',
-  );
+  const [discountMode, setDiscountMode] = useState<DiscountMode>(() => initialDiscount(plan).mode);
+  const [discount, setDiscount] = useState(() => initialDiscount(plan).value);
   const [reason, setReason] = useState(plan?.discount_reason ?? '');
   const [notes, setNotes] = useState(plan?.notes ?? '');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -201,7 +207,7 @@ function SetFeeForm({ onOpenChange, enrollmentId, plan, onSaved }: SetFeeProps) 
     try {
       await setEnrollmentFee(enrollmentId, {
         agreed_amount: agreed.trim(),
-        discount_amount: discount.trim() === '' ? 0 : discount.trim(),
+        ...discountPayload(discountMode, discount),
         discount_reason: reason.trim(),
         notes: notes.trim(),
       });
@@ -211,7 +217,13 @@ function SetFeeForm({ onOpenChange, enrollmentId, plan, onSaved }: SetFeeProps) 
       const fields = fieldErrors(cause);
       setErrors(fields);
       setMessage(
-        unshownError(fields, ['agreed_amount', 'discount_amount', 'discount_reason', 'notes']) ??
+        unshownError(fields, [
+          'agreed_amount',
+          'discount_amount',
+          'discount_percent',
+          'discount_reason',
+          'notes',
+        ]) ??
           '',
       );
     } finally {
@@ -219,7 +231,8 @@ function SetFeeForm({ onOpenChange, enrollmentId, plan, onSaved }: SetFeeProps) 
     }
   }
 
-  const payable = Math.max(0, Number(agreed || 0) - Number(discount || 0));
+  const discountOff = discountRupees(agreed, discountMode, discount);
+  const payable = Math.max(0, Number(agreed || 0) - discountOff);
 
   return (
     <form onSubmit={(event) => void save(event)} noValidate>
@@ -246,20 +259,17 @@ function SetFeeForm({ onOpenChange, enrollmentId, plan, onSaved }: SetFeeProps) 
               placeholder="e.g. 25000"
             />
           </Field>
-          <Field label="Discount (₹)" htmlFor="fee-discount" error={errors.discount_amount}>
-            <Input
-              id="fee-discount"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="1"
-              value={discount}
-              onChange={(event) => setDiscount(event.target.value)}
-              placeholder="0"
-            />
-          </Field>
+          <DiscountField
+            id="fee-discount"
+            agreed={agreed}
+            mode={discountMode}
+            value={discount}
+            onModeChange={setDiscountMode}
+            onValueChange={setDiscount}
+            error={errors.discount_percent ?? errors.discount_amount}
+          />
         </div>
-        {Number(discount) > 0 ? (
+        {discountOff > 0 ? (
           <Field
             label="Reason for the discount"
             htmlFor="fee-reason"
@@ -658,9 +668,11 @@ export function describeHistory(entry: FeeHistoryEntry): string {
   switch (entry.action) {
     case 'fee.plan.set': {
       const discount = Number(text(context.discount_amount) || 0);
+      const percent = Number(text(context.discount_percent) || 0);
+      const off = percent > 0 ? `${percent}% (${money(discount)})` : money(discount);
       return `Agreed ${money(text(context.agreed_amount))}${
         discount > 0
-          ? `, less ${money(discount)} (${text(context.discount_reason) || 'no reason given'})`
+          ? `, less ${off} (${text(context.discount_reason) || 'no reason given'})`
           : ''
       }.`;
     }
@@ -674,10 +686,22 @@ export function describeHistory(entry: FeeHistoryEntry): string {
               ? 'discount'
               : field === 'discount_reason'
                 ? 'discount reason'
-                : field;
+                : field === 'discount_percent'
+                  ? 'discount percentage'
+                  : field;
         const isMoney = field === 'agreed_amount' || field === 'discount_amount';
-        const from = isMoney ? money(change.from) : change.from || 'nothing';
-        const to = isMoney ? money(change.to) : change.to || 'nothing';
+        const asPercent = (value?: string) =>
+          !value || value === 'None' ? 'none' : `${Number(value)}%`;
+        const from = isMoney
+          ? money(change.from)
+          : field === 'discount_percent'
+            ? asPercent(change.from)
+            : change.from || 'nothing';
+        const to = isMoney
+          ? money(change.to)
+          : field === 'discount_percent'
+            ? asPercent(change.to)
+            : change.to || 'nothing';
         return `${label} ${from} → ${to}`;
       });
       return parts.length ? `Changed ${parts.join('; ')}.` : 'Changed.';

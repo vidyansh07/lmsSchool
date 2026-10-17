@@ -100,6 +100,93 @@ def test_a_discount_needs_a_reason_and_cannot_exceed_the_fee(counsellor_user, en
 
 
 @pytest.mark.django_db
+def test_a_discount_typed_as_a_percentage_is_worked_out_in_rupees(
+    api_client_no_csrf, counsellor_user, enrollment
+):
+    api_client_no_csrf.force_login(counsellor_user)
+    response = api_client_no_csrf.put(
+        fee_url(enrollment),
+        {
+            "agreed_amount": "24999",
+            "discount_percent": "12.5",
+            # Ignored when a percentage is sent: the server works it out.
+            "discount_amount": "1",
+            "discount_reason": "Scholarship",
+        },
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["discount_percent"] == "12.50"
+    assert body["discount_amount"] == "3124.88"  # 24,999 × 12.5% = 3,124.875, half up
+    assert body["payable"] == "21874.12"
+    entry = AuditLog.objects.get(action=AuditAction.FEE_PLAN_SET)
+    assert entry.context["discount_percent"] == "12.50"
+
+
+@pytest.mark.django_db
+def test_a_percentage_discount_follows_a_changed_fee_and_can_turn_flat(
+    counsellor_user, enrollment
+):
+    services.set_fee_plan(
+        enrollment=enrollment,
+        actor=counsellor_user,
+        agreed_amount="20000",
+        discount_percent="10",
+        discount_reason="Referral",
+    )
+    plan = services.set_fee_plan(
+        enrollment=enrollment,
+        actor=counsellor_user,
+        agreed_amount="30000",
+        discount_percent="10",
+        discount_reason="Referral",
+    )
+    assert plan.discount_amount == money("3000")
+    assert plan.payable == money("27000")
+
+    plan = services.set_fee_plan(
+        enrollment=enrollment,
+        actor=counsellor_user,
+        agreed_amount="30000",
+        discount_amount="500",
+        discount_reason="Referral",
+    )
+    assert plan.discount_percent is None
+    assert plan.discount_amount == money("500")
+    entry = AuditLog.objects.filter(action=AuditAction.FEE_PLAN_UPDATED).latest("created_at")
+    assert entry.context["changes"]["discount_percent"] == {"from": "10.00", "to": "None"}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("percent", ["-1", "100.01", "abc", "10.555"])
+def test_a_discount_percentage_must_be_a_real_percentage(counsellor_user, enrollment, percent):
+    with pytest.raises(ApplicationError) as refused:
+        services.set_fee_plan(
+            enrollment=enrollment,
+            actor=counsellor_user,
+            agreed_amount="5000",
+            discount_percent=percent,
+            discount_reason="Scholarship",
+        )
+    assert "discount_percent" in refused.value.detail
+
+
+@pytest.mark.django_db
+def test_a_full_percentage_discount_waives_the_fee(counsellor_user, enrollment):
+    plan = services.set_fee_plan(
+        enrollment=enrollment,
+        actor=counsellor_user,
+        agreed_amount="5000",
+        discount_percent="100",
+        discount_reason="Staff ward",
+        installments=[],
+    )
+    assert plan.payable == money("0")
+    assert plan.status == "waived"
+
+
+@pytest.mark.django_db
 def test_changing_the_fee_records_old_and_new_values(manager_user, enrollment):
     services.set_fee_plan(enrollment=enrollment, actor=manager_user, agreed_amount="20000")
     services.set_fee_plan(

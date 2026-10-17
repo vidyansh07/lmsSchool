@@ -65,6 +65,7 @@ function plan(overrides: Partial<FeePlan> = {}): FeePlan {
     batch_name: 'Morning batch',
     agreed_amount: '12000.00',
     discount_amount: '2000.00',
+    discount_percent: null,
     discount_reason: 'Referral',
     payable: '10000.00',
     paid: '1000.00',
@@ -158,6 +159,16 @@ describe('describeHistory', () => {
         }),
       ),
     ).toBe('Agreed ₹12,000, less ₹2,000 (Referral).');
+    expect(
+      describeHistory(
+        entry('fee.plan.set', {
+          agreed_amount: '12000.00',
+          discount_amount: '1200.00',
+          discount_percent: '10.00',
+          discount_reason: 'Referral',
+        }),
+      ),
+    ).toBe('Agreed ₹12,000, less 10% (₹1,200) (Referral).');
     expect(
       describeHistory(
         entry('fee.plan.updated', {
@@ -458,6 +469,49 @@ describe('FeeLedger', () => {
       expect.objectContaining({
         agreed_amount: '15000',
         discount_amount: 0,
+        discount_percent: null,
+      }),
+    );
+  });
+
+  it('takes a discount as a percentage by default and shows the rupees', async () => {
+    setEnrollmentFee.mockClear();
+    setEnrollmentFee.mockResolvedValue({});
+    render(
+      <FeeLedger
+        summary={{ ...summary([]), plans: [] }}
+        enrollments={[enrollment()]}
+        mayManage
+        isLoading={false}
+        error={null}
+        onChanged={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /set the fee/i }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/course fee/i), { target: { value: '20000' } });
+    fireEvent.change(within(dialog).getByLabelText('Discount (%)'), { target: { value: '15' } });
+    expect(within(dialog).getByText('₹3,000 off the fee.')).toBeInTheDocument();
+    expect(within(dialog).getByText('₹17,000')).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(/reason for the discount/i), {
+      target: { value: 'Scholarship' },
+    });
+
+    // Switching to rupees carries the figure across.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rupees' }));
+    expect(within(dialog).getByLabelText('Discount (₹)')).toHaveValue(3000);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Percentage of the fee' }));
+    expect(within(dialog).getByLabelText('Discount (%)')).toHaveValue(15);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /save fee/i }));
+    await waitFor(() => expect(setEnrollmentFee).toHaveBeenCalledOnce());
+    expect(setEnrollmentFee).toHaveBeenCalledWith(
+      'enrol-2',
+      expect.objectContaining({
+        agreed_amount: '20000',
+        discount_percent: '15',
+        discount_amount: 0,
+        discount_reason: 'Scholarship',
       }),
     );
   });

@@ -1933,6 +1933,8 @@ export interface FeePlan {
   batch_name: string;
   agreed_amount: string;
   discount_amount: string;
+  /** Set when the discount was given as a percentage (`"12.50"`); null when flat. */
+  discount_percent: string | null;
   discount_reason: string;
   payable: string;
   paid: string;

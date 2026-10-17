@@ -39,6 +39,12 @@ import {
   type StudentBackground,
 } from '@/components/admissions/student-background-fields';
 import { StepIndicator, type WizardStep } from '@/components/admissions/step-indicator';
+import {
+  DiscountField,
+  discountPayload,
+  discountRupees,
+  type DiscountMode,
+} from '@/components/fees/discount-field';
 import { BranchField } from '@/components/organisation/branch-field';
 import { RequireAuth } from '@/components/require-auth';
 import { Alert } from '@/components/ui/alert';
@@ -98,6 +104,9 @@ const STUDENT_FIELD_KEYS = [
   'city',
   'qualification',
   'fee_amount',
+  'discount_percent',
+  'discount_amount',
+  'discount_reason',
   'branch',
 ] as const;
 
@@ -152,6 +161,11 @@ export function RegistrationWizard() {
   // walk-in may not know the fee yet, and the record should not wait on it.
   const [background, setBackground] = useState<StudentBackground>(EMPTY_BACKGROUND);
   const [feeAmount, setFeeAmount] = useState('');
+  // A discount agreed at the desk: a percentage by default ("10" is 10%),
+  // or rupees. The schedule below is spread over what is left to pay.
+  const [discountMode, setDiscountMode] = useState<DiscountMode>('percent');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
   // The registration payment, taken at the desk. ₹1,000 is the usual amount
   // and the minimum the ledger accepts for a first payment; blank if nothing
   // changed hands today.
@@ -166,6 +180,8 @@ export function RegistrationWizard() {
   // saved. Regenerated from the fee until the counsellor turns it off.
   const [installments, setInstallments] = useState<InstallmentInput[]>([]);
   const [installmentsEnabled, setInstallmentsEnabled] = useState(true);
+  const discountOff = discountRupees(feeAmount, discountMode, discountValue);
+  const payableAfterDiscount = Math.max(0, Number(feeAmount || 0) - discountOff);
   // An optional follow-up planned at registration: when to call, and why.
   const [followUpOn, setFollowUpOn] = useState('');
   const [followUpNote, setFollowUpNote] = useState('');
@@ -400,6 +416,17 @@ export function RegistrationWizard() {
     const errors: Record<string, string> = {};
     if (!email.trim()) errors.email = 'Email is required.';
     if (!firstName.trim()) errors.first_name = 'First name is required.';
+    if (discountOff > 0 && feeAmount.trim() !== '') {
+      if (discountMode === 'percent' && Number(discountValue) > 100) {
+        errors.discount_percent = 'A percentage cannot be more than 100.';
+      }
+      if (discountMode === 'amount' && Number(discountValue) > Number(feeAmount)) {
+        errors.discount_amount = 'A discount cannot be more than the fee.';
+      }
+      if (!discountReason.trim()) {
+        errors.discount_reason = 'Say why the discount was given; it is kept with the record.';
+      }
+    }
     setStudentErrors(errors);
     if (Object.keys(errors).length > 0) return;
     if (visibleDuplicates.length > 0 && !acknowledgedDuplicate) return;
@@ -422,12 +449,26 @@ export function RegistrationWizard() {
 
   // The schedule follows the fee while it is switched on: a fee typed after
   // the rows were generated would otherwise leave six stale amounts behind.
+  function respread(fee: string, mode: DiscountMode, discount: string) {
+    if (!installmentsEnabled) return;
+    const payable = Math.max(0, Number(fee || 0) - discountRupees(fee, mode, discount));
+    setInstallments((rows) =>
+      defaultInstallments(payable, rows.length || DEFAULT_INSTALLMENT_COUNT),
+    );
+  }
+
   function onFeeAmountChange(value: string) {
     setFeeAmount(value);
-    if (!installmentsEnabled) return;
-    setInstallments((rows) =>
-      defaultInstallments(Number(value), rows.length || DEFAULT_INSTALLMENT_COUNT),
-    );
+    respread(value, discountMode, discountValue);
+  }
+
+  function onDiscountValueChange(value: string) {
+    setDiscountValue(value);
+    respread(feeAmount, discountMode, value);
+  }
+
+  function onDiscountModeChange(mode: DiscountMode) {
+    setDiscountMode(mode);
   }
 
   function onInstallmentsChange(rows: InstallmentInput[]) {
@@ -682,6 +723,8 @@ export function RegistrationWizard() {
       try {
         await setEnrollmentFee(enrollment.id, {
           agreed_amount: feeAmount.trim(),
+          ...discountPayload(discountMode, discountValue),
+          discount_reason: discountOff > 0 ? discountReason.trim() : '',
           installments: installmentsEnabled ? installments : [],
         });
         const scheduleNote = installmentsEnabled
@@ -696,7 +739,7 @@ export function RegistrationWizard() {
           });
           feeNote = `${formatCurrency(payment.amount)} received today — receipt ${payment.receipt_number}.${scheduleNote}`;
         } else {
-          feeNote = `Fee of ${formatCurrency(feeAmount)} recorded; nothing paid yet.${scheduleNote}`;
+          feeNote = `Fee of ${formatCurrency(payableAfterDiscount)} recorded; nothing paid yet.${scheduleNote}`;
         }
       } catch (cause) {
         feeNote = `Enrolled, but the fee could not be recorded (${errorMessage(cause, 'unknown error')}). Record it from the student's page.`;
@@ -773,6 +816,9 @@ export function RegistrationWizard() {
     setAcknowledgedDuplicate(false);
     setOverrideReason('');
     setCreatedStudent(null);
+    setDiscountMode('percent');
+    setDiscountValue('');
+    setDiscountReason('');
     setPaidNow('1000');
     setPaidMethod('cash');
     setPaidReference('');
@@ -920,6 +966,30 @@ export function RegistrationWizard() {
                     placeholder="e.g. 25000"
                   />
                 </Field>
+                <DiscountField
+                  id="reg-discount"
+                  agreed={feeAmount}
+                  mode={discountMode}
+                  value={discountValue}
+                  onModeChange={onDiscountModeChange}
+                  onValueChange={onDiscountValueChange}
+                  error={studentErrors.discount_percent ?? studentErrors.discount_amount}
+                  disabled={feeAmount.trim() === ''}
+                />
+                {discountOff > 0 ? (
+                  <Field
+                    label="Reason for the discount"
+                    htmlFor="reg-discount-reason"
+                    error={studentErrors.discount_reason}
+                    required
+                  >
+                    <Input
+                      value={discountReason}
+                      onChange={(event) => setDiscountReason(event.target.value)}
+                      placeholder="e.g. Referral, early bird, scholarship"
+                    />
+                  </Field>
+                ) : null}
                 <Field
                   label="Paid today (₹)"
                   htmlFor="reg-paid-now"
@@ -990,7 +1060,7 @@ export function RegistrationWizard() {
                   </p>
                   <InstallmentEditor
                     idPrefix="reg-inst"
-                    payable={Number(feeAmount)}
+                    payable={payableAfterDiscount}
                     rows={installmentsEnabled ? installments : []}
                     onChange={onInstallmentsChange}
                   />
@@ -1319,7 +1389,15 @@ export function RegistrationWizard() {
                   <div>
                     <dt className="text-xs text-ink-muted">Agreed fee</dt>
                     <dd className="font-medium tabular-nums">
-                      {feeAmount.trim() === '' ? 'Not decided yet' : formatCurrency(feeAmount)}
+                      {feeAmount.trim() === ''
+                        ? 'Not decided yet'
+                        : discountOff > 0
+                          ? `${formatCurrency(feeAmount)} less ${
+                              discountMode === 'percent'
+                                ? `${Number(discountValue)}% (${formatCurrency(discountOff)})`
+                                : formatCurrency(discountOff)
+                            } = ${formatCurrency(payableAfterDiscount)}`
+                          : formatCurrency(feeAmount)}
                     </dd>
                   </div>
                   <div>
@@ -1375,7 +1453,7 @@ export function RegistrationWizard() {
                     isSubmitting ||
                     (feeAmount.trim() !== '' &&
                       installmentsEnabled &&
-                      !installmentsAddUp(installments, Number(feeAmount)))
+                      !installmentsAddUp(installments, payableAfterDiscount))
                   }
                 >
                   {isSubmitting ? 'Enrolling…' : 'Confirm and enrol'}
