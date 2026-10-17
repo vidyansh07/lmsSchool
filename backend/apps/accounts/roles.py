@@ -356,6 +356,11 @@ class Capability(models.TextChoices):
     # change it. Configuration rung, admin/superadmin only
     # (`PERMISSION_CATALOG.md` row, phase 14).
     AUTOMATION_MANAGE = "automation.manage", _("Build and manage automation rules")
+    # Connections to other systems: API keys for leads coming in (Meritto, a
+    # website form), webhooks for events going out. Configuration rung,
+    # admin/superadmin only — a key creates enquiries without a person
+    # behind it, and a webhook sends data out of the institution.
+    INTEGRATION_MANAGE = "integration.manage", _("Manage API keys and webhooks")
 
     # --- Communication (ERP Phase 19 builds the templates/Delivery model
     # this eventually sends through; Phase 14 needs the capability itself
@@ -511,6 +516,7 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.FORM_MANAGE,
         Capability.ACTIVITY_TYPE_MANAGE,
         Capability.AUTOMATION_MANAGE,
+        Capability.INTEGRATION_MANAGE,
         # Template authoring and approval (Phase 19): superadmin/admin only,
         # per the catalog — a manager or counsellor may *send* through a
         # published template (`communication.send`) but not author or

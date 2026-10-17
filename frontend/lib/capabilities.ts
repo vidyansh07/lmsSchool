@@ -108,6 +108,9 @@ export const Capability = {
   // Automation Builder (ERP Phase 14, ADR-13) — `AUTOMATION_CATALOG.md`'s
   // "Builder screen contract".
   automationManage: "automation.manage",
+  // API keys for leads coming in (Meritto, a website form) and webhooks for
+  // events going out. Admin/superadmin only.
+  integrationManage: "integration.manage",
   // The permission `send_notification`/`send_email`/`send_whatsapp` check
   // against a rule's author at save time (`AUTOMATION_CATALOG.md`'s
   // "Actions" table). Also the manual-send screen's gate (ERP Phase 19,

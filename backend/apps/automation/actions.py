@@ -495,6 +495,32 @@ def assign_form(
     return {"form_assignment_id": str(assignment.pk), "assigned_to": str(recipient.pk)}
 
 
+def send_webhook(
+    *, rule, run, rctx: RunContext, context: dict[str, Any], params: dict[str, Any], depth: int = 0
+) -> dict[str, Any]:
+    """Post this occurrence to a configured webhook (`apps.integrations`):
+    a lead pushed back to Meritto, a payment told to an accounts system. The
+    body is the rule's own context — the same allowlisted fields its
+    conditions read — signed with the webhook's secret. A refusal or a
+    non-2xx answer fails the run, so it shows on the rule's history."""
+    from apps.integrations.models import Webhook
+    from apps.integrations.services import deliver
+
+    webhook = Webhook.objects.filter(pk=params.get("webhook")).first()
+    if webhook is None:
+        raise ApplicationError({"webhook": ["That webhook no longer exists."]})
+    delivery = deliver(webhook=webhook, event=run.trigger, data=context, rule=rule)
+    if not delivery.ok:
+        raise ApplicationError(
+            {"webhook": [delivery.error or f"The receiver answered {delivery.status_code}."]}
+        )
+    return {
+        "webhook": str(webhook.pk),
+        "delivery": str(delivery.pk),
+        "status": delivery.status_code,
+    }
+
+
 ACTIONS = {
     "create_activity": create_activity,
     "assign_form": assign_form,
@@ -504,4 +530,5 @@ ACTIONS = {
     "send_whatsapp": send_whatsapp,
     "create_review": create_review,
     "flag_risk": flag_risk,
+    "send_webhook": send_webhook,
 }

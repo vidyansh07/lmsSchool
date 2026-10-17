@@ -92,6 +92,7 @@ LOCAL_APPS = [
     "apps.policies",
     "apps.forms",
     "apps.enquiries",
+    "apps.integrations",
     "apps.students",
     "apps.trainers",
     "apps.courses",
@@ -458,6 +459,9 @@ REST_FRAMEWORK = {
         # test-send. Both are per-account, low-frequency, deliberate acts
         # (never a keystroke-driven UI), so the rate stays modest.
         "communication": env.str("THROTTLE_RATE_COMMUNICATION", default="20/min"),
+        # The lead endpoint, per API key: a website or Meritto posting leads
+        # as they arrive, not a bulk loader.
+        "integration_leads": env.str("THROTTLE_RATE_INTEGRATION_LEADS", default="120/min"),
     },
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
@@ -493,6 +497,10 @@ SPECTACULAR_SETTINGS = {
     "SORT_OPERATIONS": False,
     "ENUM_NAME_OVERRIDES": {
         "UserRoleEnum": "apps.accounts.roles.UserRole.choices",
+        # What happened to a lead posted to the integrations endpoint.
+        "LeadIntakeStatusEnum": "apps.integrations.models.IntakeStatus.choices",
+        "IntegrationPresetEnum": "apps.integrations.models.Preset.choices",
+        "FeeEmailKindEnum": (("fee_receipt", "Receipt"), ("fee_statement", "Fee statement")),
         # The export request's yes/no list filters (`is_active`,
         # `is_accepting_assignments`) share one "true"/"false" choice set.
         "TrueFalseEnum": ("true", "false"),
@@ -667,6 +675,11 @@ AUTH_TOKEN_VERIFICATION_TTL_DAYS = env.int("AUTH_TOKEN_VERIFICATION_TTL_DAYS", d
 # "no defaults for secrets" rule in docs/environments.md. local/test each set
 # a fixed, clearly-labelled placeholder key of their own.
 MFA_ENCRYPTION_KEY = env.str("MFA_ENCRYPTION_KEY", default="")
+# Integrations: the Fernet key for webhook secrets (falls back to the MFA key),
+# and whether a webhook may use plain http:// (local development only; it also
+# skips the public-address check).
+INTEGRATION_ENCRYPTION_KEY = env.str("INTEGRATION_ENCRYPTION_KEY", default="")
+INTEGRATION_ALLOW_HTTP = env.bool("INTEGRATION_ALLOW_HTTP", default=False)
 
 # --- WhatsApp (ERP Phase 19, ADR-12) ----------------------------------------
 # Optional integration, gated on presence exactly like `SENTRY_DSN` above:

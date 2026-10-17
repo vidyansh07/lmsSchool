@@ -97,6 +97,11 @@ class Enquiry(SoftDeleteBaseModel):
         db_index=True,
         help_text=_("Online or offline lead. Follows the source unless set by hand."),
     )
+    #: Where the lead came from when another system sent it (`meritto`, or
+    #: `key:<prefix>` for a generic API key) and that system's own id for it,
+    #: so a second post about the same lead updates it rather than duplicating.
+    external_system = models.CharField(_("external system"), max_length=30, blank=True)
+    external_id = models.CharField(_("external id"), max_length=100, blank=True)
     utm_source = models.CharField(_("UTM source"), max_length=200, blank=True)
     utm_medium = models.CharField(_("UTM medium"), max_length=200, blank=True)
     utm_campaign = models.CharField(_("UTM campaign"), max_length=200, blank=True)
@@ -150,6 +155,9 @@ class Enquiry(SoftDeleteBaseModel):
         indexes = [
             models.Index(fields=["branch", "stage"], name="enquiry_branch_stage_idx"),
             models.Index(fields=["owner", "stage"], name="enquiry_owner_stage_idx"),
+            models.Index(
+                fields=["external_system", "external_id"], name="enquiry_external_idx"
+            ),
         ]
 
     def __str__(self) -> str:
