@@ -11,7 +11,8 @@ What is pinned:
   points a custom field anywhere;
 - only `integration.manage` reaches the screens; a counsellor does not;
 - a webhook refuses private addresses and plain http, keeps its secrets
-  encrypted, signs every body, and logs every delivery;
+  encrypted, signs every body, and logs every delivery; it is generic JSON —
+  nothing is ever sent back to Meritto (owner's decision, 17 October 2026);
 - an automation rule's `send_webhook` posts the rule's context, and fails the
   run when the receiver says no.
 """
@@ -231,9 +232,8 @@ def test_a_webhook_refuses_anywhere_it_should_not_reach(admin_user, url, resolve
 def test_a_webhook_keeps_its_secrets_encrypted(admin_user, public_dns):
     _webhook, secret = services.save_webhook(
         actor=admin_user,
-        name="Meritto",
-        preset="meritto",
-        url="https://api.meritto.example.test/leads",
+        name="Accounts",
+        url="https://accounts.example.test/in",
         headers={"access-key": "AK-123", "secret-key": "SK-456"},
     )
     assert secret
@@ -302,21 +302,32 @@ def test_a_refused_delivery_is_logged_not_raised(admin_user, public_dns):
 
 
 @pytest.mark.django_db
-def test_a_rule_pushes_a_new_enquiry_to_meritto(admin_user, public_dns, branch):
+def test_nothing_is_sent_back_to_meritto(admin_user, public_dns):
+    with pytest.raises(ApplicationError):
+        services.save_webhook(
+            actor=admin_user,
+            name="Meritto",
+            preset="meritto",
+            url="https://api.meritto.example.test/leads",
+        )
+    assert not Webhook.objects.exists()
+
+
+@pytest.mark.django_db
+def test_a_rule_posts_its_context_to_a_webhook(admin_user, public_dns, branch):
     from apps.automation import services as automation
     from apps.automation.models import AutomationRun, AutomationRunStatus, AutomationTrigger
     from apps.enquiries import services as enquiries
 
     webhook, _secret = services.save_webhook(
         actor=admin_user,
-        name="Meritto",
-        preset="meritto",
-        url="https://api.meritto.example.test/leads",
-        headers={"access-key": "AK"},
+        name="Accounts",
+        url="https://accounts.example.test/in",
+        headers={"x-token": "AK"},
     )
     rule = automation.create_rule(
         actor=admin_user,
-        name="Push new leads to Meritto",
+        name="Tell accounts about walk-ins",
         trigger="ENQUIRY_CREATED",
         conditions=[],
         actions=[{"type": "send_webhook", "params": {"webhook": str(webhook.pk)}}],
@@ -336,10 +347,10 @@ def test_a_rule_pushes_a_new_enquiry_to_meritto(admin_user, public_dns, branch):
         automation.dispatch(AutomationTrigger.ENQUIRY_CREATED, enquiry)
     run = AutomationRun.objects.get(rule=rule)
     assert run.status == AutomationRunStatus.RAN, run.result
-    assert sent["body"]["name"] == "Neha"
-    assert sent["body"]["mobile"] == "9000000001"
-    assert sent["body"]["grras_enquiry_id"] == str(enquiry.pk)
-    assert sent["headers"]["access-key"] == "AK"
+    assert sent["body"]["event"] == "ENQUIRY_CREATED"
+    assert sent["body"]["rule"] == "Tell accounts about walk-ins"
+    assert sent["body"]["data"]["enquiry"]["full_name"] == "Neha"
+    assert sent["headers"]["x-token"] == "AK"
 
     # The receiver saying no fails the run.
     from urllib.error import HTTPError

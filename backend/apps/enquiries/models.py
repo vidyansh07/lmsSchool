@@ -61,6 +61,15 @@ SOURCE_CHOICES: tuple[tuple[str, str], ...] = (
 ONLINE_SOURCES = frozenset({"website", "google", "facebook_instagram", "linkedin", "whatsapp"})
 
 
+#: Systems that own the leads they send (owner's decision, 17 October 2026:
+#: Meritto manages its leads; the LMS only receives the ones ready to admit).
+#: An enquiry from one of them is read-only to people in the LMS.
+MANAGING_SYSTEMS = frozenset({"meritto"})
+
+#: What a person is told when they try to change one.
+MANAGED_MESSAGE = "This lead is managed in Meritto. Change its stage, owner or follow-ups there."
+
+
 def channel_for_source(source: str) -> str:
     return LeadChannel.ONLINE if source in ONLINE_SOURCES else LeadChannel.OFFLINE
 
@@ -102,6 +111,11 @@ class Enquiry(SoftDeleteBaseModel):
     #: so a second post about the same lead updates it rather than duplicating.
     external_system = models.CharField(_("external system"), max_length=30, blank=True)
     external_id = models.CharField(_("external id"), max_length=100, blank=True)
+    #: Meritto manages its own leads (owner's decision, 17 October 2026): its
+    #: stage and owner are kept here in its own words, shown read-only, and
+    #: never mapped onto the LMS pipeline. See `is_managed_externally`.
+    external_stage = models.CharField(_("stage in the other system"), max_length=60, blank=True)
+    external_owner = models.CharField(_("owner in the other system"), max_length=120, blank=True)
     utm_source = models.CharField(_("UTM source"), max_length=200, blank=True)
     utm_medium = models.CharField(_("UTM medium"), max_length=200, blank=True)
     utm_campaign = models.CharField(_("UTM campaign"), max_length=200, blank=True)
@@ -155,10 +169,12 @@ class Enquiry(SoftDeleteBaseModel):
         indexes = [
             models.Index(fields=["branch", "stage"], name="enquiry_branch_stage_idx"),
             models.Index(fields=["owner", "stage"], name="enquiry_owner_stage_idx"),
-            models.Index(
-                fields=["external_system", "external_id"], name="enquiry_external_idx"
-            ),
+            models.Index(fields=["external_system", "external_id"], name="enquiry_external_idx"),
         ]
 
     def __str__(self) -> str:
         return f"{self.full_name} ({self.mobile})"
+
+    @property
+    def is_managed_externally(self) -> bool:
+        return self.external_system in MANAGING_SYSTEMS

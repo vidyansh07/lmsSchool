@@ -49,6 +49,13 @@ class EnquirySerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
     can_manage = serializers.SerializerMethodField()
+    can_register = serializers.SerializerMethodField()
+    #: Meritto's own record of a lead it sent; read-only in the LMS.
+    external_system = serializers.CharField(read_only=True)
+    external_id = serializers.CharField(read_only=True)
+    external_stage = serializers.CharField(read_only=True)
+    external_owner = serializers.CharField(read_only=True)
+    managed_externally = serializers.BooleanField(source="is_managed_externally", read_only=True)
 
     def get_owner(self, enquiry: Enquiry) -> dict | None:
         return _person(enquiry.owner)
@@ -76,6 +83,15 @@ class EnquirySerializer(serializers.Serializer):
         user = getattr(request, "user", None)
         return bool(user is not None and can_manage_enquiry(user, enquiry))
 
+    def get_can_register(self, enquiry: Enquiry) -> bool:
+        from .access import can_register_enquiry
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        return bool(
+            user is not None and enquiry.student_id is None and can_register_enquiry(user, enquiry)
+        )
+
 
 class EnquiryHistorySerializer(serializers.Serializer):
     id = serializers.UUIDField(read_only=True)
@@ -102,6 +118,10 @@ class EnquiryDetailSerializer(EnquirySerializer):
             .order_by("-created_at")[:50]
         )
         return EnquiryHistorySerializer(rows, many=True).data
+
+
+class EnquiryRegisterSerializer(StrictSerializer):
+    student = serializers.UUIDField()
 
 
 class EnquiryUpdateSerializer(StrictSerializer):

@@ -105,7 +105,13 @@ def on_enquiry_changed(
     sender, *, enquiry, event, changed=None, previous_stage="", actor=None, **kwargs
 ) -> None:
     """An enquiry created is `ENQUIRY_CREATED`; any change is
-    `ENQUIRY_UPDATED`, and a stage change is also `ENQUIRY_STAGE_CHANGED`."""
+    `ENQUIRY_UPDATED`, and a stage change is also `ENQUIRY_STAGE_CHANGED`.
+
+    Not for a Meritto lead: Meritto runs its own follow-ups, and an LMS rule
+    calling a lead Meritto is already working would double the contact
+    (owner's decision, 17 October 2026)."""
+    if getattr(enquiry, "is_managed_externally", False):
+        return
     enquiry_id = str(enquiry.pk)
     changed = list(changed or [])
     if event == "created":

@@ -26,10 +26,11 @@ from apps.common.permissions import IsActiveUser
 from apps.common.throttling import BurstThrottle
 
 from . import access, services
-from .models import SOURCE_CHOICES, Enquiry, EnquiryStage, LeadChannel
+from .models import MANAGED_MESSAGE, SOURCE_CHOICES, Enquiry, EnquiryStage, LeadChannel
 from .serializers import (
     EnquiryBulkRequestSerializer,
     EnquiryDetailSerializer,
+    EnquiryRegisterSerializer,
     EnquirySerializer,
     EnquiryUpdateSerializer,
 )
@@ -55,6 +56,12 @@ class EnquiryFilterSet(django_filters.FilterSet):
     open = django_filters.BooleanFilter(method="filter_open")
     created_after = django_filters.DateFilter(field_name="created_at", lookup_expr="date__gte")
     created_before = django_filters.DateFilter(field_name="created_at", lookup_expr="date__lte")
+    #: `meritto`: leads Meritto sent (read-only here). `lms`: entered in the LMS.
+    managed_by = django_filters.ChoiceFilter(
+        choices=(("meritto", "Meritto"), ("lms", "The LMS")), method="filter_managed_by"
+    )
+    #: Meritto leads not yet registered as a student: the counsellor's queue.
+    ready_to_admit = django_filters.BooleanFilter(method="filter_ready_to_admit")
     #: `overdue`: an open enquiry whose follow-up time has passed.
     #: `today`: follow-up due today. `none`: open with no follow-up planned.
     follow_up = django_filters.ChoiceFilter(
@@ -95,6 +102,21 @@ class EnquiryFilterSet(django_filters.FilterSet):
 
     def filter_open(self, queryset, name, value):
         return queryset.open() if value else queryset
+
+    def filter_managed_by(self, queryset, name, value):
+        from .models import MANAGING_SYSTEMS
+
+        if value == "meritto":
+            return queryset.filter(external_system__in=MANAGING_SYSTEMS)
+        if value == "lms":
+            return queryset.exclude(external_system__in=MANAGING_SYSTEMS)
+        return queryset
+
+    def filter_ready_to_admit(self, queryset, name, value):
+        from .models import MANAGING_SYSTEMS
+
+        ready = queryset.filter(external_system__in=MANAGING_SYSTEMS, student__isnull=True).open()
+        return ready if value else queryset
 
 
 class EnquiryListView(ListAPIView):
@@ -141,10 +163,19 @@ class EnquirySummaryView(APIView):
             .annotate(count=Count("id"))
         )
         channels = {channel: by_channel.get(channel, 0) for channel in LeadChannel.values}
+        from .models import MANAGING_SYSTEMS
+
+        ready = (
+            access.visible_enquiries(request.user)
+            .filter(external_system__in=MANAGING_SYSTEMS, student__isnull=True)
+            .open()
+            .count()
+        )
         return Response(
             {
                 "stages": stages,
                 "channels": channels,
+                "ready_to_admit": ready,
                 "total": sum(stages.values()),
                 "sources": [{"value": value, "label": label} for value, label in SOURCE_CHOICES],
             }
@@ -184,6 +215,8 @@ class EnquiryDetailView(APIView):
     )
     def patch(self, request, enquiry_id):
         enquiry = self._get(request, enquiry_id)
+        if enquiry.is_managed_externally:
+            raise ApplicationError({"non_field_errors": [MANAGED_MESSAGE]})
         if not access.can_manage_enquiry(request.user, enquiry):
             raise AuthorityError("You cannot change this enquiry.")
         serializer = EnquiryUpdateSerializer(data=request.data)
@@ -261,3 +294,30 @@ class EnquiryBulkView(APIView):
             lambda enquiry: enquiry.full_name or enquiry.mobile or str(enquiry.pk),
         )
         return Response(bulk.BulkResultSerializer(result).data)
+
+
+class EnquiryRegisterView(APIView):
+    """Record that the lead was registered as a student — the step the
+    admissions wizard finishes with when it was opened from an enquiry."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Link an enquiry to the student it was registered as",
+        request=EnquiryRegisterSerializer,
+        responses={200: EnquiryDetailSerializer},
+        tags=TAG,
+    )
+    def post(self, request, enquiry_id):
+        from apps.students import access as students_access
+
+        _refuse_students(request.user)
+        enquiry = get_object_or_404(access.visible_enquiries(request.user), pk=enquiry_id)
+        serializer = EnquiryRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        student = get_object_or_404(
+            students_access.visible_students(request.user), pk=serializer.validated_data["student"]
+        )
+        services.link_registration(actor=request.user, enquiry=enquiry, student=student)
+        refreshed = get_object_or_404(access.visible_enquiries(request.user), pk=enquiry_id)
+        return Response(EnquiryDetailSerializer(refreshed, context={"request": request}).data)

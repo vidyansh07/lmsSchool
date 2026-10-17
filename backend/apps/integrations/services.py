@@ -28,7 +28,7 @@ from apps.common.exceptions import ApplicationError, AuthorityError
 
 from . import crypto
 from .models import ApiKey, IntakeStatus, LeadIntake, Preset, Webhook, WebhookDelivery
-from .presets import LEAD_FIELDS, MERITTO_LEAD_KEYS, WEBHOOK_HEADERS
+from .presets import EXTERNAL_FIELDS, LEAD_FIELDS
 from .security import check_url
 
 logger = logging.getLogger("grras.integrations")
@@ -136,7 +136,7 @@ def _check_field_map(field_map: dict) -> None:
 
     if not isinstance(field_map, dict):
         raise ApplicationError({"field_map": ["Send an object of payload field to enquiry field."]})
-    allowed = set(ANSWER_FIELDS) | {"external_id"}
+    allowed = set(ANSWER_FIELDS) | EXTERNAL_FIELDS
     wrong = sorted(str(target) for target in field_map.values() if str(target) not in allowed)
     if wrong:
         raise ApplicationError({"field_map": [f"Not an enquiry field: {', '.join(wrong)}."]})
@@ -174,20 +174,22 @@ def _trimmed(payload: dict) -> dict:
     return {"_truncated": text[:_PAYLOAD_KEEP_BYTES]}
 
 
-def map_lead(key: ApiKey, payload: dict) -> tuple[dict[str, Any], str]:
-    """The enquiry answers a payload carries, and its external id."""
+def map_lead(key: ApiKey, payload: dict) -> tuple[dict[str, Any], dict[str, str]]:
+    """The enquiry answers a payload carries, and the sending system's own
+    record of the lead (`external_id`, `external_stage`, `external_owner`)."""
     from apps.enquiries.models import SOURCE_CHOICES, Enquiry
 
     mapping = {**LEAD_FIELDS.get(key.preset, LEAD_FIELDS[Preset.GENERIC]), **(key.field_map or {})}
     values: dict[str, Any] = {}
-    external_id = ""
+    external: dict[str, str] = {}
     for name, raw in payload.items():
         target = mapping.get(name)
         if target is None or raw in (None, "") or isinstance(raw, (dict, list)):
             continue
         text = str(raw).strip()
-        if target == "external_id":
-            external_id = text[:100]
+        if target in EXTERNAL_FIELDS:
+            limit = Enquiry._meta.get_field(target).max_length
+            external.setdefault(target, text[:limit])
             continue
         if target in values:
             continue
@@ -205,10 +207,11 @@ def map_lead(key: ApiKey, payload: dict) -> tuple[dict[str, Any], str]:
             note = f"Source given: {source}"
             values["remarks"] = f"{values['remarks']}\n{note}" if values.get("remarks") else note
         values["source"] = key.default_source if key.default_source in known_sources else "other"
-    # A lead from outside never sets its own stage or owner here.
+    # A lead from outside never sets the LMS pipeline's stage or owner: the
+    # sending system's own stage and owner are kept as `external_*` instead.
     for name in ("stage", "lead_stage", "lost_reason", "next_follow_up"):
         values.pop(name, None)
-    return values, external_id
+    return values, external
 
 
 def receive_lead(*, key: ApiKey, payload: Any) -> LeadIntake:
@@ -224,7 +227,8 @@ def receive_lead(*, key: ApiKey, payload: Any) -> LeadIntake:
             status=IntakeStatus.REJECTED,
             errors={"non_field_errors": ["Send one lead as a JSON object."]},
         )
-    values, external_id = map_lead(key, payload)
+    values, external = map_lead(key, payload)
+    external_id = external.get("external_id", "")
     kept = _trimmed(payload)
     system = key.preset if key.preset != Preset.GENERIC else f"key:{key.prefix}"
     try:
@@ -248,11 +252,24 @@ def receive_lead(*, key: ApiKey, payload: Any) -> LeadIntake:
                 )
                 created = False
             else:
-                enquiry, created = enquiries.capture(actor=None, values=values, branch=key.branch)
-            if external_id and not enquiry.external_id:
-                Enquiry.objects.filter(pk=enquiry.pk).update(
-                    external_system=system, external_id=external_id
+                stamp = {name: value for name, value in external.items() if name != "external_id"}
+                if external_id:
+                    stamp.update(external_system=system, external_id=external_id)
+                elif key.preset != Preset.GENERIC:
+                    stamp["external_system"] = system
+                enquiry, created = enquiries.capture(
+                    actor=None, values=values, branch=key.branch, external=stamp
                 )
+            if existing is not None:
+                # Meritto's latest words for its own lead, set through the
+                # queryset: not an LMS change, so no audit row and no event.
+                latest = {
+                    name: value
+                    for name, value in external.items()
+                    if name in ("external_stage", "external_owner")
+                }
+                if latest:
+                    Enquiry.objects.filter(pk=enquiry.pk).update(**latest)
             return LeadIntake.objects.create(
                 api_key=key,
                 status=IntakeStatus.CREATED if created else IntakeStatus.UPDATED,
@@ -291,11 +308,13 @@ def save_webhook(
     when one was just made (on creation, or `rotate_secret`), else ``""``."""
     _require(actor)
     creating = webhook is None
-    webhook = webhook or Webhook(created_by=actor, preset=preset or Preset.GENERIC)
-    if preset is not None:
-        if preset not in Preset.values:
-            raise ApplicationError({"preset": [f"Unknown preset: {preset!r}."]})
-        webhook.preset = preset
+    # One way only with Meritto (owner's decision, 17 October 2026): it sends
+    # leads in and is never written back to, so a webhook is generic JSON.
+    if preset not in (None, Preset.GENERIC):
+        raise ApplicationError(
+            {"preset": ["Webhooks send generic JSON; nothing is sent back to Meritto."]}
+        )
+    webhook = webhook or Webhook(created_by=actor, preset=Preset.GENERIC)
     if name is not None:
         webhook.name = name.strip()
     if url is not None:
@@ -350,24 +369,14 @@ def signature(secret: str, body: bytes) -> str:
 
 
 def webhook_body(webhook: Webhook, *, event: str, data: dict[str, Any], rule=None) -> dict:
-    """What is posted. The generic preset sends the automation context as it
-    is; the Meritto preset flattens an enquiry to Meritto's lead fields."""
-    body: dict[str, Any] = {
+    """What is posted: the event, the rule, and the automation context — the
+    same allowlisted fields the rule's conditions read."""
+    return {
         "event": event,
         "occurred_at": timezone.now().isoformat(),
         "rule": rule.name if rule is not None else None,
         "data": data,
     }
-    if webhook.preset == Preset.MERITTO and isinstance(data.get("enquiry"), dict):
-        enquiry = data["enquiry"]
-        body = {
-            meritto: enquiry.get(ours)
-            for ours, meritto in MERITTO_LEAD_KEYS.items()
-            if enquiry.get(ours) not in (None, "")
-        }
-        body["grras_enquiry_id"] = enquiry.get("id")
-        body["grras_event"] = event
-    return body
 
 
 def deliver(*, webhook: Webhook, event: str, data: dict[str, Any], rule=None) -> WebhookDelivery:
@@ -425,7 +434,6 @@ def send_test(*, actor, webhook: Webhook) -> WebhookDelivery:
 
 
 __all__ = [
-    "WEBHOOK_HEADERS",
     "authenticate",
     "create_api_key",
     "deliver",

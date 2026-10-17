@@ -20,7 +20,7 @@ from apps.common.permissions import Capability, HasCapability
 
 from . import services
 from .models import ApiKey, IntakeStatus, Webhook
-from .presets import LEAD_FIELDS, WEBHOOK_HEADERS
+from .presets import LEAD_FIELDS
 from .serializers import (
     ApiKeyCreatedSerializer,
     ApiKeySerializer,
@@ -104,12 +104,7 @@ class LeadIntakeView(APIView):
 class PresetsView(_ManageView):
     @extend_schema(summary="What each preset maps", responses={200: dict}, tags=TAG)
     def get(self, request):
-        return Response(
-            {
-                preset: {"lead_fields": LEAD_FIELDS[preset], "headers": WEBHOOK_HEADERS[preset]}
-                for preset in LEAD_FIELDS
-            }
-        )
+        return Response({preset: {"lead_fields": LEAD_FIELDS[preset]} for preset in LEAD_FIELDS})
 
 
 class ApiKeyListView(_ManageView):

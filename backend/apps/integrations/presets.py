@@ -1,11 +1,16 @@
 """What each preset pre-fills.
 
 `LEAD_FIELDS` maps a payload's field names to enquiry fields
-(`apps.enquiries.services.ANSWER_FIELDS` keys, plus `external_id`). The generic
-preset accepts the enquiry's own names and a few obvious aliases; the Meritto
-preset adds the names Meritto's lead export and webhooks use. A key's own
-`field_map` is applied last, so an institution whose Meritto form has a custom
-field can point it anywhere without a code change.
+(`apps.enquiries.services.ANSWER_FIELDS` keys, plus the three `EXTERNAL_FIELDS`).
+The generic preset accepts the enquiry's own names and a few obvious aliases;
+the Meritto preset adds the names Meritto's lead export and webhooks use. A
+key's own `field_map` is applied last, so an institution whose Meritto form
+has a custom field can point it anywhere without a code change.
+
+Meritto manages its leads (owner's decision, 17 October 2026): it sends a lead
+when it is ready to admit, and its stage and owner arrive as Meritto's own
+words — `external_stage`, `external_owner` — shown in the LMS, never mapped
+onto the LMS pipeline. Nothing goes back to Meritto.
 """
 
 from __future__ import annotations
@@ -37,6 +42,10 @@ _GENERIC = {
     "id": "external_id",
 }
 
+#: Targets that are not enquiry form answers: kept on the enquiry as the
+#: sending system's own record of the lead.
+EXTERNAL_FIELDS = frozenset({"external_id", "external_stage", "external_owner"})
+
 _MERITTO = {
     **_GENERIC,
     "lead_id": "external_id",
@@ -54,30 +63,18 @@ _MERITTO = {
     "medium": "utm_medium",
     "highest_qualification": "qualification",
     "remark": "remarks",
+    "lead_stage": "external_stage",
+    "stage": "external_stage",
+    "lead_status": "external_stage",
+    "status": "external_stage",
+    "lead_owner": "external_owner",
+    "owner": "external_owner",
+    "counsellor": "external_owner",
+    "counselor": "external_owner",
+    "assigned_to": "external_owner",
 }
 
 LEAD_FIELDS: dict[str, dict[str, str]] = {
     Preset.GENERIC: _GENERIC,
     Preset.MERITTO: _MERITTO,
-}
-
-#: The headers a receiver of that kind expects; the values are typed in by an
-#: administrator and stored encrypted.
-WEBHOOK_HEADERS: dict[str, list[str]] = {
-    Preset.GENERIC: [],
-    Preset.MERITTO: ["access-key", "secret-key"],
-}
-
-#: Field names in the JSON the `send_webhook` action posts, per preset. The
-#: generic shape is the automation context itself; the Meritto shape flattens
-#: an enquiry to the names Meritto's lead API accepts.
-MERITTO_LEAD_KEYS = {
-    "full_name": "name",
-    "mobile": "mobile",
-    "email": "email",
-    "course": "course",
-    "city": "city",
-    "state": "state",
-    "source": "source",
-    "stage": "lead_stage",
 }

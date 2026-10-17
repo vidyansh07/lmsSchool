@@ -20,7 +20,7 @@ from django.utils import timezone
 from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError
 
-from .models import CLOSED_STAGES, Enquiry, EnquiryStage, channel_for_source
+from .models import CLOSED_STAGES, MANAGED_MESSAGE, Enquiry, EnquiryStage, channel_for_source
 from .signals import enquiry_changed
 
 #: Form question key → enquiry field. Keys not listed are kept on the form
@@ -186,11 +186,22 @@ def _apply(enquiry: Enquiry, fields: dict[str, Any]) -> list[str]:
     return changed
 
 
+#: The sending system's own record of a lead (`apps.integrations`).
+EXTERNAL_FIELDS = ("external_system", "external_id", "external_stage", "external_owner")
+
+
 @transaction.atomic
-def capture(*, actor, values: dict[str, Any], branch=None) -> tuple[Enquiry, bool]:
+def capture(
+    *, actor, values: dict[str, Any], branch=None, external: dict[str, str] | None = None
+) -> tuple[Enquiry, bool]:
     """Create an enquiry from a capture form's answers — or, when an open
     enquiry from the same mobile already exists at the centre, update that
-    one. Returns ``(enquiry, created)``."""
+    one. Returns ``(enquiry, created)``.
+
+    ``external`` is the sending system's record of the lead (`EXTERNAL_FIELDS`),
+    set before anything is announced, so a receiver already sees a Meritto
+    lead as Meritto's."""
+    external = {name: value for name, value in (external or {}).items() if name in EXTERNAL_FIELDS}
     fields = answers_to_fields(values)
     if not fields.get("full_name") or not fields.get("mobile"):
         raise ApplicationError(
@@ -208,11 +219,19 @@ def capture(*, actor, values: dict[str, Any], branch=None) -> tuple[Enquiry, boo
         .order_by("-created_at")
         .first()
     )
+    if existing is not None and existing.is_managed_externally and actor is not None:
+        # The same mobile is already a Meritto lead: that one is Meritto's to
+        # change. The walk-in desk is pointed at it rather than editing it.
+        return existing, False
     if existing is not None:
         fields.pop("stage", None)  # a repeat enquiry never moves the pipeline by itself
         previous_stage = existing.stage
+        for name, value in external.items():
+            if name in ("external_system", "external_id") and getattr(existing, name):
+                continue  # the first system to send it keeps it
+            setattr(existing, name, value)
         changed = _apply(existing, fields)
-        if changed:
+        if changed or external:
             existing.save()
         record(
             action=AuditAction.ENQUIRY_UPDATED,
@@ -239,6 +258,7 @@ def capture(*, actor, values: dict[str, Any], branch=None) -> tuple[Enquiry, boo
         created_by=actor if getattr(actor, "pk", None) else None,
         owner=actor if staff else None,
         stage=EnquiryStage.NEW,
+        **external,
         stage_changed_at=timezone.now(),
     )
     _apply(enquiry, fields)
@@ -268,6 +288,9 @@ def update(
 
     ``emit=False`` is for the automation engine's `update_enquiry` action,
     which dispatches the follow-on event itself (see `signals.py`)."""
+    if enquiry.is_managed_externally and actor is not None:
+        # Only the integration itself (no person) writes a Meritto lead.
+        raise ApplicationError({"non_field_errors": [MANAGED_MESSAGE]})
     unknown = sorted(set(fields) - EDITABLE_FIELDS)
     if unknown:
         raise ApplicationError({name: ["This field cannot be changed here."] for name in unknown})
@@ -302,7 +325,10 @@ def update(
 
 def apply_answers(*, actor, enquiry: Enquiry, values: dict[str, Any]) -> list[str]:
     """A follow-up about `enquiry` was answered: write its mapped answers,
-    and note the contact."""
+    and note the contact. A Meritto lead keeps its answers on the form only:
+    its pipeline is Meritto's."""
+    if enquiry.is_managed_externally:
+        return []
     fields = answers_to_fields(values)
     # Identity comes from the capture form, not from a follow-up about it.
     for name in ("full_name", "mobile"):
@@ -319,12 +345,58 @@ def apply_answers(*, actor, enquiry: Enquiry, values: dict[str, Any]) -> list[st
     return changed
 
 
+@transaction.atomic
+def link_registration(*, actor, enquiry: Enquiry, student) -> Enquiry:
+    """The lead was registered as `student` in the LMS. Recorded on the LMS
+    side only — for a Meritto lead, Meritto's own stage is left as Meritto
+    sent it (nothing goes back to Meritto)."""
+    from .access import can_register_enquiry
+
+    if not can_register_enquiry(actor, enquiry):
+        from apps.common.exceptions import AuthorityError
+
+        raise AuthorityError("You cannot register this enquiry.")
+    locked = Enquiry.objects.select_for_update().get(pk=enquiry.pk)
+    if locked.student_id and locked.student_id != student.pk:
+        raise ApplicationError(
+            {"student": ["This enquiry is already registered as another student."]}
+        )
+    previous_stage = locked.stage
+    locked.student = student
+    locked.stage = EnquiryStage.REGISTERED
+    if previous_stage != EnquiryStage.REGISTERED:
+        locked.stage_changed_at = timezone.now()
+    locked.save(update_fields=["student", "stage", "stage_changed_at", "updated_at"])
+    record(
+        action=AuditAction.ENQUIRY_UPDATED,
+        actor=actor,
+        resource_type="enquiry",
+        resource_id=locked.pk,
+        context={
+            "changed": ["student", "stage"],
+            "registered_as": str(student.pk),
+            "previous_stage": previous_stage,
+        },
+        durable=False,
+    )
+    if not locked.is_managed_externally:
+        _emit(
+            locked,
+            event="updated",
+            changed=["student", "stage"],
+            previous_stage=previous_stage,
+            actor=actor,
+        )
+    return locked
+
+
 __all__ = [
     "ANSWER_FIELDS",
     "EDITABLE_FIELDS",
     "answers_to_fields",
     "apply_answers",
     "capture",
+    "link_registration",
     "mobile_key",
     "update",
 ]
