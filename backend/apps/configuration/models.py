@@ -58,6 +58,8 @@ DEFAULT_SETTINGS: dict[str, object] = {
     "support_email": "",
     "support_phone": "",
     "notification_email_enabled": True,
+    "fee_receipt_email_enabled": True,
+    "fee_statement_email_enabled": True,
     "export_retention_days": 14,
     "resource_upload_max_mb": 25,
 }
@@ -96,6 +98,18 @@ class SystemSetting(BaseModel):
         help_text=_(
             "Turning this off suppresses delivery only. The in-app notification "
             "is still written, so nothing is lost."
+        ),
+    )
+    fee_receipt_email_enabled = models.BooleanField(
+        _("email a receipt for every payment"),
+        default=True,
+        help_text=_("The student is sent the receipt PDF as soon as a payment is recorded."),
+    )
+    fee_statement_email_enabled = models.BooleanField(
+        _("email a fee statement when a fee is agreed or changed"),
+        default=True,
+        help_text=_(
+            "The student is sent the fee, discount, schedule and payments so far as a PDF."
         ),
     )
     export_retention_days = models.PositiveSmallIntegerField(

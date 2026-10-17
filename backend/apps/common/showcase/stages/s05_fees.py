@@ -97,6 +97,7 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.enrollments.models import LIVE_STATUSES, Enrollment, EnrollmentStatus
+from apps.fees import mail as fee_mail
 from apps.fees.models import FeePayment, FeePlan, PaymentMethod
 from apps.fees.services import (
     record_payment,
@@ -645,11 +646,14 @@ def run(ctx: Context) -> None:
     for row in plan.without_plan:
         ctx.out(f"no plan on purpose: {row.code} ({row.student.user.email})")
 
-    plans = _timed(ctx, "plans", lambda: _ensure_plans(ctx, plan))
-    _timed(ctx, "payments", lambda: _ensure_payments(ctx, plan, plans))
-    _timed(ctx, "ageing", lambda: _ensure_next_dues(ctx, plan, plans))
-    _timed(ctx, "status sync", lambda: _sync_statuses(ctx, plan, plans))
-    _timed(ctx, "backdating", lambda: _backdate(ctx, plan))
+    # Demo ledgers go through the real services; their students are not
+    # mailed receipts and statements for money nobody paid.
+    with fee_mail.suppressed():
+        plans = _timed(ctx, "plans", lambda: _ensure_plans(ctx, plan))
+        _timed(ctx, "payments", lambda: _ensure_payments(ctx, plan, plans))
+        _timed(ctx, "ageing", lambda: _ensure_next_dues(ctx, plan, plans))
+        _timed(ctx, "status sync", lambda: _sync_statuses(ctx, plan, plans))
+        _timed(ctx, "backdating", lambda: _backdate(ctx, plan))
 
 
 def _timed(ctx: Context, what: str, step: Callable[[], Any]) -> Any:

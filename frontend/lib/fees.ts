@@ -9,6 +9,8 @@
 
 import { apiFetch, apiMutate } from './api';
 import type {
+  FeeEmail,
+  FeeEmailQueued,
   FeeHistoryEntry,
   FeePayment,
   FeePlan,
@@ -132,6 +134,25 @@ export async function voidPayment(paymentId: string, reason: string): Promise<Fe
 /** Who changed what, when — newest first. */
 export async function getFeeHistory(enrollmentId: string): Promise<FeeHistoryEntry[]> {
   return apiFetch<FeeHistoryEntry[]>(`${BASE}/enrollments/${enrollmentId}/history/`);
+}
+
+/** Every fee mail about one enrolment — statements and receipts — newest first. */
+export async function listFeeEmails(enrollmentId: string): Promise<FeeEmail[]> {
+  return apiFetch<FeeEmail[]>(`${BASE}/enrollments/${enrollmentId}/emails/`);
+}
+
+/** Send the fee statement (PDF attached) to the student now. */
+export async function emailStatement(enrollmentId: string): Promise<FeeEmailQueued> {
+  return apiMutate<FeeEmailQueued>(`${BASE}/enrollments/${enrollmentId}/email-statement/`, {
+    method: 'POST',
+  });
+}
+
+/** Send a payment's receipt (PDF attached) to the student again. */
+export async function emailReceipt(paymentId: string): Promise<FeeEmailQueued> {
+  return apiMutate<FeeEmailQueued>(`${BASE}/payments/${paymentId}/email-receipt/`, {
+    method: 'POST',
+  });
 }
 
 export async function getStudentFees(studentId: string): Promise<StudentFeeSummary> {

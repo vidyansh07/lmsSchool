@@ -1960,6 +1960,27 @@ export type FeePlanBrief = Omit<FeePlan, "payments" | "installments"> & {
   student_name?: string;
 };
 
+/** One fee mail from the outbox (`GET /fees/enrollments/<id>/emails/`). */
+export interface FeeEmail {
+  id: string;
+  kind: 'fee_receipt' | 'fee_statement';
+  /** The receipt it carried; null for a statement. */
+  receipt_number: string | null;
+  to_email: string;
+  subject: string;
+  status: 'pending' | 'sent' | 'failed' | 'abandoned';
+  attempts: number;
+  last_error: string;
+  sent_at: string | null;
+  created_at: string;
+}
+
+export interface FeeEmailQueued {
+  id: string;
+  to_email: string;
+  status: string;
+}
+
 export interface FeeHistoryEntry {
   id: string;
   action: string;

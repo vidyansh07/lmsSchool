@@ -26,7 +26,9 @@ import {
   CalendarClock,
   ChevronDown,
   ChevronUp,
+  FileText,
   History,
+  Mail,
   Receipt,
   Wallet,
 } from 'lucide-react';
@@ -63,7 +65,10 @@ import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
 import { ApiError, errorMessage, fieldErrors, isUncertainOutcome, unshownError } from '@/lib/api';
 import { ENROLLMENT_STATUS_LABEL, ENROLLMENT_STATUS_VARIANT } from '@/lib/batch-labels';
 import {
+  emailReceipt,
+  emailStatement,
   getFeeHistory,
+  listFeeEmails,
   recordPayment,
   setEnrollmentFee,
   setInstallments,
@@ -80,6 +85,7 @@ import {
 import { apiBaseUrl } from '@/lib/env';
 import { cn } from '@/lib/utils';
 import type {
+  FeeEmail,
   Enrollment,
   FeeHistoryEntry,
   FeePayment,
@@ -100,6 +106,27 @@ export function money(value: string | number | null | undefined): string {
 export function receiptUrl(paymentId: string): string {
   return `${apiBaseUrl()}/api/v1/fees/payments/${paymentId}/receipt/`;
 }
+
+/** The fee statement PDF for one enrolment: fee, discount, schedule, payments. */
+export function statementUrl(enrollmentId: string): string {
+  return `${apiBaseUrl()}/api/v1/fees/enrollments/${enrollmentId}/statement/`;
+}
+
+/** What happened to a mail, in the counsellor's words. */
+const EMAIL_STATUS_LABEL: Record<FeeEmail['status'], string> = {
+  pending: 'Queued',
+  sent: 'Sent',
+  failed: 'Not delivered yet',
+  abandoned: 'Could not be delivered',
+};
+const EMAIL_STATUS_VARIANT: Record<FeeEmail['status'], 'success' | 'warning' | 'error' | 'neutral'> = {
+  pending: 'neutral',
+  sent: 'success',
+  failed: 'warning',
+  abandoned: 'error',
+};
+
+type Notice = { tone: 'success' | 'error'; text: string } | null;
 
 function isoToday(): string {
   const now = new Date();
@@ -784,6 +811,53 @@ function FeeHistory({ enrollmentId }: { enrollmentId: string }) {
   );
 }
 
+function FeeEmails({ enrollmentId, refreshKey }: { enrollmentId: string; refreshKey: number }) {
+  const [rows, setRows] = useState<FeeEmail[] | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    listFeeEmails(enrollmentId)
+      .then((result) => {
+        if (!cancelled) setRows(result);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setError(errorMessage(cause, 'Could not load the mails.'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enrollmentId, refreshKey]);
+
+  if (error) return <ErrorState title="Could not load the mails" message={error} />;
+  if (rows === null) return <LoadingState label="Loading mails…" rows={2} />;
+  if (rows.length === 0)
+    return (
+      <p className="text-sm text-ink-muted">
+        Nothing mailed yet. Receipts and statements are sent automatically when mail is on.
+      </p>
+    );
+
+  return (
+    <ul className="divide-y divide-line rounded-lg border border-line" aria-label="Fee mails">
+      {rows.map((row) => (
+        <li key={row.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+          <div className="min-w-0">
+            <p className="font-medium text-ink">
+              {row.kind === 'fee_receipt' ? `Receipt ${row.receipt_number ?? ''}` : 'Fee statement'}
+            </p>
+            <p className="text-xs text-ink-muted">
+              To {row.to_email} · {formatDateTime(row.sent_at ?? row.created_at)}
+              {row.status !== 'sent' && row.last_error ? ` · ${row.last_error}` : ''}
+            </p>
+          </div>
+          <Badge variant={EMAIL_STATUS_VARIANT[row.status]}>{EMAIL_STATUS_LABEL[row.status]}</Badge>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // One enrolment's fee
 // ---------------------------------------------------------------------------
@@ -792,11 +866,14 @@ function PaymentsTable({
   payments,
   mayManage,
   onVoided,
+  onNotice,
 }: {
   payments: FeePayment[];
   mayManage: boolean;
   onVoided: () => void;
+  onNotice: (notice: Notice) => void;
 }) {
+  const [emailingId, setEmailingId] = useState('');
   const [voidingId, setVoidingId] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -814,6 +891,22 @@ function PaymentsTable({
       setMessage(errorMessage(cause, 'Could not void this payment.'));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function sendReceipt(payment: FeePayment) {
+    setEmailingId(payment.id);
+    onNotice(null);
+    try {
+      const queued = await emailReceipt(payment.id);
+      onNotice({
+        tone: 'success',
+        text: `Receipt ${payment.receipt_number} is on its way to ${queued.to_email}.`,
+      });
+    } catch (cause) {
+      onNotice({ tone: 'error', text: errorMessage(cause, 'Could not send the receipt.') });
+    } finally {
+      setEmailingId('');
     }
   }
 
@@ -921,18 +1014,32 @@ function PaymentsTable({
                         </Button>
                       </form>
                     ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="text-ink-muted"
-                        onClick={() => {
-                          setVoidingId(payment.id);
-                          setReason('');
-                        }}
-                      >
-                        Void
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="text-ink-muted"
+                          disabled={emailingId === payment.id}
+                          aria-label={`Email receipt ${payment.receipt_number} to the student`}
+                          onClick={() => void sendReceipt(payment)}
+                        >
+                          <Mail className="size-4" aria-hidden="true" />
+                          {emailingId === payment.id ? 'Sending…' : 'Email'}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="text-ink-muted"
+                          onClick={() => {
+                            setVoidingId(payment.id);
+                            setReason('');
+                          }}
+                        >
+                          Void
+                        </Button>
+                      </div>
                     )}
                   </Td>
                 ) : null}
@@ -957,10 +1064,32 @@ export function FeePlanCard({
   const [dialog, setDialog] = useState<'fee' | 'payment' | 'due' | 'schedule' | null>(null);
   const scheduled = plan.installments.length > 0;
   const [showHistory, setShowHistory] = useState(false);
+  const [showEmails, setShowEmails] = useState(false);
+  const [emailsVersion, setEmailsVersion] = useState(0);
+  const [notice, setNoticeState] = useState<Notice>(null);
+  const [sendingStatement, setSendingStatement] = useState(false);
   const payable = Number(plan.payable);
   const paid = Number(plan.paid);
   const percent = payable > 0 ? Math.min(100, Math.round((paid / payable) * 100)) : 100;
   const balance = Number(plan.balance);
+
+  function setNotice(next: Notice) {
+    setNoticeState(next);
+    if (next?.tone === 'success') setEmailsVersion((value) => value + 1);
+  }
+
+  async function sendStatement() {
+    setSendingStatement(true);
+    setNotice(null);
+    try {
+      const queued = await emailStatement(plan.enrollment_id);
+      setNotice({ tone: 'success', text: `The fee statement is on its way to ${queued.to_email}.` });
+    } catch (cause) {
+      setNotice({ tone: 'error', text: errorMessage(cause, 'Could not send the statement.') });
+    } finally {
+      setSendingStatement(false);
+    }
+  }
 
   return (
     <div className="rounded-xl border border-line bg-surface p-4">
@@ -995,7 +1124,11 @@ export function FeePlanCard({
           value={money(plan.agreed_amount)}
           sub={
             Number(plan.discount_amount) > 0
-              ? `Less ${money(plan.discount_amount)} · ${plan.discount_reason || 'discount'}`
+              ? `Less ${
+                  plan.discount_percent != null
+                    ? `${Number(plan.discount_percent)}% (${money(plan.discount_amount)})`
+                    : money(plan.discount_amount)
+                } · ${plan.discount_reason || 'discount'}`
               : undefined
           }
         />
@@ -1081,7 +1214,32 @@ export function FeePlanCard({
             <BadgeIndianRupee className="size-4" aria-hidden="true" />
             Change fee
           </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void sendStatement()}
+            disabled={sendingStatement}
+          >
+            <Mail className="size-4" aria-hidden="true" />
+            {sendingStatement ? 'Sending…' : 'Email statement'}
+          </Button>
         </div>
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <a
+          href={statementUrl(plan.enrollment_id)}
+          className="inline-flex items-center gap-1 text-action hover:underline"
+        >
+          <FileText className="size-4" aria-hidden="true" />
+          Fee statement (PDF)
+        </a>
+      </div>
+
+      {notice ? (
+        <Alert variant={notice.tone === 'success' ? 'success' : 'error'} className="mt-3">
+          {notice.text}
+        </Alert>
       ) : null}
 
       {scheduled ? (
@@ -1097,7 +1255,12 @@ export function FeePlanCard({
         <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
           Payments
         </p>
-        <PaymentsTable payments={plan.payments} mayManage={mayManage} onVoided={onChanged} />
+        <PaymentsTable
+          payments={plan.payments}
+          mayManage={mayManage}
+          onVoided={onChanged}
+          onNotice={setNotice}
+        />
       </div>
 
       <div className="mt-3">
@@ -1121,6 +1284,30 @@ export function FeePlanCard({
           </div>
         ) : null}
       </div>
+
+      {mayManage ? (
+        <div className="mt-2">
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"
+            onClick={() => setShowEmails((value) => !value)}
+            aria-expanded={showEmails}
+          >
+            <Mail className="size-4" aria-hidden="true" />
+            {showEmails ? 'Hide mails' : 'Mails sent to the student'}
+            {showEmails ? (
+              <ChevronUp className="size-4" aria-hidden="true" />
+            ) : (
+              <ChevronDown className="size-4" aria-hidden="true" />
+            )}
+          </button>
+          {showEmails ? (
+            <div className="mt-3">
+              <FeeEmails enrollmentId={plan.enrollment_id} refreshKey={emailsVersion} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {mayManage ? (
         <>

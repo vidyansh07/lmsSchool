@@ -21,6 +21,10 @@ export interface SystemSettings {
   support_email: string;
   support_phone: string;
   notification_email_enabled: boolean;
+  /** Mail the receipt PDF to the student for every payment. */
+  fee_receipt_email_enabled: boolean;
+  /** Mail a fee statement PDF when a fee is agreed or changed. */
+  fee_statement_email_enabled: boolean;
   export_retention_days: number;
   resource_upload_max_mb: number;
   /** Provenance, not settings. Both are null until somebody has saved once. */
@@ -40,6 +44,8 @@ export type SystemSettingsPatch = Partial<
     | 'support_email'
     | 'support_phone'
     | 'notification_email_enabled'
+    | 'fee_receipt_email_enabled'
+    | 'fee_statement_email_enabled'
     | 'export_retention_days'
     | 'resource_upload_max_mb'
   >

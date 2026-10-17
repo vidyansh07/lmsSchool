@@ -25,6 +25,8 @@ interface FormState {
   support_email: string;
   support_phone: string;
   notification_email_enabled: string;
+  fee_receipt_email_enabled: string;
+  fee_statement_email_enabled: string;
   export_retention_days: string;
   resource_upload_max_mb: string;
 }
@@ -35,6 +37,8 @@ function toForm(row: SystemSettings): FormState {
     support_email: row.support_email,
     support_phone: row.support_phone,
     notification_email_enabled: String(row.notification_email_enabled),
+    fee_receipt_email_enabled: String(row.fee_receipt_email_enabled),
+    fee_statement_email_enabled: String(row.fee_statement_email_enabled),
     export_retention_days: String(row.export_retention_days),
     resource_upload_max_mb: String(row.resource_upload_max_mb),
   };
@@ -56,6 +60,12 @@ function changedFields(form: FormState, original: FormState): SystemSettingsPatc
   if (form.support_phone !== original.support_phone) patch.support_phone = form.support_phone;
   if (form.notification_email_enabled !== original.notification_email_enabled) {
     patch.notification_email_enabled = form.notification_email_enabled === 'true';
+  }
+  if (form.fee_receipt_email_enabled !== original.fee_receipt_email_enabled) {
+    patch.fee_receipt_email_enabled = form.fee_receipt_email_enabled === 'true';
+  }
+  if (form.fee_statement_email_enabled !== original.fee_statement_email_enabled) {
+    patch.fee_statement_email_enabled = form.fee_statement_email_enabled === 'true';
   }
   if (form.export_retention_days !== original.export_retention_days) {
     patch.export_retention_days = Number(form.export_retention_days);
@@ -105,6 +115,8 @@ function InstitutionSettings() {
   const emailId = useId();
   const phoneId = useId();
   const mailSwitchId = useId();
+  const receiptMailId = useId();
+  const statementMailId = useId();
   const retentionId = useId();
   const uploadId = useId();
 
@@ -237,6 +249,36 @@ function InstitutionSettings() {
                 <Select
                   value={form.notification_email_enabled}
                   onChange={(event) => edit({ notification_email_enabled: event.target.value })}
+                >
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </Select>
+              </Field>
+
+              <Field
+                label="Email a receipt for every payment"
+                htmlFor={receiptMailId}
+                error={errors.fee_receipt_email_enabled}
+                hint="The student gets the receipt PDF as soon as a payment is recorded."
+              >
+                <Select
+                  value={form.fee_receipt_email_enabled}
+                  onChange={(event) => edit({ fee_receipt_email_enabled: event.target.value })}
+                >
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </Select>
+              </Field>
+
+              <Field
+                label="Email a fee statement when a fee is agreed or changed"
+                htmlFor={statementMailId}
+                error={errors.fee_statement_email_enabled}
+                hint="Fee, discount, instalments and payments so far, as a PDF."
+              >
+                <Select
+                  value={form.fee_statement_email_enabled}
+                  onChange={(event) => edit({ fee_statement_email_enabled: event.target.value })}
                 >
                   <option value="true">Yes</option>
                   <option value="false">No</option>

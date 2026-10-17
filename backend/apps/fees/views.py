@@ -27,10 +27,12 @@ from apps.common.permissions import Capability, HasCapability, IsActiveUser
 from apps.enrollments.models import Enrollment
 from apps.students import access as students_access
 
-from . import services
+from . import mail, services
 from .models import FeePayment, FeePlan
 from .serializers import (
     FeeCollectionsTrendPointSerializer,
+    FeeEmailQueuedSerializer,
+    FeeEmailSerializer,
     FeeHistoryEntrySerializer,
     FeePaymentSerializer,
     FeePlanBriefSerializer,
@@ -356,3 +358,103 @@ class FeePaymentReceiptView(APIView):
         response["X-Content-Type-Options"] = "nosniff"
         response["Cache-Control"] = "private, no-store"
         return response
+
+
+def _pdf_response(content: bytes, filename: str):
+    from django.http import HttpResponse
+
+    response = HttpResponse(content, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+class EnrollmentFeeStatementView(APIView):
+    """The fee statement as a PDF: the student's own, or staff who may read fees."""
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Download the fee statement for an enrolment",
+        responses={200: OpenApiResponse(description="A PDF.")},
+        tags=FEES_TAG,
+    )
+    def get(self, request, enrollment_id):
+        enrollment = _enrollment(request.user, enrollment_id)
+        if not _may_read(request.user, enrollment):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        plan = _plan_or_404(enrollment)
+        document = mail._render_statement(str(plan.pk))
+        return _pdf_response(document.content, document.filename)
+
+
+class EnrollmentFeeEmailsView(APIView):
+    """Every fee mail about this enrolment — statements and receipts — newest first."""
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_VIEW_ANY
+
+    @extend_schema(
+        summary="Fee mails sent for an enrolment",
+        responses={200: FeeEmailSerializer(many=True)},
+        tags=FEES_TAG,
+    )
+    def get(self, request, enrollment_id):
+        enrollment = _enrollment(request.user, enrollment_id)
+        plan = _plan_or_404(enrollment)
+        receipt_numbers = {
+            str(pk): number for pk, number in plan.payments.values_list("pk", "receipt_number")
+        }
+        rows = mail.emails_for_plan(plan)[:100]
+        return Response(
+            FeeEmailSerializer(rows, many=True, context={"receipt_numbers": receipt_numbers}).data
+        )
+
+
+class EnrollmentFeeEmailStatementView(APIView):
+    """Send the fee statement to the student now."""
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_MANAGE_ANY
+
+    @extend_schema(
+        summary="Email the fee statement to the student",
+        request=None,
+        responses={202: FeeEmailQueuedSerializer},
+        tags=FEES_TAG,
+    )
+    def post(self, request, enrollment_id):
+        from django.db import transaction
+
+        enrollment = _enrollment(request.user, enrollment_id)
+        plan = _plan_or_404(enrollment)
+        with transaction.atomic():
+            message = mail.email_statement(plan, automatic=False)
+        return Response(FeeEmailQueuedSerializer(message).data, status=status.HTTP_202_ACCEPTED)
+
+
+class FeePaymentEmailReceiptView(APIView):
+    """Send a payment's receipt to the student again."""
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_MANAGE_ANY
+
+    @extend_schema(
+        summary="Email the receipt for a payment to the student",
+        request=None,
+        responses={202: FeeEmailQueuedSerializer},
+        tags=FEES_TAG,
+    )
+    def post(self, request, payment_id):
+        from django.db import transaction
+
+        payment = get_object_or_404(
+            FeePayment.objects.filter(
+                plan__enrollment__in=batch_access.visible_enrollments(request.user)
+            ),
+            pk=payment_id,
+        )
+        with transaction.atomic():
+            message = mail.email_receipt(payment, automatic=False)
+        return Response(FeeEmailQueuedSerializer(message).data, status=status.HTTP_202_ACCEPTED)

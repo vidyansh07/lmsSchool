@@ -3,12 +3,16 @@
 from django.urls import path
 
 from .views import (
+    EnrollmentFeeEmailStatementView,
+    EnrollmentFeeEmailsView,
     EnrollmentFeeHistoryView,
     EnrollmentFeeInstallmentsView,
     EnrollmentFeeNextDueView,
     EnrollmentFeePaymentsView,
+    EnrollmentFeeStatementView,
     EnrollmentFeeView,
     FeeCollectionsTrendView,
+    FeePaymentEmailReceiptView,
     FeePaymentReceiptView,
     FeePaymentVoidView,
     FeesOverviewView,
@@ -44,7 +48,27 @@ urlpatterns = [
         EnrollmentFeeHistoryView.as_view(),
         name="history",
     ),
+    path(
+        "enrollments/<uuid:enrollment_id>/statement/",
+        EnrollmentFeeStatementView.as_view(),
+        name="statement",
+    ),
+    path(
+        "enrollments/<uuid:enrollment_id>/emails/",
+        EnrollmentFeeEmailsView.as_view(),
+        name="emails",
+    ),
+    path(
+        "enrollments/<uuid:enrollment_id>/email-statement/",
+        EnrollmentFeeEmailStatementView.as_view(),
+        name="email-statement",
+    ),
     path("payments/<uuid:payment_id>/void/", FeePaymentVoidView.as_view(), name="void"),
+    path(
+        "payments/<uuid:payment_id>/email-receipt/",
+        FeePaymentEmailReceiptView.as_view(),
+        name="email-receipt",
+    ),
     path(
         "payments/<uuid:payment_id>/receipt/",
         FeePaymentReceiptView.as_view(),

@@ -22,6 +22,9 @@ const setNextDue = vi.hoisted(() => vi.fn());
 const setInstallments = vi.hoisted(() => vi.fn());
 const voidPayment = vi.hoisted(() => vi.fn());
 const getFeeHistory = vi.hoisted(() => vi.fn());
+const emailReceipt = vi.hoisted(() => vi.fn());
+const emailStatement = vi.hoisted(() => vi.fn());
+const listFeeEmails = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/fees', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/fees')>()),
@@ -31,6 +34,9 @@ vi.mock('@/lib/fees', async (importOriginal) => ({
   setInstallments,
   voidPayment,
   getFeeHistory,
+  emailReceipt,
+  emailStatement,
+  listFeeEmails,
 }));
 
 function payment(overrides: Partial<FeePayment> = {}): FeePayment {
@@ -220,8 +226,10 @@ describe('FeeLedger', () => {
     expect(screen.getByText('GRS-R-00002')).toBeInTheDocument();
     expect(screen.getByText('Voided')).toBeInTheDocument();
     expect(screen.getByText(/Entered twice/)).toBeInTheDocument();
-    // Nothing to click for a reader.
+    // Nothing to click for a reader, but the statement is theirs to download.
     expect(screen.queryByRole('button', { name: /record payment/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /email statement/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /fee statement \(pdf\)/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^void$/i })).not.toBeInTheDocument();
   });
 
@@ -444,6 +452,85 @@ describe('FeeLedger', () => {
     });
     fireEvent.click(confirm);
     await waitFor(() => expect(voidPayment).toHaveBeenCalledWith('pay-1', 'Wrong student'));
+  });
+
+  it('mails the statement, resends a receipt and lists what was sent', async () => {
+    emailStatement.mockResolvedValue({ id: 'm1', to_email: 'sam@example.test', status: 'pending' });
+    emailReceipt.mockResolvedValue({ id: 'm2', to_email: 'sam@example.test', status: 'pending' });
+    listFeeEmails.mockResolvedValue([
+      {
+        id: 'm2',
+        kind: 'fee_receipt',
+        receipt_number: 'GRS-R-00001',
+        to_email: 'sam@example.test',
+        subject: 'Receipt GRS-R-00001',
+        status: 'sent',
+        attempts: 1,
+        last_error: '',
+        sent_at: '2026-10-17T10:00:00Z',
+        created_at: '2026-10-17T10:00:00Z',
+      },
+      {
+        id: 'm1',
+        kind: 'fee_statement',
+        receipt_number: null,
+        to_email: 'sam@example.test',
+        subject: 'Your fee',
+        status: 'failed',
+        attempts: 1,
+        last_error: 'Recipient not verified',
+        sent_at: null,
+        created_at: '2026-10-17T09:00:00Z',
+      },
+    ]);
+    render(
+      <FeeLedger
+        summary={summary([plan()])}
+        enrollments={[]}
+        mayManage
+        isLoading={false}
+        error={null}
+        onChanged={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('link', { name: /fee statement \(pdf\)/i })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/api/v1/fees/enrollments/enrol-1/statement/'),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /email statement/i }));
+    expect(await screen.findByText(/statement is on its way to sam@example.test/i)).toBeInTheDocument();
+    expect(emailStatement).toHaveBeenCalledWith('enrol-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Email receipt GRS-R-00001 to the student' }));
+    expect(await screen.findByText(/Receipt GRS-R-00001 is on its way/)).toBeInTheDocument();
+    expect(emailReceipt).toHaveBeenCalledWith('pay-1');
+
+    fireEvent.click(screen.getByRole('button', { name: /mails sent to the student/i }));
+    const log = await screen.findByRole('list', { name: 'Fee mails' });
+    expect(within(log).getByText('Receipt GRS-R-00001')).toBeInTheDocument();
+    expect(within(log).getByText('Sent')).toBeInTheDocument();
+    expect(within(log).getByText('Not delivered yet')).toBeInTheDocument();
+    expect(within(log).getByText(/Recipient not verified/)).toBeInTheDocument();
+  });
+
+  it('says why a statement could not be mailed', async () => {
+    const { ApiError } = await import('@/lib/api');
+    emailStatement.mockRejectedValue(
+      new ApiError(400, 'invalid', 'This student has no active email address to send to.', ''),
+    );
+    render(
+      <FeeLedger
+        summary={summary([plan()])}
+        enrollments={[]}
+        mayManage
+        isLoading={false}
+        error={null}
+        onChanged={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /email statement/i }));
+    expect(await screen.findByText(/no active email address/i)).toBeInTheDocument();
   });
 
   it('offers to set the fee on an enrolment that has none', async () => {

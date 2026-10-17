@@ -249,6 +249,11 @@ class EmailMessage(BaseModel):
     subject = models.CharField(_("subject"), max_length=255)
     body = models.TextField(_("body"))
     template = models.CharField(_("template"), max_length=60, blank=True)
+    #: Files to attach, as references rather than bytes: `[{"kind": "fee_receipt",
+    #: "id": "<uuid>"}]`. Each kind is drawn when the message is sent, by the
+    #: renderer its app registered (`apps.notifications.attachments`), so the
+    #: outbox never holds a copy of a document and a retry sends the current one.
+    attachments = models.JSONField(_("attachments"), default=list, blank=True)
 
     notification = models.ForeignKey(
         Notification,

@@ -43,6 +43,7 @@ from apps.common.identifiers import next_receipt_number
 from apps.enrollments.models import LIVE_STATUSES, Enrollment
 from apps.students.models import FeeStatus, StudentProfile
 
+from . import mail
 from .models import (
     DEFAULT_INSTALLMENT_COUNT,
     DEFAULT_INSTALLMENT_GAP_DAYS,
@@ -86,9 +87,7 @@ def _percent(value: Any) -> Decimal:
     except Exception as exc:
         raise ApplicationError({"discount_percent": ["Enter a percentage, like 10."]}) from exc
     if percent != percent.quantize(Decimal("0.01")):
-        raise ApplicationError(
-            {"discount_percent": ["Use at most two decimals, like 12.5."]}
-        )
+        raise ApplicationError({"discount_percent": ["Use at most two decimals, like 12.5."]})
     if percent < ZERO or percent > HUNDRED:
         raise ApplicationError({"discount_percent": ["A percentage is between 0 and 100."]})
     return percent.quantize(Decimal("0.01"))
@@ -195,6 +194,7 @@ def set_fee_plan(
             )
         _replace_installments(plan, actor=actor, items=installments)
         sync_student_fee_status(enrollment.student, actor=actor)
+        mail.queue_safely(mail.email_statement, plan)
         return plan
 
     # Changing a fee that already has payments against it: the new payable
@@ -225,6 +225,7 @@ def set_fee_plan(
     if not changes:
         if installments is not None:
             _replace_installments(plan, actor=actor, items=installments)
+            mail.queue_safely(mail.email_statement, plan)
         return plan
 
     plan.updated_by = actor
@@ -247,6 +248,8 @@ def set_fee_plan(
             )
             _replace_installments(plan, actor=actor, items=respread)
     sync_student_fee_status(enrollment.student, actor=actor)
+    if installments is not None or {"agreed_amount", "discount_amount"} & changes.keys():
+        mail.queue_safely(mail.email_statement, plan)
     return plan
 
 
@@ -355,6 +358,7 @@ def set_installments(*, plan: FeePlan, actor: User, items: list[dict[str, Any]])
     plan = FeePlan.objects.select_for_update().get(pk=plan.pk)
     _replace_installments(plan, actor=actor, items=items)
     sync_student_fee_status(plan.enrollment.student, actor=actor)
+    mail.queue_safely(mail.email_statement, plan)
     return plan
 
 
@@ -527,6 +531,7 @@ def record_payment(
         },
     )
     sync_student_fee_status(plan.enrollment.student, actor=actor)
+    mail.queue_safely(mail.email_receipt, payment)
     return payment
 
 
