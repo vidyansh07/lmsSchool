@@ -40,6 +40,8 @@ import {
   UsersRound,
   Workflow,
   ShieldCheck,
+  Inbox,
+  Plug,
   Zap,
 } from "lucide-react";
 
@@ -194,6 +196,13 @@ const FEES_HOME: NavItem = {
   label: "Fees & collections",
   icon: Wallet,
   capability: Capability.feeViewAny,
+};
+/** Leads Meritto sent, waiting to be registered (17 October 2026). */
+const READY_TO_ADMIT: NavItem = {
+  href: "/admissions/ready",
+  label: "Ready to admit",
+  icon: Inbox,
+  capability: Capability.studentCreate,
 };
 const TEACHING_ITEMS: NavItem[] = [
   {
@@ -356,6 +365,7 @@ export const MANAGER_NAV: NavGroup[] = [
   {
     title: "Front office",
     items: [
+      READY_TO_ADMIT,
       {
         href: "/admissions/dashboard",
         label: "Admissions pipeline",
@@ -442,6 +452,7 @@ export const COUNSELLOR_NAV: NavGroup[] = [
   {
     title: "Admissions",
     items: [
+      READY_TO_ADMIT,
       {
         href: "/admissions/new",
         label: "Register a student",
@@ -668,6 +679,7 @@ export const ADMIN_NAV: NavGroup[] = [
   {
     title: "Admissions",
     items: [
+      READY_TO_ADMIT,
       {
         href: "/admissions/dashboard",
         label: "Admissions pipeline",
@@ -866,6 +878,12 @@ export const ADMIN_NAV: NavGroup[] = [
         label: "Automation",
         icon: Zap,
         capability: Capability.automationManage,
+      },
+      {
+        href: "/admin/integrations",
+        label: "Integrations",
+        icon: Plug,
+        capability: Capability.integrationManage,
       },
       {
         href: "/admin/communication",

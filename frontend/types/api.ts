@@ -3166,7 +3166,8 @@ export type AutomationActionType =
   | "send_email"
   | "send_whatsapp"
   | "create_review"
-  | "flag_risk";
+  | "flag_risk"
+  | "send_webhook";
 
 export interface CreateActivityActionParams {
   type: string;
@@ -3235,6 +3236,11 @@ export interface FlagRiskActionParams {
   reason?: string;
 }
 
+/** Post the occurrence to a configured webhook (`integration.manage`). */
+export interface SendWebhookActionParams {
+  webhook: string;
+}
+
 /** Discriminated on `type` so the builder's per-type parameter form (and any
  *  code reading `.params`) gets the right shape without a cast. */
 export type AutomationAction =
@@ -3245,7 +3251,8 @@ export type AutomationAction =
   | { type: "send_email"; params: SendEmailActionParams }
   | { type: "send_whatsapp"; params: SendWhatsappActionParams }
   | { type: "create_review"; params: CreateReviewActionParams }
-  | { type: "flag_risk"; params: FlagRiskActionParams };
+  | { type: "flag_risk"; params: FlagRiskActionParams }
+  | { type: "send_webhook"; params: SendWebhookActionParams };
 
 export type AutomationRuleStatus = "draft" | "active" | "paused";
 
@@ -3473,6 +3480,16 @@ export interface Enquiry {
   created_at: string;
   updated_at: string;
   can_manage: boolean;
+  /** May register this lead as a student now (not yet registered, `student.create`). */
+  can_register: boolean;
+  /** `meritto` for a lead Meritto sent; "" for one entered in the LMS. */
+  external_system: string;
+  external_id: string;
+  /** Meritto's own stage and owner, in its words. Read-only here. */
+  external_stage: string;
+  external_owner: string;
+  /** A Meritto lead: its stage, owner and follow-ups are Meritto's. */
+  managed_externally: boolean;
 }
 
 export interface EnquiryHistoryEntry {
@@ -3495,7 +3512,81 @@ export interface EnquirySummary {
   stages: Record<EnquiryStage, number>;
   /** How many visible enquiries came in each way. */
   channels: Record<LeadChannel, number>;
+  /** Meritto leads not yet registered — the counsellor's queue. */
+  ready_to_admit: number;
   total: number;
   /** The sources the enquiry form offers, for a select. */
   sources: { value: string; label: string }[];
 }
+
+// ---------------------------------------------------------------------------
+// Integrations (`apps/integrations`): API keys in, webhooks out.
+// ---------------------------------------------------------------------------
+
+export type IntegrationPreset = "generic" | "meritto";
+
+export interface IntegrationApiKey {
+  id: string;
+  name: string;
+  preset: IntegrationPreset;
+  /** `grk_<prefix>_…` — the key itself is only ever in `ApiKeyCreated`. */
+  display: string;
+  branch: string | null;
+  branch_name: string | null;
+  default_source: string;
+  field_map: Record<string, string>;
+  is_active: boolean;
+  last_used_at: string | null;
+  revoked_at: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  intake_count: number;
+}
+
+export interface ApiKeyCreated extends IntegrationApiKey {
+  /** Shown once. */
+  key: string;
+}
+
+export interface LeadIntake {
+  id: string;
+  status: "created" | "updated" | "rejected";
+  enquiry: string | null;
+  enquiry_name: string | null;
+  external_id: string;
+  payload: Record<string, unknown>;
+  errors: Record<string, string[]>;
+  created_at: string;
+}
+
+export interface Webhook {
+  id: string;
+  name: string;
+  preset: IntegrationPreset;
+  url: string;
+  header_names: string[];
+  has_secret: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  last_delivery: { ok: boolean; status_code: number | null; created_at: string } | null;
+}
+
+export interface WebhookSaved extends Webhook {
+  /** The signing secret, only when it was just made; otherwise "". */
+  secret: string;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  event: string;
+  rule: string | null;
+  rule_name: string | null;
+  ok: boolean;
+  status_code: number | null;
+  error: string;
+  response_excerpt: string;
+  duration_ms: number;
+  created_at: string;
+}
+

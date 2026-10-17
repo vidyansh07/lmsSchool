@@ -1425,3 +1425,34 @@ capability, so a configured role sees only what it holds. A page in a module
 with more than one screen shows the module's other screens as tabs. This
 supersedes the shared `STAFF_NAV` of D-130 ("only the sidebar differs"):
 what each role may do is unchanged.
+
+### D-145 · Meritto manages leads; the LMS registers the ones it sends (17 October 2026)
+
+The owner's answers: leads are managed completely in Meritto. Meritto sends a
+lead to the LMS only when it is ready to admit, one way — the LMS never writes
+back to Meritto. Walk-ins and phone enquiries are still entered and worked in
+the LMS.
+
+A Meritto API key (Integrations → Lead API keys) posts to
+`POST /api/v1/integrations/leads/`. The lead is marked
+`external_system = "meritto"` before anything is announced, and Meritto's own
+stage and owner are kept in its words (`external_stage`, `external_owner`),
+refreshed on every post and never mapped onto the LMS pipeline. To people in
+the LMS such a lead is read-only: no stage, owner or follow-up change, no bulk
+owner change, no follow-up answers, and LMS lead automation does not run for
+it. The one thing the LMS does with it is register it — "Ready to admit" lists
+them, and "Register this lead" opens the registration wizard pre-filled; on
+confirm the lead is linked to the student and marked registered on the LMS
+side, with Meritto's stage left as Meritto sent it.
+
+Outbound webhooks stay, for other systems, as generic signed JSON; there is no
+Meritto preset.
+
+The same pass made three fee decisions, by default where the owner did not
+answer otherwise: a discount is typed as a percentage of the fee (with a ₹
+switch), and the rupees are worked out on the server; a student is emailed the
+receipt PDF for every payment and a fee statement (not a tax invoice — there is
+no GSTIN or tax rate to put on one) when the fee is agreed or changed, each
+switchable off in institution settings; and three automation triggers —
+payment recorded, instalment due soon, instalment overdue — let reminders be
+built as rules, two of which are seeded as drafts.

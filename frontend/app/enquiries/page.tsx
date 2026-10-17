@@ -47,7 +47,12 @@ import { useBulkSelection } from "@/hooks/use-bulk-selection";
 import { errorMessage, fieldErrors } from "@/lib/api";
 import { bulkAssignEnquiryOwner, bulkTarget, type BulkResult } from "@/lib/bulk";
 import { Capability, can } from "@/lib/capabilities";
-import { enquiryListPath, updateEnquiry, type EnquiryFollowUpFilter } from "@/lib/enquiries";
+import {
+  enquiryListPath,
+  registerLeadHref,
+  updateEnquiry,
+  type EnquiryFollowUpFilter,
+} from "@/lib/enquiries";
 import { formatCount, formatDateTime } from "@/lib/format";
 import {
   ENQUIRY_STAGE_LABEL,
@@ -152,8 +157,50 @@ function ChannelTabs({
   );
 }
 
+/** Who manages the lead: Meritto sends only ready-to-admit leads and runs
+ *  their pipeline (17 October 2026); walk-ins are entered here. */
+type LeadView = "" | "ready" | "meritto" | "lms";
+
+const LEAD_VIEWS: { value: LeadView; label: string }[] = [
+  { value: "", label: "All leads" },
+  { value: "ready", label: "Ready to admit" },
+  { value: "meritto", label: "From Meritto" },
+  { value: "lms", label: "Entered here" },
+];
+
+function LeadViewTabs({
+  summary,
+  view,
+  onView,
+}: {
+  summary: EnquirySummary | null;
+  view: LeadView;
+  onView: (view: LeadView) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Who manages the lead">
+      {LEAD_VIEWS.map((tab) => (
+        <button
+          key={tab.value || "all"}
+          type="button"
+          aria-pressed={view === tab.value}
+          onClick={() => onView(tab.value)}
+          className={pillClass(view === tab.value)}
+        >
+          {tab.label}
+          {tab.value === "ready" && summary ? (
+            <span className="tabular-nums text-ink-faint">{summary.ready_to_admit}</span>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** The list's filters as the bulk endpoint reads them (`EnquiryFilterSet`). */
 const ENQUIRY_FILTER_KEYS = [
+  "managed_by",
+  "ready_to_admit",
   "stage",
   "channel",
   "source",
@@ -231,6 +278,7 @@ function EnquiriesWorkspace() {
   const mayCapture = can(user?.capabilities, Capability.formAssign);
   const [stage, setStage] = useState<EnquiryStage | "">("");
   const [channel, setChannel] = useState<LeadChannel | "">("");
+  const [view, setView] = useState<LeadView>("");
   const [source, setSource] = useState("");
   const [followUp, setFollowUp] = useState<EnquiryFollowUpFilter>("");
   const [createdAfter, setCreatedAfter] = useState("");
@@ -247,6 +295,8 @@ function EnquiriesWorkspace() {
   const summary = useApi<EnquirySummary>("/api/v1/enquiries/summary/");
   const list = useApi<Paginated<Enquiry>>(
     enquiryListPath({
+      managed_by: view === "meritto" || view === "lms" ? view : "",
+      ready_to_admit: view === "ready",
       stage,
       channel,
       source,
@@ -260,6 +310,8 @@ function EnquiriesWorkspace() {
   );
   const rows = list.data?.results ?? [];
   const query: Record<string, string> = {
+    managed_by: view === "meritto" || view === "lms" ? view : "",
+    ready_to_admit: view === "ready" ? "true" : "",
     stage,
     channel,
     source,
@@ -303,7 +355,9 @@ function EnquiriesWorkspace() {
   const sourceLabel = (value: string) =>
     sources.find((option) => option.value === value)?.label ?? value;
   const filtered =
-    Boolean(stage || channel || source || followUp || createdAfter || createdBefore || search || mine);
+    Boolean(
+      view || stage || channel || source || followUp || createdAfter || createdBefore || search || mine,
+    );
 
   function resetPage<T>(setter: (value: T) => void) {
     return (value: T) => {
@@ -330,7 +384,7 @@ function EnquiriesWorkspace() {
     <div className="space-y-6">
       <PageHeader
         title="Enquiries"
-        meta="Every lead at your centre, online and offline, by stage of the admissions pipeline."
+        meta="Leads Meritto sent when they were ready to admit, and walk-ins entered here."
       >
         {mayCapture ? (
           <Button asChild>
@@ -350,6 +404,7 @@ function EnquiriesWorkspace() {
         ]}
       />
 
+      <LeadViewTabs summary={summary.data} view={view} onView={resetPage(setView)} />
       <ChannelTabs summary={summary.data} channel={channel} onChannel={resetPage(setChannel)} />
       <StageStrip summary={summary.data} stage={stage} onStage={resetPage(setStage)} />
 
@@ -513,6 +568,11 @@ function EnquiriesWorkspace() {
                         >
                           {row.full_name}
                         </Link>
+                        {row.managed_externally ? (
+                          <Badge variant="info" className="ml-2" dot={false}>
+                            Meritto
+                          </Badge>
+                        ) : null}
                         <span className="block text-2xs tabular-nums text-ink-faint">{row.mobile}</span>
                       </Td>
                       <Td>{row.course || "—"}</Td>
@@ -559,13 +619,36 @@ function EnquiriesWorkspace() {
                               </option>
                             ))}
                           </Select>
+                        ) : row.managed_externally ? (
+                          <span className="flex flex-col gap-1">
+                            <Badge variant={row.student ? "success" : "warning"}>
+                              {row.student ? "Registered" : "Ready to admit"}
+                            </Badge>
+                            {row.external_stage ? (
+                              <span className="text-2xs text-ink-faint">
+                                Meritto: {row.external_stage}
+                              </span>
+                            ) : null}
+                          </span>
                         ) : (
                           <Badge variant={ENQUIRY_STAGE_VARIANT[row.stage]}>
                             {ENQUIRY_STAGE_LABEL[row.stage]}
                           </Badge>
                         )}
                       </Td>
-                      <Td>{row.owner?.name ?? "Unassigned"}</Td>
+                      <Td>
+                        {row.managed_externally
+                          ? row.external_owner || "In Meritto"
+                          : (row.owner?.name ?? "Unassigned")}
+                        {row.can_register ? (
+                          <Link
+                            href={registerLeadHref(row.id)}
+                            className="mt-1 block text-xs font-medium text-action hover:underline"
+                          >
+                            Register this lead
+                          </Link>
+                        ) : null}
+                      </Td>
                       <Td className={cn("whitespace-nowrap tabular-nums", followUpLate && "text-danger")}>
                         {row.next_follow_up_at ? formatDateTime(row.next_follow_up_at) : "—"}
                       </Td>

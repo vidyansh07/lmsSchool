@@ -52,6 +52,9 @@ vi.mock('@/lib/fees', async (importOriginal) => ({
   recordPayment,
 }));
 vi.mock('@/lib/courses', () => ({ listCourses }));
+const getEnquiry = vi.hoisted(() => vi.fn());
+const registerEnquiry = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/enquiries', () => ({ getEnquiry, registerEnquiry }));
 vi.mock('@/lib/batches', () => ({ listBatches, createBatch, assignBatchTrainer, enrolStudent }));
 
 const COURSE: CourseListRow = {
@@ -457,6 +460,45 @@ describe('RegistrationWizard — confirming', () => {
     expect(assignBatchTrainer).toHaveBeenCalledWith('batch-1', 'trainer-1');
     expect(enrolStudent).toHaveBeenCalledWith({ student_id: 'student-1', batch_id: 'batch-1' });
     await waitFor(() => expect(screen.getByText(/is enrolled on Morning batch/)).toBeInTheDocument());
+  });
+
+  it('registers a Meritto lead: fills the form from it and marks it registered', async () => {
+    window.history.replaceState(null, '', '/admissions/new?enquiry=e-7');
+    getEnquiry.mockResolvedValue({
+      id: 'e-7',
+      full_name: 'Aman Kumar Verma',
+      email: 'aman@example.test',
+      mobile: '9876500001',
+      city: 'Jaipur',
+      course: 'DevOps',
+      managed_externally: true,
+      external_stage: 'Ready for admission',
+    });
+    registerEnquiry.mockResolvedValue({});
+    createStudent.mockResolvedValue(student());
+    assignBatchTrainer.mockResolvedValue({});
+    enrolStudent.mockResolvedValue(enrollment());
+
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    expect(await screen.findByText(/from Meritto \(Ready for admission\)/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Email', { exact: false })).toHaveValue('aman@example.test');
+    expect(screen.getByLabelText('First name', { exact: false })).toHaveValue('Aman');
+    expect(screen.getByLabelText('Last name', { exact: false })).toHaveValue('Kumar Verma');
+
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+    await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
+    await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search trainers results'), 'trainer-1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
+
+    await waitFor(() => expect(registerEnquiry).toHaveBeenCalledWith('e-7', 'student-1'));
+    expect(await screen.findByText(/The lead Aman Kumar Verma is marked registered/)).toBeInTheDocument();
+    window.history.replaceState(null, '', '/');
   });
 
   it('sends the agreed fee and where the student works, decided at the desk', async () => {

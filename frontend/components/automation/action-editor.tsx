@@ -16,7 +16,7 @@
  * value it does not have a friendly label for.
  */
 
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import {
   NOTIFICATION_TO_STRATEGIES,
   REVIEWER_STRATEGIES,
 } from "@/lib/automation";
+import { listWebhooks } from "@/lib/integrations";
 import {
   ACTIVITY_PRIORITY_LABEL,
   AUTOMATION_ACTION_TYPE_OPTIONS,
@@ -48,8 +49,10 @@ import type {
   FlagRiskActionParams,
   SendEmailActionParams,
   SendNotificationActionParams,
+  SendWebhookActionParams,
   SendWhatsappActionParams,
   UpdateEnquiryActionParams,
+  Webhook,
 } from "@/types/api";
 
 /** An activity type as the action editor needs it: what it is about, and
@@ -159,6 +162,8 @@ export function blankActionFor(type: AutomationActionType): AutomationAction {
       };
     case "update_enquiry":
       return { type: "update_enquiry", params: { stage: "", owner: "" } };
+    case "send_webhook":
+      return { type: "send_webhook", params: { webhook: "" } };
   }
 }
 
@@ -773,6 +778,63 @@ function FlagRiskFields({
   );
 }
 
+/** Which webhook to post to. Loads the list itself: only somebody who may
+ *  manage integrations may point a rule at one, and the server checks that
+ *  again when the rule is saved. */
+function SendWebhookFields({
+  params,
+  onChange,
+  disabled,
+}: {
+  params: SendWebhookActionParams;
+  onChange: (next: SendWebhookActionParams) => void;
+  disabled: boolean;
+}) {
+  const uid = useId();
+  const [webhooks, setWebhooks] = useState<Webhook[] | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    listWebhooks()
+      .then((rows) => {
+        if (!cancelled) setWebhooks(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not load the webhooks. Set one up under Integrations.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="space-y-2">
+      <Field
+        label="Webhook"
+        htmlFor={`${uid}-webhook`}
+        error={error || undefined}
+        hint="The event's details are posted there, signed. Set webhooks up under Integrations."
+      >
+        <Select
+          id={`${uid}-webhook`}
+          disabled={disabled || webhooks === null}
+          value={params.webhook}
+          onChange={(event) => onChange({ webhook: event.target.value })}
+        >
+          <option value="">{webhooks === null && !error ? "Loading…" : "Choose a webhook"}</option>
+          {(webhooks ?? []).map((row) => (
+            <option key={row.id} value={row.id} disabled={!row.is_active}>
+              {row.name}
+              {row.is_active ? "" : " (off)"}
+            </option>
+          ))}
+        </Select>
+      </Field>
+    </div>
+  );
+}
+
 /** One action's form — a row in the list editor, and the side panel's form
  *  in the flow builder. */
 export function ActionRow({
@@ -872,6 +934,12 @@ export function ActionRow({
           variables={variables}
           disabled={disabled}
           onChange={(params) => onChange({ type: "assign_form", params })}
+        />
+      ) : action.type === "send_webhook" ? (
+        <SendWebhookFields
+          params={action.params}
+          disabled={disabled}
+          onChange={(params) => onChange({ type: "send_webhook", params })}
         />
       ) : (
         <FlagRiskFields

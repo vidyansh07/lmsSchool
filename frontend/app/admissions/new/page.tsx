@@ -60,6 +60,7 @@ import { assignBatchTrainer, createBatch, enrolStudent, listBatches } from '@/li
 import { formatDate, isoDaysFromNow, isoToday } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
 import { listCourses } from '@/lib/courses';
+import { getEnquiry, registerEnquiry } from '@/lib/enquiries';
 import {
   DEFAULT_INSTALLMENT_COUNT,
   InstallmentEditor,
@@ -80,6 +81,7 @@ import {
 } from '@/lib/people';
 import type {
   AdminUser,
+  EnquiryDetail,
   BatchDetail,
   BatchListRow,
   CourseListRow,
@@ -142,6 +144,8 @@ interface Result {
   feeNote: string;
   /** The follow-up planned, or why it could not be. Empty when none was asked for. */
   followUpNote: string;
+  /** The lead this registration came from, linked — or why it could not be. */
+  leadNote: string;
 }
 
 export function RegistrationWizard() {
@@ -155,6 +159,15 @@ export function RegistrationWizard() {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
+  // Opened from a lead ("Register this lead"): `?enquiry=<id>`. Its details
+  // fill the form, and the finished registration is linked back to it.
+  const [leadId, setLeadId] = useState(() =>
+    typeof window === 'undefined'
+      ? ''
+      : (new URLSearchParams(window.location.search).get('enquiry') ?? ''),
+  );
+  const [lead, setLead] = useState<EnquiryDetail | null>(null);
+  const [leadError, setLeadError] = useState('');
   const [qualification, setQualification] = useState('');
   // Where the student is coming from — a college or an employer — and what
   // was agreed for the course. Both decided at the desk, both optional: a
@@ -389,6 +402,28 @@ export function RegistrationWizard() {
     }, 250);
     return () => clearTimeout(timer);
   }, [managerQuery]);
+
+  useEffect(() => {
+    if (!leadId) return;
+    let cancelled = false;
+    getEnquiry(leadId)
+      .then((found) => {
+        if (cancelled) return;
+        setLead(found);
+        const [first = '', ...rest] = found.full_name.trim().split(/\s+/);
+        setFirstName((value) => value || first);
+        setLastName((value) => value || rest.join(' '));
+        setEmail((value) => value || found.email);
+        setPhone((value) => value || found.mobile);
+        setCity((value) => value || found.city);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setLeadError(errorMessage(cause, 'Could not load the lead.'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [leadId]);
 
   // --- Step 1 handlers -----------------------------------------------------
 
@@ -761,6 +796,18 @@ export function RegistrationWizard() {
       }
     }
 
+    // The lead it came from is marked registered here; like the fee, a
+    // failure is a note, never a failed registration.
+    let leadNote = '';
+    if (lead) {
+      try {
+        await registerEnquiry(lead.id, student.id);
+        leadNote = `The lead ${lead.full_name} is marked registered.`;
+      } catch (cause) {
+        leadNote = `The lead could not be linked (${errorMessage(cause, 'unknown error')}).`;
+      }
+    }
+
     setResult({
       student,
       batchName: batchInfo.name,
@@ -768,6 +815,7 @@ export function RegistrationWizard() {
       enrollment,
       feeNote,
       followUpNote: followUpResult,
+      leadNote,
     });
     setIsSubmitting(false);
   }
@@ -816,6 +864,10 @@ export function RegistrationWizard() {
     setAcknowledgedDuplicate(false);
     setOverrideReason('');
     setCreatedStudent(null);
+    // The next student is not the lead this one came from.
+    setLead(null);
+    setLeadId('');
+    setLeadError('');
     setDiscountMode('percent');
     setDiscountValue('');
     setDiscountReason('');
@@ -895,6 +947,17 @@ export function RegistrationWizard() {
           </CardHeader>
           <CardContent>
             <form onSubmit={onStudentSubmit} className="space-y-4" noValidate>
+              {lead ? (
+                <Alert variant="info">
+                  Registering the lead <span className="font-medium">{lead.full_name}</span>
+                  {lead.managed_externally
+                    ? ` from Meritto${lead.external_stage ? ` (${lead.external_stage})` : ''}`
+                    : ''}
+                  {lead.course ? `, interested in ${lead.course}` : ''}. Its details are filled
+                  in below; the lead is marked registered when you confirm.
+                </Alert>
+              ) : null}
+              {leadError ? <Alert variant="warning">{leadError}</Alert> : null}
               {unshownError(studentErrors, STUDENT_FIELD_KEYS) ? (
                 <Alert variant="error">{unshownError(studentErrors, STUDENT_FIELD_KEYS)}</Alert>
               ) : null}
@@ -1348,6 +1411,7 @@ export function RegistrationWizard() {
                 <p className="text-sm">
                   Enrolment {result.enrollment.code}.{result.feeNote ? ` ${result.feeNote}` : ''}
                   {result.followUpNote ? ` ${result.followUpNote}` : ''}
+                  {result.leadNote ? ` ${result.leadNote}` : ''}
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Button size="sm" onClick={onSaveAndStartAnother}>

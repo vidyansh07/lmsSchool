@@ -687,6 +687,25 @@ export const ENQUIRY_STAGE_VARIANT: Record<
   not_eligible: "neutral",
 };
 
+/** Where a lead came from — mirrors `apps.enquiries.models.SOURCE_CHOICES`. */
+export const LEAD_SOURCE_OPTIONS: { value: string; label: string }[] = [
+  { value: "walk_in", label: "Walk-in" },
+  { value: "phone_call", label: "Phone call" },
+  { value: "website", label: "Website" },
+  { value: "google", label: "Google" },
+  { value: "facebook_instagram", label: "Facebook / Instagram" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "referral", label: "Referral" },
+  { value: "college_seminar", label: "College seminar" },
+  { value: "other", label: "Other" },
+];
+
+export const INTEGRATION_PRESET_LABEL: Record<"generic" | "meritto", string> = {
+  generic: "Generic JSON",
+  meritto: "Meritto",
+};
+
 export const LEAD_CHANNEL_LABEL: Record<LeadChannel, string> = {
   online: "Online",
   offline: "Offline",
@@ -754,6 +773,7 @@ export const AUTOMATION_ACTION_TYPE_LABEL: Record<AutomationActionType, string> 
   send_whatsapp: "Send a WhatsApp message",
   create_review: "Open a performance review",
   flag_risk: "Flag risk",
+  send_webhook: "Send to a webhook",
 };
 
 export const AUTOMATION_ACTION_TYPE_OPTIONS: { value: AutomationActionType; label: string }[] = (
