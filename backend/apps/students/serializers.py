@@ -134,6 +134,8 @@ class StudentListSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="user.full_name", read_only=True)
     is_active = serializers.BooleanField(source="user.is_active", read_only=True)
     is_email_verified = serializers.BooleanField(source="user.is_email_verified", read_only=True)
+    #: They set a password of their own: the invitation was accepted.
+    invitation_accepted = serializers.SerializerMethodField()
     user_id = serializers.UUIDField(source="user.id", read_only=True)
     # From the fee ledger (``apps.fees.queries``): what was agreed across the
     # student's courses, what has come in, what is still owed, and the nearest
@@ -165,9 +167,13 @@ class StudentListSerializer(serializers.ModelSerializer):
             "referred_by",
             "is_active",
             "is_email_verified",
+            "invitation_accepted",
             "created_at",
         )
         read_only_fields = fields
+
+    def get_invitation_accepted(self, obj) -> bool:
+        return obj.user.has_usable_password()
 
 
 class StudentProfileFieldsSerializer(StrictModelSerializer):

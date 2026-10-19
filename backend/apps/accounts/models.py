@@ -232,6 +232,10 @@ class User(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
 class TokenPurpose(models.TextChoices):
     EMAIL_VERIFICATION = "email_verification", _("Email verification")
     PASSWORD_RESET = "password_reset", _("Password reset")
+    #: The link in the welcome email: set a first password. Longer-lived than a
+    #: reset (a new trainer may not open their mail for days), and completing
+    #: it also confirms the address it was sent to.
+    INVITATION = "invitation", _("Invitation")
 
 
 class AccountTokenQuerySet(models.QuerySet):
@@ -312,6 +316,8 @@ class AccountToken(models.Model):
 
         if purpose == TokenPurpose.PASSWORD_RESET:
             return timedelta(hours=settings.AUTH_TOKEN_RESET_TTL_HOURS)
+        if purpose == TokenPurpose.INVITATION:
+            return timedelta(days=settings.AUTH_TOKEN_INVITATION_TTL_DAYS)
         return timedelta(days=settings.AUTH_TOKEN_VERIFICATION_TTL_DAYS)
 
     @classmethod

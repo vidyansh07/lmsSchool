@@ -27,7 +27,9 @@ from .models import User, UserRole
 from .serializers import (
     AdminUserCreateSerializer,
     AdminUserDetailSerializer,
+    AdminUserRecordSerializer,
     AdminUserUpdateSerializer,
+    CredentialActionResultSerializer,
     CredentialActionSerializer,
     SessionSerializer,
     SetActiveSerializer,
@@ -146,11 +148,11 @@ class UserDetailView(RetrieveUpdateAPIView):
 
     def get_serializer_class(self):
         return (
-            AdminUserDetailSerializer if self.request.method == "GET" else AdminUserUpdateSerializer
+            AdminUserRecordSerializer if self.request.method == "GET" else AdminUserUpdateSerializer
         )
 
     @extend_schema(
-        summary="Retrieve a user", responses={200: AdminUserDetailSerializer}, tags=USERS_TAG
+        summary="Retrieve a user", responses={200: AdminUserRecordSerializer}, tags=USERS_TAG
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
@@ -167,7 +169,7 @@ class UserDetailView(RetrieveUpdateAPIView):
         serializer.is_valid(raise_exception=True)
 
         updated = services.update_user(user=user, actor=request.user, **serializer.validated_data)
-        return Response(AdminUserDetailSerializer(updated, context={"request": request}).data)
+        return Response(AdminUserRecordSerializer(updated, context={"request": request}).data)
 
 
 class UserRoleTransitionView(APIView):
@@ -279,7 +281,7 @@ class UserCredentialActionView(APIView):
         summary="Send a credential link to a user",
         request=CredentialActionSerializer,
         responses={
-            202: OpenApiResponse(description="Accepted; a link has been sent if it could be."),
+            200: CredentialActionResultSerializer,
             403: OpenApiResponse(description="Outside your authority."),
         },
         tags=USERS_TAG,
@@ -292,13 +294,10 @@ class UserCredentialActionView(APIView):
         serializer.is_valid(raise_exception=True)
         action = serializer.validated_data["action"]
 
-        services.send_credential_link(user=user, actor=request.user, action=action)
-        # 202, and the same answer whichever branch ran: whether an address is
-        # deliverable is not something this endpoint should report.
-        return Response(
-            {"detail": "If the account can receive it, a link has been sent."},
-            status=status.HTTP_202_ACCEPTED,
-        )
+        sent, detail = services.send_credential_link(user=user, actor=request.user, action=action)
+        # Whether the institution's mail service took the message — its own
+        # set-up — not whether the mailbox exists (see `send_credential_link`).
+        return Response(CredentialActionResultSerializer({"sent": sent, "detail": detail}).data)
 
 
 #: What each bulk action needs on top of reading the accounts list.

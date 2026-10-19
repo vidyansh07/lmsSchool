@@ -262,7 +262,13 @@ class TrainerBulkView(APIView):
 
         if not (
             has_capability(request.user, Capability.TRAINER_VIEW_ANY)
-            and has_capability(request.user, Capability.USER_UPDATE_ANY)
+            # A manager brings trainers in (`trainer.create`/`update_any`) and so
+            # may resend the invitation of one who never got it; the per-account
+            # authority rule still applies to each row.
+            and (
+                has_capability(request.user, Capability.USER_UPDATE_ANY)
+                or has_capability(request.user, Capability.TRAINER_UPDATE_ANY)
+            )
         ):
             raise AuthorityError({"action": ["You cannot resend trainers' invitations."]})
         serializer = TrainerBulkRequestSerializer(data=request.data)

@@ -666,6 +666,10 @@ FRONTEND_EMAIL_VERIFY_PATH = "/verify-email"
 # verification links are weaker and may live longer.
 AUTH_TOKEN_RESET_TTL_HOURS = env.int("AUTH_TOKEN_RESET_TTL_HOURS", default=1)
 AUTH_TOKEN_VERIFICATION_TTL_DAYS = env.int("AUTH_TOKEN_VERIFICATION_TTL_DAYS", default=3)
+# The welcome email's set-your-password link. A reset is an hour because it is
+# asked for by the person about to use it; an invitation is sent by somebody
+# else and may sit unread for days.
+AUTH_TOKEN_INVITATION_TTL_DAYS = env.int("AUTH_TOKEN_INVITATION_TTL_DAYS", default=7)
 
 # MFA (ERP Phase 5, ADR-05). Fernet key encrypting a TOTP device's secret at
 # rest (apps.accounts.mfa). No usable default here — an empty string fails

@@ -144,10 +144,38 @@ def create_user(
     )
 
     if send_invitation and password is None:
-        _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.PASSWORD_RESET)
+        _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.INVITATION)
+        record(
+            action=AuditAction.INVITATION_SENT,
+            actor=actor,
+            resource_type="user",
+            resource_id=user.pk,
+            context={"by": "account created"},
+        )
         transaction.on_commit(lambda: send_account_created_email(user=user, raw_token=raw_token))
 
     return user
+
+
+def has_accepted_invitation(user: User) -> bool:
+    """Whether the person has ever set a password of their own. That — not
+    a verified email — is what "accepted the invitation" means: they can sign
+    in."""
+    return user.has_usable_password()
+
+
+def send_invitation(*, user: User, actor: User | None = None) -> bool:
+    """A new set-your-password link, superseding any earlier one. Returns
+    whether the mail service took it."""
+    _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.INVITATION)
+    record(
+        action=AuditAction.INVITATION_SENT,
+        actor=actor,
+        resource_type="user",
+        resource_id=user.pk,
+        context={"by": "resent" if actor is not None else "requested"},
+    )
+    return send_account_created_email(user=user, raw_token=raw_token)
 
 
 def _guard_administration(*, actor: User, target: User, action: str) -> None:
@@ -760,6 +788,13 @@ def request_password_reset(*, email: str) -> None:
     if user is None:
         return
 
+    if not has_accepted_invitation(user):
+        # Somebody who never set a password (an imported student, an invitation
+        # that expired) gets the invitation again, not a "reset" of a password
+        # they never had.
+        send_invitation(user=user)
+        return
+
     _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.PASSWORD_RESET)
     send_password_reset_email(user=user, raw_token=raw_token)
 
@@ -771,7 +806,7 @@ def reset_password(*, raw_token: str, new_password: str) -> User:
     entry for a rejected token has to survive the rejection, and a write inside
     a block that then rolls back would be lost.
     """
-    token = _consume_token(raw_token, TokenPurpose.PASSWORD_RESET)
+    token = _consume_token(raw_token, (TokenPurpose.PASSWORD_RESET, TokenPurpose.INVITATION))
     user = token.user
 
     if not user.is_active:
@@ -782,11 +817,22 @@ def reset_password(*, raw_token: str, new_password: str) -> User:
 
     with transaction.atomic():
         user.set_password(new_password)
-        user.save(update_fields=["password", "updated_at"])
+        fields = ["password", "updated_at"]
+        # The link was opened from this address's inbox, which is exactly what
+        # verifying it would prove — asking again straight after is a dead end.
+        if not user.is_email_verified:
+            user.is_email_verified = True
+            user.email_verified_at = timezone.now()
+            fields += ["is_email_verified", "email_verified_at"]
+        user.save(update_fields=fields)
         token.consume()
 
         record(
-            action=AuditAction.PASSWORD_RESET_COMPLETED,
+            action=(
+                AuditAction.INVITATION_ACCEPTED
+                if token.purpose == TokenPurpose.INVITATION
+                else AuditAction.PASSWORD_RESET_COMPLETED
+            ),
             actor=user,
             resource_type="user",
             resource_id=user.pk,
@@ -802,9 +848,11 @@ def reset_password(*, raw_token: str, new_password: str) -> User:
 # ---------------------------------------------------------------------------
 
 
-def request_email_verification(*, user: User) -> None:
+def request_email_verification(*, user: User) -> bool:
+    """Send a verification link. Returns whether the mail service took it
+    (true, too, when there is nothing to verify)."""
     if user.is_email_verified:
-        return
+        return True
     _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.EMAIL_VERIFICATION)
     record(
         action=AuditAction.EMAIL_VERIFICATION_REQUESTED,
@@ -812,7 +860,7 @@ def request_email_verification(*, user: User) -> None:
         resource_type="user",
         resource_id=user.pk,
     )
-    send_email_verification_email(user=user, raw_token=raw_token)
+    return send_email_verification_email(user=user, raw_token=raw_token)
 
 
 def verify_email(*, raw_token: str) -> User:
@@ -835,28 +883,32 @@ def verify_email(*, raw_token: str) -> User:
     return user
 
 
-def _consume_token(raw_token: str, purpose: str) -> AccountToken:
+def _consume_token(raw_token: str, purpose: str | tuple[str, ...]) -> AccountToken:
     """Look up a token by hash and check it is usable.
 
     Unknown, expired and already-used tokens all raise the same error so the
-    response cannot be used to probe which tokens exist.
+    response cannot be used to probe which tokens exist. A failure is
+    recorded against the account the token belonged to, when there was one,
+    so the account's own history shows "tried an expired link".
     """
+    purposes = (purpose,) if isinstance(purpose, str) else tuple(purpose)
     token = (
         AccountToken.objects.select_related("user")
-        .filter(token_hash=AccountToken.hash_token(raw_token or ""), purpose=purpose)
+        .filter(token_hash=AccountToken.hash_token(raw_token or ""), purpose__in=purposes)
         .first()
     )
 
     if token is None or not token.is_valid:
         failure_action = (
-            AuditAction.PASSWORD_RESET_FAILED
-            if purpose == TokenPurpose.PASSWORD_RESET
-            else AuditAction.EMAIL_VERIFICATION_FAILED
+            AuditAction.EMAIL_VERIFICATION_FAILED
+            if purposes == (TokenPurpose.EMAIL_VERIFICATION,)
+            else AuditAction.PASSWORD_RESET_FAILED
         )
         record(
             action=failure_action,
             actor=getattr(token, "user", None),
-            resource_type="account_token",
+            resource_type="user" if token is not None else "account_token",
+            resource_id=token.user_id if token is not None else "",
             result=AuditResult.FAILURE,
             # Records *why* it failed without recording the token itself.
             context={
@@ -924,44 +976,85 @@ def record_permission_denied(*, actor: Any, resource_type: str, resource_id: Any
     )
 
 
-def resend_invitation(*, user: User, actor: User) -> str | None:
-    """Send a new set-password invitation, or say in words why not.
+#: What a person sees when the mail service did not take the email.
+NOT_SENT = "The email could not be sent: {reason}"
 
-    The bulk screens (accounts, trainers) skip rather than fail: your own
-    account, an inactive one, and one that already accepted are each a
-    reason, not an error. Anything the authority ladder refuses still raises.
+
+def _last_failure(user: User) -> str:
+    from .emails import last_failure
+
+    return last_failure()
+
+
+def may_send_invitation(actor: User, user: User) -> bool:
+    """Who may (re)send someone's invitation: whoever may administer them —
+    and, while the invitation is still unaccepted, whoever could have created
+    the account. An administrator who added a fellow administrator is not
+    left unable to resend the link that person never received; once the
+    invitation is accepted the ordinary ladder applies again."""
+    from apps.accounts.roles import can_administer, can_grant_role
+
+    if can_administer(actor, user):
+        return True
+    return not has_accepted_invitation(user) and can_grant_role(actor, user.role)
+
+
+def resend_invitation(*, user: User, actor: User) -> str | None:
+    """Send a new set-your-password invitation, or say in words why not.
+
+    The bulk screens (accounts, trainers, students) skip rather than fail:
+    your own account, an inactive one, one that already set a password, and
+    one the mail service refused are each a reason, not an error. Anything
+    the authority ladder refuses still raises.
     """
     if user.pk == actor.pk:
         return "That is your own account."
     if not user.is_active:
         return "The account is inactive. Reactivate it first."
-    if user.is_email_verified:
-        return "They have already accepted their invitation."
-    send_credential_link(user=user, actor=actor, action="email_verification")
+    if has_accepted_invitation(user):
+        return "They have already set their password; send a password reset instead."
+    if not may_send_invitation(actor, user):
+        _guard_administration(actor=actor, target=user, action=AuditAction.USER_UPDATED)
+    if not send_invitation(user=user, actor=actor):
+        return NOT_SENT.format(reason=_last_failure(user) or "the mail service refused it.")
     return None
 
 
 @transaction.atomic
-def send_credential_link(*, user: User, actor: User, action: str) -> None:
-    """Send this person a password-reset or email-verification link.
+def send_credential_link(*, user: User, actor: User, action: str) -> tuple[bool, str]:
+    """Send this person a password link or an email-verification link.
+    Returns ``(sent, what happened)``.
 
     Guarded by the same authority rule as editing them: being able to trigger a
     password reset on an account is, in practice, being able to take it — the
     link goes to whatever address the account currently holds, and an
     administrator who could also change that address would have the whole chain.
 
-    Never reports whether the address exists or is deliverable. The caller
-    already knows the account exists; what they must not learn is anything more
-    about the mailbox.
+    "Sent" means the institution's mail service accepted the message. That is
+    about this system's own set-up, not the mailbox — whether the address
+    exists or the message bounces is not known here and is not reported.
     """
+    if action == "password_reset" and not has_accepted_invitation(user):
+        reason = resend_invitation(user=user, actor=actor)
+        if reason is None:
+            return True, f"A new invitation to set a password was sent to {user.email}."
+        return False, reason
+
     _guard_administration(actor=actor, target=user, action=AuditAction.USER_UPDATED)
+    if not user.is_active:
+        return False, "The account is inactive, so nothing was sent. Reactivate it first."
 
     if action == "password_reset":
-        request_password_reset(email=user.email)
+        _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.PASSWORD_RESET)
+        sent = send_password_reset_email(user=user, raw_token=raw_token)
         recorded = AuditAction.PASSWORD_RESET_REQUESTED
+        done = f"A password-reset link was sent to {user.email}."
     else:
-        request_email_verification(user=user)
+        if user.is_email_verified:
+            return True, "Their email address is already verified."
+        sent = request_email_verification(user=user)
         recorded = AuditAction.EMAIL_VERIFICATION_REQUESTED
+        done = f"A verification link was sent to {user.email}."
 
     record(
         action=recorded,
@@ -970,3 +1063,6 @@ def send_credential_link(*, user: User, actor: User, action: str) -> None:
         resource_id=user.pk,
         context={"on_behalf_of": str(user.pk), "by": "administrator"},
     )
+    if not sent:
+        return False, NOT_SENT.format(reason=_last_failure(user) or "the mail service refused it.")
+    return True, done

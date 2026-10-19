@@ -526,7 +526,8 @@ def test_an_administrator_can_send_a_reset_link_but_never_learns_it(api_client_n
         format="json",
     )
 
-    assert response.status_code == 202
+    assert response.status_code == 200
+    assert response.json()["sent"] is True
     assert len(mailoutbox) == 1
     assert mailoutbox[0].to == [target.email]
     # The link went to the account holder; the response carries nothing.

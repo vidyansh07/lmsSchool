@@ -16,9 +16,16 @@ URL = "/api/v1/users/bulk/"
 
 
 def _invited(user) -> bool:
+    """A new set-your-password invitation went out — not a verify-email link,
+    which does not let anybody in."""
     return AuditLog.objects.filter(
-        action=AuditAction.EMAIL_VERIFICATION_REQUESTED, resource_id=str(user.pk)
+        action=AuditAction.INVITATION_SENT, resource_id=str(user.pk)
     ).exists()
+
+
+def _no_password(user) -> None:
+    user.set_unusable_password()
+    user.save(update_fields=["password"])
 
 
 def _make(email, role, branch, **extra) -> User:
@@ -36,8 +43,10 @@ def _make(email, role, branch, **extra) -> User:
 def test_resending_invitations_skips_who_cannot_or_need_not_receive_one(
     api_client_no_csrf, admin_user, branch
 ):
-    pending = _make("pending@example.test", UserRole.COUNSELLOR, branch)
-    accepted = _make("accepted@example.test", UserRole.COUNSELLOR, branch, is_email_verified=True)
+    pending = _make("pending@example.test", UserRole.COUNSELLOR, branch, is_email_verified=True)
+    accepted = _make("accepted@example.test", UserRole.COUNSELLOR, branch)
+    accepted.set_password("A-real-password-1")
+    accepted.save(update_fields=["password"])
     dormant = _make("dormant@example.test", UserRole.MANAGER, branch, is_active=False)
 
     api_client_no_csrf.force_login(admin_user)
@@ -55,7 +64,8 @@ def test_resending_invitations_skips_who_cannot_or_need_not_receive_one(
     assert body["total"] == 4
     assert body["done"] == 1
     reasons = {row["label"]: row["reason"] for row in body["skipped"]}
-    assert "already accepted" in reasons["accepted"]
+    # A verified email is not an accepted invitation; a password of their own is.
+    assert "already set their password" in reasons["accepted"]
     assert "inactive" in reasons["dormant"]
     assert "your own account" in reasons["Amy Admin"]
     assert _invited(pending)
@@ -241,10 +251,7 @@ def test_resending_trainer_invitations_from_the_trainers_hub(
 ):
     """The hub works in trainer ids and the hub's own filters; the rule is the
     accounts list's."""
-    trainer_profile.user.is_email_verified = False
-    trainer_profile.user.save(update_fields=["is_email_verified"])
-    trainer_profile_two.user.is_email_verified = True
-    trainer_profile_two.user.save(update_fields=["is_email_verified"])
+    _no_password(trainer_profile.user)
 
     api_client_no_csrf.force_login(admin_user)
     response = api_client_no_csrf.post(
@@ -259,7 +266,7 @@ def test_resending_trainer_invitations_from_the_trainers_hub(
     assert response.status_code == 200, response.content
     body = response.json()
     assert body["done"] == 1
-    assert "already accepted" in body["skipped"][0]["reason"]
+    assert "already set their password" in body["skipped"][0]["reason"]
     assert _invited(trainer_profile.user)
 
     by_filter = api_client_no_csrf.post(
@@ -271,10 +278,28 @@ def test_resending_trainer_invitations_from_the_trainers_hub(
 
 
 @pytest.mark.django_db
-def test_a_manager_cannot_resend_trainer_invitations(
+def test_a_manager_resends_the_invitation_of_a_trainer_they_brought_in(
     api_client_no_csrf, manager_user, trainer_profile
 ):
+    """A manager creates trainers (D-130); one who never got their link must
+    not need an administrator to get another."""
+    _no_password(trainer_profile.user)
     api_client_no_csrf.force_login(manager_user)
+    response = api_client_no_csrf.post(
+        TRAINERS_URL,
+        {"action": "resend_invitation", "ids": [str(trainer_profile.pk)]},
+        format="json",
+    )
+    assert response.status_code == 200, response.content
+    assert response.json()["done"] == 1
+    assert _invited(trainer_profile.user)
+
+
+@pytest.mark.django_db
+def test_a_counsellor_cannot_resend_trainer_invitations(
+    api_client_no_csrf, counsellor_user, trainer_profile
+):
+    api_client_no_csrf.force_login(counsellor_user)
     response = api_client_no_csrf.post(
         TRAINERS_URL,
         {"action": "resend_invitation", "ids": [str(trainer_profile.pk)]},
@@ -287,8 +312,9 @@ def test_a_manager_cannot_resend_trainer_invitations(
 def test_resending_student_invitations_from_the_students_list(
     api_client_no_csrf, admin_user, student_profile, other_student_profile, manager_user
 ):
-    other_student_profile.user.is_email_verified = True
-    other_student_profile.user.save(update_fields=["is_email_verified"])
+    _no_password(student_profile.user)
+    other_student_profile.user.set_password("A-real-password-1")
+    other_student_profile.user.save(update_fields=["password"])
     api_client_no_csrf.force_login(admin_user)
     response = api_client_no_csrf.post(
         "/api/v1/students/bulk/",
@@ -298,7 +324,7 @@ def test_resending_student_invitations_from_the_students_list(
     assert response.status_code == 200, response.content
     body = response.json()
     assert body["total"] == 2
-    assert body["done"] == (0 if student_profile.user.is_email_verified else 1)
+    assert body["done"] == 1
 
     api_client_no_csrf.force_login(manager_user)
     refused = api_client_no_csrf.post(

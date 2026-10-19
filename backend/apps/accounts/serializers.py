@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.authorization.models import Role
@@ -134,6 +135,13 @@ class CurrentUserSerializer(UserSerializer):
         return str(profile.pk) if profile else None
 
 
+class CredentialActionResultSerializer(serializers.Serializer):
+    """Whether the mail service took the email, and what to tell the admin."""
+
+    sent = serializers.BooleanField()
+    detail = serializers.CharField()
+
+
 class AdminUserDetailSerializer(UserSerializer):
     """Administrator view of a user. Still never exposes credential material."""
 
@@ -141,6 +149,9 @@ class AdminUserDetailSerializer(UserSerializer):
     allowed_role_transitions = serializers.SerializerMethodField()
     profile_type = serializers.SerializerMethodField()
     profile_id = serializers.SerializerMethodField()
+    #: They have set a password of their own — they accepted the invitation
+    #: and can sign in. Not the same as a verified email.
+    invitation_accepted = serializers.SerializerMethodField()
 
     class Meta(UserSerializer.Meta):
         fields = (
@@ -154,8 +165,12 @@ class AdminUserDetailSerializer(UserSerializer):
             "allowed_role_transitions",
             "profile_type",
             "profile_id",
+            "invitation_accepted",
         )
         read_only_fields = fields
+
+    def get_invitation_accepted(self, obj: User) -> bool:
+        return obj.has_usable_password()
 
     def get_can_administer(self, obj: User) -> bool:
         """Whether the *caller* may change this account.
@@ -514,3 +529,114 @@ class UserBulkRequestSerializer(bulk.BulkTargetSerializer):
                     {"reason": ["Say why these accounts are moving; it goes in the audit trail."]}
                 )
         return attrs
+
+
+class AccountEmailSerializer(serializers.Serializer):
+    kind = serializers.CharField()
+    kind_label = serializers.CharField()
+    sent = serializers.BooleanField()
+    error = serializers.CharField(allow_blank=True)
+    at = serializers.DateTimeField()
+
+
+class InvitationStateSerializer(serializers.Serializer):
+    sent_at = serializers.DateTimeField()
+    expires_at = serializers.DateTimeField()
+    expired = serializers.BooleanField()
+
+
+class CapabilitySerializer(serializers.Serializer):
+    code = serializers.CharField()
+    label = serializers.CharField()
+
+
+class AdminUserRecordSerializer(AdminUserDetailSerializer):
+    """One account's page: the detail fields plus where the account stands —
+    the invitation, the last account email and whether it went, MFA, and what
+    the person can do. Read for one account at a time (a few queries), never
+    for a list."""
+
+    mfa_enabled = serializers.BooleanField(read_only=True)
+    invitation = serializers.SerializerMethodField()
+    last_account_email = serializers.SerializerMethodField()
+    capabilities = serializers.SerializerMethodField()
+    may_send_invitation = serializers.SerializerMethodField()
+
+    class Meta(AdminUserDetailSerializer.Meta):
+        fields = (
+            *AdminUserDetailSerializer.Meta.fields,
+            "mfa_enabled",
+            "invitation",
+            "last_account_email",
+            "capabilities",
+            "may_send_invitation",
+        )
+        read_only_fields = fields
+
+    @extend_schema_field(InvitationStateSerializer(allow_null=True))
+    def get_invitation(self, obj: User) -> dict | None:
+        from django.utils import timezone
+
+        from .models import AccountToken, TokenPurpose
+
+        if obj.has_usable_password():
+            return None
+        token = (
+            AccountToken.objects.filter(user=obj, purpose=TokenPurpose.INVITATION)
+            .order_by("-created_at")
+            .first()
+        )
+        if token is None:
+            return None
+        expired = token.used_at is not None or token.expires_at <= timezone.now()
+        return {"sent_at": token.created_at, "expires_at": token.expires_at, "expired": expired}
+
+    @extend_schema_field(AccountEmailSerializer(allow_null=True))
+    def get_last_account_email(self, obj: User) -> dict | None:
+        from apps.audit.models import AuditAction, AuditLog
+
+        from .emails import KIND_LABEL
+
+        row = (
+            AuditLog.objects.filter(
+                action__in=[AuditAction.CREDENTIAL_EMAIL_SENT, AuditAction.CREDENTIAL_EMAIL_FAILED],
+                resource_type="user",
+                resource_id=str(obj.pk),
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if row is None:
+            return None
+        context = row.context or {}
+        kind = context.get("kind", "")
+        return {
+            "kind": kind,
+            "kind_label": KIND_LABEL.get(kind, kind),
+            "sent": row.action == AuditAction.CREDENTIAL_EMAIL_SENT,
+            "error": context.get("error", ""),
+            "at": row.created_at,
+        }
+
+    @extend_schema_field(CapabilitySerializer(many=True))
+    def get_capabilities(self, obj: User) -> list[dict]:
+        from apps.accounts.roles import Capability, effective_capabilities
+
+        labels = dict(Capability.choices)
+        return [
+            {"code": code, "label": str(labels.get(code, code))}
+            for code in sorted(effective_capabilities(obj))
+        ]
+
+    def get_may_send_invitation(self, obj: User) -> bool:
+        from .services import may_send_invitation
+
+        request = self.context.get("request")
+        actor = getattr(request, "user", None)
+        return bool(
+            actor is not None
+            and actor.pk != obj.pk
+            and obj.is_active
+            and not obj.has_usable_password()
+            and may_send_invitation(actor, obj)
+        )
