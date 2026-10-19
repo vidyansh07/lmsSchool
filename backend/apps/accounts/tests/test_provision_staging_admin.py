@@ -78,7 +78,7 @@ def test_apply_creates_a_bounded_app_admin_and_uses_normal_verification(
     assert user.is_email_verified is False
     assert user.has_usable_password() is False
     assert set(AccountToken.objects.filter(user=user).values_list("purpose", flat=True)) == {
-        TokenPurpose.PASSWORD_RESET,
+        TokenPurpose.INVITATION,
         TokenPurpose.EMAIL_VERIFICATION,
     }
     assert len(mail.outbox) == 2
