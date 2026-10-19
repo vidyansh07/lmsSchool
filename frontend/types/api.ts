@@ -36,6 +36,9 @@ export interface User {
   custom_role_name?: string | null;
   is_active: boolean;
   is_email_verified: boolean;
+  /** They set a password of their own — accepted the invitation, can sign in.
+   *  Not the same as a verified email. */
+  invitation_accepted: boolean;
   profile_image_url: string | null;
   date_joined: string;
   /** The centre this account belongs to. Null for a superadmin, who is
@@ -77,6 +80,35 @@ export interface AdminUser extends User {
   email_verified_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** An account email (invitation, reset, verification, code) and whether the
+ *  mail service took it. Never the link. */
+export interface AccountEmail {
+  kind: "invitation" | "password_reset" | "email_verification" | "one_time_code" | string;
+  kind_label: string;
+  sent: boolean;
+  /** Why it was not sent, in words; "" when it was. */
+  error: string;
+  at: string;
+}
+
+/** `GET /users/<id>/`: one account's page. */
+export interface AdminUserRecord extends AdminUser {
+  mfa_enabled: boolean;
+  /** The latest invitation, while it is not yet accepted. */
+  invitation: { sent_at: string; expires_at: string; expired: boolean } | null;
+  last_account_email: AccountEmail | null;
+  /** What this person can do, from their role (and custom role). */
+  capabilities: { code: string; label: string }[];
+  /** Whether the caller may send this person a new invitation now. */
+  may_send_invitation: boolean;
+}
+
+/** `POST /users/<id>/credential-link/`. */
+export interface CredentialLinkResult {
+  sent: boolean;
+  detail: string;
 }
 
 /** One line of an account's history. */
@@ -161,6 +193,8 @@ export interface StudentListRow {
   referred_by: string | null;
   is_active: boolean;
   is_email_verified: boolean;
+  /** They set a password of their own: the invitation was accepted. */
+  invitation_accepted: boolean;
   created_at: string;
 }
 
@@ -205,6 +239,8 @@ export interface TrainerListRow {
   id: string;
   trainer_id: string;
   user_id: string;
+  /** They set a password of their own: the invitation was accepted. */
+  invitation_accepted: boolean;
   /** `manager` for a manager who also teaches; absent on older responses. */
   role?: 'trainer' | 'manager';
   email: string;

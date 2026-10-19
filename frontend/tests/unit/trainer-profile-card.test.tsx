@@ -12,8 +12,9 @@ import type { TrainerProfile } from '@/types/api';
 
 const getTrainer = vi.hoisted(() => vi.fn());
 const updateTrainer = vi.hoisted(() => vi.fn());
-const sendCredentialLink = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/people', () => ({ getTrainer, updateTrainer, sendCredentialLink }));
+const bulkTrainers = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/people', () => ({ getTrainer, updateTrainer }));
+vi.mock('@/lib/bulk', () => ({ bulkTrainers }));
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock('@/components/auth-provider', () => ({ useAuth }));
 
@@ -30,6 +31,7 @@ function profile(overrides: Partial<TrainerProfile> = {}): TrainerProfile {
       role: 'trainer',
       is_active: true,
       is_email_verified: false,
+      invitation_accepted: false,
     } as TrainerProfile['user'],
     professional_title: 'Senior trainer',
     bio: '',
@@ -58,15 +60,31 @@ beforeEach(() => {
 describe('TrainerProfileCard', () => {
   it('says the invitation was never accepted and resends it', async () => {
     getTrainer.mockResolvedValue(profile());
-    sendCredentialLink.mockResolvedValue({ detail: 'sent' });
+    bulkTrainers.mockResolvedValue({ action: 'resend_invitation', total: 1, done: 1, skipped: [] });
     const user = userEvent.setup();
     render(<TrainerProfileCard trainerId="tp-1" />);
 
     expect(await screen.findByText('Invitation not accepted')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute('href', '/admin/users/u-1');
     await user.click(screen.getByRole('button', { name: 'Resend invitation' }));
-    await waitFor(() => expect(sendCredentialLink).toHaveBeenCalledWith('u-1', 'email_verification'));
-    expect(await screen.findByText(/new invitation link was sent/i)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(bulkTrainers).toHaveBeenCalledWith({ action: 'resend_invitation', ids: ['tp-1'] }),
+    );
+    expect(await screen.findByText(/new invitation to set a password went/i)).toBeInTheDocument();
+  });
+
+  it('says why the invitation could not be sent', async () => {
+    getTrainer.mockResolvedValue(profile());
+    bulkTrainers.mockResolvedValue({
+      action: 'resend_invitation',
+      total: 1,
+      done: 0,
+      skipped: [{ id: 'tp-1', label: 'Tina Trainer', reason: 'The email could not be sent: the mail service refused it.' }],
+    });
+    const user = userEvent.setup();
+    render(<TrainerProfileCard trainerId="tp-1" />);
+    await user.click(await screen.findByRole('button', { name: 'Resend invitation' }));
+    expect(await screen.findByText(/could not be sent: the mail service refused it/)).toBeInTheDocument();
   });
 
   it('edits skills as tags and saves the profile', async () => {

@@ -38,7 +38,8 @@ import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
 import { ApiError, errorMessage, fieldErrors, unshownError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
 import { fallback, NO_DATA } from '@/lib/format';
-import { getTrainer, sendCredentialLink, updateTrainer } from '@/lib/people';
+import { bulkTrainers } from '@/lib/bulk';
+import { getTrainer, updateTrainer } from '@/lib/people';
 import type { TrainerProfile } from '@/types/api';
 
 const EDIT_FIELDS = ['professional_title', 'skills', 'years_of_experience', 'expertise', 'is_accepting_assignments'] as const;
@@ -227,8 +228,15 @@ export function TrainerProfileCard({ trainerId }: { trainerId: string }) {
     setNotice('');
     setActionError('');
     try {
-      await sendCredentialLink(profile.user.id, 'email_verification');
-      setNotice(`A new invitation link was sent to ${profile.user.email}.`);
+      // Through the trainers hub, so a manager who brought the trainer in may
+      // send it too; the answer says whether the email actually went.
+      const done = await bulkTrainers({ action: 'resend_invitation', ids: [profile.id] });
+      const skipped = done.skipped[0]?.reason;
+      if (done.done > 0) {
+        setNotice(`A new invitation to set a password went to ${profile.user.email}.`);
+      } else {
+        setActionError(skipped ?? 'The invitation was not sent.');
+      }
     } catch (cause) {
       setActionError(errorMessage(cause, 'The invitation could not be sent.'));
     } finally {
@@ -248,7 +256,7 @@ export function TrainerProfileCard({ trainerId }: { trainerId: string }) {
   }
   if (!profile) return <LoadingState label="Loading profile…" rows={3} />;
 
-  const invitationPending = !profile.user.is_email_verified;
+  const invitationPending = !profile.user.invitation_accepted;
 
   return (
     <Card>
@@ -282,13 +290,15 @@ export function TrainerProfileCard({ trainerId }: { trainerId: string }) {
             {profile.user.is_active ? 'Account active' : 'Account inactive'}
           </Badge>
           <Badge variant={invitationPending ? 'warning' : 'success'}>
-            {invitationPending ? 'Invitation not accepted' : 'Email verified'}
+            {invitationPending ? 'Invitation not accepted' : 'Signed up'}
           </Badge>
           <Badge variant={profile.is_accepting_assignments ? 'success' : 'neutral'}>
             {profile.is_accepting_assignments ? 'Accepting new batches' : 'Not accepting new batches'}
           </Badge>
         </div>
-        {invitationPending && can(Capability.userUpdateAny) ? (
+        {invitationPending &&
+        profile.user.is_active &&
+        (can(Capability.userUpdateAny) || can(Capability.trainerUpdateAny)) ? (
           <div className="flex flex-wrap items-center gap-3 rounded-control border border-line px-3 py-2 text-sm">
             <span className="text-ink-muted">
               They have not set a password yet, so they cannot sign in.

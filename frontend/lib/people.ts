@@ -5,6 +5,8 @@ import type {
   ActivityDetail,
   ActivityPriority,
   AdminUser,
+  AdminUserRecord,
+  CredentialLinkResult,
   FeeStatus,
   Paginated,
   StudentDuplicatesResponse,
@@ -44,8 +46,8 @@ export async function listUsers(
   return apiFetch<Paginated<AdminUser>>(`/api/v1/users/${queryString(query)}`, { signal });
 }
 
-export async function getUser(id: string): Promise<AdminUser> {
-  return apiFetch<AdminUser>(`/api/v1/users/${id}/`);
+export async function getUser(id: string): Promise<AdminUserRecord> {
+  return apiFetch<AdminUserRecord>(`/api/v1/users/${id}/`);
 }
 
 export async function createUser(payload: {
@@ -91,10 +93,12 @@ export async function transitionUserRole(
  * a password has to transmit it, which means two people know it and the record
  * says an administrator changed it rather than the owner setting one.
  */
+/** Send a password link (an invitation, while they have not set a password)
+ *  or a verification link. `sent` says whether the mail service took it. */
 export async function sendCredentialLink(
   id: string,
   action: 'password_reset' | 'email_verification',
-): Promise<{ detail: string }> {
+): Promise<CredentialLinkResult> {
   return apiMutate(`/api/v1/users/${id}/credential-link/`, {
     method: 'POST',
     body: { action },

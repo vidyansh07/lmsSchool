@@ -16,6 +16,8 @@ import { confirmPasswordReset } from '@/lib/auth';
 function ResetPasswordForm() {
   const params = useSearchParams();
   const token = params.get('token') ?? '';
+  // The welcome email's link: choosing a first password, not resetting one.
+  const invite = params.get('invite') === '1';
   const [newPassword, setNewPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [done, setDone] = useState(false);
@@ -45,7 +47,11 @@ function ResetPasswordForm() {
       <Alert variant="error">
         <AlertTitle>This link is incomplete</AlertTitle>
         <p className="text-ink-muted">
-          Request a new password reset link and open it directly from your email.
+          Open the link directly from your email, or{' '}
+          <Link href="/forgot-password" className="font-medium underline">
+            ask for a new one
+          </Link>
+          .
         </p>
       </Alert>
     );
@@ -55,9 +61,11 @@ function ResetPasswordForm() {
     return (
       <div className="space-y-4">
         <Alert variant="success">
-          <AlertTitle>Password updated</AlertTitle>
+          <AlertTitle>{invite ? 'Your password is set' : 'Password updated'}</AlertTitle>
           <p className="text-ink-muted">
-            You have been signed out everywhere. Sign in with your new password.
+            {invite
+              ? 'Your account is ready and your email address is confirmed. Sign in to start.'
+              : 'You have been signed out everywhere. Sign in with your new password.'}
           </p>
         </Alert>
         <Button asChild className="w-full">
@@ -72,7 +80,12 @@ function ResetPasswordForm() {
       {/* Expired, already-used and unknown tokens all arrive here with the same
           message: the API does not distinguish them. */}
       {errors.__all__ || errors.token ? (
-        <Alert variant="error">{errors.token ?? errors.__all__}</Alert>
+        <Alert variant="error">
+          {errors.token ?? errors.__all__}{' '}
+          <Link href="/forgot-password" className="font-medium underline">
+            Send me a new link
+          </Link>
+        </Alert>
       ) : null}
 
       <Field
@@ -100,20 +113,29 @@ function ResetPasswordForm() {
       </Field>
 
       <Button type="submit" disabled={isSubmitting} className="w-full">
-        {isSubmitting ? 'Saving…' : 'Set new password'}
+        {isSubmitting ? 'Saving…' : invite ? 'Set my password' : 'Set new password'}
       </Button>
     </form>
   );
 }
 
+function Heading() {
+  const invite = useSearchParams().get('invite') === '1';
+  return (
+    <div className="mb-6 space-y-1.5">
+      <h2 className="text-xl font-semibold tracking-tight">
+        {invite ? 'Welcome — choose your password' : 'Choose a new password'}
+      </h2>
+      <p className="text-sm text-ink-muted">This link can be used once.</p>
+    </div>
+  );
+}
+
 export default function ResetPasswordPage() {
   return (
-    <AuthSplitShell heading="Choose a new password" tagline="Almost there — set a fresh password to continue.">
-      <div className="mb-6 space-y-1.5">
-        <h2 className="text-xl font-semibold tracking-tight">Choose a new password</h2>
-        <p className="text-sm text-ink-muted">This link can be used once.</p>
-      </div>
+    <AuthSplitShell heading="Choose a password" tagline="Almost there — set a password to continue.">
       <Suspense fallback={<LoadingState label="Loading…" rows={3} />}>
+        <Heading />
         <ResetPasswordForm />
       </Suspense>
     </AuthSplitShell>

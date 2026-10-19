@@ -1456,3 +1456,29 @@ no GSTIN or tax rate to put on one) when the fee is agreed or changed, each
 switchable off in institution settings; and three automation triggers —
 payment recorded, instalment due soon, instalment overdue — let reminders be
 built as rules, two of which are seeded as drafts.
+
+### D-146 · An invitation is its own link, and every account email says whether it went (19 October 2026)
+
+The owner reported that new trainers and users never received their link or
+code. Staging's mail service had refused every message for days, and nothing
+in the product showed it. A review of the account flow then found it broken in
+several places. Decisions:
+
+- An account somebody else creates gets an **invitation** token, which lasts
+  `AUTH_TOKEN_INVITATION_TTL_DAYS` (7 days), not the one-hour reset token.
+  Setting a password from any emailed link also verifies the address.
+- **"Accepted" means a password of their own** (`invitation_accepted`), not a
+  verified email. "Resend invitation" sends a new set-password link that
+  supersedes the old one. "Forgot password" for someone who never set a
+  password sends the invitation.
+- **Every account email is recorded** with whether the mail service accepted
+  it, in words an administrator can act on (`auth.email.credential_*`; never
+  the link). The account page's "Getting in" card shows it, and the
+  credential-link endpoint answers `{sent, detail}`. This reports the
+  institution's own mail set-up, not the recipient's mailbox. A one-time code
+  that could not be emailed is dropped, so it does not count against the
+  cooldown.
+- An administrator who created a fellow administrator may resend that
+  invitation until it is accepted. A manager may resend a trainer's. The
+  account details form and the email links appear only for holders of
+  `user.update_any`, so nobody is shown a Save that answers 403.

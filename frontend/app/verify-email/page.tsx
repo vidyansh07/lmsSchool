@@ -62,8 +62,8 @@ function VerifyEmail() {
         </p>
       </Alert>
       <Button asChild variant="outline" className="w-full">
-        <Link href={state === 'verified' ? '/' : '/settings/account'}>
-          {state === 'verified' ? 'Continue' : 'Go to account settings'}
+        <Link href={state === 'verified' ? '/' : '/login?next=%2Fsettings%2Faccount'}>
+          {state === 'verified' ? 'Continue' : 'Sign in to send a new link'}
         </Link>
       </Button>
     </div>

@@ -45,7 +45,8 @@ import { bulkTarget, bulkTrainers, selectionKey } from '@/lib/bulk';
 import { Capability } from '@/lib/capabilities';
 import { fallback, NO_DATA } from '@/lib/format';
 import { listManageTrainers, type ManageTrainerRow } from '@/lib/manage';
-import { updateTrainer } from '@/lib/people';
+import { getUser, updateTrainer } from '@/lib/people';
+import type { TrainerProfile } from '@/types/api';
 
 const TRAINER_FILTER_KEYS = [
   'attention',
@@ -116,9 +117,34 @@ export function TrainersHub() {
       list.reload();
     },
   });
-  const bulkActions: BulkAction[] = can(Capability.userUpdateAny)
-    ? [{ id: 'resend', label: 'Resend invitations', onClick: resend.open }]
-    : [];
+  // A manager brings trainers in, so may resend their invitations too.
+  const bulkActions: BulkAction[] =
+    can(Capability.userUpdateAny) || can(Capability.trainerUpdateAny)
+      ? [{ id: 'resend', label: 'Resend invitations', onClick: resend.open }]
+      : [];
+
+  /** Say whether the new trainer's invitation actually went — the email is
+   *  sent as the account is saved, so its outcome is already on the record. */
+  async function reportInvitation(created: TrainerProfile) {
+    const name = created.user.full_name || created.user.email;
+    if (!can(Capability.userViewAny)) {
+      setNotice(`${name} is added. Their invitation to set a password was sent to ${created.user.email}.`);
+      return;
+    }
+    try {
+      const record = await getUser(created.user.id);
+      const last = record.last_account_email;
+      if (last?.kind === 'invitation' && !last.sent) {
+        setActionError(
+          `${name} is added, but the invitation could not be sent: ${last.error} Use "Resend invitations" once email works.`,
+        );
+      } else {
+        setNotice(`${name} is added. Their invitation to set a password went to ${created.user.email}.`);
+      }
+    } catch {
+      setNotice(`${name} is added.`);
+    }
+  }
 
   async function toggleAvailability(row: ManageTrainerRow) {
     setBusyTrainerId(row.id);
@@ -244,6 +270,15 @@ export function TrainersHub() {
       header: 'Account',
       render: (row) => <Badge variant={row.is_active ? 'success' : 'error'}>{row.is_active ? 'Active' : 'Inactive'}</Badge>,
     },
+    {
+      key: 'invitation_accepted',
+      header: 'Signed up',
+      render: (row) => (
+        <Badge variant={row.invitation_accepted ? 'success' : 'warning'}>
+          {row.invitation_accepted ? 'Yes' : 'Invitation pending'}
+        </Badge>
+      ),
+    },
   ];
 
   return (
@@ -268,9 +303,10 @@ export function TrainersHub() {
       <CreateTrainerDialog
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        onCreated={() => {
+        onCreated={(created) => {
           setShowCreate(false);
           list.reload();
+          if (created) void reportInvitation(created);
         }}
       />
 

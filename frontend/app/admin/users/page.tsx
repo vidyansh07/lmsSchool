@@ -74,11 +74,11 @@ function UsersTable() {
       ),
     },
     {
-      key: 'is_email_verified',
-      header: 'Email verified',
+      key: 'invitation_accepted',
+      header: 'Signed up',
       render: (row) => (
-        <Badge variant={row.is_email_verified ? 'success' : 'warning'}>
-          {row.is_email_verified ? 'Yes' : 'No'}
+        <Badge variant={row.invitation_accepted ? 'success' : 'warning'}>
+          {row.invitation_accepted ? 'Yes' : 'Invitation pending'}
         </Badge>
       ),
     },
@@ -149,7 +149,8 @@ function UsersTable() {
         onClose={() => setShowCreate(false)}
         onCreated={(created) => {
           setShowCreate(false);
-          router.push(`/admin/users/${created.id}`);
+          // Their page says whether the invitation email actually went.
+          router.push(`/admin/users/${created.id}?created=1`);
         }}
       />
 
@@ -201,12 +202,12 @@ function UsersTable() {
           </label>
           <Select
             id="filter-invitation"
-            value={String(list.query.is_email_verified ?? '')}
-            onChange={(event) => list.setQuery({ is_email_verified: event.target.value })}
+            value={String(list.query.invitation_accepted ?? '')}
+            onChange={(event) => list.setQuery({ invitation_accepted: event.target.value })}
           >
             <option value="">All</option>
-            <option value="false">Not accepted</option>
-            <option value="true">Accepted</option>
+            <option value="false">Not accepted yet</option>
+            <option value="true">Accepted (password set)</option>
           </Select>
         </div>
         {seesEveryCentre && branches.length > 1 ? (
@@ -238,8 +239,13 @@ function UsersTable() {
           { key: 'is_active', label: 'Status', display: (value) => (value === 'true' ? 'Active' : 'Inactive') },
           {
             key: 'is_email_verified',
+            label: 'Email',
+            display: (value) => (value === 'true' ? 'Verified' : 'Not verified'),
+          },
+          {
+            key: 'invitation_accepted',
             label: 'Invitation',
-            display: (value) => (value === 'true' ? 'Accepted' : 'Not accepted'),
+            display: (value) => (value === 'true' ? 'Accepted' : 'Not accepted yet'),
           },
           {
             key: 'branch',

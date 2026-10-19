@@ -8,9 +8,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import AdminUsersPage from '@/app/admin/users/page';
 import { UserAdministration } from '@/app/admin/users/[userId]/page';
-import type { AdminUser } from '@/types/api';
+import type { AdminUserRecord } from '@/types/api';
 
-function account(overrides: Partial<AdminUser> = {}): AdminUser {
+function account(overrides: Partial<AdminUserRecord> = {}): AdminUserRecord {
   return {
     id: 'u-2',
     email: 'mira@example.com',
@@ -23,6 +23,12 @@ function account(overrides: Partial<AdminUser> = {}): AdminUser {
     custom_role_name: null,
     is_active: true,
     is_email_verified: true,
+    invitation_accepted: true,
+    mfa_enabled: false,
+    invitation: null,
+    last_account_email: null,
+    capabilities: [],
+    may_send_invitation: false,
     profile_image_url: null,
     date_joined: '2026-01-01T00:00:00Z',
     branch_id: 'b1',

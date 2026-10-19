@@ -59,12 +59,20 @@ class UserFilterSet(django_filters.FilterSet):
     role = django_filters.CharFilter(field_name="role", lookup_expr="exact")
     is_active = django_filters.BooleanFilter(field_name="is_active")
     is_email_verified = django_filters.BooleanFilter(field_name="is_email_verified")
+    #: Set a password of their own (accepted the invitation), or not yet.
+    invitation_accepted = django_filters.BooleanFilter(method="filter_invitation_accepted")
     joined_after = django_filters.DateFilter(field_name="date_joined", lookup_expr="date__gte")
     joined_before = django_filters.DateFilter(field_name="date_joined", lookup_expr="date__lte")
 
     class Meta:
         model = User
         fields = ("branch", "role", "is_active", "is_email_verified")
+
+    def filter_invitation_accepted(self, queryset, name, value):
+        from django.contrib.auth.hashers import UNUSABLE_PASSWORD_PREFIX
+
+        pending = queryset.filter(password__startswith=UNUSABLE_PASSWORD_PREFIX)
+        return queryset.exclude(pk__in=pending.values("pk")) if value else pending
 
 
 class UserListCreateView(ListCreateAPIView):

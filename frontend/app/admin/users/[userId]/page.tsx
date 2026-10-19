@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
-import { ArrowLeft, KeyRound, MailCheck } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
+import { CapabilitiesCard, GettingInCard } from "@/components/admin/getting-in-card";
 import { UserSessionsCard } from "@/components/admin/user-sessions-card";
 import { useAuth } from "@/components/auth-provider";
 import { Confirm } from "@/components/confirm";
@@ -51,7 +52,6 @@ import {
 import {
   getUser,
   getUserAudit,
-  sendCredentialLink,
   setUserActive,
   transitionUserRole,
   updateUser,
@@ -63,6 +63,7 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { listBatches } from "@/lib/batches";
 import type {
   AdminUser,
+  AdminUserRecord,
   BatchListRow,
   RoleSummary,
   UserAuditEntry,
@@ -180,7 +181,11 @@ function History({ userId }: { userId: string }) {
 export function UserAdministration({ userId }: { userId: string }) {
   const router = useRouter();
   const { user: currentUser, can } = useAuth();
-  const [user, setUser] = useState<AdminUser | null>(null);
+  const [user, setUser] = useState<AdminUserRecord | null>(null);
+  // Arrived straight from "Add staff account".
+  const [justCreated] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("created"),
+  );
   const [error, setError] = useState<ApiError | null>(null);
   const [form, setForm] = useState({
     email: "",
@@ -293,6 +298,11 @@ export function UserAdministration({ userId }: { userId: string }) {
   // administering — an administrator may see that a superadmin exists — and
   // without asking we would offer controls that cannot work.
   const mayAdminister = user.can_administer;
+  // Changing the details and sending links also needs `user.update_any`: a
+  // manager may administer a trainer's account on the ladder, but those two
+  // endpoints are an administrator's, and a Save that answers 403 is worse
+  // than no Save.
+  const mayEdit = mayAdminister && can(Capability.userUpdateAny);
   const roleChanged =
     form.role !== user.role ||
     (form.custom_role || null) !== (user.custom_role ?? null);
@@ -374,11 +384,12 @@ export function UserAdministration({ userId }: { userId: string }) {
           {user.full_name || user.email}
         </h1>
         <Badge>{labelFor(ROLE_LABEL, user.role)}</Badge>
+        {user.custom_role_name ? <Badge variant="info">{user.custom_role_name}</Badge> : null}
         <Badge variant={user.is_active ? "success" : "error"}>
           {user.is_active ? "Active" : "Inactive"}
         </Badge>
-        <Badge variant={user.is_email_verified ? "success" : "warning"}>
-          {user.is_email_verified ? "Email verified" : "Email unverified"}
+        <Badge variant={user.invitation_accepted ? "success" : "warning"}>
+          {user.invitation_accepted ? "Signed up" : "Invitation pending"}
         </Badge>
         {teachingManager ? <Badge variant="neutral">Also teaches</Badge> : null}
         {user.profile_type && user.profile_id ? (
@@ -420,13 +431,29 @@ export function UserAdministration({ userId }: { userId: string }) {
         </Alert>
       ) : null}
 
-      {!mayAdminister ? (
+      {!mayEdit ? (
         <Alert variant="warning">
-          You can see this account but not change it. Authority runs downward:
-          you may administer accounts that hold less than your own, and not your
-          peers or anybody above you.
+          {user.can_administer
+            ? "You can see this account but not change it here: account details are changed by an administrator."
+            : "You can see this account but not change it. Authority runs downward: you may administer accounts that hold less than your own, and not your peers or anybody above you."}
+          {user.may_send_invitation && !user.invitation_accepted
+            ? " You can still send them their invitation, below."
+            : ""}
         </Alert>
       ) : null}
+
+      {justCreated ? (
+        <Alert variant={user.last_account_email && !user.last_account_email.sent ? "warning" : "success"} role="status">
+          Account created.{" "}
+          {user.last_account_email?.kind === "invitation"
+            ? user.last_account_email.sent
+              ? `The invitation to set a password went to ${user.email}.`
+              : `The invitation could not be sent: ${user.last_account_email.error} Fix the email set-up, then send it again below.`
+            : "No invitation was sent."}
+        </Alert>
+      ) : null}
+
+      <GettingInCard user={user} mayManage={mayEdit} onSent={() => load()} />
 
       <Card>
         <CardHeader>
@@ -450,7 +477,7 @@ export function UserAdministration({ userId }: { userId: string }) {
                 type="email"
                 autoComplete="email"
                 value={form.email}
-                disabled={!mayAdminister}
+                disabled={!mayEdit}
                 onChange={(event) =>
                   setForm({ ...form, email: event.target.value })
                 }
@@ -462,7 +489,7 @@ export function UserAdministration({ userId }: { userId: string }) {
                 type="tel"
                 autoComplete="tel"
                 value={form.phone}
-                disabled={!mayAdminister}
+                disabled={!mayEdit}
                 onChange={(event) =>
                   setForm({ ...form, phone: event.target.value })
                 }
@@ -478,7 +505,7 @@ export function UserAdministration({ userId }: { userId: string }) {
                 id="user-first"
                 autoComplete="given-name"
                 value={form.first_name}
-                disabled={!mayAdminister}
+                disabled={!mayEdit}
                 onChange={(event) =>
                   setForm({ ...form, first_name: event.target.value })
                 }
@@ -493,7 +520,7 @@ export function UserAdministration({ userId }: { userId: string }) {
                 id="user-last"
                 autoComplete="family-name"
                 value={form.last_name}
-                disabled={!mayAdminister}
+                disabled={!mayEdit}
                 onChange={(event) =>
                   setForm({ ...form, last_name: event.target.value })
                 }
@@ -508,7 +535,7 @@ export function UserAdministration({ userId }: { userId: string }) {
             </Alert>
           ) : null}
 
-          {mayAdminister ? (
+          {mayEdit ? (
             <Button
               type="button"
               disabled={busy === "save"}
@@ -742,56 +769,15 @@ export function UserAdministration({ userId }: { userId: string }) {
         <UserSessionsCard userId={user.id} />
       ) : null}
 
-      {mayAdminister ? (
+      {can(Capability.userSetActive) && mayAdminister && !isSelf ? (
         <Card>
           <CardHeader>
             <CardTitle>Access</CardTitle>
-            <CardDescription>
-              Getting somebody back into their account, without anybody else
-              learning their password.
-            </CardDescription>
+            <CardDescription>Whether this account may sign in at all.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy === "reset"}
-                onClick={() =>
-                  void run(
-                    "reset",
-                    () => sendCredentialLink(user.id, "password_reset"),
-                    "A password-reset link has been sent to their address.",
-                  )
-                }
-              >
-                <KeyRound className="size-4" aria-hidden="true" />
-                Send a password-reset link
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy === "verify" || user.is_email_verified}
-                onClick={() =>
-                  void run(
-                    "verify",
-                    () => sendCredentialLink(user.id, "email_verification"),
-                    "A verification link has been sent to their address.",
-                  )
-                }
-              >
-                <MailCheck className="size-4" aria-hidden="true" />
-                Resend the verification link
-              </Button>
-            </div>
-            <p className="text-sm text-ink-muted">
-              Nobody here sets somebody else&rsquo;s password. A link goes to
-              the account holder, and they choose it — so only one person ever
-              knows it, and the record says they set it.
-            </p>
-
             {can(Capability.userSetActive) && mayAdminister && !isSelf ? (
-              <div className="border-t border-line pt-3">
+              <div>
                 <Button
                   type="button"
                   variant={user.is_active ? "destructive" : "primary"}
@@ -825,6 +811,8 @@ export function UserAdministration({ userId }: { userId: string }) {
           </CardContent>
         </Card>
       ) : null}
+
+      <CapabilitiesCard user={user} />
 
       <History userId={user.id} />
       </div>

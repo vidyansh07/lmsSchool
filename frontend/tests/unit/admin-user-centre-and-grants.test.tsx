@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { UserAdministration } from '@/app/admin/users/[userId]/page';
 import { ApiError } from '@/lib/api';
-import type { AdminUser } from '@/types/api';
+import type { AdminUserRecord } from '@/types/api';
 
 const getUser = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/people', async () => {
@@ -53,7 +53,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
-function counsellor(): AdminUser {
+function counsellor(): AdminUserRecord {
   return {
     id: 'c-1',
     email: 'c@example.com',
@@ -66,6 +66,12 @@ function counsellor(): AdminUser {
     custom_role_name: null,
     is_active: true,
     is_email_verified: true,
+    invitation_accepted: true,
+    mfa_enabled: false,
+    invitation: null,
+    last_account_email: null,
+    capabilities: [],
+    may_send_invitation: false,
     profile_image_url: null,
     date_joined: '2026-01-01T00:00:00Z',
     branch_id: 'branch-1',

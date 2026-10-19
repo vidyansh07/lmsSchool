@@ -38,7 +38,13 @@ import { Capability } from '@/lib/capabilities';
 import { formatCount } from '@/lib/format';
 import { exportFiltersFrom } from '@/lib/reporting';
 
-export const USER_FILTER_KEYS = ['role', 'is_active', 'is_email_verified', 'branch'] as const;
+export const USER_FILTER_KEYS = [
+  'role',
+  'is_active',
+  'is_email_verified',
+  'invitation_accepted',
+  'branch',
+] as const;
 
 type Pending = 'move' | null;
 

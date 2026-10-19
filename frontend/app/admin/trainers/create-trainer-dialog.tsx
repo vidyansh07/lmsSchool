@@ -24,7 +24,7 @@ import { errorMessage, fieldErrors } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
 import { ROLE_LABEL, labelFor } from '@/lib/labels';
 import { createTrainer, ensureTeachingProfile, listUsers } from '@/lib/people';
-import type { AdminUser } from '@/types/api';
+import type { AdminUser, TrainerProfile } from '@/types/api';
 
 export function CreateTrainerDialog({
   open,
@@ -33,7 +33,8 @@ export function CreateTrainerDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  /** The new trainer; `undefined` when an existing account was set up to teach. */
+  onCreated: (created?: TrainerProfile) => void;
 }) {
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -90,7 +91,7 @@ export function CreateTrainerDialog({
     setExisting(null);
     setExistingError('');
     try {
-      await createTrainer({
+      const created = await createTrainer({
         email: email.trim(),
         first_name: firstName.trim(),
         last_name: lastName.trim(),
@@ -103,7 +104,7 @@ export function CreateTrainerDialog({
         ...(branchId ? { branch: branchId } : {}),
       });
       resetForm();
-      onCreated();
+      onCreated(created);
     } catch (cause) {
       const fields = fieldErrors(cause);
       setErrors(fields);

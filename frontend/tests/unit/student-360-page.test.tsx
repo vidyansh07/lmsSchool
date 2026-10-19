@@ -82,6 +82,7 @@ function user(overrides: Partial<User> = {}): User {
     role: 'student',
     is_active: true,
     is_email_verified: true,
+    invitation_accepted: true,
     profile_image_url: null,
     date_joined: '2026-01-01',
     branch_id: null,
@@ -485,9 +486,9 @@ describe('Student360Content — actions for this student', () => {
       can: (capability: string) => capabilities.includes(capability),
     });
     getStudent360.mockResolvedValue(
-      student360({ profile: studentProfile({ user: user({ is_email_verified: false }) }) }),
+      student360({ profile: studentProfile({ user: user({ invitation_accepted: false }) }) }),
     );
-    sendCredentialLink.mockResolvedValue({ detail: 'ok' });
+    sendCredentialLink.mockResolvedValue({ sent: true, detail: 'ok' });
     render(<Student360Content studentId="student-1" />);
 
     expect(await screen.findByRole('button', { name: 'Plan a follow-up' })).toBeInTheDocument();
@@ -502,7 +503,9 @@ describe('Student360Content — actions for this student', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Resend invitation' }));
     fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
-    await waitFor(() => expect(sendCredentialLink).toHaveBeenCalledWith('user-1', 'email_verification'));
+    // A set-password invitation (the server sends one to an account that has
+    // no password yet), not a verify-email link.
+    await waitFor(() => expect(sendCredentialLink).toHaveBeenCalledWith('user-1', 'password_reset'));
   });
 
   it('offers no actions to somebody who can only read', async () => {

@@ -607,7 +607,7 @@ export function Student360Content({ studentId }: { studentId: string }) {
             studentId={studentId}
             userId={data.profile.user.id}
             email={data.profile.user.email}
-            isEmailVerified={data.profile.user.is_email_verified}
+            invitationAccepted={data.profile.user.invitation_accepted}
             onOpenTab={setTab}
             onChanged={load}
           />

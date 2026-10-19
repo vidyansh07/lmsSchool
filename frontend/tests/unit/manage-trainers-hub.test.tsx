@@ -66,6 +66,7 @@ function trainerRow(overrides: Partial<ManageTrainerRow> = {}): ManageTrainerRow
     id: 'trainer-1',
     trainer_id: 'GRS-T-001',
     user_id: 'u-trainer-1',
+    invitation_accepted: true,
     email: 'tina@example.com',
     full_name: 'Tina Trainer',
     professional_title: 'Senior trainer',

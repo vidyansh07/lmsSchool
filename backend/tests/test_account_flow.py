@@ -238,3 +238,21 @@ def test_the_account_page_says_what_the_person_can_do(api_client_no_csrf, admin_
     assert record["invitation_accepted"] is True
     assert record["invitation"] is None
     assert "mfa_enabled" in record
+
+
+@pytest.mark.django_db
+def test_the_list_filters_on_whether_the_invitation_was_accepted(
+    api_client_no_csrf, admin_user, branch
+):
+    pending = User.objects.create_user(
+        email="waiting@example.test",
+        password=None,
+        first_name="Wai",
+        role=UserRole.COUNSELLOR,
+        branch=branch,
+    )
+    api_client_no_csrf.force_login(admin_user)
+    waiting = api_client_no_csrf.get(f"{USERS_URL}?invitation_accepted=false").json()
+    assert [row["email"] for row in waiting["results"]] == [pending.email]
+    accepted = api_client_no_csrf.get(f"{USERS_URL}?invitation_accepted=true").json()
+    assert pending.email not in [row["email"] for row in accepted["results"]]

@@ -35,14 +35,15 @@ export function StudentQuickActions({
   studentId,
   userId,
   email,
-  isEmailVerified,
+  invitationAccepted,
   onOpenTab,
   onChanged,
 }: {
   studentId: string;
   userId: string;
   email: string;
-  isEmailVerified: boolean;
+  /** They set a password of their own; no invitation is needed. */
+  invitationAccepted: boolean;
   /** Opens a tab on this page — the fees tab for "Record a payment". */
   onOpenTab: (tab: 'fees' | 'activities') => void;
   onChanged: () => void;
@@ -56,15 +57,19 @@ export function StudentQuickActions({
   const mayPay = can(Capability.feeManageAny);
   const mayEnrol = can(Capability.enrolmentCreate);
   const mayTransfer = mayEnrol && can(Capability.enrolmentUpdateAny);
-  const mayInvite = !isEmailVerified && can(Capability.userUpdateAny);
+  const mayInvite = !invitationAccepted && can(Capability.userUpdateAny);
   const mayLog = can(Capability.activityCreate);
   const anyInMenu = mayPay || mayEnrol || mayTransfer || mayInvite || mayLog;
 
   async function invite() {
     setSending(true);
     try {
-      await sendCredentialLink(userId, 'email_verification');
-      toast({ title: 'Invitation sent', description: `A new link went to ${email}.` });
+      const answer = await sendCredentialLink(userId, 'password_reset');
+      if (answer.sent) {
+        toast({ title: 'Invitation sent', description: `A new link to set a password went to ${email}.` });
+      } else {
+        toast({ title: 'Could not send the invitation', description: answer.detail, variant: 'error' });
+      }
     } catch (cause) {
       toast({ title: 'Could not send the invitation', description: errorMessage(cause), variant: 'error' });
     } finally {

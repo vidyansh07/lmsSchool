@@ -55,6 +55,9 @@ class UserSerializer(serializers.ModelSerializer):
     custom_role_name = serializers.CharField(
         source="custom_role.name", read_only=True, default=None
     )
+    #: They set a password of their own: accepted the invitation, can sign in.
+    #: Not the same as a verified email.
+    invitation_accepted = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -70,6 +73,7 @@ class UserSerializer(serializers.ModelSerializer):
             "custom_role_name",
             "is_active",
             "is_email_verified",
+            "invitation_accepted",
             "profile_image_url",
             "date_joined",
             "branch_id",
@@ -77,6 +81,9 @@ class UserSerializer(serializers.ModelSerializer):
             "branch_name",
         )
         read_only_fields = fields
+
+    def get_invitation_accepted(self, obj: User) -> bool:
+        return obj.has_usable_password()
 
     def get_profile_image_url(self, obj: User) -> str | None:
         """Path to the authenticated image view, never a direct media path."""
@@ -149,10 +156,6 @@ class AdminUserDetailSerializer(UserSerializer):
     allowed_role_transitions = serializers.SerializerMethodField()
     profile_type = serializers.SerializerMethodField()
     profile_id = serializers.SerializerMethodField()
-    #: They have set a password of their own — they accepted the invitation
-    #: and can sign in. Not the same as a verified email.
-    invitation_accepted = serializers.SerializerMethodField()
-
     class Meta(UserSerializer.Meta):
         fields = (
             *UserSerializer.Meta.fields,
@@ -165,12 +168,8 @@ class AdminUserDetailSerializer(UserSerializer):
             "allowed_role_transitions",
             "profile_type",
             "profile_id",
-            "invitation_accepted",
         )
         read_only_fields = fields
-
-    def get_invitation_accepted(self, obj: User) -> bool:
-        return obj.has_usable_password()
 
     def get_can_administer(self, obj: User) -> bool:
         """Whether the *caller* may change this account.

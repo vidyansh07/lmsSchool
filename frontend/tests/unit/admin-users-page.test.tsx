@@ -69,6 +69,7 @@ function userRow(overrides: Partial<AdminUser> = {}): AdminUser {
     role: 'student',
     is_active: true,
     is_email_verified: true,
+    invitation_accepted: true,
     profile_image_url: null,
     date_joined: '2026-01-01T00:00:00Z',
     branch_id: null,
@@ -201,7 +202,7 @@ describe('AdminUsersPage — centres and adding staff', () => {
         expect.objectContaining({ email: 'chitra@example.com', first_name: 'Chitra', role: 'counsellor' }),
       ),
     );
-    expect(push).toHaveBeenCalledWith('/admin/users/new-1');
+    expect(push).toHaveBeenCalledWith('/admin/users/new-1?created=1');
   });
 });
 

@@ -26,6 +26,7 @@ function user(overrides: Partial<User>): User {
     role: 'manager',
     is_active: true,
     is_email_verified: true,
+    invitation_accepted: true,
     profile_image_url: null,
     branch_id: 'b1',
     branch_code: 'JPR',
