@@ -164,8 +164,16 @@ def send_email_message(message: EmailMessage) -> bool:
     from django.core.mail import send_mail
 
     from apps.common.logging import scrub
+    from apps.common.mail_policy import NOT_ON_LIST, recipient_allowed
 
     from .attachments import render as render_attachment
+
+    if not recipient_allowed(message.to_email):
+        # Not a failure to retry: this environment does not email this address.
+        message.status = EmailStatus.ABANDONED
+        message.last_error = NOT_ON_LIST
+        message.save(update_fields=["status", "last_error", "updated_at"])
+        return False
 
     message.attempts += 1
     subject = f"{settings.EMAIL_SUBJECT_PREFIX}{message.subject}"

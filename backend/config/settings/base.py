@@ -670,6 +670,10 @@ AUTH_TOKEN_VERIFICATION_TTL_DAYS = env.int("AUTH_TOKEN_VERIFICATION_TTL_DAYS", d
 # asked for by the person about to use it; an invitation is sent by somebody
 # else and may sit unread for days.
 AUTH_TOKEN_INVITATION_TTL_DAYS = env.int("AUTH_TOKEN_INVITATION_TTL_DAYS", default=7)
+# Who this environment may email (`apps.common.mail_policy`). Empty: everybody
+# (production). A staging or demo environment lists whole addresses and/or
+# `@domain` entries, comma-separated, so its seeded accounts are never mailed.
+EMAIL_RECIPIENT_ALLOWLIST = env.list("EMAIL_RECIPIENT_ALLOWLIST", default=[])
 
 # MFA (ERP Phase 5, ADR-05). Fernet key encrypting a TOTP device's secret at
 # rest (apps.accounts.mfa). No usable default here — an empty string fails

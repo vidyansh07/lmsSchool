@@ -70,6 +70,10 @@ KIND_LABEL = {
 }
 
 
+class _NotOnList(Exception):
+    """This environment does not email this address (`apps.common.mail_policy`)."""
+
+
 def describe_failure(exc: Exception) -> str:
     """What went wrong, in words an administrator can act on — never the raw
     provider message, which can carry account identifiers."""
@@ -97,10 +101,13 @@ def describe_failure(exc: Exception) -> str:
 def _send(*, subject: str, body: str, user, kind: str) -> bool:
     from apps.audit.models import AuditResult
     from apps.audit.services import AuditAction, record
+    from apps.common.mail_policy import NOT_ON_LIST, recipient_allowed
 
     recipient = user.email
     error = ""
     try:
+        if not recipient_allowed(recipient):
+            raise _NotOnList(NOT_ON_LIST)
         send_mail(
             subject=f"{settings.EMAIL_SUBJECT_PREFIX}{subject}",
             message=body,
@@ -112,10 +119,19 @@ def _send(*, subject: str, body: str, user, kind: str) -> bool:
         # The exception detail is logged; the caller learns only that it failed,
         # and the API response to the person asking for a reset is identical
         # either way.
-        logger.exception("Failed to send %s email", kind)
-        error = describe_failure(exc)
+        if isinstance(exc, _NotOnList):
+            error = str(exc)
+        else:
+            logger.exception("Failed to send %s email", kind)
+            error = describe_failure(exc)
     _LAST_FAILURE.set(error)
+    from apps.common.request_context import get_request_meta
+
     record(
+        # Inside a request a failure is written after it (so a rolled-back
+        # request keeps it); outside one — a shell, a command, a task — there
+        # is no "after", so it is written now.
+        durable=None if get_request_meta() else False,
         action=AuditAction.CREDENTIAL_EMAIL_FAILED if error else AuditAction.CREDENTIAL_EMAIL_SENT,
         actor=None,
         actor_label="system",

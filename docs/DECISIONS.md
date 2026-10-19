@@ -1482,3 +1482,10 @@ several places. Decisions:
   invitation until it is accepted. A manager may resend a trainer's. The
   account details form and the email links appear only for holders of
   `user.update_any`, so nobody is shown a Save that answers 403.
+
+Later the same day, staging's mail was moved to Gmail SMTP. `grras.com`, the
+domain of the seeded demo accounts, turned out to have real mail servers, so
+`EMAIL_RECIPIENT_ALLOWLIST` was added: in a staging or demo environment, only
+the listed addresses and `@domains` are ever emailed. Production leaves it empty.
+A refused message is recorded as not sent, with the reason.
+
