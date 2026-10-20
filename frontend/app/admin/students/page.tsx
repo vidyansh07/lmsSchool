@@ -1,7 +1,6 @@
 'use client';
 
-import { Eye } from 'lucide-react';
-import Link from 'next/link';
+import { Eye, IndianRupee, Pencil, Send } from 'lucide-react';
 import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
@@ -10,12 +9,12 @@ import { ExportMenu } from '@/components/export-menu';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
+import { RowActions } from '@/components/row-actions';
 import { Alert } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
-import { Tooltip } from '@/components/ui/tooltip';
 import { useList } from '@/hooks/use-list';
 import { ApiError } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/format';
@@ -189,18 +188,34 @@ function StudentsTable() {
       header: 'Actions',
       align: 'right',
       sticky: 'end',
+      // What this person may do to this student, and nothing they may not.
+      // Each of these needs the capability its endpoint already enforces, so
+      // the column never offers an action that would be refused.
       render: (row) => (
-        <Tooltip content="Open the student's record">
-          <Button asChild variant="ghost" size="sm" className="size-8 p-0 text-ink-muted">
-            <Link
-              href={`/admissions/${row.id}`}
-              onClick={(event) => event.stopPropagation()}
-              aria-label={`Open ${row.full_name || row.email}`}
-            >
-              <Eye className="size-4" aria-hidden="true" />
-            </Link>
-          </Button>
-        </Tooltip>
+        <RowActions
+          subject={row.full_name || row.email}
+          actions={[
+            { label: 'Open', icon: Eye, href: `/admissions/${row.id}` },
+            {
+              label: 'Edit',
+              icon: Pencil,
+              href: `/admissions/${row.id}?edit=1`,
+              capability: Capability.studentUpdateAny,
+            },
+            {
+              label: 'Fees',
+              icon: IndianRupee,
+              href: `/fees?student=${row.id}`,
+              capability: Capability.feeViewAny,
+            },
+            {
+              label: 'Message',
+              icon: Send,
+              href: `/communication/new?student=${row.id}`,
+              capability: Capability.communicationSend,
+            },
+          ]}
+        />
       ),
     },
   ];
