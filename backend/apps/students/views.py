@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import django_filters
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
@@ -25,6 +26,8 @@ from apps.accounts.roles import UserRole, has_capability
 from apps.common import bulk
 from apps.common.caching import MINUTE, remember
 from apps.common.exceptions import AuthorityError
+from apps.common.filtering import FilterField, filterset_for
+from apps.common.filtering import describe as describe_filters
 from apps.common.permissions import Capability, HasCapability, IsActiveUser, IsOwnerOrHasCapability
 from apps.common.throttling import BurstThrottle
 from apps.fees.queries import annotate_student_fee_totals
@@ -32,7 +35,7 @@ from apps.organisation.access import resolve_submitted_branch
 from apps.work.serializers import ActivityDetailSerializer
 
 from . import access, services, student_360
-from .models import StudentProfile
+from .models import FeeStatus, InstitutionKind, Qualification, StudentProfile
 from .serializers import (
     AdminStudentProfileSerializer,
     AdminStudentUpdateSerializer,
@@ -51,16 +54,47 @@ from .serializers import (
 STUDENTS_TAG = ["students"]
 
 
-class StudentFilterSet(django_filters.FilterSet):
-    fee_status = django_filters.CharFilter(field_name="fee_status", lookup_expr="exact")
-    is_active = django_filters.BooleanFilter(field_name="user__is_active")
-    qualification = django_filters.CharFilter(field_name="qualification", lookup_expr="exact")
-    city = django_filters.CharFilter(field_name="city", lookup_expr="iexact")
+#: The questions this screen is willing to be asked.
+#:
+#: Declared rather than hand-written so each field carries its own set of
+#: operators — `city=Jaipur` as before, and `city__icontains=jai` as well. The
+#: list is also sent to the browser, so the filter bar can only ever offer an
+#: operator the server accepts.
+#:
+#: Nothing outside this tuple is filterable. A field becomes available by being
+#: added here, never by being spelled correctly in a URL.
+STUDENT_FILTER_FIELDS = (
+    FilterField("fee_status", kind="choice", label="Fee status", choices=FeeStatus.choices),
+    FilterField(
+        "qualification", kind="choice", label="Qualification", choices=Qualification.choices
+    ),
+    FilterField("city", kind="text", label="City"),
+    FilterField("state", kind="text", label="State"),
     # "Everyone from Infosys" — the question a referral scheme starts with.
+    FilterField("institution", kind="text", label="College or employer"),
+    FilterField(
+        "institution_kind", kind="choice", label="Institution kind", choices=InstitutionKind.choices
+    ),
+    FilterField("student_id", kind="text", label="Student ID"),
+    FilterField("roll_number", kind="text", label="Roll number"),
+    FilterField("referred_by", kind="uuid", path="referred_by_id", label="Referred by"),
+    FilterField("branch", kind="uuid", path="branch_id", label="Centre"),
+    FilterField("created_at", kind="date", label="Registered on"),
+    FilterField("is_active", kind="boolean", path="user__is_active", label="Account active"),
+)
+
+
+class StudentFilterSet(filterset_for(StudentProfile, STUDENT_FILTER_FIELDS)):
+    # Two bare parameters keep the reading they have always had, because links,
+    # saved views and the referral screen are all already written against them.
+    # The generated `__exact` forms are the strict ones, for somebody who asks.
+    #
+    # `?city=jaipur` has always matched regardless of case.
+    city = django_filters.CharFilter(field_name="city", lookup_expr="iexact")
+    # `?institution=Infosys` has always been a contains match — it is how
+    # "everyone from one employer" is asked, and those names are typed by
+    # students in a dozen spellings.
     institution = django_filters.CharFilter(field_name="institution", lookup_expr="icontains")
-    institution_kind = django_filters.CharFilter(field_name="institution_kind", lookup_expr="exact")
-    referred_by = django_filters.UUIDFilter(field_name="referred_by_id")
-    branch = django_filters.UUIDFilter(field_name="branch_id")
     # "Registered, nowhere to sit" — the question the counsellor dashboard's
     # `Registered, not yet enrolled` panel asks. It used to answer it in the
     # browser by diffing the thirty most recent students against a page of the
@@ -72,18 +106,6 @@ class StudentFilterSet(django_filters.FilterSet):
         method="filter_awaiting_enrolment",
         label="Only students holding no seat on any batch (or only those who do).",
     )
-
-    class Meta:
-        model = StudentProfile
-        fields = (
-            "fee_status",
-            "qualification",
-            "city",
-            "institution",
-            "institution_kind",
-            "referred_by",
-            "branch",
-        )
 
     def filter_awaiting_enrolment(self, queryset, name, value):
         """Both directions through the one shared definition.
@@ -99,6 +121,32 @@ class StudentFilterSet(django_filters.FilterSet):
         if value:
             return awaiting
         return queryset.exclude(pk__in=awaiting.values("pk"))
+
+
+class StudentFilterFieldsView(APIView):
+    """What this list may be asked about.
+
+    The filter bar is built from this rather than from a copy of the field list
+    kept in the browser. One declaration, read by the server that enforces it
+    and by the screen that offers it, so the bar cannot offer a field or an
+    operator that would be ignored — which is the usual way a filter feature
+    rots: the server drops a field, the control stays, and the list silently
+    stops narrowing.
+
+    Needs only the right to see the list it describes. It carries field names
+    and labels, never anybody's data.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.STUDENT_VIEW_ANY
+
+    @extend_schema(
+        summary="The fields and operators the student list accepts",
+        responses={200: OpenApiTypes.OBJECT},
+        tags=STUDENTS_TAG,
+    )
+    def get(self, request):
+        return Response({"fields": describe_filters(STUDENT_FILTER_FIELDS)})
 
 
 class StudentListCreateView(ListCreateAPIView):

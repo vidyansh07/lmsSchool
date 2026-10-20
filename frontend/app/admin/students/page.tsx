@@ -2,7 +2,7 @@
 
 import { Eye, IndianRupee, Pencil, Send } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
 import { BulkActionsBar, type BulkAction } from '@/components/bulk-actions';
@@ -12,6 +12,14 @@ import { exportFiltersFrom } from '@/lib/reporting';
 import { SavedViews } from '@/components/saved-views';
 import { ActiveFilters } from '@/components/active-filters';
 import { useBranches } from '@/components/organisation/branch-field';
+import {
+  FilterBuilder,
+  fromQuery,
+  parameterFor,
+  toQuery,
+  type FilterCondition,
+  type FilterFieldSpec,
+} from '@/components/filter-builder';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { useResendInvitations } from '@/components/resend-invitations-action';
@@ -35,7 +43,7 @@ import {
   QUALIFICATION_LABEL,
   labelFor,
 } from '@/lib/labels';
-import { listStudents, setFeeStatus } from '@/lib/people';
+import { listStudents, setFeeStatus, studentFilterFields } from '@/lib/people';
 import type { FeeStatus, StudentListRow } from '@/types/api';
 import { CreateStudentDialog } from './create-student-dialog';
 
@@ -46,7 +54,36 @@ function StudentsTable() {
   const { user: viewer, can } = useAuth();
   const list = useList<StudentListRow>(listStudents, {}, {
     urlKeys: [...STUDENT_FILTER_KEYS],
+    // A filter somebody builds has a parameter name this screen cannot know in
+    // advance — it depends on the field and operator they chose. Matching on
+    // the shape keeps such a view in the address bar, so it can be bookmarked
+    // or sent to a colleague like any other.
+    urlKeyMatch: (key) => key.includes('__'),
   });
+
+  // The fields come from the server, which is the same declaration it enforces
+  // the list against. A copy kept here would drift: the server drops a field,
+  // the control stays, and the list quietly stops narrowing.
+  const [filterFields, setFilterFields] = useState<FilterFieldSpec[]>([]);
+  useEffect(() => {
+    const controller = new AbortController();
+    studentFilterFields(controller.signal)
+      .then((response) => setFilterFields(response.fields))
+      // A filter bar that cannot load is a missing feature, not a broken page:
+      // search, the fixed filters and the list itself all still work.
+      .catch(() => setFilterFields([]));
+    return () => controller.abort();
+  }, []);
+
+  const conditions = fromQuery(list.query as Record<string, unknown>, filterFields);
+
+  function applyConditions(next: FilterCondition[]) {
+    // Clearing has to be explicit: `setQuery` merges, so a parameter that is
+    // simply absent from the new set would otherwise stay applied.
+    const cleared: Record<string, string> = {};
+    for (const condition of conditions) cleared[parameterFor(condition)] = '';
+    list.setQuery({ ...cleared, ...toQuery(next) });
+  }
   // Ticked rows survive paging but never a change of filter.
   const selection = useBulkSelection<string>(selectionKey(list.query, STUDENT_FILTER_KEYS));
   const exportFilters = exportFiltersFrom(list.query, ['search', ...STUDENT_FILTER_KEYS]);
@@ -368,6 +405,15 @@ function StudentsTable() {
           </div>
         ) : null}
       </ListToolbar>
+
+      {/* The fixed controls above answer the questions this screen was built
+          for; this answers the rest, without turning the toolbar into a wall of
+          dropdowns nobody uses. */}
+      <FilterBuilder
+        fields={filterFields}
+        conditions={conditions}
+        onChange={applyConditions}
+      />
       <ActiveFilters
         query={list.query}
         onChange={list.setQuery}

@@ -34,12 +34,32 @@ export interface ListOptions {
    * would fight over the same parameters.
    */
   urlKeys?: readonly string[];
+  /**
+   * Also keep in the address bar any parameter whose name matches.
+   *
+   * `urlKeys` is a written-down list, which works while a screen's filters are
+   * written down too. A filter a person builds themselves is not: its
+   * parameter name depends on the field and operator they picked, and the
+   * screen cannot know them in advance.
+   *
+   * Without this, such a list narrows correctly and the URL says nothing — so
+   * the view cannot be bookmarked or sent to a colleague, which is most of why
+   * somebody builds a filter in the first place.
+   *
+   * Only consulted alongside `urlKeys`: a screen that has not opted into the
+   * address bar at all does not start writing to it because of this.
+   */
+  urlKeyMatch?: (key: string) => boolean;
 }
 
 /** Always in the address bar when a page opts in, alongside its own filters. */
 const URL_BASE_KEYS = ['search', 'ordering', 'page'] as const;
 
-function readUrlQuery(params: URLSearchParams | null, keys: readonly string[]): ListQuery {
+function readUrlQuery(
+  params: URLSearchParams | null,
+  keys: readonly string[],
+  match?: (key: string) => boolean,
+): ListQuery {
   // From `useSearchParams`, not `window.location`: on a client navigation the
   // new page renders before the address bar changes, so the window still
   // shows the page being left (a sign-in page's `?next=`) at this moment.
@@ -53,6 +73,12 @@ function readUrlQuery(params: URLSearchParams | null, keys: readonly string[]): 
       if (Number.isFinite(page) && page > 1) query.page = page;
     } else {
       query[key] = value;
+    }
+  }
+  if (match) {
+    for (const [key, value] of params.entries()) {
+      if (!value || key in query || keys.includes(key)) continue;
+      if (match(key)) query[key] = value;
     }
   }
   return query;
@@ -69,7 +95,7 @@ export function useList<T>(
     page: 1,
     page_size: 20,
     ...initialQuery,
-    ...(urlKeys ? readUrlQuery(searchParams, urlKeys) : {}),
+    ...(urlKeys ? readUrlQuery(searchParams, urlKeys, options.urlKeyMatch) : {}),
   }));
   const [attempt, setAttempt] = useState(0);
 
@@ -142,10 +168,21 @@ export function useList<T>(
   // keystroke in the search box is not a page the Back button should visit,
   // but the entry the person leaves from is what Back returns them to.
   const urlKeyList = urlKeys?.join(',') ?? '';
+  const matcher = options.urlKeyMatch;
   useEffect(() => {
     if (!urlKeyList || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
-    for (const key of urlKeyList.split(',')) {
+    // The named keys, plus any matched one either already in the address bar or
+    // newly in the query. Both directions are needed: one adds a filter
+    // somebody has just built, the other clears one they have just removed.
+    const matched = matcher
+      ? new Set(
+          [...params.keys(), ...Object.keys(query)].filter(
+            (key) => matcher(key) && !urlKeyList.split(',').includes(key),
+          ),
+        )
+      : new Set<string>();
+    for (const key of [...urlKeyList.split(','), ...matched]) {
       const value = query[key];
       const keep = value !== undefined && value !== null && value !== '' && !(key === 'page' && value === 1);
       if (keep) params.set(key, String(value));
@@ -156,7 +193,7 @@ export function useList<T>(
     if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
       window.history.replaceState(window.history.state, '', next);
     }
-  }, [query, urlKeyList]);
+  }, [query, urlKeyList, matcher]);
 
   return {
     data: state.data,

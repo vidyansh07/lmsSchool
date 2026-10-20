@@ -1,6 +1,7 @@
 /** API calls for users, students and trainers. */
 
 import { apiFetch, apiMutate, queryString } from './api';
+import type { FilterFieldSpec } from '@/components/filter-builder';
 import type {
   ActivityDetail,
   ActivityPriority,
@@ -269,4 +270,18 @@ export async function createTrainer(payload: {
   profile?: Record<string, unknown>;
 }): Promise<TrainerProfile> {
   return apiMutate<TrainerProfile>('/api/v1/trainers/', { method: 'POST', body: payload });
+}
+
+/**
+ * What the student list may be asked about.
+ *
+ * Fetched rather than written down here, because the server enforces an
+ * allowlist and a filter bar built from a second copy drifts from it: the
+ * server drops a field, the control stays, and the list silently stops
+ * narrowing.
+ */
+export async function studentFilterFields(
+  signal?: AbortSignal,
+): Promise<{ fields: FilterFieldSpec[] }> {
+  return apiFetch<{ fields: FilterFieldSpec[] }>('/api/v1/students/filter-fields/', { signal });
 }
