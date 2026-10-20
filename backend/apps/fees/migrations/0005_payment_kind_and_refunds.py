@@ -11,7 +11,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('fees', '0003_installments_and_reference_name'),
+        ('fees', '0004_discount_percent'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -40,10 +40,5 @@ class Migration(migrations.Migration):
             model_name='feepayment',
             name='refunded_by',
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='fee_payments_refunded', to=settings.AUTH_USER_MODEL),
-        ),
-        migrations.AddField(
-            model_name='feeplan',
-            name='discount_percent',
-            field=models.DecimalField(blank=True, decimal_places=2, help_text='If the discount was agreed as a percentage, the percentage agreed.', max_digits=5, null=True, validators=[django.core.validators.MinValueValidator(Decimal('0')), django.core.validators.MaxValueValidator(Decimal('100'))], verbose_name='discount percentage'),
         ),
     ]

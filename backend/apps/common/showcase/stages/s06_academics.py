@@ -449,7 +449,9 @@ class Scope:
 
 
 def _seed(*parts: Any) -> random.Random:
-    """A generator for one row, from its natural key — see the module docstring."""
+    """A generator for one row, from its natural key — see the module docstring.
+    Natural means the same on every database: names, emails, slugs, dates —
+    never a primary key (a fresh UUID each run) or a sequence-made code."""
     return random.Random(  # nosec B311  # noqa: S311 — deterministic fixture
         ":".join([str(RUN_SEED), STAGE, *(str(p) for p in parts)])
     )
@@ -735,7 +737,13 @@ def _ensure_registers(ctx: Context, scope: Scope) -> None:
             if session.status != SessionStatus.COMPLETED:
                 # A class that was in progress: the register does not complete it.
                 set_session_status(session=session, target=SessionStatus.COMPLETED, actor=actor)
-            when = _end_of(ctx, session) + timedelta(minutes=10)
+            # Ten minutes after the class — but on its own day: a 21:55 class
+            # (the latest the clock slot allows) ends at 23:55, and its
+            # register is not taken tomorrow.
+            when = min(
+                _end_of(ctx, session) + timedelta(minutes=10),
+                ctx.at(session.session_date, 23, 59),
+            )
             ctx.backdate(session, attendance_taken_at=when)
             # The whole register at once: the same queryset ``update()``
             # ``ctx.backdate`` makes, without a round trip per mark — six
@@ -1116,7 +1124,8 @@ def _ensure_learning(ctx: Context, scope: Scope) -> None:
             if headline is not None and row.student_id == headline.pk:
                 recent = ctx.at(ctx.days_ago(1), 20, 15)
             else:
-                recent = ctx.at(ctx.days_ago(_seed("recent", *pair).randint(0, 5)), 19, 30)
+                draw = _seed("recent", row.student.user.email.lower(), row.course.slug)
+                recent = ctx.at(ctx.days_ago(draw.randint(0, 5)), 19, 30)
             opened = min(recent, ctx.now - timedelta(hours=1))
             ctx.backdate(
                 progress, first_accessed_at=opened, last_accessed_at=opened, created_at=opened
@@ -1145,7 +1154,7 @@ def _completed_lessons(
     """
     if headline is not None and row.student_id == headline.pk:
         return total if batch.status == BatchStatus.COMPLETED else round(HEADLINE_FRACTION * total)
-    draw = _seed("learning", row.student_id, batch.course_id)
+    draw = _seed("learning", row.student.user.email.lower(), batch.course.slug)
     expected = _expected_fraction(ctx, batch)
     roll = draw.random()
     if row.pk in scope.chronic.get(key, set()):
@@ -1171,7 +1180,7 @@ def _nothing_opened(
     so the two never disagree about the same student."""
     if headline is not None and row.student_id == headline.pk:
         return False
-    draw = _seed("learning", row.student_id, batch.course_id)
+    draw = _seed("learning", row.student.user.email.lower(), batch.course.slug)
     roll = draw.random()
     if row.pk in scope.chronic.get(key, set()):
         return roll < CHRONIC_NOTHING

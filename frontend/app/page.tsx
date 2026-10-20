@@ -6,10 +6,10 @@ import { useEffect } from 'react';
 import { Activity, KeyRound, ShieldCheck } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
+import { homeFor } from '@/components/navigation';
 import { LoadingState } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { workspaceHomeForUser } from '@/lib/workspace';
 
 const foundations = [
   {
@@ -36,13 +36,14 @@ export default function HomePage() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
 
+  // A signed-in person has a real home now — their first navigation entry —
+  // so this address is only the public front page.
   useEffect(() => {
-    if (user) router.replace(workspaceHomeForUser(user));
-  }, [router, user]);
+    if (user) router.replace(homeFor(user));
+  }, [user, router]);
 
   if (isLoading) return <LoadingState label="Loading…" rows={4} />;
-
-  if (user) return <LoadingState label="Opening your workspace…" rows={4} />;
+  if (user) return <LoadingState label="Opening your home…" rows={4} />;
 
   return (
     <div className="space-y-8">

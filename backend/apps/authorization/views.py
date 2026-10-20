@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.roles import Capability, has_capability
 from apps.accounts.stepup import StepUpRequired, is_fresh
+from apps.audit.models import AuditAction
 from apps.common.caching import remember
 from apps.common.exceptions import AuthorityError
 from apps.common.permissions import HasCapability
@@ -165,6 +166,16 @@ class UnlockPermissionView(LockPermissionView):
         return self._apply(request, slug, code, False)
 
 
+def _guard_scope_change(actor, target, action: str) -> None:
+    """A grant widens what somebody reaches, so it follows the ladder — and is
+    never self-service, or a role narrowed to "assigned" could widen itself."""
+    from apps.accounts.services import ensure_may_administer
+
+    if actor.pk == target.pk:
+        raise AuthorityError({"user": ["Ask another administrator to change your own access."]})
+    ensure_may_administer(actor=actor, target=target, action=action)
+
+
 class ScopeGrantListView(APIView):
     """A user's batch/course grants under the `assigned` scope (ADR-02)."""
 
@@ -194,6 +205,7 @@ class ScopeGrantListView(APIView):
     )
     def post(self, request, user_id):
         target = self._user_for(user_id)
+        _guard_scope_change(request.user, target, AuditAction.SCOPE_GRANTED)
         serializer = ScopeGrantWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = dict(serializer.validated_data)
@@ -221,6 +233,7 @@ class ScopeGrantDetailView(APIView):
         from apps.accounts.access import visible_accounts
 
         target = get_object_or_404(visible_accounts(request.user), pk=user_id)
+        _guard_scope_change(request.user, target, AuditAction.SCOPE_REVOKED)
         grant = get_object_or_404(ScopeGrant.objects.filter(user=target), pk=grant_id)
         services.revoke_scope(actor=request.user, grant=grant)
         return Response(status=http_status.HTTP_204_NO_CONTENT)

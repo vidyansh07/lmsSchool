@@ -15,11 +15,12 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 
-import { ApiError } from '@/lib/api';
+import { ApiError, onSessionEnded } from '@/lib/api';
 import { fetchCurrentUser, logout as apiLogout } from '@/lib/auth';
 import { can, type CapabilityName } from '@/lib/capabilities';
 import type { CurrentUser } from '@/types/api';
@@ -32,14 +33,43 @@ interface AuthState {
   signOut: () => Promise<void>;
   setUser: (user: CurrentUser | null) => void;
   can: (capability: CapabilityName) => boolean;
+  /** True after a signed-in session was ended by the server (expired or
+   *  revoked), until somebody signs in again — the sign-in page says so. */
+  sessionEnded: boolean;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [user, setUserState] = useState<CurrentUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
+  const [sessionEnded, setSessionEnded] = useState(false);
+  // Kept in step with every `setUser` call rather than by an effect after the
+  // render: an "authentication required" answer arriving in the same moment
+  // as a sign-in must already see the person as signed in.
+  const signedIn = useRef(false);
+
+  // Any request answered `authentication_required` while somebody is signed
+  // in means the session is gone. Forgetting the user lets `RequireAuth` send
+  // them to sign-in with `?next=` pointing back at this page. Ignored for a
+  // visitor who was never signed in — that answer is how they are detected.
+  useEffect(
+    () =>
+      onSessionEnded(() => {
+        if (!signedIn.current) return;
+        signedIn.current = false;
+        setSessionEnded(true);
+        setUserState(null);
+      }),
+    [],
+  );
+
+  const setUser = useCallback((next: CurrentUser | null) => {
+    signedIn.current = next !== null;
+    if (next) setSessionEnded(false);
+    setUserState(next);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -56,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [setUser]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setUser]);
 
   const signOut = useCallback(async () => {
     try {
@@ -88,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setUser(null);
     }
-  }, []);
+  }, [setUser]);
 
   const value = useMemo<AuthState>(
     () => ({
@@ -99,8 +129,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       setUser,
       can: (capability: CapabilityName) => can(user?.capabilities, capability),
+      sessionEnded,
     }),
-    [user, isLoading, error, load, signOut],
+    [user, isLoading, error, load, signOut, setUser, sessionEnded],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

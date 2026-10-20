@@ -16,20 +16,26 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.access import visible_accounts
-from apps.common.permissions import Capability, HasCapability
+from apps.audit.models import AuditAction
+from apps.common import bulk
+from apps.common.permissions import Capability, HasCapability, IsActiveUser
+from apps.common.throttling import BurstThrottle
 from apps.organisation.access import resolve_submitted_branch
 
 from . import services, sessions
-from .models import User
+from .models import User, UserRole
 from .serializers import (
     AdminUserCreateSerializer,
     AdminUserDetailSerializer,
+    AdminUserRecordSerializer,
     AdminUserUpdateSerializer,
+    CredentialActionResultSerializer,
     CredentialActionSerializer,
     SessionSerializer,
     SetActiveSerializer,
     UserAuditEntrySerializer,
     UserBranchSerializer,
+    UserBulkRequestSerializer,
     UserRoleTransitionSerializer,
 )
 from .stepup import StepUpRequired, is_fresh
@@ -53,12 +59,20 @@ class UserFilterSet(django_filters.FilterSet):
     role = django_filters.CharFilter(field_name="role", lookup_expr="exact")
     is_active = django_filters.BooleanFilter(field_name="is_active")
     is_email_verified = django_filters.BooleanFilter(field_name="is_email_verified")
+    #: Set a password of their own (accepted the invitation), or not yet.
+    invitation_accepted = django_filters.BooleanFilter(method="filter_invitation_accepted")
     joined_after = django_filters.DateFilter(field_name="date_joined", lookup_expr="date__gte")
     joined_before = django_filters.DateFilter(field_name="date_joined", lookup_expr="date__lte")
 
     class Meta:
         model = User
         fields = ("branch", "role", "is_active", "is_email_verified")
+
+    def filter_invitation_accepted(self, queryset, name, value):
+        from django.contrib.auth.hashers import UNUSABLE_PASSWORD_PREFIX
+
+        pending = queryset.filter(password__startswith=UNUSABLE_PASSWORD_PREFIX)
+        return queryset.exclude(pk__in=pending.values("pk")) if value else pending
 
 
 class UserListCreateView(ListCreateAPIView):
@@ -142,11 +156,11 @@ class UserDetailView(RetrieveUpdateAPIView):
 
     def get_serializer_class(self):
         return (
-            AdminUserDetailSerializer if self.request.method == "GET" else AdminUserUpdateSerializer
+            AdminUserRecordSerializer if self.request.method == "GET" else AdminUserUpdateSerializer
         )
 
     @extend_schema(
-        summary="Retrieve a user", responses={200: AdminUserDetailSerializer}, tags=USERS_TAG
+        summary="Retrieve a user", responses={200: AdminUserRecordSerializer}, tags=USERS_TAG
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
@@ -163,7 +177,7 @@ class UserDetailView(RetrieveUpdateAPIView):
         serializer.is_valid(raise_exception=True)
 
         updated = services.update_user(user=user, actor=request.user, **serializer.validated_data)
-        return Response(AdminUserDetailSerializer(updated, context={"request": request}).data)
+        return Response(AdminUserRecordSerializer(updated, context={"request": request}).data)
 
 
 class UserRoleTransitionView(APIView):
@@ -177,6 +191,7 @@ class UserRoleTransitionView(APIView):
         request=UserRoleTransitionSerializer,
         responses={
             200: AdminUserDetailSerializer,
+            403: OpenApiResponse(description="Outside your authority, or step-up required."),
             409: OpenApiResponse(
                 description="A persona conversion or last-superadmin guard refused it."
             ),
@@ -187,6 +202,11 @@ class UserRoleTransitionView(APIView):
         user = get_object_or_404(_scoped_users(request.user), pk=user_id)
         serializer = UserRoleTransitionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        # Granting authority is at least as dangerous as ending a session or
+        # locking a permission, both of which already ask for a fresh step-up.
+        # Checked after the scoped lookup, so a cross-centre id still 404s.
+        if not is_fresh(request):
+            raise StepUpRequired()
         updated = services.transition_user_role(
             user=user, actor=request.user, **serializer.validated_data
         )
@@ -269,24 +289,102 @@ class UserCredentialActionView(APIView):
         summary="Send a credential link to a user",
         request=CredentialActionSerializer,
         responses={
-            202: OpenApiResponse(description="Accepted; a link has been sent if it could be."),
+            200: CredentialActionResultSerializer,
             403: OpenApiResponse(description="Outside your authority."),
         },
         tags=USERS_TAG,
     )
     def post(self, request, user_id):
-        user = get_object_or_404(User.objects.all(), pk=user_id)
+        # Scoped like its siblings: a 403 here for an account in another centre
+        # would confirm that the id is real.
+        user = get_object_or_404(_scoped_users(request.user), pk=user_id)
         serializer = CredentialActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         action = serializer.validated_data["action"]
 
-        services.send_credential_link(user=user, actor=request.user, action=action)
-        # 202, and the same answer whichever branch ran: whether an address is
-        # deliverable is not something this endpoint should report.
-        return Response(
-            {"detail": "If the account can receive it, a link has been sent."},
-            status=status.HTTP_202_ACCEPTED,
+        sent, detail = services.send_credential_link(user=user, actor=request.user, action=action)
+        # Whether the institution's mail service took the message — its own
+        # set-up — not whether the mailbox exists (see `send_credential_link`).
+        return Response(CredentialActionResultSerializer({"sent": sent, "detail": detail}).data)
+
+
+#: What each bulk action needs on top of reading the accounts list.
+_BULK_USER_CAPABILITY = {
+    "resend_invitation": Capability.USER_UPDATE_ANY,
+    "move_centre": Capability.ORGANISATION_ASSIGN_USERS,
+}
+
+
+class UserBulkView(APIView):
+    """Resend invitations to, or move to a centre, many accounts at once.
+
+    The rows are the ticked ids or everything the list's filters match, out of
+    the accounts this caller may see (`apps.common.bulk`). Each one goes
+    through the same service as the single-account screen — the authority
+    ladder, the centre rule and the audit entry all apply per account — and an
+    account a rule refuses is skipped with the reason, not failed silently.
+    """
+
+    permission_classes = (IsActiveUser,)
+    throttle_classes = (BurstThrottle,)
+
+    @extend_schema(
+        summary="Act on many accounts at once",
+        request=UserBulkRequestSerializer,
+        responses={200: bulk.BulkResultSerializer},
+        tags=USERS_TAG,
+    )
+    def post(self, request):
+        from apps.accounts.roles import has_capability
+        from apps.common.exceptions import AuthorityError
+        from apps.organisation import access as organisation_access
+
+        serializer = UserBulkRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        action = data["action"]
+        if not (
+            has_capability(request.user, Capability.USER_VIEW_ANY)
+            and has_capability(request.user, _BULK_USER_CAPABILITY[action])
+        ):
+            raise AuthorityError({"action": ["You cannot do this to accounts."]})
+
+        branch = None
+        if action == "move_centre":
+            branch = get_object_or_404(
+                organisation_access.visible_branches(request.user), pk=data["branch_id"]
+            )
+
+        rows, missing = bulk.resolve_targets(
+            _scoped_users(request.user),
+            data,
+            filterset="apps.accounts.user_views.UserFilterSet",
+            search_fields=UserListCreateView.search_fields,
         )
+
+        def resend(user: User) -> str | None:
+            return services.resend_invitation(user=user, actor=request.user)
+
+        def move(user: User) -> str | None:
+            if user.pk == request.user.pk:
+                return "You cannot move your own account."
+            if user.role == UserRole.STUDENT:
+                return "A student stays at the centre they were admitted to; transfer their class."
+            if user.branch_id == branch.pk:
+                return f"Already at {branch.name}."
+            services.move_user_to_branch(
+                user=user, branch=branch, actor=request.user, reason=data["reason"].strip()
+            )
+            return None
+
+        result = bulk.apply_each(
+            bulk.BulkResult(action=action),
+            rows,
+            missing,
+            resend if action == "resend_invitation" else move,
+            lambda user: user.get_full_name() or user.email,
+        )
+        return Response(bulk.BulkResultSerializer(result).data)
 
 
 class UserBranchView(APIView):
@@ -387,6 +485,11 @@ class UserSessionListView(APIView):
         # Resolved out of the scoped queryset (rule §2): a cross-centre id
         # 404s here rather than confirming a real account exists elsewhere.
         target = get_object_or_404(_scoped_users(request.user), pk=user_id)
+        # Devices and addresses are as sensitive as the sign-out itself:
+        # nobody reads them for an account above their own.
+        services.ensure_may_administer(
+            actor=request.user, target=target, action=AuditAction.SESSION_REVOKED_BY_ADMIN
+        )
         rows = sessions.list_active_sessions(user=target)
         return Response(SessionSerializer(rows, many=True).data)
 
@@ -419,6 +522,9 @@ class UserSessionRevokeView(APIView):
         # step-up check answering a fixed 403 for an id that was never
         # reachable in the first place.
         target = get_object_or_404(_scoped_users(request.user), pk=user_id)
+        services.ensure_may_administer(
+            actor=request.user, target=target, action=AuditAction.SESSION_REVOKED_BY_ADMIN
+        )
         row = get_object_or_404(sessions.list_active_sessions(user=target), pk=session_id)
         if not is_fresh(request):
             raise StepUpRequired()

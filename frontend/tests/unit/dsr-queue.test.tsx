@@ -35,6 +35,14 @@ vi.mock('@/lib/people', async () => {
 const mockAuth = vi.hoisted(() => ({ value: { can: () => true } as { can: (capability: string) => boolean } }));
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => mockAuth.value }));
 vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
+vi.mock('@/lib/saved-filters', () => ({
+  listSavedFilters: vi.fn().mockResolvedValue([]),
+  createSavedFilter: vi.fn(),
+  deleteSavedFilter: vi.fn(),
+}));
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 
 function page<T>(results: T[], overrides: Partial<Paginated<T>> = {}): Paginated<T> {
   return { count: results.length, page: 1, page_size: 20, total_pages: 1, next: null, previous: null, results, ...overrides };
@@ -106,6 +114,7 @@ function trainerRow(overrides: Partial<TrainerListRow> = {}): TrainerListRow {
     id: 'trainer-1',
     trainer_id: 'GRS-T-001',
     user_id: 'u-trainer-1',
+    invitation_accepted: true,
     email: 'tina@example.com',
     full_name: 'Tina Trainer',
     professional_title: 'Senior trainer',
@@ -456,5 +465,28 @@ describe('DsrQueue reading and missing reports', () => {
     await user.click(screen.getByRole('tab', { name: 'Missing' }));
     await waitFor(() => expect(screen.getByText('GRS-B-009')).toBeInTheDocument());
     expect(screen.getByText('Not started')).toBeInTheDocument();
+  });
+});
+
+describe('DsrQueue — filters in the address bar', () => {
+  it('opens narrowed to the status and dates in the link, and shows the range', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/dsr?status=submitted&date_after=2026-10-01&date_before=2026-10-15',
+    );
+    listDsr.mockResolvedValue(page([]));
+    render(<DsrQueue />);
+    await waitFor(() =>
+      expect(listDsr).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'submitted',
+          date_after: '2026-10-01',
+          date_before: '2026-10-15',
+        }),
+        expect.anything(),
+      ),
+    );
+    expect(screen.getByRole('group', { name: 'Active filters' })).toHaveTextContent('2026-10-01');
   });
 });

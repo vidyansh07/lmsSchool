@@ -19,6 +19,8 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
+import { BulkActionsBar, type BulkAction } from "@/components/bulk-actions";
+import { BulkResultDialog } from "@/components/bulk-result-dialog";
 import { Pagination } from "@/components/pagination";
 import { RequireAuth } from "@/components/require-auth";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -26,15 +28,32 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/layout";
 import { StatStrip } from "@/components/ui/stat-strip";
+import { StaffSelect } from "@/components/staff-select";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { useApi } from "@/hooks/use-api";
-import { errorMessage } from "@/lib/api";
+import { useBulkSelection } from "@/hooks/use-bulk-selection";
+import { errorMessage, fieldErrors } from "@/lib/api";
+import { bulkAssignEnquiryOwner, bulkTarget, type BulkResult } from "@/lib/bulk";
 import { Capability, can } from "@/lib/capabilities";
-import { enquiryListPath, updateEnquiry, type EnquiryFollowUpFilter } from "@/lib/enquiries";
-import { formatDateTime } from "@/lib/format";
+import {
+  enquiryListPath,
+  registerLeadHref,
+  updateEnquiry,
+  type EnquiryFollowUpFilter,
+} from "@/lib/enquiries";
+import { formatCount, formatDateTime } from "@/lib/format";
 import {
   ENQUIRY_STAGE_LABEL,
   ENQUIRY_STAGE_VARIANT,
@@ -138,11 +157,128 @@ function ChannelTabs({
   );
 }
 
+/** Who manages the lead: Meritto sends only ready-to-admit leads and runs
+ *  their pipeline (17 October 2026); walk-ins are entered here. */
+type LeadView = "" | "ready" | "meritto" | "lms";
+
+const LEAD_VIEWS: { value: LeadView; label: string }[] = [
+  { value: "", label: "All leads" },
+  { value: "ready", label: "Ready to admit" },
+  { value: "meritto", label: "From Meritto" },
+  { value: "lms", label: "Entered here" },
+];
+
+function LeadViewTabs({
+  summary,
+  view,
+  onView,
+}: {
+  summary: EnquirySummary | null;
+  view: LeadView;
+  onView: (view: LeadView) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2" role="group" aria-label="Who manages the lead">
+      {LEAD_VIEWS.map((tab) => (
+        <button
+          key={tab.value || "all"}
+          type="button"
+          aria-pressed={view === tab.value}
+          onClick={() => onView(tab.value)}
+          className={pillClass(view === tab.value)}
+        >
+          {tab.label}
+          {tab.value === "ready" && summary ? (
+            <span className="tabular-nums text-ink-faint">{summary.ready_to_admit}</span>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The list's filters as the bulk endpoint reads them (`EnquiryFilterSet`). */
+const ENQUIRY_FILTER_KEYS = [
+  "managed_by",
+  "ready_to_admit",
+  "stage",
+  "channel",
+  "source",
+  "follow_up",
+  "created_after",
+  "created_before",
+  "owner",
+  "q",
+] as const;
+
+function AssignOwnerDialog({
+  open,
+  count,
+  onClose,
+  onAssign,
+}: {
+  open: boolean;
+  count: number;
+  onClose: () => void;
+  onAssign: (ownerId: string | null) => Promise<Record<string, string> | null>;
+}) {
+  const [owner, setOwner] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!owner) {
+      setErrors({ owner_id: "Choose who takes them, or nobody." });
+      return;
+    }
+    setBusy(true);
+    const refused = await onAssign(owner === "none" ? null : owner);
+    setBusy(false);
+    if (refused) setErrors(refused);
+    else {
+      setOwner("");
+      setErrors({});
+    }
+  }
+
+  const formError = errors.filters ?? errors.ids ?? errors.detail;
+
+  return (
+    <Dialog open={open} onOpenChange={(next) => (next || busy ? null : onClose())}>
+      <DialogContent size="md">
+        <DialogHeader>
+          <DialogTitle>Assign {formatCount(count, "enquiry", "enquiries")}</DialogTitle>
+          <DialogDescription>
+            They appear in the new owner&apos;s list and follow-ups. Enquiries you cannot change, or
+            at another centre than the owner, are skipped and listed.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={(event) => void submit(event)} className="space-y-4" noValidate>
+          {formError ? <Alert variant="error">{formError}</Alert> : null}
+          <Field label="Owner" htmlFor="bulk-owner" error={errors.owner_id} required>
+            <StaffSelect id="bulk-owner" value={owner} onChange={setOwner} allowNone autoFocus />
+          </Field>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy}>
+              {busy ? "Assigning…" : "Assign"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function EnquiriesWorkspace() {
   const { user } = useAuth();
   const mayCapture = can(user?.capabilities, Capability.formAssign);
   const [stage, setStage] = useState<EnquiryStage | "">("");
   const [channel, setChannel] = useState<LeadChannel | "">("");
+  const [view, setView] = useState<LeadView>("");
   const [source, setSource] = useState("");
   const [followUp, setFollowUp] = useState<EnquiryFollowUpFilter>("");
   const [createdAfter, setCreatedAfter] = useState("");
@@ -152,10 +288,15 @@ function EnquiriesWorkspace() {
   const [page, setPage] = useState(1);
   const [savingId, setSavingId] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [result, setResult] = useState<BulkResult | null>(null);
+  const mayManage = can(user?.capabilities, Capability.enquiryManage);
 
   const summary = useApi<EnquirySummary>("/api/v1/enquiries/summary/");
   const list = useApi<Paginated<Enquiry>>(
     enquiryListPath({
+      managed_by: view === "meritto" || view === "lms" ? view : "",
+      ready_to_admit: view === "ready",
       stage,
       channel,
       source,
@@ -168,13 +309,55 @@ function EnquiriesWorkspace() {
     }),
   );
   const rows = list.data?.results ?? [];
+  const query: Record<string, string> = {
+    managed_by: view === "meritto" || view === "lms" ? view : "",
+    ready_to_admit: view === "ready" ? "true" : "",
+    stage,
+    channel,
+    source,
+    follow_up: followUp,
+    created_after: createdAfter,
+    created_before: createdBefore,
+    owner: mine ? "me" : "",
+    q: search.trim(),
+  };
+  // Ticked rows survive paging but never a change of filter.
+  const selection = useBulkSelection<string>(JSON.stringify(query));
+  const pageIds = rows.map((row) => row.id);
+  const pageState = selection.pageSelectionState(pageIds);
+  const selectedCount = selection.selectAllMatching
+    ? (list.data?.count ?? 0)
+    : selection.selectedCount;
+
+  async function assignOwner(ownerId: string | null): Promise<Record<string, string> | null> {
+    try {
+      const done = await bulkAssignEnquiryOwner({
+        // `q` is this list's search; the bulk endpoint reads it as a filter.
+        ...bulkTarget(selection, query, ENQUIRY_FILTER_KEYS),
+        owner_id: ownerId,
+      });
+      setAssigning(false);
+      setResult(done);
+      selection.clear();
+      list.reload();
+      return null;
+    } catch (cause) {
+      return fieldErrors(cause);
+    }
+  }
+
+  const bulkActions: BulkAction[] = mayManage
+    ? [{ id: "assign", label: "Assign owner", onClick: () => setAssigning(true) }]
+    : [];
   // Read once per page load: "late" only needs to be right to the minute.
   const [now] = useState(() => Date.now());
   const sources = summary.data?.sources ?? [];
   const sourceLabel = (value: string) =>
     sources.find((option) => option.value === value)?.label ?? value;
   const filtered =
-    Boolean(stage || channel || source || followUp || createdAfter || createdBefore || search || mine);
+    Boolean(
+      view || stage || channel || source || followUp || createdAfter || createdBefore || search || mine,
+    );
 
   function resetPage<T>(setter: (value: T) => void) {
     return (value: T) => {
@@ -201,7 +384,7 @@ function EnquiriesWorkspace() {
     <div className="space-y-6">
       <PageHeader
         title="Enquiries"
-        meta="Every lead at your centre, online and offline, by stage of the admissions pipeline."
+        meta="Leads Meritto sent when they were ready to admit, and walk-ins entered here."
       >
         {mayCapture ? (
           <Button asChild>
@@ -221,6 +404,7 @@ function EnquiriesWorkspace() {
         ]}
       />
 
+      <LeadViewTabs summary={summary.data} view={view} onView={resetPage(setView)} />
       <ChannelTabs summary={summary.data} channel={channel} onChannel={resetPage(setChannel)} />
       <StageStrip summary={summary.data} stage={stage} onStage={resetPage(setStage)} />
 
@@ -283,6 +467,31 @@ function EnquiriesWorkspace() {
 
       {saveError ? <Alert variant="error">{saveError}</Alert> : null}
 
+      <BulkActionsBar
+        selectedCount={selection.selectedCount}
+        totalMatchingCount={list.data?.count}
+        selectAllMatching={selection.selectAllMatching}
+        onSelectAllMatching={selection.selectAllMatchingFilter}
+        onClear={selection.clear}
+        actions={bulkActions}
+        itemNoun="enquiry"
+        itemPlural="enquiries"
+      />
+      <AssignOwnerDialog
+        open={assigning}
+        count={selectedCount}
+        onClose={() => setAssigning(false)}
+        onAssign={assignOwner}
+      />
+      <BulkResultDialog
+        result={result}
+        title="Owner assigned"
+        doneLabel="assigned"
+        itemNoun="enquiry"
+        itemPlural="enquiries"
+        onClose={() => setResult(null)}
+      />
+
       {list.isLoading ? (
         <LoadingState label="Loading enquiries…" rows={6} />
       ) : list.error ? (
@@ -307,6 +516,18 @@ function EnquiriesWorkspace() {
             <Table>
               <thead>
                 <tr>
+                  <Th className="w-10">
+                    <input
+                      type="checkbox"
+                      aria-label="Select every enquiry on this page"
+                      checked={pageState === "all"}
+                      ref={(node) => {
+                        if (node) node.indeterminate = pageState === "some";
+                      }}
+                      onChange={() => selection.toggleAll(pageIds)}
+                      className="size-4 rounded border-line accent-action"
+                    />
+                  </Th>
                   <Th>Enquiry</Th>
                   <Th>Course</Th>
                   <Th>Source</Th>
@@ -318,12 +539,28 @@ function EnquiriesWorkspace() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {rows.map((row, index) => {
                   const followUpLate =
                     row.next_follow_up_at !== null && new Date(row.next_follow_up_at).getTime() < now;
                   const busy = savingId === row.id;
                   return (
-                    <tr key={row.id} className="hover:bg-sunken/40" data-testid={`enquiry-${row.id}`}>
+                    <tr
+                      key={row.id}
+                      className={cn("hover:bg-sunken/40", selection.isSelected(row.id) && "bg-selected")}
+                      data-testid={`enquiry-${row.id}`}
+                    >
+                      <Td>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${row.full_name}`}
+                          checked={selection.isSelected(row.id)}
+                          readOnly
+                          onClick={(event) =>
+                            selection.toggle(row.id, index, pageIds, event.shiftKey)
+                          }
+                          className="size-4 rounded border-line accent-action"
+                        />
+                      </Td>
                       <Td>
                         <Link
                           href={`/enquiries/${row.id}`}
@@ -331,6 +568,11 @@ function EnquiriesWorkspace() {
                         >
                           {row.full_name}
                         </Link>
+                        {row.managed_externally ? (
+                          <Badge variant="info" className="ml-2" dot={false}>
+                            Meritto
+                          </Badge>
+                        ) : null}
                         <span className="block text-2xs tabular-nums text-ink-faint">{row.mobile}</span>
                       </Td>
                       <Td>{row.course || "—"}</Td>
@@ -377,13 +619,36 @@ function EnquiriesWorkspace() {
                               </option>
                             ))}
                           </Select>
+                        ) : row.managed_externally ? (
+                          <span className="flex flex-col gap-1">
+                            <Badge variant={row.student ? "success" : "warning"}>
+                              {row.student ? "Registered" : "Ready to admit"}
+                            </Badge>
+                            {row.external_stage ? (
+                              <span className="text-2xs text-ink-faint">
+                                Meritto: {row.external_stage}
+                              </span>
+                            ) : null}
+                          </span>
                         ) : (
                           <Badge variant={ENQUIRY_STAGE_VARIANT[row.stage]}>
                             {ENQUIRY_STAGE_LABEL[row.stage]}
                           </Badge>
                         )}
                       </Td>
-                      <Td>{row.owner?.name ?? "Unassigned"}</Td>
+                      <Td>
+                        {row.managed_externally
+                          ? row.external_owner || "In Meritto"
+                          : (row.owner?.name ?? "Unassigned")}
+                        {row.can_register ? (
+                          <Link
+                            href={registerLeadHref(row.id)}
+                            className="mt-1 block text-xs font-medium text-action hover:underline"
+                          >
+                            Register this lead
+                          </Link>
+                        ) : null}
+                      </Td>
                       <Td className={cn("whitespace-nowrap tabular-nums", followUpLate && "text-danger")}>
                         {row.next_follow_up_at ? formatDateTime(row.next_follow_up_at) : "—"}
                       </Td>

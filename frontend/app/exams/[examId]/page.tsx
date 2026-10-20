@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { Confirm } from '@/components/confirm';
 import { RequireAuth } from '@/components/require-auth';
 import { ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
@@ -38,6 +39,10 @@ function ExamPlayer({ examId }: { examId: string }) {
   const [remaining, setRemaining] = useState(0);
   const [answers, setAnswers] = useState<Record<string, CandidateQuestion>>({});
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [confirmSubmit, setConfirmSubmit] = useState(false);
+  // Set once when the displayed clock reaches zero, so the paper is locked
+  // and handed to the server exactly once.
+  const timeUpHandled = useRef(false);
   // The server is idempotent about starting, but there is no reason to ask it
   // twice: React re-runs effects in development, and a second request would
   // race the first for no benefit.
@@ -100,11 +105,52 @@ function ExamPlayer({ examId }: { examId: string }) {
     }
   }
 
+  /** Answers typed into a text box are saved when it loses focus; one still
+   *  being typed is saved here before the paper is handed in. Best effort:
+   *  the server is the record, and re-reading it afterwards shows the truth. */
+  async function flushTypedAnswers(current: AttemptPaper) {
+    const unsaved = current.questions.filter((question) => {
+      const local = answers[question.id];
+      return local !== undefined && local.text_answer !== question.text_answer;
+    });
+    await Promise.allSettled(
+      unsaved.map((question) =>
+        saveAnswer(current.attempt.id, question.id, {
+          selected_options: answers[question.id]?.selected_options ?? question.selected_options,
+          text_answer: answers[question.id]?.text_answer ?? '',
+        }),
+      ),
+    );
+  }
+
+  // The clock is the server's (see the docstring); at zero the server closes
+  // the attempt on its next read. Lock the paper, save what is mid-typing,
+  // and read it back, so the candidate sees "submitted" instead of answers
+  // that would fail with "That answer could not be saved."
+  useEffect(() => {
+    if (!paper || paper.attempt.status !== 'in_progress' || remaining > 0) return;
+    if (timeUpHandled.current) return;
+    timeUpHandled.current = true;
+    const current = paper;
+    void (async () => {
+      await flushTypedAnswers(current);
+      try {
+        adopt(await getAttemptPaper(current.attempt.id));
+      } catch (cause) {
+        setFormError(errorMessage(cause, 'Time is up, but the paper could not be refreshed.'));
+      }
+    })();
+    // Runs on the tick that reaches zero; `answers` is read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remaining, paper]);
+
   async function finish() {
     if (!paper) return;
+    setConfirmSubmit(false);
     setIsSubmitting(true);
     setFormError(null);
     try {
+      await flushTypedAnswers(paper);
       await submitAttempt(paper.attempt.id);
       adopt(await getAttemptPaper(paper.attempt.id));
     } catch (cause) {
@@ -129,6 +175,12 @@ function ExamPlayer({ examId }: { examId: string }) {
   }
 
   const finished = paper.attempt.status !== 'in_progress';
+  const timeUp = !finished && remaining <= 0;
+  const locked = finished || timeUp;
+  const unanswered = paper.questions.filter((question) => {
+    const current = answers[question.id] ?? question;
+    return (current.selected_options ?? []).length === 0 && !(current.text_answer ?? '').trim();
+  }).length;
 
   return (
     <div className="space-y-6">
@@ -156,6 +208,12 @@ function ExamPlayer({ examId }: { examId: string }) {
       </div>
 
       {formError ? <Alert variant="error">{formError}</Alert> : null}
+
+      {timeUp ? (
+        <Alert variant="warning" role="status">
+          Time is up. Your answers are being handed in — nothing more can be changed.
+        </Alert>
+      ) : null}
 
       {finished ? (
         <Alert variant="success" role="status" className="">
@@ -191,7 +249,7 @@ function ExamPlayer({ examId }: { examId: string }) {
 
             <CardContent>
               {question.options.length > 0 ? (
-                <fieldset className="space-y-2" disabled={finished}>
+                <fieldset className="space-y-2" disabled={locked}>
                   <legend className="sr-only">Answer for question {question.position + 1}</legend>
                   {question.options.map((option) => {
                     const many = question.question_type === 'multiple';
@@ -222,7 +280,7 @@ function ExamPlayer({ examId }: { examId: string }) {
                 <Textarea
                   aria-label={`Answer for question ${question.position + 1}`}
                   rows={question.question_type === 'long_answer' ? 6 : 2}
-                  disabled={finished}
+                  disabled={locked}
                   value={current.text_answer}
                   onChange={(event) =>
                     setAnswers((all) => ({
@@ -238,11 +296,27 @@ function ExamPlayer({ examId }: { examId: string }) {
         );
       })}
 
-      {!finished ? (
-        <Button type="button" onClick={finish} disabled={isSubmitting}>
+      {!locked ? (
+        <Button type="button" onClick={() => setConfirmSubmit(true)} disabled={isSubmitting}>
           {isSubmitting ? 'Submitting…' : 'Submit my paper'}
         </Button>
       ) : null}
+
+      <Confirm
+        open={confirmSubmit}
+        title="Submit your paper?"
+        description={
+          unanswered > 0
+            ? `${unanswered} of ${paper.questions.length} question${paper.questions.length === 1 ? '' : 's'} ${unanswered === 1 ? 'is' : 'are'} still unanswered. Once you submit, you cannot change any answer.`
+            : 'Every question has an answer. Once you submit, you cannot change any of them.'
+        }
+        confirmLabel="Submit my paper"
+        cancelLabel="Keep working"
+        confirmVariant="primary"
+        isConfirming={isSubmitting}
+        onConfirm={() => void finish()}
+        onCancel={() => setConfirmSubmit(false)}
+      />
     </div>
   );
 }

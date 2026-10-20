@@ -18,7 +18,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.roles import has_capability
+from apps.common import bulk
+from apps.common.exceptions import AuthorityError
 from apps.common.permissions import Capability, HasCapability, IsActiveUser, IsOwnerOrHasCapability
+from apps.common.throttling import BurstThrottle
 from apps.organisation.access import resolve_submitted_branch
 
 from . import access, services
@@ -26,6 +29,7 @@ from .models import TrainerProfile
 from .serializers import (
     AdminTrainerUpdateSerializer,
     TeachingProfileSerializer,
+    TrainerBulkRequestSerializer,
     TrainerCreateSerializer,
     TrainerListSerializer,
     TrainerProfileSerializer,
@@ -234,3 +238,55 @@ class TrainerMeView(APIView):
             **serializer.validated_data,
         )
         return Response(TrainerProfileSerializer(updated).data)
+
+
+class TrainerBulkView(APIView):
+    """Resend invitations to many trainers at once, from the trainers hub —
+    the ticked ones, or every trainer the hub's filters match.
+
+    The same rule as the accounts list (`accounts.services.resend_invitation`):
+    trainers who already accepted, or are inactive, are skipped and listed.
+    """
+
+    permission_classes = (IsActiveUser,)
+    throttle_classes = (BurstThrottle,)
+
+    @extend_schema(
+        summary="Act on many trainers at once",
+        request=TrainerBulkRequestSerializer,
+        responses={200: bulk.BulkResultSerializer},
+        tags=TRAINERS_TAG,
+    )
+    def post(self, request):
+        from apps.accounts import services as account_services
+
+        if not (
+            has_capability(request.user, Capability.TRAINER_VIEW_ANY)
+            # A manager brings trainers in (`trainer.create`/`update_any`) and so
+            # may resend the invitation of one who never got it; the per-account
+            # authority rule still applies to each row.
+            and (
+                has_capability(request.user, Capability.USER_UPDATE_ANY)
+                or has_capability(request.user, Capability.TRAINER_UPDATE_ANY)
+            )
+        ):
+            raise AuthorityError({"action": ["You cannot resend trainers' invitations."]})
+        serializer = TrainerBulkRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        rows, missing = bulk.resolve_targets(
+            access.visible_trainers(request.user).select_related("user"),
+            serializer.validated_data,
+            filterset="apps.trainers.views.TrainerFilterSet",
+            search_fields=TrainerListCreateView.search_fields,
+            request=request,
+        )
+        result = bulk.apply_each(
+            bulk.BulkResult(action="resend_invitation"),
+            rows,
+            missing,
+            lambda trainer: account_services.resend_invitation(
+                user=trainer.user, actor=request.user
+            ),
+            lambda trainer: trainer.user.get_full_name() or trainer.user.email,
+        )
+        return Response(bulk.BulkResultSerializer(result).data)

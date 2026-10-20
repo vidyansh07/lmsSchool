@@ -14,6 +14,7 @@ class AutomationConfig(AppConfig):
         # those apps imports anything back from this one.
         from apps.dsr.signals import dsr_missing, dsr_submitted
         from apps.enquiries.signals import enquiry_changed
+        from apps.fees.signals import instalment_due, instalment_overdue, payment_recorded
         from apps.forms.signals import form_submitted
         from apps.performance.signals import RISK_CHANGED
         from apps.work.signals import activity_changed
@@ -23,7 +24,10 @@ class AutomationConfig(AppConfig):
             on_dsr_missing,
             on_dsr_submitted,
             on_enquiry_changed,
+            on_fee_payment_recorded,
             on_form_submitted,
+            on_instalment_due,
+            on_instalment_overdue,
             on_risk_changed,
         )
 
@@ -38,3 +42,12 @@ class AutomationConfig(AppConfig):
         # `apps.dsr.signals`: a class report handed in, or gone missing.
         dsr_submitted.connect(on_dsr_submitted, dispatch_uid="automation.on_dsr_submitted")
         dsr_missing.connect(on_dsr_missing, dispatch_uid="automation.on_dsr_missing")
+        # `apps.fees.signals`: a payment recorded, and the morning sweep's
+        # instalments due soon or overdue — the three `FEE_*` triggers.
+        payment_recorded.connect(
+            on_fee_payment_recorded, dispatch_uid="automation.on_fee_payment_recorded"
+        )
+        instalment_due.connect(on_instalment_due, dispatch_uid="automation.on_instalment_due")
+        instalment_overdue.connect(
+            on_instalment_overdue, dispatch_uid="automation.on_instalment_overdue"
+        )

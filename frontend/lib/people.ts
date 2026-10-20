@@ -5,6 +5,8 @@ import type {
   ActivityDetail,
   ActivityPriority,
   AdminUser,
+  AdminUserRecord,
+  CredentialLinkResult,
   FeeStatus,
   Paginated,
   StudentDuplicatesResponse,
@@ -44,8 +46,8 @@ export async function listUsers(
   return apiFetch<Paginated<AdminUser>>(`/api/v1/users/${queryString(query)}`, { signal });
 }
 
-export async function getUser(id: string): Promise<AdminUser> {
-  return apiFetch<AdminUser>(`/api/v1/users/${id}/`);
+export async function getUser(id: string): Promise<AdminUserRecord> {
+  return apiFetch<AdminUserRecord>(`/api/v1/users/${id}/`);
 }
 
 export async function createUser(payload: {
@@ -61,14 +63,22 @@ export async function createUser(payload: {
 
 export async function updateUser(
   id: string,
-  changes: Partial<Pick<AdminUser, 'email' | 'first_name' | 'last_name' | 'phone'>>,
+  changes: Partial<Pick<AdminUser, 'email' | 'first_name' | 'last_name' | 'phone'>> & {
+    /** The `updated_at` the form was loaded with; an older copy gets 409 `stale_write`. */
+    expected_updated_at?: string;
+  },
 ): Promise<AdminUser> {
   return apiMutate<AdminUser>(`/api/v1/users/${id}/`, { method: 'PATCH', body: changes });
 }
 
 export async function transitionUserRole(
   id: string,
-  changes: { role: AdminUser['role']; custom_role: string | null; reason: string },
+  changes: {
+    role: AdminUser['role'];
+    custom_role: string | null;
+    reason: string;
+    expected_updated_at?: string;
+  },
 ): Promise<AdminUser> {
   return apiMutate<AdminUser>(`/api/v1/users/${id}/role-transition/`, {
     method: 'POST',
@@ -83,10 +93,12 @@ export async function transitionUserRole(
  * a password has to transmit it, which means two people know it and the record
  * says an administrator changed it rather than the owner setting one.
  */
+/** Send a password link (an invitation, while they have not set a password)
+ *  or a verification link. `sent` says whether the mail service took it. */
 export async function sendCredentialLink(
   id: string,
   action: 'password_reset' | 'email_verification',
-): Promise<{ detail: string }> {
+): Promise<CredentialLinkResult> {
   return apiMutate(`/api/v1/users/${id}/credential-link/`, {
     method: 'POST',
     body: { action },

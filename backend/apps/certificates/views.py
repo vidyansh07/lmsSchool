@@ -130,10 +130,13 @@ class CertificateFilterSet(django_filters.FilterSet):
     status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
     course = django_filters.UUIDFilter(field_name="completion__enrollment__course_id")
     batch = django_filters.UUIDFilter(field_name="completion__enrollment__batch_id")
+    #: One student's certificates — the Student 360 tab. Narrowing only: the
+    #: rows are already the caller's visible set.
+    student = django_filters.UUIDFilter(field_name="completion__enrollment__student_id")
 
     class Meta:
         model = Certificate
-        fields = ("status", "course", "batch")
+        fields = ("status", "course", "batch", "student")
 
 
 class CertificateListView(ListAPIView):

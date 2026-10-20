@@ -166,11 +166,16 @@ class SetInstallmentsSerializer(StrictSerializer):
 class SetFeePlanSerializer(StrictSerializer):
     agreed_amount = serializers.DecimalField(min_value=0, **MONEY)
     discount_amount = serializers.DecimalField(min_value=0, required=False, default=0, **MONEY)
-    # Sent instead of `discount_amount` when the discount was agreed as a
-    # percentage. No default: left out means "no percentage was offered", which
-    # is a different answer from zero.
+    # Sent: the discount is this percentage of the fee and `discount_amount` is
+    # ignored (the server works it out). Left out or null: a flat discount.
     discount_percent = serializers.DecimalField(
-        max_digits=5, decimal_places=2, min_value=0, max_value=100, required=False
+        max_digits=5,
+        decimal_places=2,
+        min_value=0,
+        max_value=100,
+        required=False,
+        allow_null=True,
+        default=None,
     )
     discount_reason = SafeCharField(max_length=200, required=False, allow_blank=True, default="")
     notes = SafeCharField(max_length=1000, required=False, allow_blank=True)
@@ -247,3 +252,41 @@ class FeesOverviewSerializer(serializers.Serializer):
     enrollments_without_plan = serializers.IntegerField()
     overdue = serializers.ListField(child=serializers.DictField())
     due_soon = serializers.ListField(child=serializers.DictField())
+
+
+class FeeEmailSerializer(serializers.Serializer):
+    """One fee mail from the outbox: what was sent, to whom, and whether it went."""
+
+    id = serializers.UUIDField(read_only=True)
+    kind = serializers.ChoiceField(
+        source="template",
+        choices=(("fee_receipt", "Receipt"), ("fee_statement", "Fee statement")),
+        read_only=True,
+    )
+    receipt_number = serializers.SerializerMethodField()
+    to_email = serializers.EmailField(read_only=True)
+    subject = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    attempts = serializers.IntegerField(read_only=True)
+    last_error = serializers.CharField(read_only=True)
+    sent_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_receipt_number(self, obj) -> str | None:
+        return self.context.get("receipt_numbers", {}).get(
+            next(
+                (
+                    item.get("id")
+                    for item in obj.attachments or []
+                    if item.get("kind") == "fee_receipt"
+                ),
+                None,
+            )
+        )
+
+
+class FeeEmailQueuedSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    to_email = serializers.EmailField()
+    status = serializers.CharField()

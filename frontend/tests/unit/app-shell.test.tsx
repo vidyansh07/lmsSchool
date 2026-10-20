@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AppShell } from '@/components/app-shell';
+import { homeFor } from '@/components/navigation';
 import { Capability } from '@/lib/capabilities';
 
 const SIDEBAR_STORAGE_KEY = 'grras.sidebar-collapsed';
@@ -19,9 +20,11 @@ function staffAuth() {
 
 const mockAuth = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 
+const pathname = vi.hoisted(() => ({ value: '/' }));
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/',
+  usePathname: () => pathname.value,
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 vi.mock('@/components/auth-provider', () => ({
@@ -161,8 +164,11 @@ describe('AppShell sidebar collapse', () => {
     renderShell();
 
     expect(screen.getByText('Administrator workspace')).toBeInTheDocument();
-    for (const home of screen.getAllByRole('link', { name: /Grras LMS/ })) {
-      expect(home).toHaveAttribute('href', '/admin/overview');
+    // The brand link goes where sign-in lands: the first page the sidebar offers.
+    const home = homeFor(mockAuth.value.user as Parameters<typeof homeFor>[0]);
+    expect(home).not.toBe('/');
+    for (const link of screen.getAllByRole('link', { name: /Grras LMS/ })) {
+      expect(link).toHaveAttribute('href', home);
     }
 
     const institution = screen.getByRole('button', { name: 'Institution' });
@@ -256,5 +262,86 @@ describe('AppShell mobile drawer (unchanged by Phase R3)', () => {
     await user.click(screen.getByRole('button', { name: 'Open navigation menu' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+  });
+});
+
+describe('AppShell — a sidebar and module tabs for each role', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    pathname.value = '/';
+  });
+
+  function signIn(role: string, capabilities: string[]) {
+    mockAuth.value = {
+      user: { role, email: `${role}@example.test`, full_name: role, capabilities },
+      isLoading: false,
+      signOut: vi.fn(),
+      can: (capability: string) => capabilities.includes(capability),
+    };
+  }
+
+  it("shows a counsellor the front desk, and the leads module's other screens as tabs", () => {
+    signIn('counsellor', [
+      Capability.enrolmentCreate,
+      Capability.enquiryViewAny,
+      Capability.formAssign,
+      Capability.studentCreate,
+    ]);
+    pathname.value = '/enquiries';
+    renderShell();
+
+    const sidebar = screen.getAllByRole('navigation', { name: 'Main' })[0]!;
+    const links = within(sidebar).getAllByRole('link');
+    // The pipeline first, then leads — the counsellor's own order.
+    expect(links[0]).toHaveAttribute('href', '/admissions/dashboard');
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(
+      expect.arrayContaining(['/enquiries', '/forms/fill/enquiry', '/admissions/new']),
+    );
+
+    const tabs = screen.getByRole('navigation', { name: 'Leads' });
+    expect(within(tabs).getByRole('link', { name: 'Enquiries' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(within(tabs).getByRole('link', { name: 'New enquiry' })).toHaveAttribute(
+      'href',
+      '/forms/fill/enquiry',
+    );
+    expect(within(tabs).getByRole('link', { name: 'Form inbox' })).toBeInTheDocument();
+  });
+
+  it('offers only the tabs a configured role still holds', () => {
+    mockAuth.value = {
+      user: {
+        role: 'counsellor',
+        custom_role: 'desk-only',
+        email: 'd@example.test',
+        full_name: 'Desk',
+        capabilities: [Capability.enquiryViewAny],
+      },
+      isLoading: false,
+      signOut: vi.fn(),
+      can: () => false,
+    };
+    pathname.value = '/enquiries';
+    renderShell();
+    const tabs = screen.getByRole('navigation', { name: 'Leads' });
+    expect(within(tabs).queryByRole('link', { name: 'New enquiry' })).not.toBeInTheDocument();
+  });
+
+  it("shows a manager the academics module's screens as tabs", () => {
+    signIn('manager', [Capability.performanceViewAny, Capability.batchViewAny, Capability.dsrViewAny]);
+    pathname.value = '/dsr';
+    renderShell();
+    const tabs = screen.getByRole('navigation', { name: 'Academics' });
+    expect(within(tabs).getByRole('link', { name: 'Batches' })).toBeInTheDocument();
+    expect(within(tabs).getByRole('link', { name: 'Batch review' })).toBeInTheDocument();
+  });
+
+  it('draws no tabs for a module with a single screen', () => {
+    signIn('admin', [Capability.trainerViewAny]);
+    pathname.value = '/manage/trainers';
+    renderShell();
+    expect(screen.queryByRole('navigation', { name: 'Trainers' })).not.toBeInTheDocument();
   });
 });

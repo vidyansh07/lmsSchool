@@ -138,18 +138,6 @@ class FeePlan(BaseModel):
         default=ZERO,
         validators=[MinValueValidator(ZERO)],
     )
-    #: What the counsellor typed, when they gave a percentage rather than a
-    #: figure. The money is `discount_amount` and always has been; this records
-    #: the intent behind it.
-    #:
-    #: Both are stored because they answer different questions and only one of
-    #: them is money. "Twenty percent off" is what was agreed and what the
-    #: student remembers; 5,000 rupees is what the ledger must subtract. If only
-    #: the percentage were stored, every total would be a multiplication waiting
-    #: to drift when the agreed fee is later corrected — and a student's balance
-    #: would move under them, which is the one thing this ledger does not do.
-    #:
-    #: Null means a flat discount was given, or none.
     discount_percent = models.DecimalField(
         _("discount percentage"),
         max_digits=5,
@@ -157,7 +145,10 @@ class FeePlan(BaseModel):
         null=True,
         blank=True,
         validators=[MinValueValidator(ZERO), MaxValueValidator(Decimal("100"))],
-        help_text=_("If the discount was agreed as a percentage, the percentage agreed."),
+        help_text=_(
+            "Set when the discount was given as a percentage of the fee; "
+            "`discount_amount` is then worked out from it. Empty for a flat discount."
+        ),
     )
     discount_reason = models.CharField(
         _("discount reason"),

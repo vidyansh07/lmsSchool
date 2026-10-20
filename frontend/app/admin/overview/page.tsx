@@ -450,6 +450,8 @@ function Overview() {
       <Grid>
         <GridItem span={12} lgSpan={6}>
           <ChartCard
+            error={delivery.error}
+            onRetry={delivery.reload}
             title="Classes held and attendance rate"
             subtitle="Volume against rate — a busy week and a well-attended one are not the same week"
             icon={Activity}
@@ -479,6 +481,8 @@ function Overview() {
 
         <GridItem span={12} lgSpan={6}>
           <ChartCard
+            error={enrolments.error}
+            onRetry={enrolments.reload}
             title="Enrolments over time"
             subtitle="Enrolments started each week, and how many of them completed"
             icon={GraduationCap}
@@ -508,6 +512,8 @@ function Overview() {
 
         <GridItem span={12}>
           <ChartCard
+            error={batches.error}
+            onRetry={batches.reload}
             title="Attendance by batch"
             subtitle={`The ten lowest of the batches you can see. Amber is below the ${ATTENDANCE_TARGET}% target.`}
             icon={CalendarCheck}

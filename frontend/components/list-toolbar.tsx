@@ -31,6 +31,14 @@ export function ListToolbar({
 }) {
   const searchId = useId();
   const [value, setValue] = useState(search);
+  // When the search changes from outside — a saved view applied, Back to a
+  // list whose address carries one — show it, rather than letting the
+  // debounce below write the stale box back over it.
+  const [seenSearch, setSeenSearch] = useState(search);
+  if (search !== seenSearch) {
+    setSeenSearch(search);
+    setValue(search);
+  }
 
   useEffect(() => {
     const timer = setTimeout(() => {

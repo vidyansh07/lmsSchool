@@ -53,6 +53,22 @@ function readCsrfCookie(): string | null {
   return match ? decodeURIComponent(match.slice(CSRF_COOKIE_NAME.length + 1)) : null;
 }
 
+/**
+ * Told when the server answers `authentication_required` — the session cookie
+ * expired, was revoked from another device, or a role change ended it.
+ * `AuthProvider` listens, so a screen open across the 12-hour session limit
+ * goes back to sign-in instead of showing "Authentication is required." with
+ * a Retry that can never work.
+ */
+const sessionEndedListeners = new Set<() => void>();
+
+export function onSessionEnded(listener: () => void): () => void {
+  sessionEndedListeners.add(listener);
+  return () => {
+    sessionEndedListeners.delete(listener);
+  };
+}
+
 export interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   /** Abort the request after this many milliseconds. */
@@ -139,13 +155,15 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   if (!response.ok) {
     const envelope = payload as ApiErrorBody | null;
-    throw new ApiError(
+    const error = new ApiError(
       response.status,
       envelope?.error?.code ?? 'error',
       envelope?.error?.message ?? 'The request failed.',
       envelope?.error?.request_id ?? response.headers.get('X-Request-ID') ?? '',
       envelope?.error?.details ?? null,
     );
+    if (error.isAuthError) sessionEndedListeners.forEach((listener) => listener());
+    throw error;
   }
 
   return payload as T;
@@ -206,16 +224,90 @@ export function fieldErrors(error: unknown): Record<string, string> {
   if (!(error instanceof ApiError)) {
     return { __all__: 'Something went wrong. Please try again.' };
   }
-  const details = error.details;
-  if (!details || typeof details !== 'object') {
+  // A throttle's details are a number of seconds, not a field: reported as
+  // `retry_after_seconds: "57.3"` it would read as a validation message.
+  const throttled = rateLimitMessage(error);
+  if (throttled) return { __all__: throttled };
+  const details = error.details as unknown;
+  if (!details || typeof details !== 'object' || Array.isArray(details)) {
     return { __all__: error.message };
   }
-  const mapped: Record<string, string> = {};
-  for (const [field, value] of Object.entries(details)) {
-    mapped[field] = Array.isArray(value) ? String(value[0]) : String(value);
-  }
+  const mapped = mapDetails(details as Record<string, unknown>);
   if (Object.keys(mapped).length === 0) mapped.__all__ = error.message;
   return mapped;
+}
+
+/**
+ * Flatten DRF's error shapes onto the names a form reads.
+ *
+ * `non_field_errors` is the form-level message, so it becomes `__all__`. A
+ * nested serializer (`{"profile": {"skills": [...]}}`) lifts its fields to the
+ * top so a form that renders `errors.skills` sees them, and keeps the parent
+ * key as well. A list of row errors (`[{}, {"amount": [...]}]`) contributes
+ * its first sentence. The first message for a key wins.
+ */
+function mapDetails(details: Record<string, unknown>): Record<string, string> {
+  const mapped: Record<string, string> = {};
+  for (const [field, value] of Object.entries(details)) {
+    const key = field === 'non_field_errors' ? '__all__' : field;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [inner, message] of Object.entries(mapDetails(value as Record<string, unknown>))) {
+        mapped[inner === '__all__' ? key : inner] ??= message;
+      }
+    }
+    const message = firstMessage(value);
+    if (message !== null) mapped[key] ??= message;
+  }
+  return mapped;
+}
+
+function firstMessage(value: unknown): string | null {
+  if (typeof value === 'string') return value || null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const message = firstMessage(item);
+      if (message !== null) return message;
+    }
+    return null;
+  }
+  if (value && typeof value === 'object') return firstMessage(Object.values(value));
+  return null;
+}
+
+/**
+ * The sentence a form shows above its fields: the form-level message, or else
+ * the first error under a key the form does not render beside a field. A 403,
+ * a 409 on `status` or a timeout otherwise leaves the button reverting with
+ * nothing said.
+ */
+export function unshownError(
+  fields: Record<string, string>,
+  shown: readonly string[],
+): string | null {
+  if (fields.__all__) return fields.__all__;
+  const stray = Object.entries(fields).find(([key]) => !shown.includes(key));
+  return stray ? stray[1] : null;
+}
+
+/**
+ * True when a write may have reached the server although no answer came
+ * back — a timeout or a dropped connection. Retrying blindly can record a
+ * payment twice; the screen should say to check first.
+ */
+export function isUncertainOutcome(cause: unknown): boolean {
+  return cause instanceof ApiError && (cause.code === 'timeout' || cause.code === 'network_error');
+}
+
+/** A friendly sentence for a `429 rate_limited` refusal, or `null` otherwise. */
+export function rateLimitMessage(cause: unknown): string | null {
+  if (!(cause instanceof ApiError) || cause.code !== 'rate_limited') return null;
+  const raw = cause.details?.retry_after_seconds;
+  const seconds = Number(Array.isArray(raw) ? raw[0] : raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return 'Too many attempts. Wait a moment and try again.';
+  }
+  const wait = Math.ceil(seconds);
+  return `Too many attempts. Wait ${wait} second${wait === 1 ? '' : 's'} and try again.`;
 }
 
 /**

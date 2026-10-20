@@ -28,6 +28,9 @@ import { Suspense } from 'react';
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
 import { WarningsStrip } from '@/components/warnings-strip';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
+import { SavedViews } from '@/components/saved-views';
+import { ActiveFilters } from '@/components/active-filters';
+import { labelFor } from '@/lib/labels';
 import { ListToolbar } from '@/components/list-toolbar';
 import { AttentionChip } from '@/components/manage/attention-chip';
 import { Pagination } from '@/components/pagination';
@@ -96,10 +99,14 @@ export function BatchesHub() {
   // narrowed to the thing the person clicked on, rather than to everything.
   const searchParams = useSearchParams();
   const attention = searchParams.get('attention') ?? '';
-  const list = useList<ManageBatchRow>(listManageBatches, {
-    page_size: 20,
-    ...(attention ? { attention } : {}),
-  });
+  const list = useList<ManageBatchRow>(
+    listManageBatches,
+    {
+      page_size: 20,
+      ...(attention ? { attention } : {}),
+    },
+    { urlKeys: ['attention', 'status'] },
+  );
 
   const columns: DataTableColumn<ManageBatchRow>[] = [
     {
@@ -172,6 +179,12 @@ export function BatchesHub() {
           onClear={() => list.setQuery({ attention: undefined, page: 1 })}
         />
 
+        <SavedViews
+          screen="manage-batches"
+          keys={['search', 'ordering', 'attention', 'status']}
+          query={list.query}
+          onApply={list.setQuery}
+        />
         <ListToolbar
           search={String(list.query.search ?? '')}
           onSearchChange={(value) => list.setQuery({ search: value })}
@@ -199,6 +212,14 @@ export function BatchesHub() {
             </Select>
           </div>
         </ListToolbar>
+        <ActiveFilters
+          query={list.query}
+          onChange={list.setQuery}
+          filters={[
+            { key: 'search', label: 'Search' },
+            { key: 'status', label: 'Status', display: (value) => labelFor(BATCH_STATUS_LABEL, value) },
+          ]}
+        />
 
         <DataTable
           columns={columns}

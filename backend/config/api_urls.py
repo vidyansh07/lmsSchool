@@ -179,6 +179,7 @@ urlpatterns = [
     path("me/", include((work_urls.me_patterns, "work-me"))),
     path("automation-rules/", include("apps.automation.urls")),
     path("enquiries/", include("apps.enquiries.urls")),
+    path("integrations/", include("apps.integrations.urls")),
     path("templates/", include((communication_urls.template_patterns, "templates"))),
     path("deliveries/", include((communication_urls.delivery_patterns, "deliveries"))),
     path("communication/", include((communication_urls.communication_patterns, "communication"))),

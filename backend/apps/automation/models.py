@@ -66,6 +66,14 @@ class AutomationTrigger(models.TextChoices):
     DSR_MISSING = "DSR_MISSING", _("Class report missing")
     #: A submitted class report carries a note about one student.
     DSR_STUDENT_FLAGGED = "DSR_STUDENT_FLAGGED", _("Student flagged in a class report")
+    #: A payment was recorded against a student's fee (`apps.fees.services.record_payment`).
+    FEE_PAYMENT_RECORDED = "FEE_PAYMENT_RECORDED", _("Fee payment recorded")
+    #: An unpaid instalment falls due within the week; checked every morning,
+    #: so a rule says which day before by `instalment.days_until`.
+    FEE_INSTALMENT_DUE = "FEE_INSTALMENT_DUE", _("Fee instalment due soon")
+    #: An instalment's date has passed and it is not fully paid; checked every
+    #: morning with `instalment.days_overdue`.
+    FEE_INSTALMENT_OVERDUE = "FEE_INSTALMENT_OVERDUE", _("Fee instalment overdue")
 
 
 class AutomationRuleStatus(models.TextChoices):

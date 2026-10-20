@@ -22,6 +22,7 @@ vi.mock('@/lib/performance', async () => {
 
 const mockAuth = vi.hoisted(() => ({ value: { can: () => true } as { can: (capability: string) => boolean } }));
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => mockAuth.value }));
+vi.mock('@/components/manage/trainer-profile-card', () => ({ TrainerProfileCard: () => null }));
 
 function review(overrides: Partial<PerformanceReview> = {}): PerformanceReview {
   return {

@@ -1380,6 +1380,51 @@ def _moment(ctx: Context, when: tuple[int, int] | None) -> datetime | None:
     return ctx.at(ctx.days_ahead(days), hour)
 
 
+#: From this hour a spec's "today" moment means "later this evening".
+EVENING_HOUR = 19
+
+
+def _open_moments(ctx: Context, spec: Act) -> tuple[datetime | None, datetime | None]:
+    """``(planned_at, due_at)`` for a spec, kept ahead of now where the spec
+    means "later today".
+
+    An open activity written as ``planned=(0, 21), due=(0, 22)`` is one still
+    ahead this evening. Run the seed after 21:00 and those hours have gone:
+    the sweep would call it missed or overdue and the counsellor's "due later
+    today" would be empty. So an evening moment of today that has already
+    passed moves to just ahead of now — the planned and due moments by the
+    same amount, so their order holds — and never past the end of the day.
+    """
+    planned = _moment(ctx, spec.planned)
+    due = _moment(ctx, spec.due)
+    if spec.status not in (PLANNED, ASSIGNED, IN_PROGRESS):
+        return planned, due
+
+    def evening(when: tuple[int, int] | None) -> bool:
+        return when is not None and when[0] == 0 and when[1] >= EVENING_HOUR
+
+    end = ctx.at(ctx.today, 23, 59)
+    floor = min(ctx.now + timedelta(minutes=10), end)
+    moments = [
+        moment
+        for moment, when in ((planned, spec.planned), (due, spec.due))
+        if moment is not None and evening(when)
+    ]
+    if not moments or min(moments) >= floor:
+        return planned, due
+    shift = floor - min(moments)
+
+    def moved(moment: datetime | None, when: tuple[int, int] | None) -> datetime | None:
+        if moment is None or not evening(when):
+            return moment
+        return min(moment + shift, end)
+
+    # An activity already under way keeps the time it was planned for.
+    if spec.status != IN_PROGRESS:
+        planned = moved(planned, spec.planned)
+    return planned, moved(due, spec.due)
+
+
 def _ensure_activities(ctx: Context, scope: Scope) -> None:
     skipped = 0
     for spec in ACTIVITIES:
@@ -1417,8 +1462,7 @@ def _create(
 ) -> None:
     creator = _actor(ctx, spec.creator, batch)
     assignee = _actor(ctx, spec.assignee, batch) if spec.assignee else None
-    planned_at = _moment(ctx, spec.planned)
-    due_at = _moment(ctx, spec.due)
+    planned_at, due_at = _open_moments(ctx, spec)
 
     activity = create_activity(
         actor=creator,
@@ -1540,8 +1584,7 @@ def _keep_live(ctx: Context, activity: Activity, spec: Act) -> None:
     if spec.status not in (PLANNED, ASSIGNED, IN_PROGRESS) or activity.status != spec.status:
         return
     fields: dict[str, Any] = {}
-    intended_planned = _moment(ctx, spec.planned)
-    intended_due = _moment(ctx, spec.due)
+    intended_planned, intended_due = _open_moments(ctx, spec)
     grace = ctx.now - timedelta(minutes=MISSED_GRACE_MINUTES)
     if (
         spec.status in (PLANNED, ASSIGNED)

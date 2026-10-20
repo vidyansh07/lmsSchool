@@ -254,7 +254,12 @@ def test_batches_stage_builds_every_state_and_is_idempotent(
     assert started.start_time <= now.time(), "the headline batch has a class today that started"
     assert started.trainer_id == headline_trainer.pk
     later = ClassSession.objects.filter(batch=batches["a1"], session_date=today)
-    if (now + timedelta(hours=2)).time() <= time(21, 55) and now.date() == today:
+    # The seed's own rule (`_clock_time`): two hours ahead, while that is
+    # still today and leaves a two-hour class room to end today. The date is
+    # the later moment's — after 22:00 two hours ahead is tomorrow morning,
+    # whose time-of-day alone would wrongly read as "room left today".
+    ahead = now + timedelta(hours=2)
+    if ahead.date() == today and ahead.time() <= time(21, 55):
         assert later.filter(start_time__gt=now.time()).exists(), "a1 has a class later today"
     else:  # too late in the evening for a class ahead: a started one instead
         assert later.filter(start_time__lte=now.time()).exists()

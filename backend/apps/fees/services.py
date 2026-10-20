@@ -43,6 +43,7 @@ from apps.common.identifiers import next_receipt_number
 from apps.enrollments.models import LIVE_STATUSES, Enrollment
 from apps.students.models import FeeStatus, StudentProfile
 
+from . import mail
 from .models import (
     DEFAULT_INSTALLMENT_COUNT,
     DEFAULT_INSTALLMENT_GAP_DAYS,
@@ -58,6 +59,9 @@ from .models import (
     PaymentMethod,
     installment_rows,
 )
+from .signals import payment_recorded
+
+HUNDRED = Decimal("100")
 
 RESOURCE_PLAN = "fee_plan"
 RESOURCE_PAYMENT = "fee_payment"
@@ -80,35 +84,21 @@ def _money(value: Any, field: str) -> Decimal:
     return amount.quantize(Decimal("0.01"))
 
 
-def _percentage(value: Any) -> Decimal | None:
-    """A discount percentage, or ``None`` when one was not given.
-
-    ``None`` and ``0`` are different answers: no percentage was offered, versus
-    a discount of nothing. The first leaves any flat discount alone; the second
-    sets the discount to zero.
-    """
-    if value is None or value == "":
-        return None
+def _percent(value: Any) -> Decimal:
     try:
         percent = Decimal(str(value))
     except Exception as exc:
-        raise ApplicationError(
-            {"discount_percent": ["Enter a percentage, for example 10 or 12.5."]}
-        ) from exc
-    if percent < ZERO or percent > Decimal("100"):
+        raise ApplicationError({"discount_percent": ["Enter a percentage, like 10."]}) from exc
+    if percent != percent.quantize(Decimal("0.01")):
+        raise ApplicationError({"discount_percent": ["Use at most two decimals, like 12.5."]})
+    if percent < ZERO or percent > HUNDRED:
         raise ApplicationError({"discount_percent": ["A percentage is between 0 and 100."]})
     return percent.quantize(Decimal("0.01"))
 
 
-def discount_from_percent(agreed: Decimal, percent: Decimal) -> Decimal:
-    """The money a percentage comes to, on this fee.
-
-    Rounded half-up to the paisa, the way a person with a calculator rounds, so
-    the figure a counsellor is shown is the figure the ledger subtracts. Banker's
-    rounding — Python's default — would make 12.5% of an odd fee land a paisa
-    away from what the counsellor read out, and a student notices one rupee.
-    """
-    return (agreed * percent / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+def discount_for_percent(agreed: Decimal, percent: Decimal) -> Decimal:
+    """The rupee discount a percentage of the fee comes to, to the paisa."""
+    return (agreed * percent / HUNDRED).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def refund_payment(*, payment: FeePayment, actor: User, reason: str) -> FeePayment:
@@ -166,6 +156,8 @@ def refund_payment(*, payment: FeePayment, actor: User, reason: str) -> FeePayme
     return payment
 
 
+
+
 def _plan_context(plan: FeePlan) -> dict[str, Any]:
     enrollment = plan.enrollment
     return {
@@ -188,9 +180,9 @@ def set_fee_plan(
     actor: User,
     agreed_amount: Any,
     discount_amount: Any = ZERO,
+    discount_percent: Any = None,
     discount_reason: str = "",
     notes: str | None = None,
-    discount_percent: Any = None,
     installments: list[dict[str, Any]] | None = None,
     installment_count: int | None = None,
 ) -> FeePlan:
@@ -202,15 +194,20 @@ def set_fee_plan(
     instalments, default six, thirty days apart from today), and an existing
     plan keeps its dates with the amounts re-spread over them if the fee
     changed.
+
+    A discount is given either as rupees (`discount_amount`) or as a
+    percentage of the fee (`discount_percent`, what a counsellor types: `10`
+    is 10%). Given as a percentage, the rupee amount is worked out here and
+    both are kept, so the receipt and the ledger never round it differently.
     """
     _require_manage(actor)
     agreed = _money(agreed_amount, "agreed_amount")
-    percent = _percentage(discount_percent)
+    percent = None if discount_percent in (None, "") else _percent(discount_percent)
     if percent is not None:
         # A percentage is an instruction to work out the money, not a second
         # kind of discount. It is turned into rupees here, once, and the rupees
         # are what the ledger keeps.
-        discount = discount_from_percent(agreed, percent)
+        discount = discount_for_percent(agreed, percent)
     else:
         discount = _money(discount_amount, "discount_amount")
     problems: dict[str, list[str]] = {}
@@ -250,6 +247,7 @@ def set_fee_plan(
                 **_plan_context(plan),
                 "agreed_amount": str(agreed),
                 "discount_amount": str(discount),
+                "discount_percent": None if percent is None else str(percent),
                 "discount_reason": plan.discount_reason,
             },
         )
@@ -259,6 +257,7 @@ def set_fee_plan(
             )
         _replace_installments(plan, actor=actor, items=installments)
         sync_student_fee_status(enrollment.student, actor=actor)
+        mail.queue_safely(mail.email_statement, plan)
         return plan
 
     # Changing a fee that already has payments against it: the new payable
@@ -278,6 +277,7 @@ def set_fee_plan(
     for field, new_value in (
         ("agreed_amount", agreed),
         ("discount_amount", discount),
+        ("discount_percent", percent),
         ("discount_reason", discount_reason.strip()),
         ("notes", (notes if notes is not None else plan.notes).strip()),
     ):
@@ -288,6 +288,7 @@ def set_fee_plan(
     if not changes:
         if installments is not None:
             _replace_installments(plan, actor=actor, items=installments)
+            mail.queue_safely(mail.email_statement, plan)
         return plan
 
     plan.updated_by = actor
@@ -310,6 +311,8 @@ def set_fee_plan(
             )
             _replace_installments(plan, actor=actor, items=respread)
     sync_student_fee_status(enrollment.student, actor=actor)
+    if installments is not None or {"agreed_amount", "discount_amount"} & changes.keys():
+        mail.queue_safely(mail.email_statement, plan)
     return plan
 
 
@@ -418,6 +421,7 @@ def set_installments(*, plan: FeePlan, actor: User, items: list[dict[str, Any]])
     plan = FeePlan.objects.select_for_update().get(pk=plan.pk)
     _replace_installments(plan, actor=actor, items=items)
     sync_student_fee_status(plan.enrollment.student, actor=actor)
+    mail.queue_safely(mail.email_statement, plan)
     return plan
 
 
@@ -603,6 +607,9 @@ def record_payment(
         },
     )
     sync_student_fee_status(plan.enrollment.student, actor=actor)
+    mail.queue_safely(mail.email_receipt, payment)
+    if not mail.is_suppressed():
+        payment_recorded.send(sender=FeePayment, payment=payment, actor=actor)
     return payment
 
 

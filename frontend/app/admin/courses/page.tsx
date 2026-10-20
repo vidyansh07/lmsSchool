@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
 import { CourseCard } from '@/components/course-card';
+import { SavedViews } from '@/components/saved-views';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
@@ -31,7 +32,11 @@ const STATUS_OPTIONS: PublishStatus[] = ['draft', 'in_review', 'published', 'arc
 function CourseAdminList() {
   const { can } = useAuth();
   const isAdmin = can(Capability.courseViewAny);
-  const list = useList<CourseListRow>(isAdmin ? listCourses : listMyCourses, { page_size: 12 });
+  const list = useList<CourseListRow>(
+    isAdmin ? listCourses : listMyCourses,
+    { page_size: 12 },
+    { urlKeys: ['status'] },
+  );
   const [showCreate, setShowCreate] = useState(false);
 
   return (
@@ -69,6 +74,12 @@ function CourseAdminList() {
         />
       ) : null}
 
+      <SavedViews
+        screen="admin-courses"
+        keys={['search', 'ordering', 'status']}
+        query={list.query}
+        onApply={list.setQuery}
+      />
       <ListToolbar
         search={String(list.query.search ?? '')}
         onSearchChange={(value) => list.setQuery({ search: value })}

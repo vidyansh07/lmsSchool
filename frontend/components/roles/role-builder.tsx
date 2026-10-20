@@ -33,7 +33,7 @@ import {
 import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { ApiError, errorMessage, fieldErrors } from "@/lib/api";
+import { ApiError, fieldErrors, unshownError } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
 import {
   PERMISSION_CATEGORY_LABEL,
@@ -244,9 +244,7 @@ export function RoleBuilder({ slug }: { slug?: string }) {
       const fields = fieldErrors(cause);
       setErrors(fields);
       setFormError(
-        Object.keys(fields).length === 0
-          ? errorMessage(cause, "The role could not be saved.")
-          : (fields.permissions ?? fields.__all__ ?? null),
+        fields.permissions ?? unshownError(fields, ["name", "slug", "kind", "description"]),
       );
       if (fields.name || fields.slug || fields.kind) setStep(1);
     } finally {

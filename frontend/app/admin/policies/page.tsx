@@ -61,7 +61,7 @@ import { Input, Select } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { useApi } from "@/hooks/use-api";
-import { ApiError, errorMessage, fieldErrors } from "@/lib/api";
+import { ApiError, errorMessage, fieldErrors, unshownError } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
 import { formatDateTime, UNKNOWN } from "@/lib/format";
 import { POLICY_CATEGORY_LABEL } from "@/lib/labels";
@@ -248,11 +248,7 @@ function EditDialog({
       }
       const fields = fieldErrors(cause);
       setErrors(fields);
-      setFormError(
-        Object.keys(fields).length === 0
-          ? errorMessage(cause, "That could not be saved.")
-          : (fields.__all__ ?? null),
-      );
+      setFormError(unshownError(fields, ["value", "reason", "confirm"]));
     } finally {
       setIsSaving(false);
     }

@@ -7,6 +7,12 @@ import { ApiError } from '@/lib/api';
 import type { ManageTrainerRow } from '@/lib/manage';
 
 const listManageTrainers = vi.hoisted(() => vi.fn());
+// Saved views load from the server; these tests are about the list itself.
+vi.mock('@/lib/saved-filters', () => ({
+  listSavedFilters: vi.fn().mockResolvedValue([]),
+  createSavedFilter: vi.fn(),
+  deleteSavedFilter: vi.fn(),
+}));
 vi.mock('@/lib/manage', async () => {
   const actual = await vi.importActual<typeof import('@/lib/manage')>('@/lib/manage');
   return { ...actual, listManageTrainers };
@@ -20,13 +26,25 @@ vi.mock('@/lib/people', async () => {
 
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock('@/components/auth-provider', () => ({ useAuth }));
-vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
+const exportFilters = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
+vi.mock('@/components/export-menu', () => ({
+  ExportMenu: ({ filters }: { filters?: Record<string, unknown> }) => {
+    exportFilters.value = filters ?? {};
+    return null;
+  },
+}));
 vi.mock('@/app/admin/trainers/create-trainer-dialog', () => ({
   CreateTrainerDialog: ({ open }: { open: boolean }) =>
     open ? <div role="dialog">Trainer onboarding</div> : null,
 }));
 
 vi.mock('@/components/manage/attention-strip', () => ({ ManagerAttentionStrip: () => null }));
+vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+const bulkTrainers = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/bulk', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/bulk')>('@/lib/bulk');
+  return { ...actual, bulkTrainers };
+});
 
 const push = vi.hoisted(() => vi.fn());
 // The hub reads `?attention=` from the address bar and the filter chip
@@ -48,6 +66,7 @@ function trainerRow(overrides: Partial<ManageTrainerRow> = {}): ManageTrainerRow
     id: 'trainer-1',
     trainer_id: 'GRS-T-001',
     user_id: 'u-trainer-1',
+    invitation_accepted: true,
     email: 'tina@example.com',
     full_name: 'Tina Trainer',
     professional_title: 'Senior trainer',
@@ -121,6 +140,49 @@ describe('TrainersHub', () => {
     );
   });
 
+  it('applies a typed skill without waiting for the field to lose focus', async () => {
+    listManageTrainers.mockResolvedValue(page([trainerRow()]));
+    render(<TrainersHub />);
+    await waitFor(() => expect(listManageTrainers).toHaveBeenCalledTimes(1));
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Skill'), 'linux');
+    await waitFor(() =>
+      expect(listManageTrainers).toHaveBeenLastCalledWith(
+        expect.objectContaining({ skill: 'linux' }),
+        expect.anything(),
+      ),
+    );
+    // And the export receives the same narrowing as the table.
+    await waitFor(() => expect(exportFilters.value).toEqual(expect.objectContaining({ skill: 'linux' })));
+  });
+
+  it('marks a manager who also teaches, rather than listing them as one more trainer', async () => {
+    listManageTrainers.mockResolvedValue(page([trainerRow({ role: 'manager', full_name: 'Meera Manager' })]));
+    render(<TrainersHub />);
+    expect(await screen.findByText('Manager · also teaches')).toBeInTheDocument();
+  });
+
+  it('narrows by experience and says so, with a way to clear it', async () => {
+    listManageTrainers.mockResolvedValue(page([trainerRow()]));
+    render(<TrainersHub />);
+    await waitFor(() => expect(listManageTrainers).toHaveBeenCalledTimes(1));
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText('Experience'), '5');
+    await waitFor(() =>
+      expect(listManageTrainers).toHaveBeenLastCalledWith(
+        expect.objectContaining({ min_experience: '5' }),
+        expect.anything(),
+      ),
+    );
+    await user.click(screen.getByRole('button', { name: 'Remove filter Experience: 5+ years' }));
+    await waitFor(() =>
+      expect(listManageTrainers).toHaveBeenLastCalledWith(
+        expect.not.objectContaining({ min_experience: '5' }),
+        expect.anything(),
+      ),
+    );
+  });
+
   it('opens the trainer on row activation', async () => {
     listManageTrainers.mockResolvedValue(page([trainerRow()]));
     render(<TrainersHub />);
@@ -174,5 +236,44 @@ describe('TrainersHub — arriving from the attention strip', () => {
     );
     expect(replace).toHaveBeenCalledWith('/manage/hub');
     searchParams.value = '';
+  });
+});
+
+describe('TrainersHub — acting on many trainers', () => {
+  it('resends invitations to the ticked trainers', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 'admin-1', role: 'admin' },
+      isLoading: false,
+      can: () => true,
+    });
+    listManageTrainers.mockResolvedValue(
+      page([
+        trainerRow({ is_email_verified: false }),
+        trainerRow({ id: 'trainer-2', full_name: 'Ravi Kumar', email: 'ravi@example.com' }),
+      ]),
+    );
+    bulkTrainers.mockResolvedValue({
+      action: 'resend_invitation',
+      total: 2,
+      done: 1,
+      skipped: [{ id: 'trainer-2', label: 'Ravi Kumar', reason: 'They have already accepted their invitation.' }],
+    });
+    const user = userEvent.setup();
+    render(<TrainersHub />);
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Select Tina Trainer' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Select Ravi Kumar' }));
+    await user.click(screen.getByRole('button', { name: 'Resend invitations' }));
+    await user.click(screen.getByRole('button', { name: 'Send invitations' }));
+
+    await waitFor(() =>
+      expect(bulkTrainers).toHaveBeenCalledWith({
+        ids: ['trainer-1', 'trainer-2'],
+        action: 'resend_invitation',
+      }),
+    );
+    expect(await screen.findByRole('dialog', { name: 'Invitations' })).toHaveTextContent(
+      'They have already accepted their invitation.',
+    );
   });
 });

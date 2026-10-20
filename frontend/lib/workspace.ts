@@ -1,22 +1,12 @@
 import type { UserRole } from '@/types/api';
 
 /**
- * The first useful screen for each built-in role.
- *
- * `/` used to be an old phase-one welcome page, so signing in took every
- * person away from the operational page built for their job. Keep this map in
- * one place: login, the root redirect and any future "back to workspace"
- * control must agree about what home means.
+ * What each built-in role's navigation is called — the sidebar's accessible
+ * name and its heading. Where a person lands is `homeFor` in
+ * `components/navigation.ts`: the first entry of their own sidebar, so the
+ * landing page and the menu never disagree and a configured role that lost a
+ * capability never lands on a page it can no longer open.
  */
-const WORKSPACE_HOME: Record<UserRole, string> = {
-  superadmin: '/admin/overview',
-  admin: '/admin/overview',
-  manager: '/manage',
-  counsellor: '/admissions/dashboard',
-  trainer: '/dashboard',
-  student: '/dashboard',
-};
-
 const WORKSPACE_LABEL: Record<UserRole, string> = {
   superadmin: 'Superadmin workspace',
   admin: 'Administrator workspace',
@@ -27,73 +17,7 @@ const WORKSPACE_LABEL: Record<UserRole, string> = {
 };
 
 function isUserRole(role: string | undefined): role is UserRole {
-  return Boolean(role && role in WORKSPACE_HOME);
-}
-
-export function workspaceHome(role: string | undefined): string {
-  return isUserRole(role) ? WORKSPACE_HOME[role] : '/dashboard';
-}
-
-/**
- * Resolve a useful landing page without restoring permissions removed from a
- * configured role. Built-in roles retain their stable job home; a custom role
- * uses the first matching capability in that job's normal priority order.
- */
-export function workspaceHomeForUser(user: {
-  role: string;
-  capabilities: readonly string[];
-  custom_role?: string | null;
-}): string {
-  if (!user.custom_role) return workspaceHome(user.role);
-
-  const can = (capability: string) => user.capabilities.includes(capability);
-
-  switch (user.role) {
-    case 'superadmin':
-    case 'admin':
-      if (can('audit.view')) return '/admin/activity';
-      if (can('report.view_any')) return '/admin/overview';
-      if (can('student.view_any')) return '/admin/students';
-      if (can('user.view_any')) return '/admin/users';
-      if (can('fee.view_any')) return '/fees';
-      break;
-    case 'manager':
-      if (can('performance.view_any')) return '/manage';
-      if (can('report.view_any')) return '/analytics';
-      if (can('trainer.view_any')) return '/manage/trainers';
-      if (can('fee.view_any')) return '/fees';
-      if (can('student.view_any')) return '/admin/students';
-      if (can('enquiry.view_any')) return '/enquiries';
-      break;
-    case 'counsellor':
-      if (can('enrolment.create')) return '/admissions/dashboard';
-      if (can('enquiry.view_any')) return '/enquiries';
-      if (can('fee.view_any')) return '/fees';
-      if (can('student.view_any')) return '/admin/students';
-      break;
-    case 'trainer':
-    case 'student':
-      return '/dashboard';
-  }
-
-  // Any other role — a placement officer, or anything an administrator
-  // composes out of permissions. The switch above is keyed on names this file
-  // knows, so such a person used to land on their own profile page: a correct
-  // answer to "where can you certainly go?" and a useless answer to "where do
-  // you work?". Walk the same priorities by capability instead, widest job
-  // first, and fall back to the profile only when they really hold nothing.
-  for (const [capability, home] of [
-    ['enquiry.view_any', '/enquiries'],
-    ['student.view_any', '/admin/students'],
-    ['report.view_any', '/analytics'],
-    ['trainer.view_any', '/manage/trainers'],
-    ['fee.view_any', '/fees'],
-    ['user.view_any', '/admin/users'],
-  ] as const) {
-    if (can(capability)) return home;
-  }
-
-  return '/profile';
+  return Boolean(role && role in WORKSPACE_LABEL);
 }
 
 export function workspaceLabel(role: string | undefined): string {

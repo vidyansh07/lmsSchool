@@ -13,6 +13,12 @@ import { ApiError } from '@/lib/api';
 import type { BatchListRow } from '@/types/api';
 
 const listBatches = vi.hoisted(() => vi.fn());
+// Saved views load from the server; these tests are about the list itself.
+vi.mock('@/lib/saved-filters', () => ({
+  listSavedFilters: vi.fn().mockResolvedValue([]),
+  createSavedFilter: vi.fn(),
+  deleteSavedFilter: vi.fn(),
+}));
 vi.mock('@/lib/batches', async () => {
   const actual = await vi.importActual<typeof import('@/lib/batches')>('@/lib/batches');
   return { ...actual, listBatches };
@@ -25,7 +31,9 @@ vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
 vi.mock('@/app/admin/batches/create-batch-dialog', () => ({ CreateBatchDialog: () => null }));
 
 const push = vi.hoisted(() => vi.fn());
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 
 function page(results: BatchListRow[]) {
   return { count: results.length, page: 1, page_size: 20, total_pages: 1, next: null, previous: null, results };
@@ -130,8 +138,16 @@ describe('AdminBatchesPage', () => {
     render(<AdminBatchesPage />);
     await waitFor(() => expect(screen.getByText('Morning Linux batch')).toBeInTheDocument());
     const user = userEvent.setup();
-    await user.click(screen.getByText('Morning Linux batch'));
+    // Anywhere on the row opens it…
+    await user.click(screen.getByText('Linux Essentials'));
     expect(push).toHaveBeenCalledWith('/admin/batches/batch-1');
+    // …and the name is a real link to the same place, which handles its own
+    // click instead of the row navigating a second time.
+    push.mockClear();
+    expect(screen.getByRole('link', { name: 'Morning Linux batch' })).toHaveAttribute(
+      'href',
+      '/admin/batches/batch-1',
+    );
   });
 
   it('shows an error with retry on failure', async () => {

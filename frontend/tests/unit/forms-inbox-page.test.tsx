@@ -21,7 +21,9 @@ vi.mock("@/lib/forms", async () => {
   return { ...actual, submitFormAssignment };
 });
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 
 const auth = vi.hoisted(() => ({ role: "trainer", capabilities: [] as string[] }));
 vi.mock("@/components/auth-provider", () => ({

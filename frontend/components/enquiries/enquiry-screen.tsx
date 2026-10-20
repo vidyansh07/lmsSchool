@@ -10,7 +10,7 @@
 
 import Link from "next/link";
 import { useId, useState } from "react";
-import { ArrowLeft, Plus, Send } from "lucide-react";
+import { ArrowLeft, ExternalLink, Plus, Send, UserPlus } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { FormAssignmentsTable } from "@/components/forms/form-assignments-table";
@@ -36,7 +36,7 @@ import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { useApi } from "@/hooks/use-api";
 import { errorMessage, fieldErrors } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
-import { updateEnquiry, type EnquiryChanges } from "@/lib/enquiries";
+import { registerLeadHref, updateEnquiry, type EnquiryChanges } from "@/lib/enquiries";
 import { formatDateTime } from "@/lib/format";
 import {
   ACTIVITY_STATUS_LABEL,
@@ -84,7 +84,12 @@ function Facts({ enquiry }: { enquiry: EnquiryDetail }) {
     ["Source", enquiry.source || "—"],
     ["Campaign", [enquiry.utm_source, enquiry.utm_campaign].filter(Boolean).join(" / ") || "—"],
     ["Lead quality", enquiry.lead_quality ? `${enquiry.lead_quality} of 5` : "—"],
-    ["Owner", enquiry.owner?.name ?? "Unassigned"],
+    [
+      "Owner",
+      enquiry.managed_externally
+        ? enquiry.external_owner || "In Meritto"
+        : (enquiry.owner?.name ?? "Unassigned"),
+    ],
     ["Entered by", enquiry.created_by?.name ?? "—"],
     ["Last contacted", enquiry.last_contacted_at ? formatDateTime(enquiry.last_contacted_at) : "—"],
     ["Created", formatDateTime(enquiry.created_at)],
@@ -549,6 +554,66 @@ function HistoryCard({ enquiry }: { enquiry: EnquiryDetail }) {
   );
 }
 
+/** A Meritto lead: Meritto runs its pipeline, the LMS registers it. */
+function MerittoCard({ enquiry }: { enquiry: EnquiryDetail }) {
+  const facts: [string, string][] = [
+    ["Stage in Meritto", enquiry.external_stage || "Not sent"],
+    ["Owner in Meritto", enquiry.external_owner || "Not sent"],
+    ["Meritto lead id", enquiry.external_id || "—"],
+  ];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ExternalLink className="size-4 text-action" aria-hidden="true" />
+          Managed in Meritto
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-ink-muted">
+          Meritto sent this lead because it is ready to admit. Its stage, owner and follow-ups are
+          changed in Meritto and arrive here with each update; here it is registered as a student.
+        </p>
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-3">
+          {facts.map(([label, value]) => (
+            <div key={label} className="min-w-0">
+              <dt className="text-2xs font-medium uppercase tracking-wide text-ink-faint">{label}</dt>
+              <dd className="truncate text-sm text-ink">{value}</dd>
+            </div>
+          ))}
+        </dl>
+        <RegistrationLine enquiry={enquiry} />
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Registered already (with a link to the student), or the way to do it. */
+function RegistrationLine({ enquiry }: { enquiry: EnquiryDetail }) {
+  if (enquiry.student) {
+    return (
+      <Alert variant="success">
+        Registered as{" "}
+        <Link href={`/students/${enquiry.student.id}`} className="font-medium underline">
+          {enquiry.student.name || "the student"}
+        </Link>
+        .
+      </Alert>
+    );
+  }
+  if (!enquiry.can_register) {
+    return <p className="text-sm text-ink-muted">Not registered as a student yet.</p>;
+  }
+  return (
+    <Button asChild>
+      <Link href={registerLeadHref(enquiry.id)}>
+        <UserPlus className="size-4" aria-hidden="true" />
+        Register this lead
+      </Link>
+    </Button>
+  );
+}
+
 export function EnquiryScreen({ id }: { id: string }) {
   const { user } = useAuth();
   const maySend = can(user?.capabilities, Capability.formAssign);
@@ -584,22 +649,46 @@ export function EnquiryScreen({ id }: { id: string }) {
         <Badge variant={data.channel === "online" ? "info" : "neutral"}>
           {LEAD_CHANNEL_LABEL[data.channel]}
         </Badge>
-        <Badge variant={ENQUIRY_STAGE_VARIANT[data.stage]}>{ENQUIRY_STAGE_LABEL[data.stage]}</Badge>
+        {data.managed_externally ? (
+          <>
+            <Badge variant="info">From Meritto</Badge>
+            <Badge variant={data.student ? "success" : "warning"}>
+              {data.student ? "Registered" : "Ready to admit"}
+            </Badge>
+          </>
+        ) : (
+          <Badge variant={ENQUIRY_STAGE_VARIANT[data.stage]}>
+            {ENQUIRY_STAGE_LABEL[data.stage]}
+          </Badge>
+        )}
       </PageHeader>
       {notice ? <Alert variant="success">{notice}</Alert> : null}
 
       <Facts enquiry={data} />
-      <PipelineCard
-        key={data.updated_at}
-        enquiry={data}
-        sources={summary.data?.sources ?? []}
-        onSaved={(message) => {
-          setNotice(message);
-          reload();
-        }}
-      />
-      <ActivitiesCard enquiry={data} />
-      <FormsCard enquiry={data} maySend={maySend} />
+      {data.managed_externally ? (
+        <MerittoCard enquiry={data} />
+      ) : (
+        <>
+          <PipelineCard
+            key={data.updated_at}
+            enquiry={data}
+            sources={summary.data?.sources ?? []}
+            onSaved={(message) => {
+              setNotice(message);
+              reload();
+            }}
+          />
+          {data.can_register || data.student ? (
+            <Card>
+              <CardContent className="pt-5">
+                <RegistrationLine enquiry={data} />
+              </CardContent>
+            </Card>
+          ) : null}
+          <ActivitiesCard enquiry={data} />
+          <FormsCard enquiry={data} maySend={maySend} />
+        </>
+      )}
       <HistoryCard enquiry={data} />
     </div>
   );

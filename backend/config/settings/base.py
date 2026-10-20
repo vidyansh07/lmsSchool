@@ -92,6 +92,7 @@ LOCAL_APPS = [
     "apps.policies",
     "apps.forms",
     "apps.enquiries",
+    "apps.integrations",
     "apps.students",
     "apps.trainers",
     "apps.courses",
@@ -355,6 +356,15 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": 60,
         "options": {"expires": 50},
     },
+    # Fee schedules: every morning at 08:00, each unpaid instalment due within
+    # the week or already late is offered to automation (`FEE_INSTALMENT_*`),
+    # so a reminder rule can mail the student three days before, on the day,
+    # or a week after.
+    "fees-sweep-instalments": {
+        "task": "fees.sweep_instalments",
+        "schedule": crontab(hour=8, minute=0),
+        "options": {"expires": 3600},
+    },
     # Exports (ERP Phase 20): once a night, well outside business hours, so a
     # file's `SystemSetting.export_retention_days` lifetime is enforced daily
     # rather than left to accumulate in storage indefinitely.
@@ -449,6 +459,9 @@ REST_FRAMEWORK = {
         # test-send. Both are per-account, low-frequency, deliberate acts
         # (never a keystroke-driven UI), so the rate stays modest.
         "communication": env.str("THROTTLE_RATE_COMMUNICATION", default="20/min"),
+        # The lead endpoint, per API key: a website or Meritto posting leads
+        # as they arrive, not a bulk loader.
+        "integration_leads": env.str("THROTTLE_RATE_INTEGRATION_LEADS", default="120/min"),
     },
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
     "TEST_REQUEST_DEFAULT_FORMAT": "json",
@@ -484,6 +497,18 @@ SPECTACULAR_SETTINGS = {
     "SORT_OPERATIONS": False,
     "ENUM_NAME_OVERRIDES": {
         "UserRoleEnum": "apps.accounts.roles.UserRole.choices",
+        # What happened to a lead posted to the integrations endpoint.
+        "LeadIntakeStatusEnum": "apps.integrations.models.IntakeStatus.choices",
+        "IntegrationPresetEnum": "apps.integrations.models.Preset.choices",
+        "FeeEmailKindEnum": (("fee_receipt", "Receipt"), ("fee_statement", "Fee statement")),
+        # The export request's yes/no list filters (`is_active`,
+        # `is_accepting_assignments`) share one "true"/"false" choice set.
+        "TrueFalseEnum": ("true", "false"),
+        # The bulk endpoints each name their verb `action`; the trainers and
+        # students lists offer the same single one.
+        "BulkResendInvitationActionEnum": ("resend_invitation",),
+        "BulkUserActionEnum": ("resend_invitation", "move_centre"),
+        "BulkEnquiryActionEnum": ("assign_owner",),
         "PermissionScopeEnum": "apps.authorization.models.PermissionScope.choices",
         "RoleStatusEnum": "apps.authorization.models.RoleStatus.choices",
         # `Permission.category` was the only field named `category` with no
@@ -641,6 +666,14 @@ FRONTEND_EMAIL_VERIFY_PATH = "/verify-email"
 # verification links are weaker and may live longer.
 AUTH_TOKEN_RESET_TTL_HOURS = env.int("AUTH_TOKEN_RESET_TTL_HOURS", default=1)
 AUTH_TOKEN_VERIFICATION_TTL_DAYS = env.int("AUTH_TOKEN_VERIFICATION_TTL_DAYS", default=3)
+# The welcome email's set-your-password link. A reset is an hour because it is
+# asked for by the person about to use it; an invitation is sent by somebody
+# else and may sit unread for days.
+AUTH_TOKEN_INVITATION_TTL_DAYS = env.int("AUTH_TOKEN_INVITATION_TTL_DAYS", default=7)
+# Who this environment may email (`apps.common.mail_policy`). Empty: everybody
+# (production). A staging or demo environment lists whole addresses and/or
+# `@domain` entries, comma-separated, so its seeded accounts are never mailed.
+EMAIL_RECIPIENT_ALLOWLIST = env.list("EMAIL_RECIPIENT_ALLOWLIST", default=[])
 
 # MFA (ERP Phase 5, ADR-05). Fernet key encrypting a TOTP device's secret at
 # rest (apps.accounts.mfa). No usable default here — an empty string fails
@@ -650,6 +683,11 @@ AUTH_TOKEN_VERIFICATION_TTL_DAYS = env.int("AUTH_TOKEN_VERIFICATION_TTL_DAYS", d
 # "no defaults for secrets" rule in docs/environments.md. local/test each set
 # a fixed, clearly-labelled placeholder key of their own.
 MFA_ENCRYPTION_KEY = env.str("MFA_ENCRYPTION_KEY", default="")
+# Integrations: the Fernet key for webhook secrets (falls back to the MFA key),
+# and whether a webhook may use plain http:// (local development only; it also
+# skips the public-address check).
+INTEGRATION_ENCRYPTION_KEY = env.str("INTEGRATION_ENCRYPTION_KEY", default="")
+INTEGRATION_ALLOW_HTTP = env.bool("INTEGRATION_ALLOW_HTTP", default=False)
 
 # --- WhatsApp (ERP Phase 19, ADR-12) ----------------------------------------
 # Optional integration, gated on presence exactly like `SENTRY_DSN` above:

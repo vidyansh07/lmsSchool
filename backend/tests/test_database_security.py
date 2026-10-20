@@ -172,6 +172,11 @@ def test_every_foreign_key_is_declared_to_the_database():
         # outside this database, never a local row to reference.
         ("communication_delivery", "provider_message_id"),
         ("communication_templateversion", "provider_template_id"),
+        # Meritto's own lead id for a lead it sent (D-145): an opaque string
+        # from another system, kept so a re-sent lead updates rather than
+        # duplicates.
+        ("enquiries_enquiry", "external_id"),
+        ("integrations_leadintake", "external_id"),
     }
     unexpected = {(table, column) for table, column in rows} - allowed
     assert not unexpected, f"columns that look like keys but are not: {sorted(unexpected)}"

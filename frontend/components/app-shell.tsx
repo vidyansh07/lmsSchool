@@ -56,12 +56,14 @@ import { useAuth } from '@/components/auth-provider';
 import { CommandPalette } from '@/components/command-palette';
 import {
   accentFor as accentOf,
+  homeFor,
   isVisible,
   navFor,
   type ModuleAccent,
   type NavGroup,
   type NavItem,
 } from '@/components/navigation';
+import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -71,7 +73,7 @@ import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { env } from '@/lib/env';
 import { cn } from '@/lib/utils';
-import { workspaceHomeForUser, workspaceLabel } from '@/lib/workspace';
+import { workspaceLabel } from '@/lib/workspace';
 
 /** `localStorage` key for the sidebar's expanded/collapsed preference. Once a
  *  person picks one, it always wins over the breakpoint default below —
@@ -515,6 +517,48 @@ function Breadcrumb({
 }
 
 /**
+ * The other screens of the module this page belongs to, as tabs across the
+ * top of the page — "Enquiries · New enquiry · Form inbox" on the enquiries
+ * list — so moving sideways within one job never means going back to the
+ * sidebar. Built from the same filtered groups as the sidebar, so it offers
+ * exactly the screens this person's role and capabilities reach, and nothing
+ * for a module with only one of them.
+ */
+function ModuleTabs({ groups, active }: { groups: NavGroup[]; active: string | null }) {
+  const group = groups.find(
+    (candidate) => candidate.title && candidate.items.some((item) => item.href === active),
+  );
+  if (!group || group.items.length < 2) return null;
+  return (
+    <nav aria-label={group.title} className="-mx-1 mb-5 overflow-x-auto border-b border-line">
+      <ul className="flex min-w-max gap-1 px-1">
+        {group.items.map((item) => {
+          const Icon = item.icon;
+          const current = item.href === active;
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                aria-current={current ? 'page' : undefined}
+                className={cn(
+                  '-mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors duration-150',
+                  current
+                    ? 'border-action font-semibold text-ink'
+                    : 'border-transparent text-ink-muted hover:border-line-strong hover:text-ink',
+                )}
+              >
+                <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+                {item.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+/**
  * The link list itself, shared by the `lg:` sidebar (which passes its own
  * `collapsed` state) and the mobile drawer (which always passes `false` —
  * the drawer has the full width of a `Sheet` to work with and never needs
@@ -855,6 +899,7 @@ function Shell({
           tabIndex={-1}
           className="w-full max-w-[90rem] flex-1 px-4 py-6 sm:px-6 lg:px-8"
         >
+          <ModuleTabs groups={groups} active={active} />
           {children}
         </main>
       </div>
@@ -893,6 +938,30 @@ function Shell({
   );
 }
 
+/**
+ * The one reminder that used to live only on the old home page: an
+ * unverified address means password resets and notices may never arrive.
+ * Shown on every page until it is fixed, except the page that fixes it.
+ */
+function EmailVerificationNotice() {
+  const { user } = useAuth();
+  const pathname = usePathname();
+  if (!user || user.is_email_verified || pathname === '/settings/account') return null;
+  return (
+    <Alert variant="warning" className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <AlertTitle>Your email address is not verified</AlertTitle>
+        <p className="text-sm text-ink-muted">
+          Verify it so password resets and notifications reach you.
+        </p>
+      </div>
+      <Button asChild size="sm" variant="outline">
+        <Link href="/settings/account">Verify email</Link>
+      </Button>
+    </Alert>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -912,7 +981,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         }))
         .filter((group) => group.items.length > 0)
     : [];
-  const homeHref = user ? workspaceHomeForUser(user) : '/';
+  const homeHref = user ? homeFor(user) : '/';
   const navigationLabel = user ? workspaceLabel(user.role) : 'Explore Grras LMS';
 
   return (
@@ -931,6 +1000,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         showNavigation={Boolean(user)}
         onOpenSearch={() => setPaletteOpen(true)}
       >
+        <EmailVerificationNotice />
         {children}
       </Shell>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />

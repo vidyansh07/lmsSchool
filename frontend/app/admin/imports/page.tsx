@@ -100,7 +100,9 @@ function Imports() {
           <CardDescription>
             Columns: <code>email</code> and <code>first name</code> are required;{' '}
             <code>last name</code> and <code>phone</code> are optional. An address that
-            already exists is reported rather than changed.
+            already exists is reported rather than changed. Imported students are not
+            emailed: send them their invitation from the students list (&ldquo;Resend
+            invitations&rdquo;), or they can use &ldquo;Forgot password&rdquo; to get one.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

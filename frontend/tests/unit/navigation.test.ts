@@ -4,13 +4,14 @@ import {
   ADMIN_NAV,
   COUNSELLOR_NAV,
   MANAGER_NAV,
-  STAFF_NAV,
   STUDENT_NAV,
   STUDENT_NAV_GROUPS,
   SUPERADMIN_NAV,
   TRAINER_NAV,
+  homeFor,
   isVisible,
   navFor,
+  safeReturnPath,
   type NavGroup,
   type NavItem,
 } from "@/components/navigation";
@@ -28,7 +29,7 @@ function expectUniqueDestinations(items: NavItem[]): void {
 }
 
 describe("navigation authorization hints", () => {
-  const assignments = itemAt(STAFF_NAV, "/teaching/assignments");
+  const assignments = itemAt(TRAINER_NAV, "/teaching/assignments");
 
   it("keeps assignment-scoped pages visible for the built-in trainer role", () => {
     expect(isVisible(assignments, { role: "trainer", capabilities: [] })).toBe(true);
@@ -74,17 +75,25 @@ describe("navigation authorization hints", () => {
 describe("navigation wording and structure", () => {
   it("uses distinct destinations in each navigation tree", () => {
     expectUniqueDestinations(STUDENT_NAV);
-    expectUniqueDestinations(STAFF_NAV.flatMap((group) => group.items));
-    expectUniqueDestinations(ADMIN_NAV.flatMap((group) => group.items));
-    expectUniqueDestinations(SUPERADMIN_NAV.flatMap((group) => group.items));
-    expectUniqueDestinations(MANAGER_NAV.flatMap((group) => group.items));
-    expectUniqueDestinations(COUNSELLOR_NAV.flatMap((group) => group.items));
-    expectUniqueDestinations(TRAINER_NAV.flatMap((group) => group.items));
-    expectUniqueDestinations(STUDENT_NAV_GROUPS.flatMap((group) => group.items));
+    for (const nav of [
+      ADMIN_NAV,
+      SUPERADMIN_NAV,
+      MANAGER_NAV,
+      COUNSELLOR_NAV,
+      TRAINER_NAV,
+      STUDENT_NAV_GROUPS,
+    ]) {
+      expectUniqueDestinations(nav.flatMap((group) => group.items));
+    }
   });
 
   it("uses the plain-language labels chosen for staging", () => {
-    const labels = [...STUDENT_NAV, ...STAFF_NAV.flatMap((group) => group.items), ...ADMIN_NAV.flatMap((group) => group.items)].map(
+    const labels = [
+      ...STUDENT_NAV,
+      ...[ADMIN_NAV, MANAGER_NAV, COUNSELLOR_NAV, TRAINER_NAV].flatMap((nav) =>
+        nav.flatMap((group) => group.items),
+      ),
+    ].map(
       (item) => item.label,
     );
 
@@ -118,5 +127,112 @@ describe("navigation wording and structure", () => {
     expect(
       TRAINER_NAV.flatMap((group) => group.items).some((item) => item.href === "/admin/users"),
     ).toBe(false);
+  });
+});
+
+describe("a sidebar for each role", () => {
+  const hrefs = (nav: NavGroup[]) => nav.flatMap((group) => group.items.map((item) => item.href));
+  const titles = (nav: NavGroup[]) => nav.map((group) => group.title ?? "");
+
+  it("gives each staff role its own sidebar", () => {
+    expect(navFor("admin")).toBe(ADMIN_NAV);
+    expect(navFor("superadmin")).toBe(SUPERADMIN_NAV);
+    expect(navFor("student")).toBe(STUDENT_NAV_GROUPS);
+    expect(navFor("manager")).toBe(MANAGER_NAV);
+    expect(navFor("counsellor")).toBe(COUNSELLOR_NAV);
+    expect(navFor("trainer")).toBe(TRAINER_NAV);
+  });
+
+  it("groups each one by the job its role does most", () => {
+    expect(titles(MANAGER_NAV).slice(1, 3)).toEqual(["Academics", "Staff"]);
+    expect(titles(COUNSELLOR_NAV).slice(1, 3)).toEqual(["Leads", "Admissions"]);
+    expect(titles(TRAINER_NAV).slice(1, 2)).toEqual(["Classroom"]);
+  });
+
+  it("loses no page a manager or counsellor could reach before", () => {
+    // Every screen the shared staff sidebar offered them is still in theirs.
+    const shared = [
+      "/activities",
+      "/manage/batches",
+      "/manage/trainers",
+      "/manage/reviews",
+      "/dsr",
+      "/requirements",
+      "/enquiries",
+      "/admissions",
+      "/admissions/new",
+      "/admissions/batches",
+      "/admissions/transfer",
+      "/admin/users",
+      "/admin/students",
+      "/admin/courses",
+      "/admin/batches",
+      "/admin/completions",
+      "/admin/certificates",
+      "/admin/reports",
+      "/admin/imports",
+      "/calendar",
+      "/announcements",
+      "/forms",
+      "/notifications",
+      "/profile",
+    ];
+    for (const href of shared) expect(hrefs(MANAGER_NAV)).toContain(href);
+    for (const href of ["/enquiries", "/admissions", "/admissions/new", "/admissions/transfer", "/admin/students", "/forms"]) {
+      expect(hrefs(COUNSELLOR_NAV)).toContain(href);
+    }
+  });
+
+  it("shows a trainer only the pages their role or capabilities reach", () => {
+    const trainer = { role: "trainer", capabilities: [] as string[] };
+    const visible = TRAINER_NAV.flatMap((group) => group.items).filter((item) =>
+      isVisible(item, trainer),
+    );
+    expect(visible.map((item) => item.href)).toEqual(
+      expect.arrayContaining(["/dashboard", "/teaching/today", "/teaching/assignments", "/admin/batches"]),
+    );
+    expect(visible.map((item) => item.href)).not.toContain("/admin/users");
+  });
+
+  it("hides a counsellor's page once a configured role takes its capability away", () => {
+    const enquiries = itemAt(COUNSELLOR_NAV, "/enquiries");
+    expect(
+      isVisible(enquiries, { role: "counsellor", custom_role: "desk", capabilities: [] }),
+    ).toBe(false);
+  });
+});
+
+describe("homeFor", () => {
+  it("starts each person at the first entry of their own navigation", () => {
+    expect(homeFor({ role: "student", capabilities: [] })).toBe("/dashboard");
+    expect(homeFor({ role: "trainer", capabilities: [] })).toBe("/dashboard");
+    expect(
+      homeFor({ role: "counsellor", capabilities: [Capability.enrolmentCreate] }),
+    ).toBe("/admissions/dashboard");
+    expect(
+      homeFor({
+        role: "admin",
+        capabilities: [Capability.auditView, Capability.reportViewAny],
+      }),
+    ).toBe("/admin/activity");
+    expect(
+      homeFor({
+        role: "manager",
+        capabilities: [Capability.enrolmentCreate, Capability.performanceViewAny],
+      }),
+    ).toBe("/manage");
+    expect(homeFor(null)).toBe("/login");
+  });
+});
+
+describe("safeReturnPath", () => {
+  it("keeps a path on this site and refuses everything else", () => {
+    expect(safeReturnPath("/students/1?tab=fees")).toBe("/students/1?tab=fees");
+    expect(safeReturnPath("https://evil.example")).toBeNull();
+    expect(safeReturnPath("//evil.example")).toBeNull();
+    expect(safeReturnPath("/\\evil.example")).toBeNull();
+    expect(safeReturnPath("/login?next=/x")).toBeNull();
+    expect(safeReturnPath("/ok\nSet-Cookie")).toBeNull();
+    expect(safeReturnPath(null)).toBeNull();
   });
 });

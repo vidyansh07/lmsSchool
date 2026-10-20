@@ -129,5 +129,7 @@ export function describeAction(action: AutomationAction, lookups: SummaryLookups
       return `Reviewer: ${strategyLabel(action.params.reviewer)}`;
     case "flag_risk":
       return `Mark as ${action.params.level}`;
+    case "send_webhook":
+      return action.params.webhook ? "Posts this event to the chosen webhook" : "Choose a webhook";
   }
 }

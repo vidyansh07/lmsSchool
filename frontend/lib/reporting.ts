@@ -26,6 +26,24 @@ export interface ReportFilters {
   [key: string]: string | number | undefined;
 }
 
+/**
+ * The export filters for a list: exactly the named keys of what the table is
+ * showing, empty ones left out, so "Export" produces the rows on screen. The
+ * server narrows by the same FilterSet the list uses
+ * (`apps/reporting/views.py` `LIST_NARROWING`).
+ */
+export function exportFiltersFrom(
+  query: Record<string, string | number | undefined>,
+  keys: readonly string[],
+): ReportFilters {
+  const filters: ReportFilters = {};
+  for (const key of keys) {
+    const value = query[key];
+    if (value !== undefined && value !== null && String(value) !== '') filters[key] = String(value);
+  }
+  return filters;
+}
+
 // --- Reports ---------------------------------------------------------------
 
 export async function listReports(): Promise<ReportDefinition[]> {
@@ -63,6 +81,20 @@ export function reportExportUrl(
   return `${apiBaseUrl()}/api/v1/reports/${key}/export/${queryString({ ...filters, as: format })}`;
 }
 
+/**
+ * Hold ticked rows for an export and get back the token that names them.
+ * The ids travel once, in a POST body; the count, the download and a queued
+ * job carry `?selection=<token>` instead, because a request line full of ids
+ * is refused by the server long before a person runs out of rows to tick.
+ */
+export async function createExportSelection(ids: readonly string[]): Promise<string> {
+  const created = await apiMutate<{ selection: string; rows: number }>(
+    '/api/v1/reports/selections/',
+    { method: 'POST', body: { ids } },
+  );
+  return created.selection;
+}
+
 // --- Background exports ----------------------------------------------------
 
 /** Queue a report to be rendered off the request; a notification says when it is ready. */
@@ -77,6 +109,17 @@ export async function queueExport(payload: {
   actor?: string;
   kind?: string;
   role?: string;
+  search?: string;
+  skill?: string;
+  is_accepting_assignments?: string;
+  status?: string;
+  fee_status?: string;
+  is_active?: string;
+  institution?: string;
+  branch?: string;
+  min_experience?: string;
+  attention?: string;
+  selection?: string;
 }): Promise<ExportJob> {
   return apiMutate<ExportJob>('/api/v1/reports/exports/', { method: 'POST', body: payload });
 }

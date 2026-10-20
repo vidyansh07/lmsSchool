@@ -29,6 +29,24 @@ def visible_enquiries(user) -> QuerySet[Enquiry]:
 
 
 def can_manage_enquiry(user, enquiry: Enquiry) -> bool:
+    """Change its stage, owner, follow-ups. Never for a Meritto lead: Meritto
+    manages those (17 October 2026)."""
+    if enquiry.is_managed_externally:
+        return False
+    return _within_reach(user, enquiry)
+
+
+def can_register_enquiry(user, enquiry: Enquiry) -> bool:
+    """Register the lead as a student — the one thing the LMS does with a
+    Meritto lead. Needs `student.create` and the enquiry within reach."""
+    if not has_capability(user, Capability.STUDENT_CREATE):
+        return False
+    return enquiry in visible_enquiries(user) and (
+        enquiry.is_managed_externally or _within_reach(user, enquiry)
+    )
+
+
+def _within_reach(user, enquiry: Enquiry) -> bool:
     if enquiry.owner_id and enquiry.owner_id == getattr(user, "pk", None):
         return True
     if not has_capability(user, Capability.ENQUIRY_MANAGE):

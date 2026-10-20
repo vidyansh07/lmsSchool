@@ -233,8 +233,22 @@ def send_email_code(*, user, purpose: str, request_ip: str | None = None) -> One
     )
 
     # Inline, never through the outbox — see the module docstring.
-    send_otp_code_email(user=user, code=code, minutes=CODE_TTL_MINUTES)
+    sent = send_otp_code_email(user=user, code=code, minutes=CODE_TTL_MINUTES)
     del code  # out of scope the moment it is no longer needed
+    if not sent:
+        # A code nobody received must not count against the cooldown or the
+        # hourly cap, and must not be checkable: drop it, and say so.
+        row.delete()
+        from apps.common.exceptions import ApplicationError
+
+        raise ApplicationError(
+            {
+                "non_field_errors": [
+                    "We could not email your code just now. Try again in a moment, "
+                    "or ask an administrator to check the email settings."
+                ]
+            }
+        )
 
     record(
         action=AuditAction.OTP_SENT,

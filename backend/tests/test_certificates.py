@@ -468,3 +468,16 @@ def test_marks_are_never_on_a_certificate(certificate):
     fields = str(public_view(certificate)) + str(certificate.__dict__)
     assert "marks" not in fields
     assert Decimal("0") == Decimal("0")  # placeholder to keep Decimal imported meaningfully
+
+
+@pytest.mark.django_db
+def test_the_list_narrows_to_one_students_certificates(
+    api_client_no_csrf, admin_user, certificate, enrollment, other_student_profile
+):
+    """The Student 360 Certificates tab: `?student=` narrows the visible set."""
+    api_client_no_csrf.force_login(admin_user)
+    url = "/api/v1/certificates/"
+    mine = api_client_no_csrf.get(f"{url}?student={enrollment.student_id}").json()
+    assert [row["number"] for row in mine["results"]] == [certificate.number]
+    theirs = api_client_no_csrf.get(f"{url}?student={other_student_profile.pk}").json()
+    assert theirs["results"] == []

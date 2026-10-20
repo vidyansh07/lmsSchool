@@ -77,6 +77,22 @@ def api_client_no_csrf() -> APIClient:
     return APIClient()
 
 
+def stepped_up(client: APIClient) -> APIClient:
+    """Mark a logged-in test client's session as freshly stepped up.
+
+    For tests about what a step-up-guarded endpoint *does*, not about the
+    step-up itself — those post a password to ``/auth/step-up/`` instead.
+    """
+    from django.utils import timezone
+
+    from apps.accounts.stepup import SESSION_KEY
+
+    session = client.session
+    session[SESSION_KEY] = timezone.now().timestamp()
+    session.save()
+    return client
+
+
 @pytest.fixture
 def branch(db):
     """The centre everything in the default fixture set belongs to.

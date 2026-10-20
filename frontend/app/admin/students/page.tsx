@@ -1,13 +1,20 @@
 'use client';
 
 import { Eye, IndianRupee, Pencil, Send } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
+import { BulkActionsBar, type BulkAction } from '@/components/bulk-actions';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
+import { exportFiltersFrom } from '@/lib/reporting';
+import { SavedViews } from '@/components/saved-views';
+import { ActiveFilters } from '@/components/active-filters';
+import { useBranches } from '@/components/organisation/branch-field';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
+import { useResendInvitations } from '@/components/resend-invitations-action';
 import { RequireAuth } from '@/components/require-auth';
 import { RowActions } from '@/components/row-actions';
 import { Alert } from '@/components/ui/alert';
@@ -15,7 +22,9 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
+import { useBulkSelection } from '@/hooks/use-bulk-selection';
 import { useList } from '@/hooks/use-list';
+import { bulkStudents, bulkTarget, selectionKey } from '@/lib/bulk';
 import { ApiError } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { Capability } from '@/lib/capabilities';
@@ -30,16 +39,50 @@ import { listStudents, setFeeStatus } from '@/lib/people';
 import type { FeeStatus, StudentListRow } from '@/types/api';
 import { CreateStudentDialog } from './create-student-dialog';
 
+// `referred_by` arrives from a student's "Has referred N students" link.
+const STUDENT_FILTER_KEYS = ['institution', 'fee_status', 'is_active', 'branch', 'referred_by'] as const;
+
 function StudentsTable() {
-  const { can } = useAuth();
-  const list = useList<StudentListRow>(listStudents);
+  const { user: viewer, can } = useAuth();
+  const list = useList<StudentListRow>(listStudents, {}, {
+    urlKeys: [...STUDENT_FILTER_KEYS],
+  });
+  // Ticked rows survive paging but never a change of filter.
+  const selection = useBulkSelection<string>(selectionKey(list.query, STUDENT_FILTER_KEYS));
+  const exportFilters = exportFiltersFrom(list.query, ['search', ...STUDENT_FILTER_KEYS]);
+  const resend = useResendInvitations({
+    count: selection.selectAllMatching ? (list.data?.count ?? 0) : selection.selectedCount,
+    itemNoun: 'student',
+    send: () =>
+      bulkStudents({
+        ...bulkTarget(selection, list.query, STUDENT_FILTER_KEYS),
+        action: 'resend_invitation',
+      }),
+    onDone: () => {
+      selection.clear();
+      list.reload();
+    },
+  });
+  const bulkActions: BulkAction[] = can(Capability.userUpdateAny)
+    ? [{ id: 'resend', label: 'Resend invitations', onClick: resend.open }]
+    : [];
+  // Administrators and the platform operator see every centre; a centre
+  // filter only means something to them.
+  const seesEveryCentre = viewer?.role === 'superadmin' || viewer?.role === 'admin';
+  const { branches } = useBranches(seesEveryCentre);
   const [actionError, setActionError] = useState('');
+  // An inline change is said when it lands, so a select that quietly
+  // re-renders is not the only sign anything happened.
+  const [notice, setNotice] = useState('');
+  const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
 
   async function changeFeeStatus(row: StudentListRow, value: FeeStatus) {
     setActionError('');
+    setNotice('');
     try {
       await setFeeStatus(row.id, value);
+      setNotice(`${row.full_name || row.email}: fee status is now ${labelFor(FEE_STATUS_LABEL, value)}.`);
       list.reload();
     } catch (cause) {
       setActionError(
@@ -232,7 +275,7 @@ function StudentsTable() {
         <div className="flex gap-2">
           <ExportMenu
             reportKey="students"
-            filters={{ search: String(list.query.search ?? '') || undefined }}
+            filters={exportFilters}
             count={list.data?.count ?? null}
             size="md"
           />
@@ -252,6 +295,12 @@ function StudentsTable() {
         />
       ) : null}
 
+      <SavedViews
+        screen="admin-students"
+        keys={['search', 'ordering', ...STUDENT_FILTER_KEYS]}
+        query={list.query}
+        onApply={list.setQuery}
+      />
       <ListToolbar
         search={String(list.query.search ?? '')}
         onSearchChange={(value) => list.setQuery({ search: value })}
@@ -299,14 +348,75 @@ function StudentsTable() {
             <option value="false">Inactive</option>
           </Select>
         </div>
+        {seesEveryCentre && branches.length > 1 ? (
+          <div>
+            <label htmlFor="filter-branch" className="mb-1.5 block text-sm font-medium">
+              Centre
+            </label>
+            <Select
+              id="filter-branch"
+              value={String(list.query.branch ?? '')}
+              onChange={(event) => list.setQuery({ branch: event.target.value })}
+            >
+              <option value="">All centres</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name} ({branch.code})
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
       </ListToolbar>
+      <ActiveFilters
+        query={list.query}
+        onChange={list.setQuery}
+        filters={[
+          { key: 'search', label: 'Search' },
+          { key: 'referred_by', label: 'Referred by', display: () => 'the student you came from' },
+          { key: 'institution', label: 'College or employer' },
+          { key: 'fee_status', label: 'Fee status', display: (value) => labelFor(FEE_STATUS_LABEL, value) },
+          { key: 'is_active', label: 'Status', display: (value) => (value === 'true' ? 'Active' : 'Inactive') },
+          {
+            key: 'branch',
+            label: 'Centre',
+            display: (value) => branches.find((branch) => branch.id === value)?.name ?? value,
+          },
+        ]}
+      />
 
       {actionError ? <Alert variant="error">{actionError}</Alert> : null}
+      {notice ? (
+        <Alert variant="success" role="status">
+          {notice}
+        </Alert>
+      ) : null}
+
+      <BulkActionsBar
+        selectedCount={selection.selectedCount}
+        totalMatchingCount={list.data?.count}
+        selectAllMatching={selection.selectAllMatching}
+        onSelectAllMatching={selection.selectAllMatchingFilter}
+        onClear={selection.clear}
+        actions={bulkActions}
+        itemNoun="student"
+      >
+        <ExportMenu
+          reportKey="students"
+          label={selection.selectAllMatching ? 'Export all matching' : 'Export'}
+          filters={exportFilters}
+          selectedIds={selection.selectAllMatching ? undefined : [...selection.selectedIds]}
+        />
+      </BulkActionsBar>
+      {resend.dialogs}
 
       <DataTable
+        onRowActivate={(row) => router.push(`/admissions/${row.id}`)}
         columns={columns}
         rows={list.data?.results ?? []}
         getRowId={(row) => row.id}
+        selection={selection}
+        getRowLabel={(row) => row.full_name || row.email}
         isLoading={list.isLoading}
         loadingLabel="Loading students…"
         error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}

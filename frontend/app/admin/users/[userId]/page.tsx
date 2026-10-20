@@ -3,12 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
-import { ArrowLeft, KeyRound, MailCheck } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
+import { CapabilitiesCard, GettingInCard } from "@/components/admin/getting-in-card";
 import { UserSessionsCard } from "@/components/admin/user-sessions-card";
 import { useAuth } from "@/components/auth-provider";
 import { Confirm } from "@/components/confirm";
+import { SearchPicker, type PickerOption } from "@/components/admissions/search-picker";
 import { RequireAuth } from "@/components/require-auth";
+import {
+  isStepUpRequired,
+  StepUpDialog,
+} from "@/components/roles/step-up-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -31,9 +37,10 @@ import {
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
-import { ApiError, fieldErrors } from "@/lib/api";
+import { ApiError, errorMessage, fieldErrors } from "@/lib/api";
 import { Capability } from "@/lib/capabilities";
 import { formatDateTime } from "@/lib/format";
+import { BATCH_STATUS_LABEL } from "@/lib/batch-labels";
 import { ROLE_LABEL, ROLE_OPTIONS, labelFor } from "@/lib/labels";
 import {
   listRoles,
@@ -45,16 +52,19 @@ import {
 import {
   getUser,
   getUserAudit,
-  sendCredentialLink,
   setUserActive,
   transitionUserRole,
   updateUser,
 } from "@/lib/people";
 import { useBranches } from "@/components/organisation/branch-field";
 import { moveUserToBranch } from "@/lib/organisation";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
+import { listBatches } from "@/lib/batches";
 import type {
   AdminUser,
+  AdminUserRecord,
+  BatchListRow,
   RoleSummary,
   UserAuditEntry,
   UserRole,
@@ -171,7 +181,11 @@ function History({ userId }: { userId: string }) {
 export function UserAdministration({ userId }: { userId: string }) {
   const router = useRouter();
   const { user: currentUser, can } = useAuth();
-  const [user, setUser] = useState<AdminUser | null>(null);
+  const [user, setUser] = useState<AdminUserRecord | null>(null);
+  // Arrived straight from "Add staff account".
+  const [justCreated] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("created"),
+  );
   const [error, setError] = useState<ApiError | null>(null);
   const [form, setForm] = useState({
     email: "",
@@ -185,7 +199,14 @@ export function UserAdministration({ userId }: { userId: string }) {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState("");
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
+  // Somebody else saved this account after it was loaded here; the edit was
+  // refused rather than written over theirs.
+  const [stale, setStale] = useState(false);
   const [roleReason, setRoleReason] = useState("");
+  const [stepUpOpen, setStepUpOpen] = useState(false);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const [deactivateReason, setDeactivateReason] = useState("");
+  const [deactivateError, setDeactivateError] = useState("");
   const hasUnsavedChanges = Boolean(
     user &&
       (form.email.trim().toLowerCase() !== user.email.toLowerCase() ||
@@ -209,6 +230,7 @@ export function UserAdministration({ userId }: { userId: string }) {
   const load = useCallback(() => {
     getUser(userId)
       .then((row) => {
+        setStale(false);
         setUser(row);
         setForm({
           email: row.email,
@@ -226,7 +248,9 @@ export function UserAdministration({ userId }: { userId: string }) {
 
   useEffect(load, [load]);
 
-  async function run(key: string, work: () => Promise<unknown>, said: string) {
+  /** Run one action; true when it succeeded, so a caller clears its own
+   *  inputs only then and a failed attempt keeps what was typed for a retry. */
+  async function run(key: string, work: () => Promise<unknown>, said: string): Promise<boolean> {
     setBusy(key);
     setErrors({});
     setNotice("");
@@ -234,8 +258,11 @@ export function UserAdministration({ userId }: { userId: string }) {
       await work();
       setNotice(said);
       load();
+      return true;
     } catch (cause) {
       setErrors(fieldErrors(cause));
+      setStale(cause instanceof ApiError && cause.code === 'stale_write');
+      return false;
     } finally {
       setBusy("");
     }
@@ -261,12 +288,21 @@ export function UserAdministration({ userId }: { userId: string }) {
   if (!user) return <LoadingState label="Loading account…" rows={6} />;
 
   const isSelf = user.id === currentUser?.id;
+  // A manager with a live trainer profile teaches batches as well as managing
+  // (one login, owner's call of 14 September 2026). Said on the record, since
+  // it is also why a role change can be refused.
+  const teachingManager = user.role === "manager" && user.profile_type === "trainer";
   const emailChanged =
     form.email.trim().toLowerCase() !== user.email.toLowerCase();
   // The server's answer, not a guess from capabilities. Viewing is wider than
   // administering — an administrator may see that a superadmin exists — and
   // without asking we would offer controls that cannot work.
   const mayAdminister = user.can_administer;
+  // Changing the details and sending links also needs `user.update_any`: a
+  // manager may administer a trainer's account on the ladder, but those two
+  // endpoints are an administrator's, and a Save that answers 403 is worse
+  // than no Save.
+  const mayEdit = mayAdminister && can(Capability.userUpdateAny);
   const roleChanged =
     form.role !== user.role ||
     (form.custom_role || null) !== (user.custom_role ?? null);
@@ -284,13 +320,45 @@ export function UserAdministration({ userId }: { userId: string }) {
         role: form.role,
         custom_role: form.custom_role || null,
         reason: roleReason.trim(),
+        expected_updated_at: user.updated_at,
       });
       setRoleDialogOpen(false);
       setRoleReason("");
       setNotice("Role changed. Their existing sessions were ended.");
       load();
     } catch (cause) {
-      setErrors(fieldErrors(cause));
+      if (isStepUpRequired(cause)) {
+        // The step-up is the confirmation the server asks for. The role
+        // dialog steps aside so two modals never compete for focus, and its
+        // selection and reason survive in state for the retry.
+        setRoleDialogOpen(false);
+        setStepUpOpen(true);
+      } else if (cause instanceof ApiError && cause.code === 'stale_write') {
+        setErrors(fieldErrors(cause));
+        setStale(true);
+        setRoleDialogOpen(false);
+      } else {
+        setErrors(fieldErrors(cause));
+        setRoleDialogOpen(true);
+      }
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function deactivate() {
+    if (!user || !deactivateReason.trim()) return;
+    setBusy("active");
+    setDeactivateError("");
+    setNotice("");
+    try {
+      await setUserActive(user.id, false, deactivateReason.trim());
+      setDeactivateOpen(false);
+      setDeactivateReason("");
+      setNotice("Deactivated. They were signed out everywhere and cannot sign in.");
+      load();
+    } catch (cause) {
+      setDeactivateError(errorMessage(cause, "This account could not be deactivated."));
     } finally {
       setBusy("");
     }
@@ -316,12 +384,14 @@ export function UserAdministration({ userId }: { userId: string }) {
           {user.full_name || user.email}
         </h1>
         <Badge>{labelFor(ROLE_LABEL, user.role)}</Badge>
+        {user.custom_role_name ? <Badge variant="info">{user.custom_role_name}</Badge> : null}
         <Badge variant={user.is_active ? "success" : "error"}>
           {user.is_active ? "Active" : "Inactive"}
         </Badge>
-        <Badge variant={user.is_email_verified ? "success" : "warning"}>
-          {user.is_email_verified ? "Email verified" : "Email unverified"}
+        <Badge variant={user.invitation_accepted ? "success" : "warning"}>
+          {user.invitation_accepted ? "Signed up" : "Invitation pending"}
         </Badge>
+        {teachingManager ? <Badge variant="neutral">Also teaches</Badge> : null}
         {user.profile_type && user.profile_id ? (
           <Link
             href={
@@ -335,7 +405,12 @@ export function UserAdministration({ userId }: { userId: string }) {
             }}
             className="text-sm font-medium text-action hover:underline"
           >
-            Open {user.profile_type === "student" ? "student 360" : "trainer profile"}
+            Open{" "}
+            {user.profile_type === "student"
+              ? "student 360"
+              : teachingManager
+                ? "teaching profile"
+                : "trainer profile"}
           </Link>
         ) : null}
       </div>
@@ -346,16 +421,39 @@ export function UserAdministration({ userId }: { userId: string }) {
         </Alert>
       ) : null}
       {errors.__all__ || errors.user ? (
-        <Alert variant="error">{errors.user ?? errors.__all__}</Alert>
-      ) : null}
-
-      {!mayAdminister ? (
-        <Alert variant="warning">
-          You can see this account but not change it. Authority runs downward:
-          you may administer accounts that hold less than your own, and not your
-          peers or anybody above you.
+        <Alert variant="error" className="flex flex-wrap items-center justify-between gap-2">
+          <span>{errors.user ?? errors.__all__}</span>
+          {stale ? (
+            <Button type="button" size="sm" variant="outline" onClick={() => load()}>
+              Reload this account
+            </Button>
+          ) : null}
         </Alert>
       ) : null}
+
+      {!mayEdit ? (
+        <Alert variant="warning">
+          {user.can_administer
+            ? "You can see this account but not change it here: account details are changed by an administrator."
+            : "You can see this account but not change it. Authority runs downward: you may administer accounts that hold less than your own, and not your peers or anybody above you."}
+          {user.may_send_invitation && !user.invitation_accepted
+            ? " You can still send them their invitation, below."
+            : ""}
+        </Alert>
+      ) : null}
+
+      {justCreated ? (
+        <Alert variant={user.last_account_email && !user.last_account_email.sent ? "warning" : "success"} role="status">
+          Account created.{" "}
+          {user.last_account_email?.kind === "invitation"
+            ? user.last_account_email.sent
+              ? `The invitation to set a password went to ${user.email}.`
+              : `The invitation could not be sent: ${user.last_account_email.error} Fix the email set-up, then send it again below.`
+            : "No invitation was sent."}
+        </Alert>
+      ) : null}
+
+      <GettingInCard user={user} mayManage={mayEdit} onSent={() => load()} />
 
       <Card>
         <CardHeader>
@@ -379,7 +477,7 @@ export function UserAdministration({ userId }: { userId: string }) {
                 type="email"
                 autoComplete="email"
                 value={form.email}
-                disabled={!mayAdminister}
+                disabled={!mayEdit}
                 onChange={(event) =>
                   setForm({ ...form, email: event.target.value })
                 }
@@ -391,7 +489,7 @@ export function UserAdministration({ userId }: { userId: string }) {
                 type="tel"
                 autoComplete="tel"
                 value={form.phone}
-                disabled={!mayAdminister}
+                disabled={!mayEdit}
                 onChange={(event) =>
                   setForm({ ...form, phone: event.target.value })
                 }
@@ -407,7 +505,7 @@ export function UserAdministration({ userId }: { userId: string }) {
                 id="user-first"
                 autoComplete="given-name"
                 value={form.first_name}
-                disabled={!mayAdminister}
+                disabled={!mayEdit}
                 onChange={(event) =>
                   setForm({ ...form, first_name: event.target.value })
                 }
@@ -422,7 +520,7 @@ export function UserAdministration({ userId }: { userId: string }) {
                 id="user-last"
                 autoComplete="family-name"
                 value={form.last_name}
-                disabled={!mayAdminister}
+                disabled={!mayEdit}
                 onChange={(event) =>
                   setForm({ ...form, last_name: event.target.value })
                 }
@@ -437,7 +535,7 @@ export function UserAdministration({ userId }: { userId: string }) {
             </Alert>
           ) : null}
 
-          {mayAdminister ? (
+          {mayEdit ? (
             <Button
               type="button"
               disabled={busy === "save"}
@@ -450,6 +548,7 @@ export function UserAdministration({ userId }: { userId: string }) {
                       first_name: form.first_name.trim(),
                       last_name: form.last_name.trim(),
                       phone: form.phone.trim(),
+                      expected_updated_at: user.updated_at,
                     }),
                   "Saved.",
                 )
@@ -508,6 +607,12 @@ export function UserAdministration({ userId }: { userId: string }) {
                 onChange={(value) => setForm({ ...form, custom_role: value })}
               />
             </div>
+            {teachingManager ? (
+              <Alert variant="info">
+                This manager also teaches. Their role can change only once their active and
+                upcoming batches have another trainer.
+              </Alert>
+            ) : null}
             {form.role === "student" || form.role === "trainer" ? (
               <Alert variant="info">
                 This account keeps its {labelFor(ROLE_LABEL, form.role).toLowerCase()} identity.
@@ -540,9 +645,9 @@ export function UserAdministration({ userId }: { userId: string }) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {errors.role || errors.custom_role || errors.__all__ ? (
+            {errors.role || errors.custom_role || errors.user || errors.__all__ ? (
               <Alert variant="error">
-                {errors.role ?? errors.custom_role ?? errors.__all__}
+                {errors.role ?? errors.custom_role ?? errors.user ?? errors.__all__}
               </Alert>
             ) : null}
             <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -589,6 +694,67 @@ export function UserAdministration({ userId }: { userId: string }) {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={deactivateOpen}
+        onOpenChange={(open) => (busy === "active" ? null : setDeactivateOpen(open))}
+      >
+        <DialogContent size="md" hideCloseButton>
+          <DialogHeader>
+            <DialogTitle>Deactivate {user.full_name || user.email}?</DialogTitle>
+            <DialogDescription>
+              They are signed out of every device at once and cannot sign in until somebody
+              activates the account again. Nothing they did is deleted.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {deactivateError ? <Alert variant="error">{deactivateError}</Alert> : null}
+            <Field
+              label="Reason"
+              htmlFor="deactivate-reason"
+              hint="Required and recorded in the account history."
+              required
+            >
+              <Input
+                id="deactivate-reason"
+                value={deactivateReason}
+                maxLength={255}
+                onChange={(event) => setDeactivateReason(event.target.value)}
+              />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy === "active"}
+              onClick={() => setDeactivateOpen(false)}
+            >
+              Keep active
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy === "active" || !deactivateReason.trim()}
+              onClick={() => void deactivate()}
+            >
+              {busy === "active" ? "Deactivating…" : "Deactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <StepUpDialog
+        open={stepUpOpen}
+        onConfirmed={() => {
+          setStepUpOpen(false);
+          void applyRoleTransition();
+        }}
+        onCancel={() => {
+          setStepUpOpen(false);
+          setRoleDialogOpen(true);
+        }}
+      />
+
       {mayAdminister && user.role !== "superadmin" ? (
         <CentreCard user={user} busy={busy} run={run} errors={errors} />
       ) : null}
@@ -597,73 +763,39 @@ export function UserAdministration({ userId }: { userId: string }) {
         <ScopeGrantsCard userId={user.id} />
       ) : null}
 
-      {can(Capability.sessionViewAny) ? (
+      {/* Devices and addresses follow the same ladder as everything else on
+          this screen: the server refuses them for an account above yours. */}
+      {can(Capability.sessionViewAny) && mayAdminister ? (
         <UserSessionsCard userId={user.id} />
       ) : null}
 
-      {mayAdminister ? (
+      {can(Capability.userSetActive) && mayAdminister && !isSelf ? (
         <Card>
           <CardHeader>
             <CardTitle>Access</CardTitle>
-            <CardDescription>
-              Getting somebody back into their account, without anybody else
-              learning their password.
-            </CardDescription>
+            <CardDescription>Whether this account may sign in at all.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy === "reset"}
-                onClick={() =>
-                  void run(
-                    "reset",
-                    () => sendCredentialLink(user.id, "password_reset"),
-                    "A password-reset link has been sent to their address.",
-                  )
-                }
-              >
-                <KeyRound className="size-4" aria-hidden="true" />
-                Send a password-reset link
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy === "verify" || user.is_email_verified}
-                onClick={() =>
-                  void run(
-                    "verify",
-                    () => sendCredentialLink(user.id, "email_verification"),
-                    "A verification link has been sent to their address.",
-                  )
-                }
-              >
-                <MailCheck className="size-4" aria-hidden="true" />
-                Resend the verification link
-              </Button>
-            </div>
-            <p className="text-sm text-ink-muted">
-              Nobody here sets somebody else&rsquo;s password. A link goes to
-              the account holder, and they choose it — so only one person ever
-              knows it, and the record says they set it.
-            </p>
-
             {can(Capability.userSetActive) && mayAdminister && !isSelf ? (
-              <div className="border-t border-line pt-3">
+              <div>
                 <Button
                   type="button"
                   variant={user.is_active ? "destructive" : "primary"}
                   disabled={busy === "active"}
-                  onClick={() =>
+                  onClick={() => {
+                    if (user.is_active) {
+                      // Locking somebody out is asked first, with a reason
+                      // for the audit trail; letting them back in is not.
+                      setDeactivateError("");
+                      setDeactivateOpen(true);
+                      return;
+                    }
                     void run(
                       "active",
-                      () => setUserActive(user.id, !user.is_active),
-                      user.is_active
-                        ? "Deactivated. Their next request will be refused."
-                        : "Activated.",
-                    )
-                  }
+                      () => setUserActive(user.id, true),
+                      "Activated.",
+                    );
+                  }}
                 >
                   {user.is_active
                     ? "Deactivate this account"
@@ -679,6 +811,8 @@ export function UserAdministration({ userId }: { userId: string }) {
           </CardContent>
         </Card>
       ) : null}
+
+      <CapabilitiesCard user={user} />
 
       <History userId={user.id} />
       </div>
@@ -717,7 +851,7 @@ function CentreCard({
     key: string,
     work: () => Promise<unknown>,
     said: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   errors: Record<string, string>;
 }) {
   const { can } = useAuth();
@@ -725,7 +859,24 @@ function CentreCard({
   const { branches } = useBranches(mayMove);
   const [target, setTarget] = useState("");
   const [reason, setReason] = useState("");
+  const [confirming, setConfirming] = useState(false);
   const others = branches.filter((branch) => branch.id !== user.branch_id);
+  const destination = others.find((branch) => branch.id === target) ?? null;
+
+  async function move() {
+    setConfirming(false);
+    const moved = await run(
+      "branch",
+      () => moveUserToBranch(user.id, target, reason.trim()),
+      `Moved to ${destination?.name ?? "the other centre"}.`,
+    );
+    // Only a move that happened clears the form; a refusal keeps the choice
+    // and the reason on screen to correct and try again.
+    if (moved) {
+      setTarget("");
+      setReason("");
+    }
+  }
 
   return (
     <Card>
@@ -739,8 +890,8 @@ function CentreCard({
       </CardHeader>
       {mayMove ? (
         <CardContent className="space-y-3">
-          {errors.branch_id ? (
-            <Alert variant="error">{errors.branch_id}</Alert>
+          {errors.branch_id || errors.branch ? (
+            <Alert variant="error">{errors.branch_id ?? errors.branch}</Alert>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
             <Field label="Move to" htmlFor="user-branch">
@@ -765,6 +916,7 @@ function CentreCard({
               <Input
                 id="user-branch-reason"
                 value={reason}
+                maxLength={255}
                 onChange={(event) => setReason(event.target.value)}
               />
             </Field>
@@ -772,22 +924,23 @@ function CentreCard({
               type="button"
               variant="outline"
               disabled={busy === "branch" || target === ""}
-              onClick={() =>
-                void run(
-                  "branch",
-                  () => moveUserToBranch(user.id, target, reason.trim()),
-                  "Moved to the other centre.",
-                ).then(() => {
-                  setTarget("");
-                  setReason("");
-                })
-              }
+              onClick={() => setConfirming(true)}
             >
-              Move
+              {busy === "branch" ? "Moving…" : "Move"}
             </Button>
           </div>
         </CardContent>
       ) : null}
+      <Confirm
+        open={confirming}
+        title={`Move ${user.full_name || user.email} to ${destination?.name ?? "another centre"}?`}
+        description={`From their next request they see ${destination?.name ?? "that centre"}'s students, batches and records${user.branch_name ? ` instead of ${user.branch_name}'s` : ""}. Anything they were working on here stays here.`}
+        confirmLabel="Move"
+        cancelLabel="Keep them here"
+        confirmVariant="primary"
+        onConfirm={() => void move()}
+        onCancel={() => setConfirming(false)}
+      />
     </Card>
   );
 }
@@ -800,47 +953,103 @@ function CentreCard({
  */
 function ScopeGrantsCard({ userId }: { userId: string }) {
   const [grants, setGrants] = useState<ScopeGrantRow[] | null>(null);
-  const [batchId, setBatchId] = useState("");
+  const [loadError, setLoadError] = useState<ApiError | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query.trim(), 300);
+  const [options, setOptions] = useState<BatchListRow[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(() => {
-    listScopeGrants(userId)
-      .then(setGrants)
-      .catch(() => setGrants([]));
-  }, [userId]);
-
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    listScopeGrants(userId)
+      .then((rows) => {
+        if (!cancelled) {
+          setGrants(rows);
+          setLoadError(null);
+        }
+      })
+      .catch((cause: unknown) => {
+        // A failed read is not "no grants": keep whatever was on screen and
+        // say it could not be refreshed.
+        if (!cancelled) {
+          setLoadError(
+            cause instanceof ApiError
+              ? cause
+              : new ApiError(0, "error", "Could not load the scope grants.", ""),
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, attempt]);
 
-  async function addGrant(event: React.FormEvent) {
-    event.preventDefault();
-    if (!batchId.trim()) return;
+  const reload = useCallback(() => setAttempt((value) => value + 1), []);
+
+  // Search batches by code or name, inside what the caller can see, instead
+  // of asking an administrator to paste an id they would have to go and find.
+  const [searchedFor, setSearchedFor] = useState("");
+  if (debouncedQuery !== searchedFor) {
+    setSearchedFor(debouncedQuery);
+    setIsSearching(debouncedQuery !== "");
+    if (debouncedQuery === "") setOptions([]);
+  }
+  useEffect(() => {
+    if (!debouncedQuery) return;
+    let cancelled = false;
+    listBatches({ search: debouncedQuery, page_size: 8 })
+      .then((page) => {
+        if (!cancelled) setOptions(page.results);
+      })
+      .catch(() => {
+        if (!cancelled) setOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsSearching(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedQuery]);
+
+  const granted = new Set((grants ?? []).map((grant) => grant.batch).filter(Boolean));
+  const pickerOptions: PickerOption[] = options
+    .filter((row) => !granted.has(row.id))
+    .map((row) => ({
+      value: row.id,
+      label: `${row.code} · ${row.name}`,
+      hint: `${row.course_title} · ${BATCH_STATUS_LABEL[row.status]}`,
+    }));
+
+  async function addGrant(option: PickerOption) {
     setBusy(true);
     setError(null);
     try {
-      await grantScope(userId, { batch: batchId.trim() });
-      setBatchId("");
-      load();
+      await grantScope(userId, { batch: option.value });
+      setQuery("");
+      reload();
     } catch (cause) {
-      setError(fieldErrors(cause).batch ?? "That batch could not be granted.");
+      setError(errorMessage(cause, "That batch could not be granted."));
     } finally {
       setBusy(false);
     }
   }
 
-  async function remove(grantId: string) {
+  async function remove(grant: ScopeGrantRow) {
     setBusy(true);
+    setError(null);
     try {
-      await revokeScope(userId, grantId);
-      load();
+      await revokeScope(userId, grant.id);
+      reload();
+    } catch (cause) {
+      setError(errorMessage(cause, "That grant could not be revoked."));
     } finally {
       setBusy(false);
     }
   }
-
-  if (grants === null) return null;
 
   return (
     <Card>
@@ -854,9 +1063,21 @@ function ScopeGrantsCard({ userId }: { userId: string }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {error ? <Alert variant="error">{error}</Alert> : null}
-        {grants.length === 0 ? (
+        {loadError ? (
+          <ErrorState
+            title="Could not load the scope grants"
+            message={loadError.message}
+            requestId={loadError.requestId || undefined}
+            onRetry={reload}
+          />
+        ) : null}
+        {grants === null && !loadError ? (
+          <LoadingState label="Loading scope grants…" rows={2} />
+        ) : null}
+        {grants !== null && grants.length === 0 && !loadError ? (
           <p className="text-sm text-ink-muted">No direct grants.</p>
-        ) : (
+        ) : null}
+        {grants !== null && grants.length > 0 ? (
           <ul className="space-y-2">
             {grants.map((grant) => (
               <li
@@ -873,27 +1094,29 @@ function ScopeGrantsCard({ userId }: { userId: string }) {
                   variant="ghost"
                   size="sm"
                   disabled={busy}
-                  onClick={() => void remove(grant.id)}
+                  aria-label={`Revoke ${grant.batch_code ?? grant.course_code ?? "this grant"}`}
+                  onClick={() => void remove(grant)}
                 >
                   Revoke
                 </Button>
               </li>
             ))}
           </ul>
-        )}
-        <form onSubmit={addGrant} className="flex flex-wrap items-end gap-2">
-          <Field label="Batch ID" htmlFor="scope-grant-batch">
-            <Input
-              id="scope-grant-batch"
-              placeholder="Batch UUID"
-              value={batchId}
-              onChange={(event) => setBatchId(event.target.value)}
-            />
-          </Field>
-          <Button type="submit" disabled={busy || !batchId.trim()}>
-            Grant batch
-          </Button>
-        </form>
+        ) : null}
+        {grants !== null ? (
+          <SearchPicker
+            label="Grant a batch"
+            query={query}
+            onQueryChange={setQuery}
+            options={pickerOptions}
+            selected=""
+            onSelect={(option) => void addGrant(option)}
+            placeholder="Batch code or name"
+            isLoading={isSearching || busy}
+            hint="Search, then choose a batch to grant it."
+            emptyMessage={debouncedQuery ? "No batch you can see matches." : "Type to search batches."}
+          />
+        ) : null}
       </CardContent>
     </Card>
   );

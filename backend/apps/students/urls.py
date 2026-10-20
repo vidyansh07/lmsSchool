@@ -4,6 +4,7 @@ from django.urls import path
 
 from .views import (
     Student360View,
+    StudentBulkView,
     StudentDetailView,
     StudentDuplicatesView,
     StudentFeeAmountView,
@@ -21,6 +22,7 @@ urlpatterns = [
     # can ever be shadowed by it (though the `uuid` converter would already
     # refuse to match either as an id).
     path("me/", StudentMeView.as_view(), name="me"),
+    path("bulk/", StudentBulkView.as_view(), name="bulk"),
     path("duplicates/", StudentDuplicatesView.as_view(), name="duplicates"),
     path("<uuid:student_id>/", StudentDetailView.as_view(), name="detail"),
     path("<uuid:student_id>/360/", Student360View.as_view(), name="360"),

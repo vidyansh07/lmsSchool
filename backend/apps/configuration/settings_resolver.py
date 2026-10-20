@@ -47,6 +47,8 @@ class EffectiveSettings:
     support_email: str
     support_phone: str
     notification_email_enabled: bool
+    fee_receipt_email_enabled: bool
+    fee_statement_email_enabled: bool
     export_retention_days: int
     resource_upload_max_mb: int
 

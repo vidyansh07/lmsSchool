@@ -5,12 +5,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { CalendarPlus, Trash2, UserPlus } from 'lucide-react';
 
 import { generateSessions, listSessions } from '@/lib/academics';
+import { Confirm } from '@/components/confirm';
 import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { Pagination } from '@/components/pagination';
 import { ScheduleList } from '@/components/schedule-list';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { StatusActions, type StatusAction } from '@/components/status-actions';
+import {
+  EnrollmentStatusDialog,
+  type EnrollmentStatusChange,
+} from '@/components/students/enrollment-status-dialog';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -213,7 +218,7 @@ function TrainerPanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () 
   );
 }
 
-function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () => void }) {
+export function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: () => void }) {
   const [weekday, setWeekday] = useState<Weekday>(0);
   const [start, setStart] = useState('09:00');
   const [end, setEnd] = useState('11:00');
@@ -307,12 +312,23 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
     }
   }
 
-  async function onRemove(scheduleId: string) {
+  // Removing a weekly slot is a hard delete on the server, so it is asked
+  // first and names the slot; generated classes already on the calendar stay.
+  const [removing, setRemoving] = useState<BatchDetail['schedules'][number] | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+
+  async function onRemove() {
+    if (!removing) return;
+    setIsRemoving(true);
     try {
-      await deleteSchedule(scheduleId);
+      await deleteSchedule(removing.id);
+      setRemoving(null);
       onChanged();
     } catch (cause) {
+      setRemoving(null);
       setErrors(fieldErrors(cause));
+    } finally {
+      setIsRemoving(false);
     }
   }
 
@@ -347,7 +363,7 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
                   size="sm"
                   variant="ghost"
                   className="ml-auto"
-                  onClick={() => void onRemove(schedule.id)}
+                  onClick={() => setRemoving(schedule)}
                   aria-label={`Remove the ${schedule.weekday_label} class`}
                 >
                   <Trash2 className="size-3.5" aria-hidden="true" />
@@ -425,6 +441,20 @@ function SchedulePanel({ batch, onChanged }: { batch: BatchDetail; onChanged: ()
           ) : null}
         </div>
       </CardContent>
+      <Confirm
+        open={removing !== null}
+        title={`Remove the ${removing?.weekday_label ?? ''} class?`}
+        description={
+          removing
+            ? `${removing.weekday_label} ${removing.start_time.slice(0, 5)}–${removing.end_time.slice(0, 5)} stops repeating. Classes already generated from it stay on the calendar; this cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Remove"
+        cancelLabel="Keep it"
+        isConfirming={isRemoving}
+        onConfirm={() => void onRemove()}
+        onCancel={() => setRemoving(null)}
+      />
     </Card>
   );
 }
@@ -439,6 +469,7 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isBusy, setIsBusy] = useState(false);
   const [busyEntryId, setBusyEntryId] = useState('');
+  const [pendingChange, setPendingChange] = useState<EnrollmentStatusChange | null>(null);
 
   const loadRoster = useCallback(() => {
     getBatchRoster(batch.id)
@@ -489,6 +520,15 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
     } finally {
       setIsBusy(false);
     }
+  }
+
+  function ask(entry: RosterEntry, status: EnrollmentStatusChange['status']) {
+    setMessage('');
+    setPendingChange({
+      enrollmentId: entry.id,
+      subject: `${entry.full_name || entry.email} (${entry.student_code}) on ${batch.code}`,
+      status,
+    });
   }
 
   async function onSetStatus(entry: RosterEntry, status: RosterEntry['status']) {
@@ -559,7 +599,7 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
                               size="sm"
                               variant="outline"
                               disabled={busyEntryId === entry.id}
-                              onClick={() => void onSetStatus(entry, 'suspended')}
+                              onClick={() => ask(entry, 'suspended')}
                             >
                               Suspend
                             </Button>
@@ -579,7 +619,7 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
                               size="sm"
                               variant="ghost"
                               disabled={busyEntryId === entry.id}
-                              onClick={() => void onSetStatus(entry, 'cancelled')}
+                              onClick={() => ask(entry, 'cancelled')}
                             >
                               Remove
                             </Button>
@@ -613,6 +653,14 @@ export function RosterPanel({ batch, onChanged }: { batch: BatchDetail; onChange
           </div>
         ) : null}
       </CardContent>
+      <EnrollmentStatusDialog
+        change={pendingChange}
+        onClose={() => setPendingChange(null)}
+        onChanged={() => {
+          loadRoster();
+          onChanged();
+        }}
+      />
     </Card>
   );
 }

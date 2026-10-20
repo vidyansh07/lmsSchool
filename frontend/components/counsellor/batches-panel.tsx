@@ -25,7 +25,7 @@
 import Link from 'next/link';
 
 import { ErrorState, LoadingState } from '@/components/states';
-import { formatCount, formatDate } from '@/lib/format';
+import { formatCount, formatDate, localIsoDate } from '@/lib/format';
 import type { BatchListRow } from '@/types/api';
 
 /** Below this many seats left (or this fraction of capacity, if larger), a batch counts as "filling up". */
@@ -98,7 +98,7 @@ export function BatchWatchlist({
   limit = 5,
   /** Today as an ISO date. Injected so a test — and a screen holding a frozen
    *  "as of" moment — does not depend on the clock. */
-  today = new Date().toISOString().slice(0, 10),
+  today = localIsoDate(),
 }: {
   batches: BatchListRow[];
   kind: 'starting-soon' | 'filling-up';

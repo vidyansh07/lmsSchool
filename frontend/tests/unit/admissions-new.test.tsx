@@ -15,6 +15,12 @@ import type {
   TrainerListRow,
 } from '@/types/api';
 
+
+// Whole-registration journeys type into a dozen fields each; under a full
+// parallel run that can pass vitest's 5-second default without anything
+// being wrong.
+vi.setConfig({ testTimeout: 15_000 });
+
 const createStudent = vi.hoisted(() => vi.fn());
 const checkDuplicates = vi.hoisted(() => vi.fn());
 const listStudents = vi.hoisted(() => vi.fn());
@@ -29,6 +35,10 @@ const setEnrollmentFee = vi.hoisted(() => vi.fn());
 const recordPayment = vi.hoisted(() => vi.fn());
 
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => ({ user: null, can: () => false }) }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 vi.mock('@/lib/people', () => ({
   createStudent,
   checkDuplicates,
@@ -42,6 +52,9 @@ vi.mock('@/lib/fees', async (importOriginal) => ({
   recordPayment,
 }));
 vi.mock('@/lib/courses', () => ({ listCourses }));
+const getEnquiry = vi.hoisted(() => vi.fn());
+const registerEnquiry = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/enquiries', () => ({ getEnquiry, registerEnquiry }));
 vi.mock('@/lib/batches', () => ({ listBatches, createBatch, assignBatchTrainer, enrolStudent }));
 
 const COURSE: CourseListRow = {
@@ -90,6 +103,7 @@ function trainer(overrides: Partial<TrainerListRow> = {}): TrainerListRow {
     id: 'trainer-1',
     trainer_id: 'GRS-T-001',
     user_id: 'u-trainer-1',
+    invitation_accepted: true,
     email: 'tina@example.com',
     full_name: 'Tina Trainer',
     professional_title: 'Senior trainer',
@@ -117,6 +131,7 @@ function student(overrides: Partial<StudentProfile> = {}): StudentProfile {
       role: 'student',
       is_active: true,
       is_email_verified: false,
+      invitation_accepted: true,
       profile_image_url: null,
       branch_id: null,
       branch_code: null,
@@ -202,6 +217,7 @@ function referrerRow(): StudentListRow {
     id: 'referrer-1',
     student_id: 'GRS-S-00012',
     user_id: 'u-referrer',
+    invitation_accepted: true,
     email: 'priya@example.com',
     full_name: 'Priya Shah',
     city: 'Jaipur',
@@ -346,6 +362,30 @@ describe('RegistrationWizard — duplicate detection', () => {
   });
 });
 
+describe('RegistrationWizard — leaving half way', () => {
+  it('asks before "Back to admissions" throws away a half-typed registration', async () => {
+    push.mockReset();
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+
+    await user.click(screen.getByRole('link', { name: 'Back to admissions' }));
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Leave this registration?');
+
+    await user.click(screen.getByRole('button', { name: 'Leave without registering' }));
+    expect(push).toHaveBeenCalledWith('/admissions');
+  });
+
+  it('leaves at once when nothing was typed', async () => {
+    push.mockReset();
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await user.click(screen.getByRole('link', { name: 'Back to admissions' }));
+    expect(push).toHaveBeenCalledWith('/admissions');
+  });
+});
+
 describe('RegistrationWizard — moving through the steps', () => {
   it('requires an email and a first name before advancing', async () => {
     const user = userEvent.setup();
@@ -423,6 +463,45 @@ describe('RegistrationWizard — confirming', () => {
     expect(assignBatchTrainer).toHaveBeenCalledWith('batch-1', 'trainer-1');
     expect(enrolStudent).toHaveBeenCalledWith({ student_id: 'student-1', batch_id: 'batch-1' });
     await waitFor(() => expect(screen.getByText(/is enrolled on Morning batch/)).toBeInTheDocument());
+  });
+
+  it('registers a Meritto lead: fills the form from it and marks it registered', async () => {
+    window.history.replaceState(null, '', '/admissions/new?enquiry=e-7');
+    getEnquiry.mockResolvedValue({
+      id: 'e-7',
+      full_name: 'Aman Kumar Verma',
+      email: 'aman@example.test',
+      mobile: '9876500001',
+      city: 'Jaipur',
+      course: 'DevOps',
+      managed_externally: true,
+      external_stage: 'Ready for admission',
+    });
+    registerEnquiry.mockResolvedValue({});
+    createStudent.mockResolvedValue(student());
+    assignBatchTrainer.mockResolvedValue({});
+    enrolStudent.mockResolvedValue(enrollment());
+
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    expect(await screen.findByText(/from Meritto \(Ready for admission\)/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Email', { exact: false })).toHaveValue('aman@example.test');
+    expect(screen.getByLabelText('First name', { exact: false })).toHaveValue('Aman');
+    expect(screen.getByLabelText('Last name', { exact: false })).toHaveValue('Kumar Verma');
+
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+    await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
+    await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search trainers results'), 'trainer-1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
+
+    await waitFor(() => expect(registerEnquiry).toHaveBeenCalledWith('e-7', 'student-1'));
+    expect(await screen.findByText(/The lead Aman Kumar Verma is marked registered/)).toBeInTheDocument();
+    window.history.replaceState(null, '', '/');
   });
 
   it('sends the agreed fee and where the student works, decided at the desk', async () => {
@@ -615,6 +694,53 @@ describe('RegistrationWizard — confirming', () => {
     expect(screen.getByText('This email is already registered.')).toBeInTheDocument();
   });
 
+  it('says when the duplicate check could not run, instead of implying there is none', async () => {
+    checkDuplicates.mockRejectedValue(new ApiError(0, 'network_error', 'Could not reach the server.', ''));
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+
+    expect(
+      await screen.findByText(/could not check whether this student is already registered/i, undefined, {
+        timeout: 3000,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('brings the matches back when the server finds a duplicate the wizard did not show', async () => {
+    createStudent.mockRejectedValueOnce(
+      new ApiError(409, 'conflict', 'Conflict.', 'req-5', {
+        override_reason: ['A student with this phone already exists. Give a reason to register anyway.'],
+      }),
+    );
+    checkDuplicates.mockResolvedValueOnce({ results: [] }).mockResolvedValue({ results: [existingMatch()] });
+    const user = userEvent.setup();
+    await goToConfirmWithExistingBatch(user);
+    await user.click(await screen.findByRole('button', { name: /assign a trainer later/i }));
+    await user.click(await screen.findByRole('button', { name: /confirm and enrol/i }));
+
+    await waitFor(() => expect(screen.getByText('Student details')).toBeInTheDocument());
+    expect(
+      screen.getByText('A student with this phone already exists. Give a reason to register anyway.'),
+    ).toBeInTheDocument();
+    expect(await screen.findByText(/Jane Existing/)).toBeInTheDocument();
+  });
+
+  it('says a nested profile error above the form rather than dropping it', async () => {
+    createStudent.mockRejectedValue(
+      new ApiError(400, 'validation_error', 'The submitted data is invalid.', 'req-6', {
+        profile: { institution: ['Ensure this field has no more than 150 characters.'] },
+      } as unknown as Record<string, string[]>),
+    );
+    const user = userEvent.setup();
+    await goToConfirmWithExistingBatch(user);
+    await user.click(await screen.findByRole('button', { name: /assign a trainer later/i }));
+    await user.click(await screen.findByRole('button', { name: /confirm and enrol/i }));
+
+    await waitFor(() => expect(screen.getByText('Student details')).toBeInTheDocument());
+    expect(screen.getByText('Ensure this field has no more than 150 characters.')).toBeInTheDocument();
+  });
+
   it('shows a trainer clash message verbatim, without paraphrasing it', async () => {
     createStudent.mockResolvedValue(student());
     assignBatchTrainer.mockRejectedValue(
@@ -747,6 +873,51 @@ describe('RegistrationWizard — confirming', () => {
     );
     await screen.findByText(/3 instalments scheduled/i);
     expect(createFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('takes a percentage discount, spreads the schedule over what is left and needs a reason', async () => {
+    createStudent.mockResolvedValue(student());
+    assignBatchTrainer.mockResolvedValue({});
+    enrolStudent.mockResolvedValue(enrollment());
+    setEnrollmentFee.mockResolvedValue({});
+    recordPayment.mockResolvedValue({ amount: '1000.00', receipt_number: 'GRS-R-00010' });
+
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+    await user.type(screen.getByLabelText(/Agreed fee/), '25000');
+    await user.type(screen.getByLabelText('Discount (%)'), '10');
+    expect(screen.getByText('₹2,500 off the fee.')).toBeInTheDocument();
+    expect(await screen.findByText(/adds up to ₹22,500/i)).toBeInTheDocument();
+
+    // A discount without a reason does not get past this step.
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    expect(await screen.findByText(/say why the discount was given/i)).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/reason for the discount/i), 'Early bird');
+
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+    await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
+    await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search trainers results'), 'trainer-1');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirm and enrol' })).toBeInTheDocument());
+    expect(screen.getByText('₹25,000 less 10% (₹2,500) = ₹22,500')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /confirm and enrol/i }));
+    await waitFor(() => expect(setEnrollmentFee).toHaveBeenCalledOnce());
+    const [, payload] = setEnrollmentFee.mock.calls[0] as [
+      string,
+      { installments: { amount: string }[]; discount_percent: string; discount_reason: string },
+    ];
+    expect(payload).toMatchObject({
+      agreed_amount: '25000',
+      discount_percent: '10',
+      discount_amount: 0,
+      discount_reason: 'Early bird',
+    });
+    expect(payload.installments.reduce((sum, row) => sum + Number(row.amount), 0)).toBe(22500);
   });
 
   it('plans a follow-up with a note when a date is given', async () => {

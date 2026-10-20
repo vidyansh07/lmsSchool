@@ -66,16 +66,23 @@ def _login(client, user, *, user_agent: str = CHROME_WINDOWS):
 
 def _grant_session_capabilities(*, actor, holder, slug: str):
     """Build a custom role of ``holder``'s own kind (so their `role` field,
-    and therefore their branch scope, is unchanged) holding just the two
-    session capabilities, and assign it — the only way to observe branch
-    scoping on `session.revoke_any`, since the system ADMIN role that holds
-    it by default is deliberately unbounded (D-129 amended)."""
+    and therefore their branch scope, is unchanged) holding that kind's own
+    capabilities plus the two session ones, and assign it — the only way to
+    observe branch scoping on `session.revoke_any`, since the system ADMIN
+    role that holds it by default is deliberately unbounded (D-129 amended).
+
+    The kind's own set stays in: ending somebody's session is administering
+    their account, so it also follows the authority ladder, and a role
+    holding *only* the session capabilities is not above a student."""
+    from apps.accounts.roles import ROLE_CAPABILITIES
+
+    codes = set(ROLE_CAPABILITIES[holder.role]) | {"session.view_any", "session.revoke_any"}
     role = create_role(
         actor=actor,
         slug=slug,
         name=slug,
         kind=holder.role,
-        permissions=[{"code": "session.view_any"}, {"code": "session.revoke_any"}],
+        permissions=[{"code": code} for code in sorted(codes)],
     )
     holder.custom_role = role
     holder.save(update_fields=["custom_role"])

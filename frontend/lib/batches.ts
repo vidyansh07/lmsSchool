@@ -227,30 +227,24 @@ export async function listStudentEnrollments(studentCode: string): Promise<Enrol
 }
 
 /**
- * Move one enrolment to a different batch.
+ * Move one enrolment to a different batch (`POST /enrollments/{id}/transfer/`).
  *
- * Enrols on the new batch *first* and only cancels the old enrolment once that
- * succeeds. A transfer that stopped halfway would otherwise be able to leave a
- * student holding no seat at all — enrolling first means the worst case is an
- * extra seat briefly held, never a dropped one.
+ * One server-side step: the student is enrolled on the target under its
+ * capacity lock, and the old row becomes `transferred`, pointing at the new
+ * one, with the reason. Nothing to half-finish — a full target is a 409 and
+ * the student stays exactly where they were. It replaced enrol-then-cancel,
+ * which recorded every move as a cancellation.
  */
 export async function transferEnrollment(params: {
-  studentId: string;
   fromEnrollmentId: string;
   toBatchId: string;
-  note?: string;
-}): Promise<{ created: Enrollment; cancelled: Enrollment }> {
-  const created = await enrolStudent({
-    student_id: params.studentId,
-    batch_id: params.toBatchId,
-    note: params.note || 'Transferred from another batch.',
+  reason: string;
+  isUpgrade?: boolean;
+}): Promise<Enrollment> {
+  return apiMutate<Enrollment>(`/api/v1/enrollments/${params.fromEnrollmentId}/transfer/`, {
+    method: 'POST',
+    body: { batch_id: params.toBatchId, reason: params.reason, is_upgrade: Boolean(params.isUpgrade) },
   });
-  const cancelled = await setEnrollmentStatus(
-    params.fromEnrollmentId,
-    'cancelled',
-    params.note || `Transferred to ${created.batch_code}.`,
-  );
-  return { created, cancelled };
 }
 
 export async function setLessonCompletion(

@@ -120,6 +120,10 @@ function HeaderCheckbox({
   );
 }
 
+/** Elements whose own click must never also open the row they sit in. */
+const INTERACTIVE_SELECTOR =
+  'a, button, input, select, textarea, label, summary, [role="button"], [role="menuitem"], [role="checkbox"], [role="switch"], [data-row-action]';
+
 export function DataTable<Row>({
   columns,
   rows,
@@ -134,6 +138,7 @@ export function DataTable<Row>({
   sort,
   onSortChange,
   selection,
+  getRowLabel,
   onRowActivate,
   densityStorageKey = DEFAULT_DENSITY_STORAGE_KEY,
   caption,
@@ -161,16 +166,13 @@ export function DataTable<Row>({
    * shift-click ranges, then drive `components/bulk-actions.tsx`'s
    * `BulkActionsBar` off the same hook for the action buttons.
    *
-   * Deliberately unused by every table currently on `DataTable`: none of
-   * them (students, activities, activities feed, deliveries, …) has a bulk
-   * operation to standardise — each only ever exposed single-row actions
-   * (open a record, retry one delivery, and so on). Fabricating a bulk
-   * action against no real backend or product need just to light this prop
-   * up would be new business functionality wearing a refactor's clothes, so
-   * it stays built and ready for the first screen that gets a genuine,
-   * approved bulk operation rather than switched on speculatively.
+   * Used by the lists with approved bulk actions (accounts, students,
+   * enrolments, trainers); each sends its target through `lib/bulk`.
    */
   selection?: UseBulkSelectionResult<string>;
+  /** Names a row for its checkbox — "Select Asha Rao" — so twenty
+   *  checkboxes are not twenty identical "Select row"s to a screen reader. */
+  getRowLabel?: (row: Row) => string;
   onRowActivate?: (row: Row) => void;
   /** `localStorage` key for the density preference. Share one across a family
    *  of tables, or give each screen its own — both are reasonable. */
@@ -348,7 +350,17 @@ export function DataTable<Row>({
                         aria-selected={selection ? isSelected : undefined}
                         onFocus={() => setFocusedIndex(index)}
                         onKeyDown={(event) => handleRowKeyDown(event, index)}
-                        onClick={() => onRowActivate?.(row)}
+                        onClick={(event) => {
+                          if (!onRowActivate) return;
+                          // A click on a control inside the row — a link, a
+                          // button, a select changing a fee status — belongs
+                          // to that control, not to "open this row". Checked
+                          // here once rather than trusting every cell to stop
+                          // its own click from bubbling.
+                          const control = (event.target as HTMLElement).closest(INTERACTIVE_SELECTOR);
+                          if (control && event.currentTarget.contains(control)) return;
+                          onRowActivate(row);
+                        }}
                         className={cn(
                           'animate-fade-in outline-none transition-colors',
                           onRowActivate && 'cursor-pointer hover:bg-sunken/60 active:bg-sunken',
@@ -363,7 +375,9 @@ export function DataTable<Row>({
                           >
                             <input
                               type="checkbox"
-                              aria-label="Select row"
+                              aria-label={
+                                getRowLabel ? `Select ${getRowLabel(row)}` : `Select row ${index + 1}`
+                              }
                               checked={isSelected}
                               readOnly
                               // A native `onClick` carries `shiftKey` reliably;

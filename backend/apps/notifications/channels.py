@@ -160,19 +160,45 @@ def enqueue_email(message: EmailMessage) -> bool:
 def send_email_message(message: EmailMessage) -> bool:
     """Attempt one delivery, recording the outcome either way."""
     from django.conf import settings
+    from django.core.mail import EmailMessage as OutgoingEmail
     from django.core.mail import send_mail
 
     from apps.common.logging import scrub
+    from apps.common.mail_policy import NOT_ON_LIST, recipient_allowed
+
+    from .attachments import render as render_attachment
+
+    if not recipient_allowed(message.to_email):
+        # Not a failure to retry: this environment does not email this address.
+        message.status = EmailStatus.ABANDONED
+        message.last_error = NOT_ON_LIST
+        message.save(update_fields=["status", "last_error", "updated_at"])
+        return False
 
     message.attempts += 1
+    subject = f"{settings.EMAIL_SUBJECT_PREFIX}{message.subject}"
     try:
-        send_mail(
-            subject=f"{settings.EMAIL_SUBJECT_PREFIX}{message.subject}",
-            message=message.body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[message.to_email],
-            fail_silently=False,
-        )
+        if not message.attachments:
+            send_mail(
+                subject=subject,
+                message=message.body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[message.to_email],
+                fail_silently=False,
+            )
+        else:
+            outgoing = OutgoingEmail(
+                subject=subject,
+                body=message.body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[message.to_email],
+            )
+            # Drawn now, not when the row was queued, so a retry carries the
+            # document as it stands — a receipt voided in between says VOID.
+            for item in message.attachments:
+                document = render_attachment(item)
+                outgoing.attach(document.filename, document.content, document.mimetype)
+            outgoing.send(fail_silently=False)
     except Exception as exc:
         # Scrubbed before it is stored *or* logged: a provider error can echo
         # the credentials it was handed.

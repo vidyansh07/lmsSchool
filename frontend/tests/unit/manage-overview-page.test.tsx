@@ -39,6 +39,7 @@ vi.mock('@/components/auth-provider', () => ({ useAuth: () => useAuthMock.value 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   usePathname: () => '/manage',
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 function grantedAuth() {

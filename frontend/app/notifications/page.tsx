@@ -150,7 +150,9 @@ function Notifications() {
               <div className="mt-2 flex flex-wrap gap-2">
                 {row.link_path ? (
                   <Button asChild size="sm" variant="outline">
-                    <Link href={row.link_path}>Open</Link>
+                    <Link href={row.link_path} aria-label={`Open: ${row.title}`}>
+                      Open
+                    </Link>
                   </Button>
                 ) : null}
                 {row.is_read ? null : (
@@ -160,6 +162,7 @@ function Notifications() {
                     variant="ghost"
                     disabled={busy === row.id}
                     onClick={() => run(row.id, () => markNotificationRead(row.id))}
+                    aria-label={`Mark read: ${row.title}`}
                   >
                     Mark read
                   </Button>

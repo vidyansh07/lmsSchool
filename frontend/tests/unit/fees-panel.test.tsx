@@ -27,6 +27,7 @@ const overview: FeesOverview = {
       batch_name: 'Morning',
       agreed_amount: '10000.00',
       discount_amount: '0.00',
+      discount_percent: null,
       discount_reason: '',
       payable: '10000.00',
       paid: '1000.00',

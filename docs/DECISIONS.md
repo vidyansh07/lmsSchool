@@ -1385,3 +1385,107 @@ product interfaces cannot bypass them. Django's built-in admin writes the model
 directly and remains a break-glass maintenance surface; it is not a supported
 route for routine account or role administration and still needs a separate
 hardening decision.
+
+### D-143 · Granting authority asks for a fresh step-up; reach follows the ladder everywhere (15 October 2026)
+
+A role transition now requires the same fresh step-up as ending somebody's
+session or locking a permission, because handing out authority is at least as
+dangerous. Every endpoint that acts on another person's account — sessions,
+scope grants, profile-image moderation, trainer-profile edits — checks the
+authority ladder (`can_administer`), not only the capability and the centre.
+A scope grant is never self-service. An administrator does not change their own
+sign-in email through the administration route. A centre-bound role is not given
+to an account with no centre until it is placed in one. A trainer profile on a
+role that no longer teaches is kept for history but cannot take batches or
+timetable slots, and the trainer directory lists only people who teach.
+
+### D-144 · Bulk actions run row by row and report every skip; each staff role has its own sidebar (15 October 2026)
+
+The owner chose the bulk operations, modelled on ClassPro and Meritto: export
+the selection, resend invitations, move accounts to a centre, assign an
+enquiry owner, transfer enrolments to another batch, and "select all
+matching" working with every one of them. A bulk endpoint resolves its rows
+from the ticked ids or from the list's own filters inside the caller's
+visible set, refuses a filter it does not recognise (ignoring one would
+widen the action), caps one request at 500 rows, and runs each row through
+the single-row service, so every authority, centre and capacity rule and
+every audit entry still applies. The answer names each skipped row and why.
+Exporting ticked rows uses a short-lived per-person selection token because a
+request line full of ids does not fit through the server.
+
+A transfer is a transfer: the screens now call `transfer_student`, which keeps
+the old enrolment as `transferred` and pointing at the new one, with the
+reason, instead of enrolling and cancelling (which recorded every move as a
+drop-out).
+
+Managers, counsellors and trainers each get their own grouped sidebar —
+manager: academics and staff first; counsellor: leads and admissions first;
+trainer: today's class and the classroom — with every entry still gated by
+capability, so a configured role sees only what it holds. A page in a module
+with more than one screen shows the module's other screens as tabs. This
+supersedes the shared `STAFF_NAV` of D-130 ("only the sidebar differs"):
+what each role may do is unchanged.
+
+### D-145 · Meritto manages leads; the LMS registers the ones it sends (17 October 2026)
+
+The owner's answers: leads are managed completely in Meritto. Meritto sends a
+lead to the LMS only when it is ready to admit, one way — the LMS never writes
+back to Meritto. Walk-ins and phone enquiries are still entered and worked in
+the LMS.
+
+A Meritto API key (Integrations → Lead API keys) posts to
+`POST /api/v1/integrations/leads/`. The lead is marked
+`external_system = "meritto"` before anything is announced, and Meritto's own
+stage and owner are kept in its words (`external_stage`, `external_owner`),
+refreshed on every post and never mapped onto the LMS pipeline. To people in
+the LMS such a lead is read-only: no stage, owner or follow-up change, no bulk
+owner change, no follow-up answers, and LMS lead automation does not run for
+it. The one thing the LMS does with it is register it — "Ready to admit" lists
+them, and "Register this lead" opens the registration wizard pre-filled; on
+confirm the lead is linked to the student and marked registered on the LMS
+side, with Meritto's stage left as Meritto sent it.
+
+Outbound webhooks stay, for other systems, as generic signed JSON; there is no
+Meritto preset.
+
+The same pass made three fee decisions, by default where the owner did not
+answer otherwise: a discount is typed as a percentage of the fee (with a ₹
+switch), and the rupees are worked out on the server; a student is emailed the
+receipt PDF for every payment and a fee statement (not a tax invoice — there is
+no GSTIN or tax rate to put on one) when the fee is agreed or changed, each
+switchable off in institution settings; and three automation triggers —
+payment recorded, instalment due soon, instalment overdue — let reminders be
+built as rules, two of which are seeded as drafts.
+
+### D-146 · An invitation is its own link, and every account email says whether it went (19 October 2026)
+
+The owner reported that new trainers and users never received their link or
+code. Staging's mail service had refused every message for days, and nothing
+in the product showed it. A review of the account flow then found it broken in
+several places. Decisions:
+
+- An account somebody else creates gets an **invitation** token, which lasts
+  `AUTH_TOKEN_INVITATION_TTL_DAYS` (7 days), not the one-hour reset token.
+  Setting a password from any emailed link also verifies the address.
+- **"Accepted" means a password of their own** (`invitation_accepted`), not a
+  verified email. "Resend invitation" sends a new set-password link that
+  supersedes the old one. "Forgot password" for someone who never set a
+  password sends the invitation.
+- **Every account email is recorded** with whether the mail service accepted
+  it, in words an administrator can act on (`auth.email.credential_*`; never
+  the link). The account page's "Getting in" card shows it, and the
+  credential-link endpoint answers `{sent, detail}`. This reports the
+  institution's own mail set-up, not the recipient's mailbox. A one-time code
+  that could not be emailed is dropped, so it does not count against the
+  cooldown.
+- An administrator who created a fellow administrator may resend that
+  invitation until it is accepted. A manager may resend a trainer's. The
+  account details form and the email links appear only for holders of
+  `user.update_any`, so nobody is shown a Save that answers 403.
+
+Later the same day, staging's mail was moved to Gmail SMTP. `grras.com`, the
+domain of the seeded demo accounts, turned out to have real mail servers, so
+`EMAIL_RECIPIENT_ALLOWLIST` was added: in a staging or demo environment, only
+the listed addresses and `@domains` are ever emailed. Production leaves it empty.
+A refused message is recorded as not sent, with the reason.
+

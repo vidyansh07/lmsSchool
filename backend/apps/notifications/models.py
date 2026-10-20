@@ -98,6 +98,10 @@ class NotificationKind(models.TextChoices):
     FORM_ASSIGNED = "form.assigned", _("Form sent to you to fill")
     FORM_SUBMITTED = "form.submitted", _("Form you sent was submitted")
 
+    # --- Fees: what an automation rule tells a student or a counsellor
+    FEE_PAYMENT_RECEIVED = "fee.payment", _("Fee payment received")
+    FEE_REMINDER = "fee.reminder", _("Fee instalment reminder")
+
 
 class NotificationCategory(models.TextChoices):
     ACADEMIC = "academic", _("Coursework and results")
@@ -148,6 +152,8 @@ KIND_CATEGORY: dict[str, str] = {
     NotificationKind.DSR_OVERDUE: NotificationCategory.SCHEDULE,
     NotificationKind.FORM_ASSIGNED: NotificationCategory.SCHEDULE,
     NotificationKind.FORM_SUBMITTED: NotificationCategory.ACADEMIC,
+    NotificationKind.FEE_PAYMENT_RECEIVED: NotificationCategory.ADMINISTRATIVE,
+    NotificationKind.FEE_REMINDER: NotificationCategory.SCHEDULE,
 }
 
 
@@ -249,6 +255,11 @@ class EmailMessage(BaseModel):
     subject = models.CharField(_("subject"), max_length=255)
     body = models.TextField(_("body"))
     template = models.CharField(_("template"), max_length=60, blank=True)
+    #: Files to attach, as references rather than bytes: `[{"kind": "fee_receipt",
+    #: "id": "<uuid>"}]`. Each kind is drawn when the message is sent, by the
+    #: renderer its app registered (`apps.notifications.attachments`), so the
+    #: outbox never holds a copy of a document and a retry sends the current one.
+    attachments = models.JSONField(_("attachments"), default=list, blank=True)
 
     notification = models.ForeignKey(
         Notification,

@@ -38,8 +38,11 @@ def visible_trainers(user) -> QuerySet[TrainerProfile]:
     base = _base()
 
     if has_capability(user, Capability.TRAINER_VIEW_ANY):
+        # Only people who teach: a manager who moved to admissions keeps their
+        # old profile for history (its detail page still opens), but the
+        # directory and the "who can take this batch" pickers stop offering it.
         return scope_to_branch(
-            base,
+            base.filter(user__role__in=batch_access.TEACHING_ROLES),
             user,
             path="branch",
             capability=Capability.TRAINER_VIEW_ANY,

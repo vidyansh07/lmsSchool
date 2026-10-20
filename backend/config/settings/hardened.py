@@ -178,6 +178,10 @@ if UPLOAD_SCAN_FAIL_OPEN:
 # generate once per environment, store in the secret manager, never reuse
 # across environments. Generate with:
 #   python -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"
+# Plain-http webhooks skip the public-address check; never in a deployment.
+if env.bool("INTEGRATION_ALLOW_HTTP", default=False):
+    raise ImproperlyConfigured("INTEGRATION_ALLOW_HTTP must be off in a deployed environment.")
+INTEGRATION_ALLOW_HTTP = False
 MFA_ENCRYPTION_KEY = require_setting(
     "MFA_ENCRYPTION_KEY", env.str("MFA_ENCRYPTION_KEY", default="")
 )

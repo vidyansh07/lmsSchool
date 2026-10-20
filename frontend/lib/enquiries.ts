@@ -36,6 +36,20 @@ export async function updateEnquiry(id: string, changes: EnquiryChanges): Promis
   return apiMutate<EnquiryDetail>(`/api/v1/enquiries/${id}/`, { method: "PATCH", body: changes });
 }
 
+/** Record that the lead was registered as this student (the wizard's last
+ *  step when it was opened from an enquiry). */
+export async function registerEnquiry(id: string, studentId: string): Promise<EnquiryDetail> {
+  return apiMutate<EnquiryDetail>(`/api/v1/enquiries/${id}/register/`, {
+    method: "POST",
+    body: { student: studentId },
+  });
+}
+
+/** Where "Register this lead" goes: the wizard, filled in from the lead. */
+export function registerLeadHref(id: string): string {
+  return `/admissions/new?enquiry=${encodeURIComponent(id)}`;
+}
+
 /** The list path for `useApi`, with the filters the pipeline screen uses. */
 export type EnquiryFollowUpFilter = "" | "overdue" | "today" | "none";
 
@@ -48,6 +62,10 @@ export function enquiryListPath(filters: {
   created_before?: string;
   owner?: string;
   q?: string;
+  /** `meritto`: leads Meritto sent. `lms`: entered here. */
+  managed_by?: "" | "meritto" | "lms";
+  /** Meritto leads not yet registered. */
+  ready_to_admit?: boolean;
   page?: number;
 }): string {
   const query = new URLSearchParams();
@@ -59,6 +77,8 @@ export function enquiryListPath(filters: {
   if (filters.created_before) query.set("created_before", filters.created_before);
   if (filters.owner) query.set("owner", filters.owner);
   if (filters.q) query.set("q", filters.q);
+  if (filters.managed_by) query.set("managed_by", filters.managed_by);
+  if (filters.ready_to_admit) query.set("ready_to_admit", "true");
   if (filters.page && filters.page > 1) query.set("page", String(filters.page));
   const suffix = query.toString();
   return `/api/v1/enquiries/${suffix ? `?${suffix}` : ""}`;

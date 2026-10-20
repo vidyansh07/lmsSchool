@@ -86,6 +86,34 @@ _DSR_PATHS = frozenset(
     }
 )
 
+#: `fee.*`: the fee agreed for one enrolment, as it stands.
+_FEE_PATHS = frozenset(
+    {
+        "fee.id",
+        "fee.course",
+        "fee.batch",
+        "fee.payable",
+        "fee.paid",
+        "fee.balance",
+        "fee.status",
+        "fee.is_overdue",
+        "fee.discount_percent",
+        "fee.has_discount",
+    }
+)
+
+#: `instalment.*`: one row of a fee's schedule.
+_INSTALMENT_PATHS = frozenset(
+    {
+        "instalment.id",
+        "instalment.sequence",
+        "instalment.count",
+        "instalment.amount",
+        "instalment.balance",
+        "instalment.due_on",
+    }
+)
+
 #: The literal allowlist from `AUTOMATION_CATALOG.md`'s "Triggers and their
 #: context" table — the single source of truth for which condition paths a
 #: rule may reference per trigger. `ACTIVITY_COMPLETED` and `FORM_SUBMITTED`
@@ -146,6 +174,26 @@ ALLOWED_PATHS: dict[str, frozenset[str]] = {
     "DSR_SUBMITTED": _DSR_PATHS,
     "DSR_MISSING": _DSR_PATHS,
     "DSR_STUDENT_FLAGGED": frozenset({"note.flag", "note.text"}) | _DSR_PATHS | _STUDENT_PATHS,
+    "FEE_PAYMENT_RECORDED": frozenset(
+        {
+            "payment.id",
+            "payment.amount",
+            "payment.method",
+            "payment.receipt_number",
+            "payment.is_first",
+            "payment.recorded_by_role",
+        }
+    )
+    | _FEE_PATHS
+    | _STUDENT_PATHS,
+    "FEE_INSTALMENT_DUE": frozenset({"instalment.days_until"})
+    | _INSTALMENT_PATHS
+    | _FEE_PATHS
+    | _STUDENT_PATHS,
+    "FEE_INSTALMENT_OVERDUE": frozenset({"instalment.days_overdue"})
+    | _INSTALMENT_PATHS
+    | _FEE_PATHS
+    | _STUDENT_PATHS,
 }
 
 #: Triggers whose context carries the answers of a form as `form.<key>` —
@@ -572,6 +620,78 @@ def context_for_dsr_note(note) -> dict[str, Any]:
     }
 
 
+def _amount(value) -> int | float:
+    """A rupee figure a condition compares and a message prints: whole rupees
+    as an integer, so "Rs. {{instalment.balance}}" reads 5000, not 5000.0."""
+    number = float(value)
+    return int(number) if number.is_integer() else round(number, 2)
+
+
+def _fee_context(plan) -> dict[str, Any]:
+    enrollment = plan.enrollment
+    return {
+        "id": str(plan.pk),
+        "course": str(enrollment.course_id),
+        "batch": str(enrollment.batch_id),
+        "payable": _amount(plan.payable),
+        "paid": _amount(plan.paid),
+        "balance": _amount(plan.balance),
+        "status": plan.status,
+        "is_overdue": plan.is_overdue,
+        "discount_percent": (
+            float(plan.discount_percent) if plan.discount_percent is not None else None
+        ),
+        "has_discount": plan.discount_amount > 0,
+    }
+
+
+def context_for_fee_payment(payment) -> dict[str, Any]:
+    plan = payment.plan
+    enrollment = plan.enrollment
+    earlier = plan.payments.filter(created_at__lt=payment.created_at, voided_at__isnull=True)
+    recorder = payment.recorded_by
+    return {
+        "payment": {
+            "id": str(payment.pk),
+            "amount": _amount(payment.amount),
+            "method": payment.method,
+            "receipt_number": payment.receipt_number,
+            "is_first": not earlier.exists(),
+            "recorded_by_role": getattr(recorder, "role", None) if recorder else None,
+        },
+        "fee": _fee_context(plan),
+        "student": _student_context(student=enrollment.student, enrollment=enrollment),
+    }
+
+
+def context_for_fee_instalment(
+    installment, *, days_until: int | None = None, days_overdue: int | None = None
+) -> dict[str, Any]:
+    from apps.fees.models import installment_rows
+
+    plan = installment.plan
+    enrollment = plan.enrollment
+    rows = installment_rows(plan)
+    row = next((item for item in rows if item["id"] == installment.pk), None)
+    instalment = {
+        "id": str(installment.pk),
+        "sequence": installment.sequence,
+        "count": len(rows),
+        "amount": _amount(installment.amount),
+        "balance": _amount(row["balance"] if row else installment.amount),
+        "due_on": installment.due_on.isoformat(),
+    }
+    if days_until is not None:
+        instalment["days_until"] = days_until
+    if days_overdue is not None:
+        instalment["days_overdue"] = days_overdue
+    return {
+        "instalment": instalment,
+        "fee": _fee_context(plan),
+        "student": _student_context(student=enrollment.student, enrollment=enrollment),
+    }
+
+
 def context_for(trigger: str, obj, **extra: Any) -> dict[str, Any]:
     """Route to the trigger-specific builder above.
 
@@ -627,4 +747,10 @@ def context_for(trigger: str, obj, **extra: Any) -> dict[str, Any]:
         return context_for_dsr(obj)
     if trigger == AutomationTrigger.DSR_STUDENT_FLAGGED:
         return context_for_dsr_note(obj)
+    if trigger == AutomationTrigger.FEE_PAYMENT_RECORDED:
+        return context_for_fee_payment(obj)
+    if trigger == AutomationTrigger.FEE_INSTALMENT_DUE:
+        return context_for_fee_instalment(obj, days_until=extra["days_until"])
+    if trigger == AutomationTrigger.FEE_INSTALMENT_OVERDUE:
+        return context_for_fee_instalment(obj, days_overdue=extra["days_overdue"])
     raise ValueError(f"Unknown trigger: {trigger!r}")

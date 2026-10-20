@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 
+import { useAuth } from '@/components/auth-provider';
 import { Confirm } from '@/components/confirm';
 import { BranchField } from '@/components/organisation/branch-field';
 import { Alert } from '@/components/ui/alert';
@@ -16,9 +18,13 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { TagInput } from '@/components/ui/tag-input';
 import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
-import { fieldErrors } from '@/lib/api';
-import { createTrainer } from '@/lib/people';
+import { errorMessage, fieldErrors } from '@/lib/api';
+import { Capability } from '@/lib/capabilities';
+import { ROLE_LABEL, labelFor } from '@/lib/labels';
+import { createTrainer, ensureTeachingProfile, listUsers } from '@/lib/people';
+import type { AdminUser, TrainerProfile } from '@/types/api';
 
 export function CreateTrainerDialog({
   open,
@@ -27,20 +33,28 @@ export function CreateTrainerDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  /** The new trainer; `undefined` when an existing account was set up to teach. */
+  onCreated: (created?: TrainerProfile) => void;
 }) {
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [title, setTitle] = useState('');
-  const [skills, setSkills] = useState('');
+  const [skills, setSkills] = useState<string[]>([]);
   const [years, setYears] = useState('');
   const [branchId, setBranchId] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const { can } = useAuth();
+  // When the address already has an account: who it is, so the next step is
+  // obvious — open their trainer profile, let a manager teach, or reactivate —
+  // instead of a bare "already exists".
+  const [existing, setExisting] = useState<AdminUser | null>(null);
+  const [existingError, setExistingError] = useState('');
+  const [isAttaching, setIsAttaching] = useState(false);
   const isDirty = Boolean(
-    email || firstName || lastName || phone || title || skills || years || branchId,
+    email || firstName || lastName || phone || title || skills.length || years || branchId,
   );
   const { isPrompting, guard, confirmDiscard, cancelDiscard } = useUnsavedChanges(
     open && isDirty,
@@ -52,10 +66,12 @@ export function CreateTrainerDialog({
     setLastName('');
     setPhone('');
     setTitle('');
-    setSkills('');
+    setSkills([]);
     setYears('');
     setBranchId('');
     setErrors({});
+    setExisting(null);
+    setExistingError('');
   }
 
   function closeAndReset() {
@@ -72,28 +88,56 @@ export function CreateTrainerDialog({
     event.preventDefault();
     setIsSaving(true);
     setErrors({});
+    setExisting(null);
+    setExistingError('');
     try {
-      await createTrainer({
+      const created = await createTrainer({
         email: email.trim(),
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         phone: phone.trim(),
         profile: {
           professional_title: title.trim(),
-          skills: skills
-            .split(',')
-            .map((entry) => entry.trim())
-            .filter(Boolean),
+          skills,
           years_of_experience: years === '' ? null : Number(years),
         },
         ...(branchId ? { branch: branchId } : {}),
       });
       resetForm();
-      onCreated();
+      onCreated(created);
     } catch (cause) {
-      setErrors(fieldErrors(cause));
+      const fields = fieldErrors(cause);
+      setErrors(fields);
+      if (fields.email && /already exists/i.test(fields.email) && can(Capability.userViewAny)) {
+        void findExisting(email.trim());
+      }
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function findExisting(address: string) {
+    try {
+      const page = await listUsers({ search: address, page_size: 5 });
+      setExisting(
+        page.results.find((row) => row.email.toLowerCase() === address.toLowerCase()) ?? null,
+      );
+    } catch {
+      // The plain "already exists" message still stands on its own.
+    }
+  }
+
+  async function letManagerTeach(account: AdminUser) {
+    setIsAttaching(true);
+    setExistingError('');
+    try {
+      await ensureTeachingProfile(account.id);
+      resetForm();
+      onCreated();
+    } catch (cause) {
+      setExistingError(errorMessage(cause, 'Could not set them up to teach.'));
+    } finally {
+      setIsAttaching(false);
     }
   }
 
@@ -114,6 +158,44 @@ export function CreateTrainerDialog({
           </DialogHeader>
           <form onSubmit={onSubmit} className="space-y-4" noValidate>
             {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
+            {existing ? (
+              <Alert variant="info" className="space-y-2">
+                <p>
+                  <strong>{existing.full_name || existing.email}</strong> already has an account
+                  ({labelFor(ROLE_LABEL, existing.role)}
+                  {existing.is_active ? '' : ', inactive'}).{' '}
+                  {existing.role === 'trainer'
+                    ? 'They are already a trainer.'
+                    : existing.role === 'manager'
+                      ? 'A manager can teach without changing role.'
+                      : 'One account cannot be two people; use a different address, or ask an administrator.'}
+                  {existing.is_active ? '' : ' Reactivate the account before giving them classes.'}
+                </p>
+                {existingError ? <p className="text-danger">{existingError}</p> : null}
+                <div className="flex flex-wrap gap-2">
+                  {existing.profile_type === 'trainer' && existing.profile_id ? (
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/manage/trainers/${existing.profile_id}`}>Open trainer profile</Link>
+                    </Button>
+                  ) : null}
+                  {existing.role === 'manager' &&
+                  existing.profile_type !== 'trainer' &&
+                  existing.is_active ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isAttaching}
+                      onClick={() => void letManagerTeach(existing)}
+                    >
+                      {isAttaching ? 'Setting up…' : 'Let this manager teach'}
+                    </Button>
+                  ) : null}
+                  <Button asChild size="sm" variant="ghost">
+                    <Link href={`/admin/users/${existing.id}`}>Open account</Link>
+                  </Button>
+                </div>
+              </Alert>
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Email" htmlFor="t-email" error={errors.email} required>
@@ -165,12 +247,13 @@ export function CreateTrainerDialog({
                 label="Skills"
                 htmlFor="t-skills"
                 error={errors.skills}
-                hint="Comma separated, e.g. Linux, Python"
+                hint="Type a skill and press Enter, e.g. Linux"
               >
-                <Input
+                <TagInput
                   id="t-skills"
                   value={skills}
-                  onChange={(event) => setSkills(event.target.value)}
+                  onChange={setSkills}
+                  aria-describedby="t-skills-hint"
                 />
               </Field>
               <Field

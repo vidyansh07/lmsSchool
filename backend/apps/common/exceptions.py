@@ -70,6 +70,21 @@ class ConflictError(ApplicationError):
     default_code = "conflict"
 
 
+class StaleWriteError(ConflictError):
+    """Somebody else changed the record after this caller loaded it.
+
+    Raised when a write names the version it was based on (`updated_at`) and
+    the stored row has moved on, so two administrators editing one account
+    cannot silently overwrite each other. The interface offers a reload.
+    """
+
+    default_detail = (
+        "Someone else changed this since you opened it. Reload to see their changes, "
+        "then make yours again."
+    )
+    default_code = "stale_write"
+
+
 class AuthorityError(ApplicationError):
     """The caller may perform this kind of act, but not on this person.
 

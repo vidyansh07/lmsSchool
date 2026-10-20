@@ -116,6 +116,7 @@ record (D-015) and unchanged.
 | activity.review | Operations | all, branch | ✓ | ✓ | ✓ | | | | 9 |
 | activity.delete | Operations | all, branch | ✓ | ✓ | ✓ | | | | 9 |
 | automation.manage | Configuration | all | ✓ | ✓ | | | | ✓ | 14 |
+| integration.manage | Configuration | all | ✓ | ✓ | | | | ✓ | — |
 | template.manage | Communication | all | ✓ | ✓ | | | | ✓ | 19 |
 | template.approve | Communication | all | ✓ | ✓ | | | | ✓ | 19 |
 | communication.send | Communication | all, branch, assigned | ✓ | ✓ | ✓ | ✓ | | ✓ | 19 |

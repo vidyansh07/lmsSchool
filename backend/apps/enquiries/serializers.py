@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from apps.common import bulk
 from apps.common.serializers import SafeCharField, StrictSerializer
 
 from .models import Enquiry, EnquiryStage, LeadChannel
@@ -48,6 +49,13 @@ class EnquirySerializer(serializers.Serializer):
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
     can_manage = serializers.SerializerMethodField()
+    can_register = serializers.SerializerMethodField()
+    #: Meritto's own record of a lead it sent; read-only in the LMS.
+    external_system = serializers.CharField(read_only=True)
+    external_id = serializers.CharField(read_only=True)
+    external_stage = serializers.CharField(read_only=True)
+    external_owner = serializers.CharField(read_only=True)
+    managed_externally = serializers.BooleanField(source="is_managed_externally", read_only=True)
 
     def get_owner(self, enquiry: Enquiry) -> dict | None:
         return _person(enquiry.owner)
@@ -74,6 +82,15 @@ class EnquirySerializer(serializers.Serializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
         return bool(user is not None and can_manage_enquiry(user, enquiry))
+
+    def get_can_register(self, enquiry: Enquiry) -> bool:
+        from .access import can_register_enquiry
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        return bool(
+            user is not None and enquiry.student_id is None and can_register_enquiry(user, enquiry)
+        )
 
 
 class EnquiryHistorySerializer(serializers.Serializer):
@@ -103,6 +120,10 @@ class EnquiryDetailSerializer(EnquirySerializer):
         return EnquiryHistorySerializer(rows, many=True).data
 
 
+class EnquiryRegisterSerializer(StrictSerializer):
+    student = serializers.UUIDField()
+
+
 class EnquiryUpdateSerializer(StrictSerializer):
     full_name = SafeCharField(max_length=120, required=False)
     mobile = SafeCharField(max_length=20, required=False)
@@ -126,3 +147,11 @@ class EnquiryUpdateSerializer(StrictSerializer):
     )
     next_follow_up_at = serializers.DateTimeField(required=False, allow_null=True)
     owner = serializers.UUIDField(required=False, allow_null=True)
+
+
+class EnquiryBulkRequestSerializer(bulk.BulkTargetSerializer):
+    """`POST /enquiries/bulk/`: hand many enquiries to one person."""
+
+    action = serializers.ChoiceField(choices=("assign_owner",))
+    #: Empty takes the owner off ("unassigned").
+    owner_id = serializers.UUIDField(allow_null=True)

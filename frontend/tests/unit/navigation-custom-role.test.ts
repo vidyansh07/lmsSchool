@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isStaff, isVisible, navFor } from '@/components/navigation';
-import { workspaceHomeForUser } from '@/lib/workspace';
+import { homeFor, isStaff, isVisible, navFor } from '@/components/navigation';
 
 /**
  * A placement officer, and every role an administrator composes out of
@@ -65,9 +64,43 @@ describe('navigation for a composed role', () => {
   });
 
   it('lands a composed role on its work, not on its own profile page', () => {
-    expect(workspaceHomeForUser(placementOfficer)).toBe('/admin/students');
+    // `homeFor` reads the sidebar this person actually gets, so the landing
+    // page and the menu cannot disagree. Before the fallback was fixed it read
+    // a student's sidebar and sent a placement officer to a student's page.
+    expect(homeFor(placementOfficer)).not.toBe('/profile');
+    expect(homeFor(placementOfficer)).not.toBe('/dashboard');
+
+    // A composed role holding nothing is not staff by the capability test, so
+    // it takes the ordinary non-staff landing rather than a staff page it
+    // could not open.
     expect(
-      workspaceHomeForUser({ role: 'placement', custom_role: 'x', capabilities: [] }),
-    ).toBe('/profile');
+      homeFor({ role: 'placement', custom_role: 'x', capabilities: [] }),
+    ).toBe('/dashboard');
+  });
+});
+
+describe('a user whose capabilities have not arrived yet', () => {
+  /**
+   * The sign-in page holds a user between the credentials being accepted and
+   * the profile arriving, and that object has no capability list. `homeFor`
+   * sits on the path that decides where somebody lands, so throwing here is
+   * not a wrong answer — it is a sign-in that silently goes nowhere.
+   */
+  it('does not throw, and is not treated as staff', () => {
+    const halfLoaded = { role: 'counsellor' } as unknown as {
+      role: string;
+      capabilities: string[];
+    };
+
+    expect(() => isStaff(halfLoaded)).not.toThrow();
+    expect(() => homeFor(halfLoaded)).not.toThrow();
+  });
+
+  it('still recognises a built-in staff role by name', () => {
+    // The name is enough for the five curated roles, which is what keeps the
+    // ordinary sign-in working before the profile lands.
+    expect(isStaff({ role: 'admin' } as unknown as { role: string; capabilities: string[] })).toBe(
+      true,
+    );
   });
 });

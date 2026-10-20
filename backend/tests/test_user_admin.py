@@ -7,6 +7,7 @@ from django.core import mail
 
 from apps.accounts.models import User, UserRole
 from apps.audit.models import AuditAction, AuditLog
+from tests.conftest import stepped_up
 
 USERS_URL = "/api/v1/users/"
 
@@ -130,7 +131,7 @@ def test_admin_can_edit_a_user(api_client_no_csrf, admin_user, student):
 @pytest.mark.django_db
 def test_role_change_is_audited_separately(api_client_no_csrf, admin_user, manager_user):
     api_client_no_csrf.force_login(admin_user)
-    response = api_client_no_csrf.post(
+    response = stepped_up(api_client_no_csrf).post(
         f"{USERS_URL}{manager_user.pk}/role-transition/",
         {"role": "counsellor", "custom_role": None, "reason": "Moved to admissions."},
         format="json",
@@ -141,6 +142,29 @@ def test_role_change_is_audited_separately(api_client_no_csrf, admin_user, manag
     assert entry.context["from"] == "manager"
     assert entry.context["to"] == "counsellor"
     assert entry.context["reason"] == "Moved to admissions."
+
+
+@pytest.mark.django_db
+def test_role_transition_requires_a_fresh_step_up(api_client_no_csrf, admin_user, manager_user):
+    from tests.conftest import TEST_PASSWORD
+
+    api_client_no_csrf.force_login(admin_user)
+    url = f"{USERS_URL}{manager_user.pk}/role-transition/"
+    payload = {"role": "counsellor", "custom_role": None, "reason": "Moved to admissions."}
+
+    refused = api_client_no_csrf.post(url, payload, format="json")
+    assert refused.status_code == 403
+    assert refused.json()["error"]["code"] == "step_up_required"
+    manager_user.refresh_from_db()
+    assert manager_user.role == UserRole.MANAGER
+
+    stepped = api_client_no_csrf.post(
+        "/api/v1/auth/step-up/", {"password": TEST_PASSWORD}, format="json"
+    )
+    assert stepped.status_code == 204, stepped.content
+    assert api_client_no_csrf.post(url, payload, format="json").status_code == 200
+    manager_user.refresh_from_db()
+    assert manager_user.role == UserRole.COUNSELLOR
 
 
 @pytest.mark.django_db
@@ -162,7 +186,7 @@ def test_student_role_conversion_is_refused_without_changing_the_profile(
 ):
     student = student_profile.user
     api_client_no_csrf.force_login(admin_user)
-    response = api_client_no_csrf.post(
+    response = stepped_up(api_client_no_csrf).post(
         f"{USERS_URL}{student.pk}/role-transition/",
         {"role": "manager", "custom_role": None, "reason": "New responsibilities."},
         format="json",
@@ -192,7 +216,7 @@ def test_role_transition_ends_existing_sessions(api_client_no_csrf, admin_user, 
     manager_client.force_login(manager_user)
 
     api_client_no_csrf.force_login(admin_user)
-    response = api_client_no_csrf.post(
+    response = stepped_up(api_client_no_csrf).post(
         f"{USERS_URL}{manager_user.pk}/role-transition/",
         {"role": "counsellor", "custom_role": None, "reason": "Moved to admissions."},
         format="json",
@@ -219,6 +243,35 @@ def test_admin_can_deactivate_and_reactivate(api_client_no_csrf, admin_user, stu
     student.refresh_from_db()
     assert student.is_active is True
     assert AuditLog.objects.filter(action=AuditAction.USER_ACTIVATED).exists()
+
+
+@pytest.mark.django_db
+def test_admin_cannot_move_their_own_sign_in_email(api_client_no_csrf, admin_user):
+    # The self-service exemption is for names and phone numbers. Moving the
+    # login identifier through the admin route would skip re-verification,
+    # the session reset and the audit entry another administrator's change gets.
+    api_client_no_csrf.force_login(admin_user)
+    original = admin_user.email
+    response = api_client_no_csrf.patch(
+        f"{USERS_URL}{admin_user.pk}/",
+        {"email": "taken-over@example.com", "first_name": "Still allowed"},
+        format="json",
+    )
+    assert response.status_code == 400
+    assert "email" in response.json()["error"]["details"]
+    admin_user.refresh_from_db()
+    assert admin_user.email == original
+    assert admin_user.first_name != "Still allowed"
+
+    # Re-sending the same address in another case is not a change.
+    response = api_client_no_csrf.patch(
+        f"{USERS_URL}{admin_user.pk}/",
+        {"email": original.upper(), "first_name": "Renamed"},
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
+    admin_user.refresh_from_db()
+    assert admin_user.first_name == "Renamed"
 
 
 @pytest.mark.django_db
@@ -253,3 +306,40 @@ def test_user_detail_never_exposes_credentials(api_client_no_csrf, admin_user, s
     body = api_client_no_csrf.get(f"{USERS_URL}{student.pk}/").content.decode()
     assert "password" not in body
     assert "is_superuser" not in body
+
+
+@pytest.mark.django_db
+def test_an_edit_based_on_an_older_copy_is_refused_not_applied(
+    api_client_no_csrf, admin_user, manager_user
+):
+    """Two administrators editing one account: the second save names the
+    version it loaded, and is refused once the first has moved it on."""
+    api_client_no_csrf.force_login(admin_user)
+    loaded = api_client_no_csrf.get(f"{USERS_URL}{manager_user.pk}/").json()["updated_at"]
+
+    first = api_client_no_csrf.patch(
+        f"{USERS_URL}{manager_user.pk}/",
+        {"first_name": "First", "expected_updated_at": loaded},
+        format="json",
+    )
+    assert first.status_code == 200, first.json()
+
+    second = api_client_no_csrf.patch(
+        f"{USERS_URL}{manager_user.pk}/",
+        {"first_name": "Second", "expected_updated_at": loaded},
+        format="json",
+    )
+    assert second.status_code == 409
+    assert second.json()["error"]["code"] == "stale_write"
+    manager_user.refresh_from_db()
+    assert manager_user.first_name == "First"
+
+    # A role change based on the old copy is refused the same way.
+    stale_role = stepped_up(api_client_no_csrf).post(
+        f"{USERS_URL}{manager_user.pk}/role-transition/",
+        {"role": "counsellor", "reason": "Moved.", "expected_updated_at": loaded},
+        format="json",
+    )
+    assert stale_role.status_code == 409
+    manager_user.refresh_from_db()
+    assert manager_user.role == UserRole.MANAGER

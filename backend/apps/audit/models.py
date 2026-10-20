@@ -43,6 +43,12 @@ class AuditAction(models.TextChoices):
     # --- Credentials. The tokens and passwords themselves are never recorded.
     PASSWORD_CHANGED = "auth.password.changed", _("Password changed")
     PASSWORD_RESET_REQUESTED = "auth.password.reset_requested", _("Password reset requested")
+    #: A credential email (invitation, reset, verification, one-time code) was
+    #: handed to the mail service, or refused by it. Never carries the link.
+    CREDENTIAL_EMAIL_SENT = "auth.email.credential_sent", _("Account email sent")
+    CREDENTIAL_EMAIL_FAILED = "auth.email.credential_failed", _("Account email could not be sent")
+    INVITATION_SENT = "auth.invitation.sent", _("Invitation sent")
+    INVITATION_ACCEPTED = "auth.invitation.accepted", _("Invitation accepted")
     PASSWORD_RESET_COMPLETED = "auth.password.reset_completed", _("Password reset completed")
     PASSWORD_RESET_FAILED = "auth.password.reset_failed", _("Password reset failed")
     EMAIL_VERIFICATION_REQUESTED = (
@@ -363,6 +369,10 @@ class AuditAction(models.TextChoices):
     # "Guards"); `automation.rule_*` cover the builder's own CRUD so every
     # state change on the rule itself is audited too (rule 5).
     AUTOMATION_RULE_CREATED = "automation.rule_created", _("Automation rule created")
+    INTEGRATION_KEY_CREATED = "integration.key_created", _("API key created")
+    INTEGRATION_KEY_UPDATED = "integration.key_updated", _("API key changed")
+    INTEGRATION_KEY_REVOKED = "integration.key_revoked", _("API key revoked")
+    INTEGRATION_WEBHOOK_SAVED = "integration.webhook_saved", _("Webhook saved")
     AUTOMATION_RULE_UPDATED = "automation.rule_updated", _("Automation rule updated")
     AUTOMATION_RULE_ACTIVATED = "automation.rule_activated", _("Automation rule activated")
     AUTOMATION_RULE_PAUSED = "automation.rule_paused", _("Automation rule paused")

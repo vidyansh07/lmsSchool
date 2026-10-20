@@ -48,6 +48,7 @@ vi.mock('@/components/auth-provider', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   usePathname: () => '/announcements',
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 function emptyPage<T>(): Paginated<T> {

@@ -36,6 +36,7 @@ from apps.organisation.scoping import scope_to_branch
 from . import access, dashboards, exports, importers, metrics, reports, tasks, writers
 from .models import TERMINAL_EXPORT_STATUSES, BulkImport, ExportFormat, ExportJob, ExportStatus
 from .saved_filters import delete_saved_filter, save_filter, visible_saved_filters
+from .selection import recall_selection, remember_selection
 from .serializers import (
     AdminDashboardSerializer,
     BatchOverviewSerializer,
@@ -52,6 +53,8 @@ from .serializers import (
     ReportCountSerializer,
     ReportDefinitionSerializer,
     ReportPageSerializer,
+    ReportSelectionRequestSerializer,
+    ReportSelectionSerializer,
     SavedFilterSerializer,
     SavedFilterWriteSerializer,
     TrainerOverviewSerializer,
@@ -113,16 +116,49 @@ def _filters(request):
 #: Filters beyond batch and course that some reports take. Read from the query
 #: string on a direct export and from `job.filters` on a queued one; never
 #: authorization, only narrowing inside an already visible set.
-EXTRA_FILTER_KEYS = ("student", "since", "until", "actor", "kind", "role")
+EXTRA_FILTER_KEYS = (
+    "student",
+    "since",
+    "until",
+    "actor",
+    "kind",
+    "role",
+    # The list screens' own filters, so "Export" is the rows on screen
+    # (see `_narrow_list`).
+    "search",
+    "skill",
+    "is_accepting_assignments",
+    "attention",
+    "status",
+    "fee_status",
+    "is_active",
+    "institution",
+    "branch",
+    "min_experience",
+    "is_email_verified",
+    "referred_by",
+)
 
 
-def _extra_filters(params) -> dict:
+def _extra_filters(params, user=None) -> dict:
     extra = {}
     for key in EXTRA_FILTER_KEYS:
         value = params.get(key)
         if value not in (None, ""):
             extra[key] = value
+    # Hand-picked rows travel as a token, not as ids (see `selection`).
+    token = params.get("selection")
+    if token and user is not None:
+        extra["ids"] = recall_selection(user, token)
     return extra
+
+
+def _audit_filters(extra: dict) -> dict:
+    """The filters as an audit context: a selection is a count, not 1,000 ids."""
+    shown = {name: str(value) for name, value in extra.items() if name != "ids"}
+    if "ids" in extra:
+        shown["selected_rows"] = str(len(extra["ids"]))
+    return shown
 
 
 def _queryset_for(request, source: str, batch, course, extra=None):
@@ -143,6 +179,86 @@ def _apply_student(rows, user, extra, path: str):
     return rows.filter(**{path: student.pk})
 
 
+#: Report source → the list screen's own FilterSet, its search fields and the
+#: filter keys it sends. Mirrored, not reinvented, so an export narrows exactly
+#: as the screen did. Keep in step with each list view's `search_fields`.
+LIST_NARROWING: dict[str, tuple[str, tuple[str, ...], tuple[str, ...]]] = {
+    "trainers": (
+        "apps.trainers.views.TrainerFilterSet",
+        ("trainer_id", "user__email", "user__first_name", "user__last_name", "professional_title"),
+        ("skill", "is_accepting_assignments", "attention", "branch", "min_experience"),
+    ),
+    "students": (
+        "apps.students.views.StudentFilterSet",
+        (
+            "student_id",
+            "roll_number",
+            "user__email",
+            "user__first_name",
+            "user__last_name",
+            "institution",
+        ),
+        ("fee_status", "is_active", "institution", "branch", "referred_by"),
+    ),
+    "batches": (
+        "apps.batches.views.BatchFilterSet",
+        ("code", "name", "course__title", "course__code"),
+        ("status", "attention"),
+    ),
+    "users": (
+        "apps.accounts.user_views.UserFilterSet",
+        (
+            "email",
+            "first_name",
+            "last_name",
+            "student_profile__student_id",
+            "trainer_profile__trainer_id",
+        ),
+        ("role", "is_active", "is_email_verified", "branch"),
+    ),
+    "enrollments": (
+        "apps.enrollments.views.EnrollmentFilterSet",
+        ("code", "student__student_id", "student__user__email", "batch__code"),
+        ("status",),
+    ),
+}
+
+
+def _narrow_list(rows, source: str, extra):
+    """Apply a list screen's filters and search to its export. Narrowing only:
+    the rows are already the caller's visible set."""
+    from django.db.models import Q
+    from django.utils.module_loading import import_string
+
+    narrowing = LIST_NARROWING.get(source)
+    if narrowing is None or not extra:
+        return rows
+    if extra.get("ids"):
+        # Ticked rows: narrowing like any filter, inside the visible set.
+        rows = rows.filter(pk__in=list(extra["ids"]))
+    filterset_path, search_fields, keys = narrowing
+    data = {key: extra[key] for key in keys if extra.get(key) not in (None, "")}
+    if data:
+        rows = import_string(filterset_path)(data=data, queryset=rows).qs
+    # DRF's SearchFilter: every whitespace-separated term must match a field.
+    for term in str(extra.get("search") or "").split():
+        match = Q()
+        for field in search_fields:
+            match |= Q(**{f"{field}__icontains": term})
+        rows = rows.filter(match)
+    return rows
+
+
+def _check_selection(source: str, extra) -> None:
+    """Refuse ticked rows on a report that cannot narrow to them.
+
+    Otherwise the ids would be silently ignored and "export these 12" would
+    export everything the caller can see.
+    """
+    if extra and extra.get("ids") and source not in LIST_NARROWING:
+        raise ApplicationError({"selection": ["This report cannot be narrowed to selected rows."]})
+
+
 def _queryset_for_user(user, source: str, batch, course, extra=None):
     """The same resolution, keyed on a user rather than a request.
 
@@ -153,13 +269,14 @@ def _queryset_for_user(user, source: str, batch, course, extra=None):
     keeps "run it the same way the screen and the synchronous download do" true
     for the queued path as well.
     """
+    _check_selection(source, extra)
     if source == "batches":
         rows = batch_access.visible_batches(user)
         if batch is not None:
             rows = rows.filter(pk=batch.pk)
         if course is not None:
             rows = rows.filter(course=course)
-        return rows
+        return _narrow_list(rows, "batches", extra)
 
     if source == "trainers":
         from apps.trainers.models import TrainerProfile
@@ -178,7 +295,7 @@ def _queryset_for_user(user, source: str, batch, course, extra=None):
         rows = scope_to_branch(TrainerProfile.objects.all(), user, path="branch")
         if batch is not None:
             rows = rows.filter(batches=batch)
-        return rows.distinct()
+        return _narrow_list(rows.distinct(), "trainers", extra)
 
     if source == "students":
         from apps.students import access as students_access
@@ -188,7 +305,16 @@ def _queryset_for_user(user, source: str, batch, course, extra=None):
             rows = rows.filter(enrollments__batch=batch)
         if course is not None:
             rows = rows.filter(enrollments__course=course)
-        return _apply_student(rows.distinct(), user, extra, "pk")
+        rows = _narrow_list(rows.distinct(), "students", extra)
+        return _apply_student(rows, user, extra, "pk")
+    if source == "users":
+        from apps.accounts.access import visible_accounts
+        from apps.accounts.models import User
+
+        # The accounts list's own gate and scope, so the file is the table.
+        if not has_capability(user, Capability.USER_VIEW_ANY):
+            return User.objects.none()
+        return _narrow_list(visible_accounts(user), "users", extra)
     if source == "fee_payments":
         from apps.fees.models import FeePayment
 
@@ -271,6 +397,7 @@ def _queryset_for_user(user, source: str, batch, course, extra=None):
         rows = rows.filter(batch=batch)
     if course is not None:
         rows = rows.filter(course=course)
+    rows = _narrow_list(rows, "enrollments", extra)
     return _apply_student(rows, user, extra, "student_id")
 
 
@@ -313,7 +440,7 @@ class ReportView(APIView):
         definition, _producer, source = reports.REPORTS[key]
         batch, course = _filters(request)
         queryset = _queryset_for(
-            request, source, batch, course, _extra_filters(request.query_params)
+            request, source, batch, course, _extra_filters(request.query_params, request.user)
         )
 
         _report, produced = reports.run(key, queryset)
@@ -414,7 +541,7 @@ class ReportExportView(APIView):
         if fmt not in (*ExportFormat.values, PRINT_FORMAT):
             raise ApplicationError({"as": ["Choose csv, xlsx, pdf or print."]})
         batch, course = _filters(request)
-        extra = _extra_filters(request.query_params)
+        extra = _extra_filters(request.query_params, request.user)
         queryset = _queryset_for(request, source, batch, course, extra)
         _report, produced = reports.run(key, queryset)
 
@@ -427,7 +554,7 @@ class ReportExportView(APIView):
                 "batch": str(batch.pk) if batch else None,
                 "course": str(course.pk) if course else None,
                 "format": fmt,
-                **{name: str(value) for name, value in extra.items()},
+                **_audit_filters(extra),
             },
             durable=False,
         )
@@ -476,6 +603,38 @@ class ReportExportView(APIView):
         response["X-Content-Type-Options"] = "nosniff"
         response["Cache-Control"] = "private, no-store"
         return response
+
+
+class ReportSelectionView(APIView):
+    """`POST /reports/selections/` — hold ticked rows for an export.
+
+    Same gates as the export it serves: somebody who cannot export gets
+    nothing to export with. The ids are stored as given (deduplicated); which
+    of them the caller may see is decided by the export, every time.
+    """
+
+    throttle_classes = (BurstThrottle,)
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Hold selected rows for an export",
+        request=ReportSelectionRequestSerializer,
+        responses={201: ReportSelectionSerializer},
+        tags=REPORTS_TAG,
+    )
+    def post(self, request):
+        if not access.can_read_reports(request.user):
+            return _forbidden(request, "Reports are staff-facing.")
+        if not has_capability(request.user, Capability.DATA_EXPORT):
+            return _forbidden(request, "You cannot export data.")
+        serializer = ReportSelectionRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ids = serializer.validated_data["ids"]
+        token = remember_selection(request.user, ids)
+        return Response(
+            ReportSelectionSerializer({"selection": token, "rows": len(set(ids))}).data,
+            status=http_status.HTTP_201_CREATED,
+        )
 
 
 class ReportCountView(APIView):
@@ -527,7 +686,7 @@ class ReportCountView(APIView):
 
         _definition, _producer, source = reports.REPORTS[key]
         batch, course = _filters(request)
-        extra = _extra_filters(request.query_params)
+        extra = _extra_filters(request.query_params, request.user)
         queryset = _queryset_for(request, source, batch, course, extra)
         _report, produced = reports.run(key, queryset)
         rows = sum(1 for _ in produced)
@@ -632,6 +791,13 @@ class ExportJobQueueView(APIView):
             for name, value in serializer.validated_data.items()
             if name in EXTRA_FILTER_KEYS and value not in (None, "")
         }
+        if serializer.validated_data.get("selection"):
+            # Resolved now, not in the worker: the token is short-lived and a
+            # queued job may run after it has gone. The ids are only rows to
+            # look up — `_rescope` still checks them against the requester's
+            # access at the time the job runs.
+            extra["ids"] = recall_selection(request.user, serializer.validated_data["selection"])
+            _check_selection(reports.REPORTS[key][2], extra)
         job = ExportJob.objects.create(
             report_key=key,
             format=serializer.validated_data["format"],

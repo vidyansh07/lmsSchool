@@ -36,6 +36,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Switch } from "@/components/ui/switch";
 import { ApiError, errorMessage, fieldErrors } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
+import { StaffSelect } from "@/components/staff-select";
 import { formatDateTime, formatDuration, NOT_ASSIGNED } from "@/lib/format";
 import {
   ACTIVITY_CATEGORY_LABEL,
@@ -112,6 +113,9 @@ function HistoryTimeline({ history }: { history: ActivityDetail["history"] }) {
   );
 }
 
+/** Who an activity can be handed to. */
+const ASSIGNEE_ROLES = ["counsellor", "manager", "admin", "trainer"] as const;
+
 export function ActivityDrawer({
   activityId,
   onOpenChange,
@@ -126,6 +130,7 @@ export function ActivityDrawer({
   onChanged: () => void;
 }) {
   const { user } = useAuth();
+  const mayListStaff = can(user?.capabilities, Capability.userViewAny);
   const [reloadToken, setReloadToken] = useState(0);
   // `reloadToken` lives inside the request identity (not just an effect
   // dependency) so a same-activity reload still resets `isLoading` to true
@@ -566,7 +571,27 @@ export function ActivityDrawer({
                         )}
                       </Select>
                     </Field>
-                    {canAssign ? (
+                    {canAssign && mayListStaff ? (
+                      <Field
+                        label="Assigned to"
+                        htmlFor="ad-assignee"
+                        error={editErrors.assigned_to}
+                        hint="Who does it. Listed by name, from the staff you can see."
+                      >
+                        <StaffSelect
+                          id="ad-assignee"
+                          roles={ASSIGNEE_ROLES}
+                          emptyLabel="Choose a person"
+                          current={detail.assigned_to}
+                          value={editValues.assigned_to}
+                          onChange={(value) =>
+                            setEditValues((current) =>
+                              current ? { ...current, assigned_to: value } : current,
+                            )
+                          }
+                        />
+                      </Field>
+                    ) : canAssign ? (
                       <Field
                         label="Assigned to (user id)"
                         htmlFor="ad-assignee"

@@ -21,6 +21,7 @@ vi.mock("@/lib/automation", async () => {
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 const auth = vi.hoisted(() => ({

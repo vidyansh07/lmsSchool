@@ -19,7 +19,9 @@ from rest_framework.views import APIView
 
 from apps.accounts.roles import Capability, has_capability
 from apps.batches import access
+from apps.common import bulk
 from apps.common.permissions import IsActiveUser
+from apps.common.throttling import BurstThrottle
 from apps.courses.models import Lesson
 from apps.fees.queries import annotate_enrollment_fee
 from apps.students import access as students_access
@@ -29,8 +31,10 @@ from .models import Enrollment
 from .serializers import (
     AdminEnrollmentSerializer,
     CourseProgressSerializer,
+    EnrollmentBulkTransferSerializer,
     EnrollmentSerializer,
     EnrollmentStatusSerializer,
+    EnrollmentTransferSerializer,
     EnrolStudentSerializer,
     LessonCompletionSerializer,
     LessonProgressSerializer,
@@ -184,6 +188,107 @@ class EnrollmentStatusView(APIView):
             note=serializer.validated_data.get("note", ""),
         )
         return Response(AdminEnrollmentSerializer(updated).data)
+
+
+def _may_transfer(user) -> bool:
+    """A transfer enrols on the target and closes the source, so it needs both
+    rights the two halves need on their own."""
+    return has_capability(user, Capability.ENROLMENT_CREATE) and has_capability(
+        user, Capability.ENROLMENT_UPDATE_ANY
+    )
+
+
+class EnrollmentTransferView(APIView):
+    """Move one enrolment to another batch, keeping the journey in one chain.
+
+    The old row becomes `transferred` and points at the new one
+    (`services.transfer_student`), so a report tells "moved batches" from
+    "left", and attendance stays with the batch it happened in. The screens
+    used to enrol and then cancel, which recorded every move as a drop-out.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Transfer an enrolment to another batch",
+        request=EnrollmentTransferSerializer,
+        responses={
+            201: AdminEnrollmentSerializer,
+            409: OpenApiResponse(description="The target batch is full."),
+        },
+        tags=ENROLLMENTS_TAG,
+    )
+    def post(self, request, enrollment_id):
+        enrollment = _enrollment_for(request, enrollment_id)
+        if not _may_transfer(request.user):
+            return _forbidden(request, "You do not have permission to transfer students.")
+        serializer = EnrollmentTransferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        target = get_object_or_404(access.visible_batches(request.user), pk=data["batch_id"])
+        moved = services.transfer_student(
+            enrollment=enrollment,
+            target_batch=target,
+            actor=request.user,
+            reason=data["reason"],
+            is_upgrade=data["is_upgrade"],
+        )
+        return Response(AdminEnrollmentSerializer(moved).data, status=http_status.HTTP_201_CREATED)
+
+
+class EnrollmentBulkTransferView(APIView):
+    """Move many enrolments to one batch — a batch merged into another, the
+    students a counsellor ticked on the admissions list.
+
+    One at a time through `transfer_student`, so capacity, duplicates and the
+    centre rule apply per student; when the target fills up partway, the rest
+    are skipped with that reason rather than the whole move failing.
+    """
+
+    permission_classes = (IsActiveUser,)
+    throttle_classes = (BurstThrottle,)
+
+    @extend_schema(
+        summary="Transfer many enrolments to one batch",
+        request=EnrollmentBulkTransferSerializer,
+        responses={200: bulk.BulkResultSerializer},
+        tags=ENROLLMENTS_TAG,
+    )
+    def post(self, request):
+        if not _may_transfer(request.user):
+            return _forbidden(request, "You do not have permission to transfer students.")
+        serializer = EnrollmentBulkTransferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        target = get_object_or_404(access.visible_batches(request.user), pk=data["batch_id"])
+        rows, missing = bulk.resolve_targets(
+            access.visible_enrollments(request.user).select_related("student__user", "batch"),
+            data,
+            filterset="apps.enrollments.views.EnrollmentFilterSet",
+            search_fields=EnrollmentListCreateView.search_fields,
+            request=request,
+        )
+
+        def move(enrollment: Enrollment) -> str | None:
+            services.transfer_student(
+                enrollment=enrollment,
+                target_batch=target,
+                actor=request.user,
+                reason=data["reason"],
+                is_upgrade=data["is_upgrade"],
+            )
+            return None
+
+        result = bulk.apply_each(
+            bulk.BulkResult(action="transfer"),
+            rows,
+            missing,
+            move,
+            lambda enrollment: (
+                enrollment.student.user.get_full_name() or enrollment.student.student_id
+            ),
+        )
+        return Response(bulk.BulkResultSerializer(result).data)
 
 
 class MyEnrollmentsView(APIView):

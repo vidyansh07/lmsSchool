@@ -2,17 +2,21 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
+import { exportFiltersFrom } from '@/lib/reporting';
+import { SavedViews } from '@/components/saved-views';
+import { ActiveFilters } from '@/components/active-filters';
+import { labelFor } from '@/lib/labels';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/input';
+import { useCreateParam } from '@/hooks/use-create-param';
 import { useList } from '@/hooks/use-list';
 import {
   BATCH_STATUS_LABEL,
@@ -33,8 +37,8 @@ import { CreateBatchDialog } from './create-batch-dialog';
  */
 function BatchList() {
   const { can } = useAuth();
-  const list = useList<BatchListRow>(listBatches, { page_size: 20 });
-  const [showCreate, setShowCreate] = useState(false);
+  const list = useList<BatchListRow>(listBatches, { page_size: 20 }, { urlKeys: ['status'] });
+  const [showCreate, setShowCreate] = useCreateParam(can(Capability.batchCreate));
   const router = useRouter();
 
   const isAdmin = can(Capability.batchViewAny);
@@ -104,7 +108,12 @@ function BatchList() {
           </p>
         </div>
         <div className="flex gap-2">
-          <ExportMenu reportKey="batches" count={list.data?.count ?? null} size="md" />
+          <ExportMenu
+            reportKey="batches"
+            filters={exportFiltersFrom(list.query, ['search', 'status'])}
+            count={list.data?.count ?? null}
+            size="md"
+          />
           {can(Capability.batchCreate) ? (
             <Button onClick={() => setShowCreate(true)}>New batch</Button>
           ) : null}
@@ -121,6 +130,12 @@ function BatchList() {
         />
       ) : null}
 
+      <SavedViews
+        screen="admin-batches"
+        keys={['search', 'ordering', 'status']}
+        query={list.query}
+        onApply={list.setQuery}
+      />
       <ListToolbar
         search={String(list.query.search ?? '')}
         onSearchChange={(value) => list.setQuery({ search: value })}
@@ -144,6 +159,14 @@ function BatchList() {
           </Select>
         </div>
       </ListToolbar>
+      <ActiveFilters
+        query={list.query}
+        onChange={list.setQuery}
+        filters={[
+          { key: 'search', label: 'Search' },
+          { key: 'status', label: 'Status', display: (value) => labelFor(BATCH_STATUS_LABEL, value) },
+        ]}
+      />
 
       <DataTable
         columns={columns}

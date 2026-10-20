@@ -20,7 +20,9 @@ const listMyExams = vi.hoisted(() => vi.fn());
 const listMyAttempts = vi.hoisted(() => vi.fn());
 const getAttemptReview = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/exams', () => ({ listMyExams, listMyAttempts, getAttemptReview }));
-vi.mock('next/navigation', () => ({ useParams: () => ({ attemptId: 'at-1' }) }));
+vi.mock('next/navigation', () => ({ useParams: () => ({ attemptId: 'at-1' }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 vi.mock('@/components/require-auth', () => ({
   RequireAuth: ({ children }: { children: React.ReactNode }) => children,
 }));

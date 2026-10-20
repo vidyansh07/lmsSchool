@@ -27,6 +27,7 @@
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
+import { ErrorState } from '@/components/states';
 import { IconChip, type IconChipTone } from '@/components/ui/icon-chip';
 import { cn } from '@/lib/utils';
 
@@ -56,6 +57,11 @@ export interface ChartCardProps {
   /** Heading level. Defaults to `h2`; pass `h3` inside a section that
    *  already has one, so the outline never skips a level. */
   as?: 'h2' | 'h3';
+  /** The data behind this panel failed to load. Said here, with a retry,
+   *  instead of the plot's own empty message — "Nothing is waiting on you"
+   *  over a failed request reads as a fact, and is not one. */
+  error?: { message: string; requestId?: string } | null;
+  onRetry?: () => void;
   children: ReactNode;
   className?: string;
 }
@@ -70,6 +76,8 @@ export function ChartCard({
   footer,
   testId,
   as: Heading = 'h2',
+  error,
+  onRetry,
   children,
   className,
 }: ChartCardProps) {
@@ -114,7 +122,18 @@ export function ChartCard({
         </ul>
       ) : null}
 
-      <div className="mt-4 flex-1">{children}</div>
+      <div className="mt-4 flex-1">
+        {error ? (
+          <ErrorState
+            title="Could not load this chart"
+            message={error.message}
+            requestId={error.requestId || undefined}
+            onRetry={onRetry}
+          />
+        ) : (
+          children
+        )}
+      </div>
 
       {footer ? <div className="mt-4 border-t border-line pt-3 text-xs">{footer}</div> : null}
     </section>

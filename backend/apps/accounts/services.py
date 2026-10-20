@@ -22,7 +22,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.audit.services import AuditAction, AuditResult, record
-from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
+from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError, StaleWriteError
 from apps.common.uploads import normalise_profile_image
 
 from .emails import (
@@ -144,10 +144,38 @@ def create_user(
     )
 
     if send_invitation and password is None:
-        _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.PASSWORD_RESET)
+        _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.INVITATION)
+        record(
+            action=AuditAction.INVITATION_SENT,
+            actor=actor,
+            resource_type="user",
+            resource_id=user.pk,
+            context={"by": "account created"},
+        )
         transaction.on_commit(lambda: send_account_created_email(user=user, raw_token=raw_token))
 
     return user
+
+
+def has_accepted_invitation(user: User) -> bool:
+    """Whether the person has ever set a password of their own. That — not
+    a verified email — is what "accepted the invitation" means: they can sign
+    in."""
+    return user.has_usable_password()
+
+
+def send_invitation(*, user: User, actor: User | None = None) -> bool:
+    """A new set-your-password link, superseding any earlier one. Returns
+    whether the mail service took it."""
+    _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.INVITATION)
+    record(
+        action=AuditAction.INVITATION_SENT,
+        actor=actor,
+        resource_type="user",
+        resource_id=user.pk,
+        context={"by": "resent" if actor is not None else "requested"},
+    )
+    return send_account_created_email(user=user, raw_token=raw_token)
 
 
 def _guard_administration(*, actor: User, target: User, action: str) -> None:
@@ -219,8 +247,27 @@ def _guard_administration(*, actor: User, target: User, action: str) -> None:
         raise AuthorityError({"user": ["You do not have authority over this account."]})
 
 
+def ensure_may_administer(*, actor: User, target: User, action: str) -> None:
+    """The ladder check, for acts on an account that live outside this module.
+
+    Sessions, scope grants and moderation each reach somebody else's account
+    from their own endpoint; without this they checked the capability and the
+    centre but not the ladder, so an administrator could sign a superadmin out
+    or read their devices. Self-service stays exempt, as in
+    :func:`_guard_administration`.
+    """
+    _guard_administration(actor=actor, target=target, action=action)
+
+
 @transaction.atomic
-def update_user(*, user: User, actor: User, role_change_reason: str = "", **fields: Any) -> User:
+def update_user(
+    *,
+    user: User,
+    actor: User,
+    role_change_reason: str = "",
+    expected_updated_at=None,
+    **fields: Any,
+) -> User:
     """Update administrator-editable user fields.
 
     Role changes are audited separately because they are a privilege change, and
@@ -241,6 +288,15 @@ def update_user(*, user: User, actor: User, role_change_reason: str = "", **fiel
 
     _guard_administration(actor=actor, target=user, action=AuditAction.USER_UPDATED)
 
+    if expected_updated_at is not None:
+        # Locked for the rest of this transaction, so the check and the save
+        # below cannot be split by another administrator's write.
+        stored = (
+            User.objects.select_for_update().values_list("updated_at", flat=True).get(pk=user.pk)
+        )
+        if stored != expected_updated_at:
+            raise StaleWriteError({"user": [StaleWriteError.default_detail]})
+
     requested_role = fields.get("role", user.role)
     requested_custom_role = fields.get("custom_role", user.custom_role)
     requested_custom_role_id = getattr(requested_custom_role, "pk", None)
@@ -258,6 +314,14 @@ def update_user(*, user: User, actor: User, role_change_reason: str = "", **fiel
         # address would count as a change and reset somebody's verification.
         new_email = User.objects.normalize_email(new_email).strip().lower()
         fields["email"] = new_email
+        if new_email != previous_email and actor.pk == user.pk:
+            # The self-service exemption in `_guard_administration` covers a
+            # name or a phone number, not the login identifier: moving it
+            # without re-verification, a session reset or an audit entry is
+            # how a borrowed session becomes a permanent takeover.
+            raise ApplicationError(
+                {"email": ["Ask another administrator to change your own sign-in email."]}
+            )
         if new_email != previous_email and User.objects.filter(email=new_email).exists():
             raise ApplicationError({"email": ["Another account already uses that address."]})
 
@@ -337,6 +401,18 @@ def update_user(*, user: User, actor: User, role_change_reason: str = "", **fiel
         and _is_last_active_superadmin(user)
     ):
         raise ConflictError({"role": ["The last active superadmin cannot be reassigned."]})
+    if (
+        new_role is not None
+        and new_role != user.role
+        and new_role not in CENTRE_FREE_ROLES
+        and user.branch_id is None
+    ):
+        # A superadmin has no centre. Made a manager or counsellor as they
+        # are, they would be bounded to nothing: every screen empty, nobody
+        # to administer. Place them first, then change the role.
+        raise ConflictError(
+            {"role": ["Move this account into a centre before giving it a centre-bound role."]}
+        )
 
     for field, value in fields.items():
         if getattr(user, field) != value:
@@ -381,28 +457,44 @@ def update_user(*, user: User, actor: User, role_change_reason: str = "", **fiel
     return user
 
 
+#: "The caller did not mention a custom role" — distinct from ``None``, which
+#: means "clear it". The API documents ``custom_role`` as optional, and
+#: leaving it out must not silently strip a configured role.
+_CUSTOM_ROLE_UNCHANGED = object()
+
+
 @transaction.atomic
 def transition_user_role(
     *,
     user: User,
     actor: User,
     role: str,
-    custom_role=None,
+    custom_role=_CUSTOM_ROLE_UNCHANGED,
     reason: str,
+    expected_updated_at=None,
 ) -> User:
     """Apply one governed authorization-role transition.
 
     Student/trainer conversions are refused by :func:`update_user`; this
-    action handles staff-role and same-kind custom-role changes only.
+    action handles staff-role and same-kind custom-role changes only. An
+    omitted ``custom_role`` keeps the current one when the kind stays the same
+    and drops it with the kind otherwise (see :func:`update_user`).
     """
 
+    changes: dict[str, Any] = {"role": role}
+    if custom_role is not _CUSTOM_ROLE_UNCHANGED:
+        changes["custom_role"] = custom_role
     return update_user(
         user=user,
         actor=actor,
-        role=role,
-        custom_role=custom_role,
         role_change_reason=reason.strip(),
+        expected_updated_at=expected_updated_at,
+        **changes,
     )
+
+
+#: Roles that see every centre and so need none of their own (D-129 amended).
+CENTRE_FREE_ROLES = frozenset({UserRole.SUPERADMIN, UserRole.ADMIN})
 
 
 def _is_last_active_superadmin(user: User) -> bool:
@@ -426,8 +518,11 @@ def _has_open_teaching_assignments(user: User) -> bool:
     """Whether a teaching manager still owns work that needs their role."""
 
     from apps.batches.models import BatchStatus
+    from apps.trainers.models import TrainerProfile
 
-    profile = getattr(user, "trainer_profile", None)
+    # Locked, so an assignment racing this role change waits and then sees the
+    # new role (`batches.services._check_assignable_trainer` takes this lock).
+    profile = TrainerProfile.objects.select_for_update().filter(user=user).first()
     if profile is None:
         return False
     return profile.batches.filter(status__in=(BatchStatus.UPCOMING, BatchStatus.ACTIVE)).exists()
@@ -522,6 +617,16 @@ def move_user_to_branch(*, user: User, branch, actor: User, reason: str = "") ->
 
     user.branch = branch
     user.save(update_fields=["branch", "updated_at"])
+
+    # A trainer's profile names the centre they staff classes at; left behind,
+    # the trainer hub would list them in the old centre while their account
+    # sees the new one. Classes they already teach stay where they are.
+    from apps.trainers.models import TrainerProfile
+
+    if branch is not None:
+        TrainerProfile.objects.filter(user=user).exclude(branch=branch).update(
+            branch=branch, updated_at=timezone.now()
+        )
 
     record(
         action=AuditAction.USER_BRANCH_CHANGED,
@@ -683,6 +788,13 @@ def request_password_reset(*, email: str) -> None:
     if user is None:
         return
 
+    if not has_accepted_invitation(user):
+        # Somebody who never set a password (an imported student, an invitation
+        # that expired) gets the invitation again, not a "reset" of a password
+        # they never had.
+        send_invitation(user=user)
+        return
+
     _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.PASSWORD_RESET)
     send_password_reset_email(user=user, raw_token=raw_token)
 
@@ -694,7 +806,7 @@ def reset_password(*, raw_token: str, new_password: str) -> User:
     entry for a rejected token has to survive the rejection, and a write inside
     a block that then rolls back would be lost.
     """
-    token = _consume_token(raw_token, TokenPurpose.PASSWORD_RESET)
+    token = _consume_token(raw_token, (TokenPurpose.PASSWORD_RESET, TokenPurpose.INVITATION))
     user = token.user
 
     if not user.is_active:
@@ -705,11 +817,22 @@ def reset_password(*, raw_token: str, new_password: str) -> User:
 
     with transaction.atomic():
         user.set_password(new_password)
-        user.save(update_fields=["password", "updated_at"])
+        fields = ["password", "updated_at"]
+        # The link was opened from this address's inbox, which is exactly what
+        # verifying it would prove — asking again straight after is a dead end.
+        if not user.is_email_verified:
+            user.is_email_verified = True
+            user.email_verified_at = timezone.now()
+            fields += ["is_email_verified", "email_verified_at"]
+        user.save(update_fields=fields)
         token.consume()
 
         record(
-            action=AuditAction.PASSWORD_RESET_COMPLETED,
+            action=(
+                AuditAction.INVITATION_ACCEPTED
+                if token.purpose == TokenPurpose.INVITATION
+                else AuditAction.PASSWORD_RESET_COMPLETED
+            ),
             actor=user,
             resource_type="user",
             resource_id=user.pk,
@@ -725,9 +848,11 @@ def reset_password(*, raw_token: str, new_password: str) -> User:
 # ---------------------------------------------------------------------------
 
 
-def request_email_verification(*, user: User) -> None:
+def request_email_verification(*, user: User) -> bool:
+    """Send a verification link. Returns whether the mail service took it
+    (true, too, when there is nothing to verify)."""
     if user.is_email_verified:
-        return
+        return True
     _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.EMAIL_VERIFICATION)
     record(
         action=AuditAction.EMAIL_VERIFICATION_REQUESTED,
@@ -735,7 +860,7 @@ def request_email_verification(*, user: User) -> None:
         resource_type="user",
         resource_id=user.pk,
     )
-    send_email_verification_email(user=user, raw_token=raw_token)
+    return send_email_verification_email(user=user, raw_token=raw_token)
 
 
 def verify_email(*, raw_token: str) -> User:
@@ -758,28 +883,32 @@ def verify_email(*, raw_token: str) -> User:
     return user
 
 
-def _consume_token(raw_token: str, purpose: str) -> AccountToken:
+def _consume_token(raw_token: str, purpose: str | tuple[str, ...]) -> AccountToken:
     """Look up a token by hash and check it is usable.
 
     Unknown, expired and already-used tokens all raise the same error so the
-    response cannot be used to probe which tokens exist.
+    response cannot be used to probe which tokens exist. A failure is
+    recorded against the account the token belonged to, when there was one,
+    so the account's own history shows "tried an expired link".
     """
+    purposes = (purpose,) if isinstance(purpose, str) else tuple(purpose)
     token = (
         AccountToken.objects.select_related("user")
-        .filter(token_hash=AccountToken.hash_token(raw_token or ""), purpose=purpose)
+        .filter(token_hash=AccountToken.hash_token(raw_token or ""), purpose__in=purposes)
         .first()
     )
 
     if token is None or not token.is_valid:
         failure_action = (
-            AuditAction.PASSWORD_RESET_FAILED
-            if purpose == TokenPurpose.PASSWORD_RESET
-            else AuditAction.EMAIL_VERIFICATION_FAILED
+            AuditAction.EMAIL_VERIFICATION_FAILED
+            if purposes == (TokenPurpose.EMAIL_VERIFICATION,)
+            else AuditAction.PASSWORD_RESET_FAILED
         )
         record(
             action=failure_action,
             actor=getattr(token, "user", None),
-            resource_type="account_token",
+            resource_type="user" if token is not None else "account_token",
+            resource_id=token.user_id if token is not None else "",
             result=AuditResult.FAILURE,
             # Records *why* it failed without recording the token itself.
             context={
@@ -847,27 +976,85 @@ def record_permission_denied(*, actor: Any, resource_type: str, resource_id: Any
     )
 
 
+#: What a person sees when the mail service did not take the email.
+NOT_SENT = "The email could not be sent: {reason}"
+
+
+def _last_failure(user: User) -> str:
+    from .emails import last_failure
+
+    return last_failure()
+
+
+def may_send_invitation(actor: User, user: User) -> bool:
+    """Who may (re)send someone's invitation: whoever may administer them —
+    and, while the invitation is still unaccepted, whoever could have created
+    the account. An administrator who added a fellow administrator is not
+    left unable to resend the link that person never received; once the
+    invitation is accepted the ordinary ladder applies again."""
+    from apps.accounts.roles import can_administer, can_grant_role
+
+    if can_administer(actor, user):
+        return True
+    return not has_accepted_invitation(user) and can_grant_role(actor, user.role)
+
+
+def resend_invitation(*, user: User, actor: User) -> str | None:
+    """Send a new set-your-password invitation, or say in words why not.
+
+    The bulk screens (accounts, trainers, students) skip rather than fail:
+    your own account, an inactive one, one that already set a password, and
+    one the mail service refused are each a reason, not an error. Anything
+    the authority ladder refuses still raises.
+    """
+    if user.pk == actor.pk:
+        return "That is your own account."
+    if not user.is_active:
+        return "The account is inactive. Reactivate it first."
+    if has_accepted_invitation(user):
+        return "They have already set their password; send a password reset instead."
+    if not may_send_invitation(actor, user):
+        _guard_administration(actor=actor, target=user, action=AuditAction.USER_UPDATED)
+    if not send_invitation(user=user, actor=actor):
+        return NOT_SENT.format(reason=_last_failure(user) or "the mail service refused it.")
+    return None
+
+
 @transaction.atomic
-def send_credential_link(*, user: User, actor: User, action: str) -> None:
-    """Send this person a password-reset or email-verification link.
+def send_credential_link(*, user: User, actor: User, action: str) -> tuple[bool, str]:
+    """Send this person a password link or an email-verification link.
+    Returns ``(sent, what happened)``.
 
     Guarded by the same authority rule as editing them: being able to trigger a
     password reset on an account is, in practice, being able to take it — the
     link goes to whatever address the account currently holds, and an
     administrator who could also change that address would have the whole chain.
 
-    Never reports whether the address exists or is deliverable. The caller
-    already knows the account exists; what they must not learn is anything more
-    about the mailbox.
+    "Sent" means the institution's mail service accepted the message. That is
+    about this system's own set-up, not the mailbox — whether the address
+    exists or the message bounces is not known here and is not reported.
     """
+    if action == "password_reset" and not has_accepted_invitation(user):
+        reason = resend_invitation(user=user, actor=actor)
+        if reason is None:
+            return True, f"A new invitation to set a password was sent to {user.email}."
+        return False, reason
+
     _guard_administration(actor=actor, target=user, action=AuditAction.USER_UPDATED)
+    if not user.is_active:
+        return False, "The account is inactive, so nothing was sent. Reactivate it first."
 
     if action == "password_reset":
-        request_password_reset(email=user.email)
+        _, raw_token = AccountToken.issue(user=user, purpose=TokenPurpose.PASSWORD_RESET)
+        sent = send_password_reset_email(user=user, raw_token=raw_token)
         recorded = AuditAction.PASSWORD_RESET_REQUESTED
+        done = f"A password-reset link was sent to {user.email}."
     else:
-        request_email_verification(user=user)
+        if user.is_email_verified:
+            return True, "Their email address is already verified."
+        sent = request_email_verification(user=user)
         recorded = AuditAction.EMAIL_VERIFICATION_REQUESTED
+        done = f"A verification link was sent to {user.email}."
 
     record(
         action=recorded,
@@ -876,3 +1063,6 @@ def send_credential_link(*, user: User, actor: User, action: str) -> None:
         resource_id=user.pk,
         context={"on_behalf_of": str(user.pk), "by": "administrator"},
     )
+    if not sent:
+        return False, NOT_SENT.format(reason=_last_failure(user) or "the mail service refused it.")
+    return True, done

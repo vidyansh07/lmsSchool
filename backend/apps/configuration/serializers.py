@@ -36,6 +36,8 @@ class SystemSettingSerializer(serializers.Serializer):
     support_email = serializers.CharField(read_only=True, allow_blank=True)
     support_phone = serializers.CharField(read_only=True, allow_blank=True)
     notification_email_enabled = serializers.BooleanField(read_only=True)
+    fee_receipt_email_enabled = serializers.BooleanField(read_only=True)
+    fee_statement_email_enabled = serializers.BooleanField(read_only=True)
     export_retention_days = serializers.IntegerField(read_only=True)
     resource_upload_max_mb = serializers.IntegerField(read_only=True)
     updated_by_name = serializers.CharField(read_only=True, allow_null=True)
@@ -54,6 +56,8 @@ class SystemSettingWriteSerializer(StrictSerializer):
     support_email = serializers.EmailField(max_length=254, required=False, allow_blank=True)
     support_phone = SafeCharField(max_length=32, required=False, allow_blank=True)
     notification_email_enabled = serializers.BooleanField(required=False)
+    fee_receipt_email_enabled = serializers.BooleanField(required=False)
+    fee_statement_email_enabled = serializers.BooleanField(required=False)
     export_retention_days = serializers.IntegerField(min_value=1, max_value=365, required=False)
     resource_upload_max_mb = serializers.IntegerField(min_value=1, max_value=100, required=False)
 

@@ -24,9 +24,12 @@
  * that is `DSR`'s own model ordering.
  */
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 
+import { ActiveFilters } from '@/components/active-filters';
 import { DsrReportSheet } from '@/components/manage/dsr-report-sheet';
+import { SavedViews } from '@/components/saved-views';
 
 import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
@@ -34,6 +37,7 @@ import { DateRangePicker, type DateRange } from '@/components/date-range-picker'
 import { Pagination } from '@/components/pagination';
 import { ExportMenu } from '@/components/export-menu';
 import { RequireAuth } from '@/components/require-auth';
+import { LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -50,6 +54,7 @@ import {
   type DSRListItem,
   type MissingReportRow,
 } from '@/lib/dsr';
+import { labelFor } from '@/lib/labels';
 import { fallback, formatDate, formatDateTime, formatNumber, NO_DATA, UNKNOWN } from '@/lib/format';
 import {
   DSR_STATUS_LABEL,
@@ -75,17 +80,26 @@ interface PendingDecision {
 
 const REVIEWABLE_STATUSES = new Set<DSRListItem['status']>(['submitted', 'under_review']);
 
-export function DsrQueue() {
+export function DsrQueue({ initialReadingId = null }: { initialReadingId?: string | null } = {}) {
   const { can } = useAuth();
-  const list = useList<DSRListItem>(listDsr, {
-    ordering: '-report_date',
-    page_size: 20,
-  });
-  const [readingId, setReadingId] = useState<string | null>(null);
+  const list = useList<DSRListItem>(
+    listDsr,
+    {
+      ordering: '-report_date',
+      page_size: 20,
+    },
+    { urlKeys: ['status', 'batch', 'trainer', 'date_after', 'date_before'] },
+  );
+  const [readingId, setReadingId] = useState<string | null>(initialReadingId);
 
   const [batchOptions, setBatchOptions] = useState<BatchListRow[]>([]);
   const [trainerOptions, setTrainerOptions] = useState<TrainerListRow[]>([]);
-  const [dateRange, setDateRange] = useState<DateRange>({ start: '', end: '' });
+  // Read from the query, not held separately, so the range survives a
+  // refresh, Back and a shared link along with the other filters.
+  const dateRange: DateRange = {
+    start: String(list.query.date_after ?? ''),
+    end: String(list.query.date_before ?? ''),
+  };
 
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
@@ -149,7 +163,6 @@ export function DsrQueue() {
   }
 
   function onDateRangeChange(range: DateRange) {
-    setDateRange(range);
     list.setQuery({ date_after: range.start, date_before: range.end });
   }
 
@@ -399,6 +412,31 @@ export function DsrQueue() {
               <DateRangePicker value={dateRange} onChange={onDateRangeChange} />
             </div>
           </div>
+          <SavedViews
+            screen="dsr-queue"
+            keys={['ordering', 'status', 'batch', 'trainer', 'date_after', 'date_before']}
+            query={list.query}
+            onApply={list.setQuery}
+          />
+          <ActiveFilters
+            query={list.query}
+            onChange={list.setQuery}
+            filters={[
+              { key: 'status', label: 'Status', display: (value) => labelFor(DSR_STATUS_LABEL, value) },
+              {
+                key: 'batch',
+                label: 'Batch',
+                display: (value) => batchOptions.find((row) => row.id === value)?.code ?? value,
+              },
+              {
+                key: 'trainer',
+                label: 'Trainer',
+                display: (value) => trainerOptions.find((row) => row.id === value)?.full_name ?? value,
+              },
+              { key: 'date_after', label: 'From' },
+              { key: 'date_before', label: 'To' },
+            ]}
+          />
 
           <DataTable
             columns={columns}
@@ -528,10 +566,18 @@ function MissingReports() {
   );
 }
 
+/** `?report=<id>` opens that report — where `/dsr/<id>` forwards a reviewer. */
+function DsrQueueFromAddress() {
+  const searchParams = useSearchParams();
+  return <DsrQueue initialReadingId={searchParams.get('report')} />;
+}
+
 export default function DsrPage() {
   return (
     <RequireAuth capability={Capability.dsrViewAny}>
-      <DsrQueue />
+      <Suspense fallback={<LoadingState label="Loading class reports…" rows={6} />}>
+        <DsrQueueFromAddress />
+      </Suspense>
     </RequireAuth>
   );
 }

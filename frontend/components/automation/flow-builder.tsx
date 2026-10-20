@@ -29,6 +29,7 @@ import {
   GitBranch,
   GripVertical,
   Hourglass,
+  Link2,
   ListTodo,
   Mail,
   MessageCircle,
@@ -84,6 +85,7 @@ const ACTION_BLOCKS: { type: AutomationActionType; icon: LucideIcon; hint: strin
   { type: "send_email", icon: Mail, hint: "An email template" },
   { type: "create_review", icon: ClipboardCheck, hint: "A draft performance review" },
   { type: "flag_risk", icon: AlertTriangle, hint: "Mark a student at risk" },
+  { type: "send_webhook", icon: Link2, hint: "Push it to Meritto or another system" },
 ];
 
 const ACTION_ICON: Record<AutomationActionType, LucideIcon> = Object.fromEntries(

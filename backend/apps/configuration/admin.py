@@ -16,6 +16,8 @@ class SystemSettingAdmin(admin.ModelAdmin):
         "institution_name",
         "support_email",
         "notification_email_enabled",
+        "fee_receipt_email_enabled",
+        "fee_statement_email_enabled",
         "updated_at",
     )
     readonly_fields = ("id", "singleton", "updated_by", "created_at", "updated_at")

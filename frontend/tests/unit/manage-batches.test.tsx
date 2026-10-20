@@ -7,6 +7,12 @@ import { ApiError } from '@/lib/api';
 import type { ManageBatchRow } from '@/lib/manage';
 
 const listManageBatches = vi.hoisted(() => vi.fn());
+// Saved views load from the server; these tests are about the list itself.
+vi.mock('@/lib/saved-filters', () => ({
+  listSavedFilters: vi.fn().mockResolvedValue([]),
+  createSavedFilter: vi.fn(),
+  deleteSavedFilter: vi.fn(),
+}));
 vi.mock('@/lib/manage', async () => {
   const actual = await vi.importActual<typeof import('@/lib/manage')>('@/lib/manage');
   return { ...actual, listManageBatches };

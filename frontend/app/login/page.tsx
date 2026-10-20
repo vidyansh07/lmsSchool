@@ -8,18 +8,30 @@ import { useEffect, useState } from "react";
 import { AuthSplitShell } from "@/components/auth/auth-split-shell";
 import { MfaVerifyForm } from "@/components/auth/mfa-verify-form";
 import { useAuth } from "@/components/auth-provider";
+import { homeFor, safeReturnPath } from "@/components/navigation";
 import { ErrorState } from "@/components/states";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { fieldErrors } from "@/lib/api";
 import { login } from "@/lib/auth";
-import { workspaceHomeForUser } from "@/lib/workspace";
 import type { CurrentUser, MfaMethodName } from "@/types/api";
+
+/** Back to the page that sent them here, or else their own home. Read from
+ *  the address bar at the moment of use rather than through
+ *  `useSearchParams`, which would need a Suspense boundary around the form. */
+function destinationFor(user: CurrentUser): string {
+  const next =
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("next");
+  return safeReturnPath(next) ?? homeFor(user);
+}
 
 export default function LoginPage() {
   const router = useRouter();
-  const { user, setUser } = useAuth();
+  const { user, setUser, sessionEnded } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -30,12 +42,12 @@ export default function LoginPage() {
   const [mfaMethods, setMfaMethods] = useState<MfaMethodName[] | null>(null);
 
   useEffect(() => {
-    if (user) router.replace(workspaceHomeForUser(user));
+    if (user) router.replace(destinationFor(user));
   }, [user, router]);
 
   function finishSignIn(signedIn: CurrentUser) {
     setUser(signedIn);
-    router.replace(workspaceHomeForUser(signedIn));
+    router.replace(destinationFor(signedIn));
   }
 
   async function onSubmit(event: React.FormEvent) {
@@ -86,6 +98,11 @@ export default function LoginPage() {
         </p>
       </div>
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        {sessionEnded && !errors.__all__ ? (
+          <Alert variant="info" role="status">
+            Your session has ended. Sign in again to carry on where you were.
+          </Alert>
+        ) : null}
         {errors.__all__ ? (
           // The server answers every failed sign-in identically, so this
           // never reveals whether the address exists.

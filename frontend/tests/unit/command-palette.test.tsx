@@ -6,6 +6,7 @@
  * both sources as one flat, keyboard-only list.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CommandPalette } from '@/components/command-palette';
@@ -18,7 +19,9 @@ const useAuth = vi.hoisted(() => vi.fn());
 vi.mock('@/components/auth-provider', () => ({ useAuth }));
 
 const push = vi.hoisted(() => vi.fn());
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 
 // A deterministic, two-item local nav instead of the real sidebar, so
 // filtering assertions do not depend on the product's current link list.
@@ -126,5 +129,24 @@ describe('CommandPalette', () => {
     useAuth.mockReturnValue({ user: null, can: () => false });
     const { container } = render(<CommandPalette open onOpenChange={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('CommandPalette — quick actions', () => {
+  it('offers the actions the person may take, matched on plain words, and opens the dialog there', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 'u1', role: 'manager', capabilities: [] },
+      can: (capability: string) => capability === 'trainer.create',
+    });
+    const user = userEvent.setup();
+    render(<CommandPalette open onOpenChange={vi.fn()} />);
+
+    expect(screen.getByRole('option', { name: /Add a trainer/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Add a staff account/ })).toBeNull();
+
+    // Words in any order, not one exact phrase: "trainer add" finds "Add a trainer".
+    await user.type(screen.getByRole('combobox', { name: 'Command palette' }), 'trainer add');
+    await user.keyboard('{Enter}');
+    expect(push).toHaveBeenCalledWith('/manage/trainers?create=1');
   });
 });

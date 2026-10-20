@@ -2,24 +2,47 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, UserPlus } from 'lucide-react';
+
+import { useAuth } from '@/components/auth-provider';
+import { useBranches } from '@/components/organisation/branch-field';
+import { Button } from '@/components/ui/button';
 
 import { DataTable, type DataTableColumn } from '@/components/data-table';
+import { ExportMenu } from '@/components/export-menu';
+import { SavedViews } from '@/components/saved-views';
+import { ActiveFilters } from '@/components/active-filters';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/input';
+import { useBulkSelection } from '@/hooks/use-bulk-selection';
+import { useCreateParam } from '@/hooks/use-create-param';
 import { useList } from '@/hooks/use-list';
 import { Capability } from '@/lib/capabilities';
 import { formatDate } from '@/lib/format';
 import { ROLE_LABEL, ROLE_OPTIONS, labelFor } from '@/lib/labels';
+import { selectionKey } from '@/lib/bulk';
 import { listUsers } from '@/lib/people';
+import { exportFiltersFrom } from '@/lib/reporting';
 import type { AdminUser } from '@/types/api';
 
+import { CreateStaffDialog } from './create-staff-dialog';
+import { USER_FILTER_KEYS, UsersBulkActions } from './users-bulk-actions';
+
 function UsersTable() {
-  const list = useList<AdminUser>(listUsers);
+  const list = useList<AdminUser>(listUsers, {}, { urlKeys: [...USER_FILTER_KEYS] });
+  // Ticked rows survive paging but never a change of filter.
+  const selection = useBulkSelection<string>(selectionKey(list.query, USER_FILTER_KEYS));
   const router = useRouter();
+  const { user: viewer, can } = useAuth();
+  const [showCreate, setShowCreate] = useCreateParam(can(Capability.userCreate));
+  // Administrators and the platform operator see every centre, so they get a
+  // centre filter. Anyone bounded to one sees which one, not a control that
+  // could only ever hold a single value.
+  const seesEveryCentre = viewer?.role === 'superadmin' || viewer?.role === 'admin';
+  const { branches } = useBranches(seesEveryCentre);
 
   const columns: DataTableColumn<AdminUser>[] = [
     {
@@ -30,6 +53,16 @@ function UsersTable() {
       render: (row) => <span className="font-medium">{row.email}</span>,
     },
     { key: 'full_name', header: 'Name', render: (row) => row.full_name || '—' },
+    {
+      key: 'branch',
+      header: 'Centre',
+      render: (row) =>
+        row.branch_name ? (
+          <span className="whitespace-nowrap">{row.branch_name}</span>
+        ) : (
+          <span className="text-ink-muted">Every centre</span>
+        ),
+    },
     { key: 'role', header: 'Role', sortable: true, render: (row) => <Badge>{labelFor(ROLE_LABEL, row.role)}</Badge> },
     {
       key: 'is_active',
@@ -41,11 +74,11 @@ function UsersTable() {
       ),
     },
     {
-      key: 'is_email_verified',
-      header: 'Email verified',
+      key: 'invitation_accepted',
+      header: 'Signed up',
       render: (row) => (
-        <Badge variant={row.is_email_verified ? 'success' : 'warning'}>
-          {row.is_email_verified ? 'Yes' : 'No'}
+        <Badge variant={row.invitation_accepted ? 'success' : 'warning'}>
+          {row.invitation_accepted ? 'Yes' : 'Invitation pending'}
         </Badge>
       ),
     },
@@ -73,6 +106,9 @@ function UsersTable() {
         <Link
           href={`/admin/users/${row.id}`}
           onClick={(event) => event.stopPropagation()}
+          // Twenty links all called "Manage" are indistinguishable to a
+          // screen reader listing the page's links.
+          aria-label={`Manage ${row.full_name || row.email}`}
           className="inline-flex items-center gap-0.5 text-sm font-medium text-ink-muted hover:text-action hover:underline"
         >
           Manage
@@ -88,11 +124,42 @@ function UsersTable() {
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">User accounts</h1>
           <p className="text-sm text-ink-muted">
-            Every account on the platform, across all roles.
+            {seesEveryCentre || !viewer?.branch_name
+              ? 'Every account on the platform, across all roles.'
+              : `Every account at ${viewer.branch_name}, across all roles.`}
           </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <ExportMenu
+            reportKey="accounts"
+            filters={exportFiltersFrom(list.query, ['search', ...USER_FILTER_KEYS])}
+            count={list.data?.count}
+          />
+          {can(Capability.userCreate) ? (
+            <Button type="button" onClick={() => setShowCreate(true)}>
+              <UserPlus className="size-4" aria-hidden="true" />
+              Add staff account
+            </Button>
+          ) : null}
         </div>
       </div>
 
+      <CreateStaffDialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreated={(created) => {
+          setShowCreate(false);
+          // Their page says whether the invitation email actually went.
+          router.push(`/admin/users/${created.id}?created=1`);
+        }}
+      />
+
+      <SavedViews
+        screen="admin-users"
+        keys={['search', 'ordering', ...USER_FILTER_KEYS]}
+        query={list.query}
+        onApply={list.setQuery}
+      />
       <ListToolbar
         search={String(list.query.search ?? '')}
         onSearchChange={(value) => list.setQuery({ search: value })}
@@ -129,12 +196,78 @@ function UsersTable() {
             <option value="false">Inactive</option>
           </Select>
         </div>
+        <div>
+          <label htmlFor="filter-invitation" className="mb-1.5 block text-sm font-medium">
+            Invitation
+          </label>
+          <Select
+            id="filter-invitation"
+            value={String(list.query.invitation_accepted ?? '')}
+            onChange={(event) => list.setQuery({ invitation_accepted: event.target.value })}
+          >
+            <option value="">All</option>
+            <option value="false">Not accepted yet</option>
+            <option value="true">Accepted (password set)</option>
+          </Select>
+        </div>
+        {seesEveryCentre && branches.length > 1 ? (
+          <div>
+            <label htmlFor="filter-branch" className="mb-1.5 block text-sm font-medium">
+              Centre
+            </label>
+            <Select
+              id="filter-branch"
+              value={String(list.query.branch ?? '')}
+              onChange={(event) => list.setQuery({ branch: event.target.value })}
+            >
+              <option value="">All centres</option>
+              {branches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name} ({branch.code})
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
       </ListToolbar>
+      <ActiveFilters
+        query={list.query}
+        onChange={list.setQuery}
+        filters={[
+          { key: 'search', label: 'Search' },
+          { key: 'role', label: 'Role', display: (value) => labelFor(ROLE_LABEL, value) },
+          { key: 'is_active', label: 'Status', display: (value) => (value === 'true' ? 'Active' : 'Inactive') },
+          {
+            key: 'is_email_verified',
+            label: 'Email',
+            display: (value) => (value === 'true' ? 'Verified' : 'Not verified'),
+          },
+          {
+            key: 'invitation_accepted',
+            label: 'Invitation',
+            display: (value) => (value === 'true' ? 'Accepted' : 'Not accepted yet'),
+          },
+          {
+            key: 'branch',
+            label: 'Centre',
+            display: (value) => branches.find((branch) => branch.id === value)?.name ?? value,
+          },
+        ]}
+      />
+
+      <UsersBulkActions
+        selection={selection}
+        query={list.query}
+        totalCount={list.data?.count}
+        onChanged={list.reload}
+      />
 
       <DataTable
         columns={columns}
         rows={list.data?.results ?? []}
         getRowId={(row) => row.id}
+        selection={selection}
+        getRowLabel={(row) => row.full_name || row.email}
         isLoading={list.isLoading}
         loadingLabel="Loading users…"
         error={list.error ? { message: list.error.message, requestId: list.error.requestId } : null}

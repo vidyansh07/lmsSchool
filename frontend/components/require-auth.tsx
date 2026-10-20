@@ -12,7 +12,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, type ReactNode } from 'react';
+import { Suspense, useEffect, type ReactNode } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
 import { EmptyState, LoadingState } from '@/components/states';
@@ -35,7 +35,11 @@ export function RequireAuth({
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !user) router.replace('/login');
+    if (isLoading || user) return;
+    // Carry the page they asked for, so a link from an email or a
+    // notification lands there after signing in rather than on a home page.
+    const here = `${window.location.pathname}${window.location.search}`;
+    router.replace(here === '/' ? '/login' : `/login?next=${encodeURIComponent(here)}`);
   }, [isLoading, user, router]);
 
   if (isLoading) return <LoadingState label="Checking your session…" rows={4} />;
@@ -56,5 +60,8 @@ export function RequireAuth({
     );
   }
 
-  return <>{children}</>;
+  // A boundary for pages whose lists read the address bar (`useSearchParams`
+  // in `hooks/use-list.ts`): Next requires one above any such read, and every
+  // signed-in page already passes through here.
+  return <Suspense fallback={<LoadingState label="Loading…" rows={4} />}>{children}</Suspense>;
 }

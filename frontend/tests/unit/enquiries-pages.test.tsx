@@ -20,9 +20,22 @@ vi.mock("@/lib/enquiries", async () => {
   return { ...actual, updateEnquiry };
 });
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 
 vi.mock("@/components/work/activity-drawer", () => ({ ActivityDrawer: () => null }));
+
+const bulkAssignEnquiryOwner = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/bulk", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/bulk")>("@/lib/bulk");
+  return { ...actual, bulkAssignEnquiryOwner };
+});
+const listUsers = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/people", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/people")>("@/lib/people");
+  return { ...actual, listUsers };
+});
 
 const auth = vi.hoisted(() => ({
   capabilities: ["enquiry.view_any", "enquiry.manage", "form.assign", "form.view"] as string[],
@@ -69,6 +82,12 @@ function enquiry(overrides: Partial<EnquiryDetail> = {}): EnquiryDetail {
     created_at: "2026-10-01T10:00:00Z",
     updated_at: "2026-10-01T10:00:00Z",
     can_manage: true,
+    can_register: false,
+    external_system: "",
+    external_id: "",
+    external_stage: "",
+    external_owner: "",
+    managed_externally: false,
     history: [
       {
         id: "h-1",
@@ -98,6 +117,7 @@ const SUMMARY = {
     not_eligible: 0,
   },
   channels: { online: 3, offline: 4 },
+  ready_to_admit: 2,
   total: 7,
   sources: [
     { value: "walk_in", label: "Walk-in" },
@@ -201,12 +221,84 @@ describe("EnquiriesPage", () => {
     await waitFor(() => expect(updateEnquiry).toHaveBeenCalledWith("e-1", { source: "website" }));
   });
 
+  it("hands the ticked enquiries to a colleague and says what happened", async () => {
+    mockList({
+      data: page<Enquiry>([enquiry(), enquiry({ id: "e-2", full_name: "Sita Rao" })]),
+    });
+    listUsers.mockImplementation((query: { role: string }) =>
+      Promise.resolve({
+        count: 1,
+        results:
+          query.role === "counsellor"
+            ? [{ id: "u-9", full_name: "Neha Gupta", email: "neha@x.test", role: "counsellor", branch_code: "JAI" }]
+            : [],
+      }),
+    );
+    bulkAssignEnquiryOwner.mockResolvedValue({ action: "assign_owner", total: 2, done: 2, skipped: [] });
+    render(<EnquiriesPage />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Ravi Sharma" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Sita Rao" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign owner" }));
+    const owner = await screen.findByRole("option", { name: /Neha Gupta · Counsellor · JAI/ });
+    fireEvent.change(owner.closest("select")!, { target: { value: "u-9" } });
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+
+    await waitFor(() =>
+      expect(bulkAssignEnquiryOwner).toHaveBeenCalledWith({ ids: ["e-1", "e-2"], owner_id: "u-9" }),
+    );
+    expect(await screen.findByRole("dialog", { name: "Owner assigned" })).toHaveTextContent(
+      "2 enquiries assigned.",
+    );
+    expect(reloadList).toHaveBeenCalled();
+  });
+
+  it("offers no bulk owner change without enquiry.manage", () => {
+    const before = auth.capabilities;
+    auth.capabilities = ["enquiry.view_any"];
+    mockList({ data: page<Enquiry>([enquiry()]) });
+    render(<EnquiriesPage />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Ravi Sharma" }));
+    expect(screen.queryByRole("button", { name: "Assign owner" })).not.toBeInTheDocument();
+    auth.capabilities = before;
+  });
+
   it("shows stage and source read-only when the row cannot be managed", () => {
     mockList({ data: page<Enquiry>([enquiry({ can_manage: false })]) });
     render(<EnquiriesPage />);
     expect(screen.queryByLabelText("Stage of Ravi Sharma")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Source of Ravi Sharma")).not.toBeInTheDocument();
     expect(screen.getByTestId("enquiry-e-1")).toHaveTextContent("Walk-in");
+  });
+
+  it("shows Meritto's queue and marks its leads", () => {
+    const meritto = enquiry({
+      id: "e-2",
+      full_name: "Aman Verma",
+      managed_externally: true,
+      external_system: "meritto",
+      external_stage: "Ready for admission",
+      external_owner: "Pooja (Meritto)",
+      can_manage: false,
+      can_register: true,
+    });
+    mockList({ data: page<Enquiry>([meritto]) });
+    render(<EnquiriesPage />);
+    expect(screen.getByRole("button", { name: /Ready to admit/ })).toHaveTextContent("2");
+    expect(screen.getByText("Meritto")).toBeInTheDocument();
+    expect(screen.getByText("Meritto: Ready for admission")).toBeInTheDocument();
+    expect(screen.getByText("Pooja (Meritto)")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Register this lead" })).toHaveAttribute(
+      "href",
+      "/admissions/new?enquiry=e-2",
+    );
+    // Meritto's pipeline is not editable here.
+    expect(screen.queryByLabelText("Stage of Aman Verma")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Ready to admit/ }));
+    expect(useApi).toHaveBeenCalledWith("/api/v1/enquiries/?ready_to_admit=true");
+    fireEvent.click(screen.getByRole("button", { name: "Entered here" }));
+    expect(useApi).toHaveBeenCalledWith("/api/v1/enquiries/?managed_by=lms");
   });
 });
 
@@ -285,5 +377,46 @@ describe("EnquiryScreen", () => {
     expect(screen.getByLabelText("Stage")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Assign to me" })).not.toBeInTheDocument();
+  });
+
+  it("shows a Meritto lead read-only, with the way to register it", () => {
+    mockDetail(
+      enquiry({
+        managed_externally: true,
+        external_system: "meritto",
+        external_id: "MER-1",
+        external_stage: "Ready for admission",
+        external_owner: "Pooja (Meritto)",
+        can_manage: false,
+        can_register: true,
+      }),
+    );
+    render(<EnquiryScreen id="e-1" />);
+    expect(screen.getByText("Managed in Meritto")).toBeInTheDocument();
+    expect(screen.getByText("From Meritto")).toBeInTheDocument();
+    expect(screen.getAllByText("Ready for admission").length).toBeGreaterThan(0);
+    expect(screen.getByText("MER-1")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Stage")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Assign to me" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Register this lead" })).toHaveAttribute(
+      "href",
+      "/admissions/new?enquiry=e-1",
+    );
+  });
+
+  it("links a registered lead to its student", () => {
+    mockDetail(
+      enquiry({
+        managed_externally: true,
+        external_system: "meritto",
+        stage: "registered",
+        student: { id: "s-1", name: "Aman Verma" },
+        can_manage: false,
+        can_register: false,
+      }),
+    );
+    render(<EnquiryScreen id="e-1" />);
+    expect(screen.getByRole("link", { name: "Aman Verma" })).toHaveAttribute("href", "/students/s-1");
+    expect(screen.queryByRole("link", { name: "Register this lead" })).not.toBeInTheDocument();
   });
 });

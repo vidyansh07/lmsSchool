@@ -38,11 +38,12 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
-import { errorMessage, fieldErrors } from '@/lib/api';
+import { fieldErrors, unshownError } from '@/lib/api';
 import { REVIEW_STATUS_OPTIONS, REVIEW_TYPE_OPTIONS } from '@/lib/labels';
 import { createReview, updateReview } from '@/lib/performance';
 import { cn } from '@/lib/utils';
 import type { PerformanceReview, PerformanceSubjectType, ReviewStatus, ReviewType } from '@/types/api';
+import { localIsoDate } from '@/lib/format';
 
 const RATING_VALUES = [1, 2, 3, 4, 5] as const;
 
@@ -62,7 +63,7 @@ interface FormState {
 }
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localIsoDate();
 }
 
 function formFromReview(review: PerformanceReview | null): FormState {
@@ -145,9 +146,12 @@ function ReviewForm({ subjectType, subjectId, review, onOpenChange, onSaved }: R
     } catch (cause) {
       const fields = fieldErrors(cause);
       setErrors(fields);
-      if (Object.keys(fields).length === 0) {
-        setMessage(errorMessage(cause, 'The review could not be saved.'));
-      }
+      setMessage(
+        unshownError(fields, [
+          'actions', 'concerns', 'next_review_at', 'period_end', 'period_start', 'rating',
+          'recommendations', 'review_type', 'score', 'status', 'strengths', 'summary', 'weaknesses',
+        ]) ?? '',
+      );
     } finally {
       setIsSaving(false);
     }
@@ -165,7 +169,6 @@ function ReviewForm({ subjectType, subjectId, review, onOpenChange, onSaved }: R
       </DialogHeader>
       <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
         {message ? <Alert variant="error">{message}</Alert> : null}
-        {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Review type" htmlFor="review-type" error={errors.review_type}>

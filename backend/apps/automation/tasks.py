@@ -279,3 +279,55 @@ def dispatch_dsr_missing(dsr_id: str) -> None:
     if dsr is None:
         return
     dispatch(AutomationTrigger.DSR_MISSING, dsr, depth=0)
+
+
+@shared_task(name="automation.dispatch_fee_payment_recorded", ignore_result=True)
+def dispatch_fee_payment_recorded(payment_id: str) -> None:
+    from apps.fees.models import FeePayment
+
+    from .models import AutomationTrigger
+    from .services import dispatch
+
+    payment = (
+        FeePayment.objects.filter(pk=payment_id, voided_at__isnull=True)
+        .select_related(
+            "recorded_by",
+            "plan__enrollment__student__user",
+            "plan__enrollment__batch__branch",
+            "plan__enrollment__batch__trainer",
+            "plan__enrollment__course",
+        )
+        .first()
+    )
+    if payment is None:
+        return
+    dispatch(AutomationTrigger.FEE_PAYMENT_RECORDED, payment, depth=0)
+
+
+def _installment(installment_id: str):
+    from apps.fees.models import FeeInstallment
+
+    return (
+        FeeInstallment.objects.filter(pk=installment_id)
+        .select_related(
+            "plan__enrollment__student__user",
+            "plan__enrollment__batch__branch",
+            "plan__enrollment__batch__trainer",
+            "plan__enrollment__course",
+        )
+        .first()
+    )
+
+
+@shared_task(name="automation.dispatch_fee_instalment", ignore_result=True)
+def dispatch_fee_instalment(installment_id: str, trigger: str, days: int) -> None:
+    from .models import AutomationTrigger
+    from .services import dispatch
+
+    installment = _installment(installment_id)
+    if installment is None:
+        return
+    if trigger == AutomationTrigger.FEE_INSTALMENT_DUE:
+        dispatch(trigger, installment, depth=0, days_until=days)
+    elif trigger == AutomationTrigger.FEE_INSTALMENT_OVERDUE:
+        dispatch(trigger, installment, depth=0, days_overdue=days)

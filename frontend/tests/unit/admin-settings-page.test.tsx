@@ -25,6 +25,7 @@ vi.mock('@/components/auth-provider', () => ({ useAuth: () => mockAuth.value }))
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
   usePathname: () => '/admin/settings',
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 function settings(overrides: Partial<SystemSettings> = {}): SystemSettings {
@@ -33,6 +34,8 @@ function settings(overrides: Partial<SystemSettings> = {}): SystemSettings {
     support_email: 'help@sunrise.example.test',
     support_phone: '+91 141 000 0000',
     notification_email_enabled: true,
+    fee_receipt_email_enabled: true,
+    fee_statement_email_enabled: true,
     export_retention_days: 14,
     resource_upload_max_mb: 25,
     updated_by_name: 'Alia Admin',
@@ -96,6 +99,21 @@ describe('InstitutionSettingsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
     expect(updateSettings).toHaveBeenCalledWith({ institution_name: 'Sunrise Institute' });
+  });
+
+  it('turns automatic receipt mail off without touching statements', async () => {
+    getSettings.mockResolvedValue(settings());
+    updateSettings.mockResolvedValue(settings({ fee_receipt_email_enabled: false }));
+    const user = userEvent.setup();
+    render(<InstitutionSettingsPage />);
+    await waitFor(() =>
+      expect(screen.getByLabelText('Email a receipt for every payment')).toBeInTheDocument(),
+    );
+
+    await user.selectOptions(screen.getByLabelText('Email a receipt for every payment'), 'false');
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(updateSettings).toHaveBeenCalledWith({ fee_receipt_email_enabled: false });
   });
 
   it('confirms a successful save in a live region', async () => {

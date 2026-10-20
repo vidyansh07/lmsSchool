@@ -125,6 +125,30 @@ export interface TriggerPathInfo {
   allowsFormPaths: boolean;
 }
 
+/** `fee.*`: the fee for one enrolment as it stands. Mirrors `_FEE_PATHS`. */
+const FEE_PATHS = [
+  "fee.balance",
+  "fee.paid",
+  "fee.payable",
+  "fee.status",
+  "fee.is_overdue",
+  "fee.has_discount",
+  "fee.discount_percent",
+  "fee.course",
+  "fee.batch",
+  "fee.id",
+];
+
+/** `instalment.*`: one row of a fee's schedule. Mirrors `_INSTALMENT_PATHS`. */
+const INSTALMENT_PATHS = [
+  "instalment.sequence",
+  "instalment.count",
+  "instalment.amount",
+  "instalment.balance",
+  "instalment.due_on",
+  "instalment.id",
+];
+
 export const AUTOMATION_TRIGGER_PATHS: Record<AutomationTrigger, TriggerPathInfo> = {
   ACTIVITY_COMPLETED: {
     paths: [
@@ -201,6 +225,27 @@ export const AUTOMATION_TRIGGER_PATHS: Record<AutomationTrigger, TriggerPathInfo
   DSR_MISSING: { paths: DSR_PATHS, allowsFormPaths: false },
   DSR_STUDENT_FLAGGED: {
     paths: ["note.flag", "note.text", ...DSR_PATHS, ...STUDENT_PATHS],
+    allowsFormPaths: false,
+  },
+  FEE_PAYMENT_RECORDED: {
+    paths: [
+      "payment.amount",
+      "payment.method",
+      "payment.is_first",
+      "payment.recorded_by_role",
+      "payment.receipt_number",
+      "payment.id",
+      ...FEE_PATHS,
+      ...STUDENT_PATHS,
+    ],
+    allowsFormPaths: false,
+  },
+  FEE_INSTALMENT_DUE: {
+    paths: ["instalment.days_until", ...INSTALMENT_PATHS, ...FEE_PATHS, ...STUDENT_PATHS],
+    allowsFormPaths: false,
+  },
+  FEE_INSTALMENT_OVERDUE: {
+    paths: ["instalment.days_overdue", ...INSTALMENT_PATHS, ...FEE_PATHS, ...STUDENT_PATHS],
     allowsFormPaths: false,
   },
 };

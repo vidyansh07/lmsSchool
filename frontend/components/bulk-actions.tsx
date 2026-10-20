@@ -12,11 +12,16 @@
  * "select all matching" is a distinct, deliberate second step — never the
  * silent behaviour of a page-level checkbox.
  */
+import type { ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { formatCount } from '@/lib/format';
 import { cn } from '@/lib/utils';
+
+/** The most rows one bulk change may touch (`apps/common/bulk.py`). Exports
+ *  are not bound by it. */
+export const MAX_BULK_ROWS = 500;
 
 export interface BulkAction {
   id: string;
@@ -34,7 +39,9 @@ export function BulkActionsBar({
   onClear,
   actions,
   itemNoun = 'row',
+  itemPlural,
   className,
+  children,
 }: {
   /** Rows individually selected (from the current page, typically). */
   selectedCount: number;
@@ -46,9 +53,17 @@ export function BulkActionsBar({
   onClear: () => void;
   actions: BulkAction[];
   itemNoun?: string;
+  /** For a noun whose plural is not "+s" ("enquiry", "enquiries"). */
+  itemPlural?: string;
   className?: string;
+  /** Controls that are not a plain button — an export menu, say. */
+  children?: ReactNode;
 }) {
   if (selectedCount === 0 && !selectAllMatching) return null;
+
+  // Refused by the server past the cap; say so before anyone confirms.
+  const tooMany =
+    Boolean(selectAllMatching) && typeof totalMatchingCount === 'number' && totalMatchingCount > MAX_BULK_ROWS;
 
   const canOfferSelectAll =
     !selectAllMatching &&
@@ -67,8 +82,8 @@ export function BulkActionsBar({
     >
       <p aria-live="polite" className="font-medium">
         {selectAllMatching
-          ? `All ${formatCount(totalMatchingCount ?? selectedCount, itemNoun)} matching the current filter are selected`
-          : `${formatCount(selectedCount, itemNoun)} selected`}
+          ? `All ${formatCount(totalMatchingCount ?? selectedCount, itemNoun, itemPlural)} matching the current filter are selected`
+          : `${formatCount(selectedCount, itemNoun, itemPlural)} selected`}
       </p>
 
       {canOfferSelectAll ? (
@@ -77,24 +92,27 @@ export function BulkActionsBar({
           onClick={onSelectAllMatching}
           className="text-action underline-offset-2 hover:underline"
         >
-          Select all {totalMatchingCount} matching this filter
+          Select all {formatCount(totalMatchingCount ?? 0, itemNoun, itemPlural)} matching this filter
         </button>
       ) : null}
 
       {selectAllMatching ? (
         <span className="inline-flex items-center gap-1 text-xs text-warning">
           <AlertTriangle className="size-3.5" aria-hidden="true" />
-          Actions below apply to every matching row, not just this page
+          {tooMany
+            ? `Changes apply to at most ${MAX_BULK_ROWS} rows at once — narrow the filter to change these. Export still works.`
+            : 'Actions below apply to every matching row, not just this page'}
         </span>
       ) : null}
 
       <div className="ml-auto flex flex-wrap items-center gap-2">
+        {children}
         {actions.map((action) => (
           <Button
             key={action.id}
             size="sm"
             variant={action.variant ?? 'outline'}
-            disabled={action.disabled}
+            disabled={action.disabled || tooMany}
             onClick={action.onClick}
           >
             {action.label}

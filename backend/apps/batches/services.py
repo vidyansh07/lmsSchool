@@ -146,6 +146,32 @@ def update_batch(*, batch: Batch, actor: User, **fields: Any) -> Batch:
     return batch
 
 
+def _check_assignable_trainer(trainer, batch: Batch) -> None:
+    """Refuse a trainer who cannot take this batch's classes.
+
+    The profile row is locked first, and its account re-read under that lock:
+    `accounts.services.update_user` takes the same lock before deciding a
+    teaching manager has no open batches, so a role change and an assignment
+    cannot both pass their checks at once.
+    """
+    from apps.trainers.models import TrainerProfile
+
+    from .access import TEACHING_ROLES
+
+    locked = TrainerProfile.objects.select_for_update().select_related("user").get(pk=trainer.pk)
+    if not locked.user.is_active:
+        raise ApplicationError({"trainer": ["That trainer's account is not active."]})
+    if locked.user.role not in TEACHING_ROLES:
+        raise ApplicationError(
+            {"trainer": ["That person no longer has a teaching role, so they cannot take classes."]}
+        )
+    if locked.branch_id != batch.branch_id:
+        # A 400 naming the reason rather than a 404, because both records
+        # are ones the caller can legitimately see: "not found" for a
+        # trainer visible on their own screen reads as a bug.
+        raise ApplicationError({"trainer": ["That trainer is at a different centre."]})
+
+
 @transaction.atomic
 def assign_trainer(*, batch: Batch, trainer, actor: User) -> Batch:
     """Put a trainer on a batch, refusing timetable clashes.
@@ -154,13 +180,7 @@ def assign_trainer(*, batch: Batch, trainer, actor: User) -> Batch:
     class the trainer is already teaching.
     """
     if trainer is not None:
-        if not trainer.user.is_active:
-            raise ApplicationError({"trainer": ["That trainer's account is not active."]})
-        if trainer.branch_id != batch.branch_id:
-            # A 400 naming the reason rather than a 404, because both records
-            # are ones the caller can legitimately see: "not found" for a
-            # trainer visible on their own screen reads as a bug.
-            raise ApplicationError({"trainer": ["That trainer is at a different centre."]})
+        _check_assignable_trainer(trainer, batch)
 
         clashes = trainer_conflicts_for_batch(batch, trainer)
         if clashes:
@@ -261,6 +281,10 @@ def _guard_conflicts(schedule: BatchSchedule, batch: Batch) -> None:
 @transaction.atomic
 def create_schedule(*, batch: Batch, actor: User, **fields: Any) -> BatchSchedule:
     schedule = BatchSchedule(batch=batch, **fields)
+    if schedule.trainer_id:
+        # A slot's own trainer (a substitute for that weekday) passes the same
+        # gate as the batch's: active, teaching, and at this centre.
+        _check_assignable_trainer(schedule.trainer, batch)
     schedule.full_clean()
     _guard_conflicts(schedule, batch)
     schedule.save()
@@ -287,6 +311,8 @@ def update_schedule(*, schedule: BatchSchedule, actor: User, **fields: Any) -> B
     if not changed:
         return schedule
 
+    if "trainer" in changed and schedule.trainer_id:
+        _check_assignable_trainer(schedule.trainer, schedule.batch)
     schedule.full_clean()
     _guard_conflicts(schedule, schedule.batch)
     schedule.save(update_fields=[*changed, "updated_at"])

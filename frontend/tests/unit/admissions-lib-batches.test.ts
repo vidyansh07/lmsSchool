@@ -112,31 +112,23 @@ describe('listStudentEnrollments', () => {
 });
 
 describe('transferEnrollment', () => {
-  it('enrols on the new batch before cancelling the old one', async () => {
-    const calls: string[] = [];
-    apiMutate.mockImplementation(async (path: string) => {
-      calls.push(path);
-      if (path === '/api/v1/enrollments/') return enrollment({ id: 'new', batch_code: 'GRS-B-002' });
-      return enrollment({ id: 'e1', status: 'cancelled' });
+  it('is one transfer request, with the reason, never an enrol and a cancel', async () => {
+    apiMutate.mockResolvedValue(enrollment({ id: 'new', batch_code: 'GRS-B-002' }));
+
+    await transferEnrollment({ fromEnrollmentId: 'e1', toBatchId: 'b2', reason: 'Evening suits' });
+
+    expect(apiMutate).toHaveBeenCalledOnce();
+    expect(apiMutate).toHaveBeenCalledWith('/api/v1/enrollments/e1/transfer/', {
+      method: 'POST',
+      body: { batch_id: 'b2', reason: 'Evening suits', is_upgrade: false },
     });
-
-    await transferEnrollment({ studentId: 's1', fromEnrollmentId: 'e1', toBatchId: 'b2' });
-
-    expect(calls[0]).toBe('/api/v1/enrollments/');
-    expect(calls[1]).toBe('/api/v1/enrollments/e1/status/');
   });
 
-  it('never cancels the old enrolment when the new one fails', async () => {
+  it('passes a refusal through untouched', async () => {
     apiMutate.mockRejectedValue(new ApiError(409, 'batch_full', 'This batch is full.', 'req-1'));
-
     await expect(
-      transferEnrollment({ studentId: 's1', fromEnrollmentId: 'e1', toBatchId: 'b2' }),
+      transferEnrollment({ fromEnrollmentId: 'e1', toBatchId: 'b2', reason: 'x' }),
     ).rejects.toThrow('This batch is full.');
-    expect(apiMutate).toHaveBeenCalledTimes(1);
-    expect(apiMutate).not.toHaveBeenCalledWith(
-      expect.stringContaining('/status/'),
-      expect.anything(),
-    );
   });
 });
 

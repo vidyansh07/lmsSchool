@@ -69,7 +69,12 @@ export function useSection<T>(
         if (!cancelled) {
           setState({
             data: empty,
-            error: cause instanceof ApiError ? cause : null,
+            // Never `null` on failure: a null error renders as the empty
+            // state, which would present a broken section as "nothing here".
+            error:
+              cause instanceof ApiError
+                ? cause
+                : new ApiError(0, 'error', 'This section could not be loaded.', ''),
             isLoading: false,
             key,
           });

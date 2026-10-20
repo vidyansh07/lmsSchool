@@ -9,6 +9,8 @@
 
 import { apiFetch, apiMutate } from './api';
 import type {
+  FeeEmail,
+  FeeEmailQueued,
   FeeHistoryEntry,
   FeePayment,
   FeePlan,
@@ -31,6 +33,9 @@ export async function setEnrollmentFee(
   payload: {
     agreed_amount: string | number;
     discount_amount?: string | number;
+    /** Sent: the discount is this percentage of the fee and the server works
+     *  out the rupees. Null or left out: `discount_amount` is a flat discount. */
+    discount_percent?: string | number | null;
     discount_reason?: string;
     notes?: string;
     /** Sent: this is the schedule (empty = ad hoc). Left out: the server's default six. */
@@ -129,6 +134,25 @@ export async function voidPayment(paymentId: string, reason: string): Promise<Fe
 /** Who changed what, when — newest first. */
 export async function getFeeHistory(enrollmentId: string): Promise<FeeHistoryEntry[]> {
   return apiFetch<FeeHistoryEntry[]>(`${BASE}/enrollments/${enrollmentId}/history/`);
+}
+
+/** Every fee mail about one enrolment — statements and receipts — newest first. */
+export async function listFeeEmails(enrollmentId: string): Promise<FeeEmail[]> {
+  return apiFetch<FeeEmail[]>(`${BASE}/enrollments/${enrollmentId}/emails/`);
+}
+
+/** Send the fee statement (PDF attached) to the student now. */
+export async function emailStatement(enrollmentId: string): Promise<FeeEmailQueued> {
+  return apiMutate<FeeEmailQueued>(`${BASE}/enrollments/${enrollmentId}/email-statement/`, {
+    method: 'POST',
+  });
+}
+
+/** Send a payment's receipt (PDF attached) to the student again. */
+export async function emailReceipt(paymentId: string): Promise<FeeEmailQueued> {
+  return apiMutate<FeeEmailQueued>(`${BASE}/payments/${paymentId}/email-receipt/`, {
+    method: 'POST',
+  });
 }
 
 export async function getStudentFees(studentId: string): Promise<StudentFeeSummary> {

@@ -258,6 +258,11 @@ export function withTopicChoice(
   };
 }
 
+/** One report by id — what `/dsr/<id>` reads to decide where to send its reader. */
+export async function getDsr(id: string): Promise<DSR> {
+  return apiFetch<DSR>(`/api/v1/dsr/${id}/`);
+}
+
 /** The report for a class: the saved draft/submission if one exists, else an
  *  unsaved preview (`id: null`) shaped exactly as `startDsr` would create it. */
 export async function getSessionDsr(sessionId: string): Promise<DSR> {

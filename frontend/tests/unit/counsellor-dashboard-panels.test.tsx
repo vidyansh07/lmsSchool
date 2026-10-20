@@ -43,6 +43,7 @@ function student(overrides: Partial<StudentListRow> = {}): StudentListRow {
     referred_by: null,
     is_active: true,
     is_email_verified: false,
+    invitation_accepted: true,
     created_at: '2026-03-01T09:00:00Z',
     ...overrides,
   };

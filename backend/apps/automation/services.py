@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
@@ -59,6 +60,9 @@ ACTION_PERMISSIONS: dict[str, str] = {
     # same kind of write `create_review` makes, so it is gated the same way:
     # the capability that actually authorizes writing a performance verdict.
     "flag_risk": Capability.REVIEW_MANAGE_ANY,
+    # Data leaving the institution: only someone who may configure the
+    # webhooks themselves may point a rule at one.
+    "send_webhook": Capability.INTEGRATION_MANAGE,
 }
 
 #: The three enquiry events, which share one context builder.
@@ -117,6 +121,8 @@ def _validate_rule_shape(trigger: str, conditions: list[dict], actions: list[dic
             errors.extend(_update_enquiry_problems(index, params))
         elif action_type == "create_activity":
             errors.extend(_create_activity_problems(index, params))
+        elif action_type == "send_webhook":
+            errors.extend(_send_webhook_problems(index, params))
 
     if errors:
         raise ApplicationError({"conditions_actions": errors})
@@ -178,6 +184,19 @@ def _update_enquiry_problems(index: int, params: dict) -> list[str]:
     ):
         problems.append(f"Action {index}: choose at least one thing to change on the enquiry.")
     return problems
+
+
+def _send_webhook_problems(index: int, params: dict) -> list[str]:
+    from apps.integrations.models import Webhook
+
+    webhook_id = params.get("webhook")
+    if not webhook_id:
+        return [f"Action {index}: choose the webhook to send to."]
+    try:
+        exists = Webhook.objects.filter(pk=webhook_id).exists()
+    except (ValueError, ValidationError):
+        exists = False
+    return [] if exists else [f"Action {index}: unknown webhook {webhook_id!r}."]
 
 
 def _assign_form_problems(index: int, params: dict) -> list[str]:
@@ -547,6 +566,24 @@ def _build(trigger: str, obj: Any, extra: dict[str, Any]) -> tuple[dict[str, Any
         rctx = RunContext(enquiry=enquiry, branch=enquiry.branch)
         return context, rctx, enquiry
 
+    if trigger == AutomationTrigger.FEE_PAYMENT_RECORDED:
+        payment = obj
+        enrollment = payment.plan.enrollment
+        context = context_for(trigger, payment)
+        rctx = RunContext(
+            student=enrollment.student, enrollment=enrollment, branch=_batch_branch(enrollment)
+        )
+        return context, rctx, payment
+
+    if trigger in (AutomationTrigger.FEE_INSTALMENT_DUE, AutomationTrigger.FEE_INSTALMENT_OVERDUE):
+        installment = obj
+        enrollment = installment.plan.enrollment
+        context = context_for(trigger, installment, **extra)
+        rctx = RunContext(
+            student=enrollment.student, enrollment=enrollment, branch=_batch_branch(enrollment)
+        )
+        return context, rctx, installment
+
     raise ValueError(f"Unknown trigger: {trigger!r}")
 
 
@@ -647,6 +684,14 @@ def _occurrence_for(trigger: str, target: Any, extra: dict[str, Any], depth: int
     if trigger == AutomationTrigger.ENQUIRY_UPDATED:
         moment = getattr(target, "updated_at", None) or timezone.now()
         return f"{_compact_datetime(moment)}-{depth}"
+
+    if trigger == AutomationTrigger.FEE_PAYMENT_RECORDED:
+        return "recorded"
+
+    if trigger in (AutomationTrigger.FEE_INSTALMENT_DUE, AutomationTrigger.FEE_INSTALMENT_OVERDUE):
+        # Once a day per instalment: the morning sweep offers it every day of
+        # the window and the rule's own condition picks the day.
+        return _compact_date()
 
     raise ValueError(f"Unknown trigger: {trigger!r}")
 

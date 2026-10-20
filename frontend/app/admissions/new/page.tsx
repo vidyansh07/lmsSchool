@@ -25,9 +25,11 @@
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { DuplicateMatch } from '@/components/admissions/duplicate-match';
+import { Confirm } from '@/components/confirm';
 import { SearchPicker, type PickerOption } from '@/components/admissions/search-picker';
 import {
   backgroundToProfile,
@@ -37,6 +39,12 @@ import {
   type StudentBackground,
 } from '@/components/admissions/student-background-fields';
 import { StepIndicator, type WizardStep } from '@/components/admissions/step-indicator';
+import {
+  DiscountField,
+  discountPayload,
+  discountRupees,
+  type DiscountMode,
+} from '@/components/fees/discount-field';
 import { BranchField } from '@/components/organisation/branch-field';
 import { RequireAuth } from '@/components/require-auth';
 import { Alert } from '@/components/ui/alert';
@@ -46,11 +54,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import { errorMessage, fieldErrors } from '@/lib/api';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import { errorMessage, fieldErrors, unshownError } from '@/lib/api';
 import { assignBatchTrainer, createBatch, enrolStudent, listBatches } from '@/lib/batches';
 import { formatDate, isoDaysFromNow, isoToday } from '@/lib/batch-labels';
 import { Capability } from '@/lib/capabilities';
 import { listCourses } from '@/lib/courses';
+import { getEnquiry, registerEnquiry } from '@/lib/enquiries';
 import {
   DEFAULT_INSTALLMENT_COUNT,
   InstallmentEditor,
@@ -71,6 +81,7 @@ import {
 } from '@/lib/people';
 import type {
   AdminUser,
+  EnquiryDetail,
   BatchDetail,
   BatchListRow,
   CourseListRow,
@@ -84,6 +95,22 @@ import type {
 } from '@/types/api';
 
 type StepKey = 'student' | 'course' | 'batch' | 'trainer' | 'confirm';
+
+/** The student step's own fields; any other key the server refuses with is
+ *  said above the form rather than dropped (`profile.*` lifts onto these). */
+const STUDENT_FIELD_KEYS = [
+  'email',
+  'phone',
+  'first_name',
+  'last_name',
+  'city',
+  'qualification',
+  'fee_amount',
+  'discount_percent',
+  'discount_amount',
+  'discount_reason',
+  'branch',
+] as const;
 
 const STEPS: WizardStep[] = [
   { key: 'student', label: 'Student' },
@@ -117,9 +144,12 @@ interface Result {
   feeNote: string;
   /** The follow-up planned, or why it could not be. Empty when none was asked for. */
   followUpNote: string;
+  /** The lead this registration came from, linked — or why it could not be. */
+  leadNote: string;
 }
 
 export function RegistrationWizard() {
+  const router = useRouter();
   const [step, setStep] = useState<StepKey>('student');
   const [completed, setCompleted] = useState<Set<StepKey>>(new Set());
 
@@ -129,12 +159,26 @@ export function RegistrationWizard() {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
+  // Opened from a lead ("Register this lead"): `?enquiry=<id>`. Its details
+  // fill the form, and the finished registration is linked back to it.
+  const [leadId, setLeadId] = useState(() =>
+    typeof window === 'undefined'
+      ? ''
+      : (new URLSearchParams(window.location.search).get('enquiry') ?? ''),
+  );
+  const [lead, setLead] = useState<EnquiryDetail | null>(null);
+  const [leadError, setLeadError] = useState('');
   const [qualification, setQualification] = useState('');
   // Where the student is coming from — a college or an employer — and what
   // was agreed for the course. Both decided at the desk, both optional: a
   // walk-in may not know the fee yet, and the record should not wait on it.
   const [background, setBackground] = useState<StudentBackground>(EMPTY_BACKGROUND);
   const [feeAmount, setFeeAmount] = useState('');
+  // A discount agreed at the desk: a percentage by default ("10" is 10%),
+  // or rupees. The schedule below is spread over what is left to pay.
+  const [discountMode, setDiscountMode] = useState<DiscountMode>('percent');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
   // The registration payment, taken at the desk. ₹1,000 is the usual amount
   // and the minimum the ledger accepts for a first payment; blank if nothing
   // changed hands today.
@@ -149,6 +193,8 @@ export function RegistrationWizard() {
   // saved. Regenerated from the fee until the counsellor turns it off.
   const [installments, setInstallments] = useState<InstallmentInput[]>([]);
   const [installmentsEnabled, setInstallmentsEnabled] = useState(true);
+  const discountOff = discountRupees(feeAmount, discountMode, discountValue);
+  const payableAfterDiscount = Math.max(0, Number(feeAmount || 0) - discountOff);
   // An optional follow-up planned at registration: when to call, and why.
   const [followUpOn, setFollowUpOn] = useState('');
   const [followUpNote, setFollowUpNote] = useState('');
@@ -164,6 +210,9 @@ export function RegistrationWizard() {
   const [studentErrors, setStudentErrors] = useState<Record<string, string>>({});
   const [duplicates, setDuplicates] = useState<StudentDuplicateMatch[]>([]);
   const [duplicateChecking, setDuplicateChecking] = useState(false);
+  // The check could not run. Not the same as "no duplicates": the counsellor
+  // is told, and the server checks again when the student is registered.
+  const [duplicateCheckFailed, setDuplicateCheckFailed] = useState(false);
   const [acknowledgedDuplicate, setAcknowledgedDuplicate] = useState(false);
   // Why this is a different person, typed at the duplicate-check step and
   // held here — nothing is sent anywhere until the wizard's final "Register"
@@ -208,6 +257,19 @@ export function RegistrationWizard() {
   const [result, setResult] = useState<Result | null>(null);
 
   const batchHasTrainer = batchMode === 'pick' && Boolean(pickedBatch?.trainer_name);
+
+  // Half a registration is a counsellor's five minutes with a family at the
+  // desk. A refresh, a closed tab or "Back to admissions" asks first; nothing
+  // is kept once the registration is confirmed.
+  const hasUnsavedRegistration =
+    !result &&
+    Boolean(email.trim() || firstName.trim() || lastName.trim() || phone.trim() || course);
+  const {
+    isPrompting: isLeavePromptOpen,
+    guard: guardLeaving,
+    confirmDiscard: confirmLeave,
+    cancelDiscard: cancelLeave,
+  } = useUnsavedChanges(hasUnsavedRegistration);
 
   // Recomputed at render time rather than reset from the debounce effect
   // above: once the identifying fields are too short to search on, the
@@ -259,10 +321,16 @@ export function RegistrationWizard() {
         phone: phoneQuery.length >= 4 ? phoneQuery : undefined,
       })
         .then((response) => {
-          if (!cancelled) setDuplicates(response.results);
+          if (!cancelled) {
+            setDuplicates(response.results);
+            setDuplicateCheckFailed(false);
+          }
         })
         .catch(() => {
-          if (!cancelled) setDuplicates([]);
+          if (!cancelled) {
+            setDuplicates([]);
+            setDuplicateCheckFailed(true);
+          }
         })
         .finally(() => {
           if (!cancelled) setDuplicateChecking(false);
@@ -335,6 +403,28 @@ export function RegistrationWizard() {
     return () => clearTimeout(timer);
   }, [managerQuery]);
 
+  useEffect(() => {
+    if (!leadId) return;
+    let cancelled = false;
+    getEnquiry(leadId)
+      .then((found) => {
+        if (cancelled) return;
+        setLead(found);
+        const [first = '', ...rest] = found.full_name.trim().split(/\s+/);
+        setFirstName((value) => value || first);
+        setLastName((value) => value || rest.join(' '));
+        setEmail((value) => value || found.email);
+        setPhone((value) => value || found.mobile);
+        setCity((value) => value || found.city);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setLeadError(errorMessage(cause, 'Could not load the lead.'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [leadId]);
+
   // --- Step 1 handlers -----------------------------------------------------
 
   // After "save and start another", the course and batch are already known —
@@ -361,6 +451,17 @@ export function RegistrationWizard() {
     const errors: Record<string, string> = {};
     if (!email.trim()) errors.email = 'Email is required.';
     if (!firstName.trim()) errors.first_name = 'First name is required.';
+    if (discountOff > 0 && feeAmount.trim() !== '') {
+      if (discountMode === 'percent' && Number(discountValue) > 100) {
+        errors.discount_percent = 'A percentage cannot be more than 100.';
+      }
+      if (discountMode === 'amount' && Number(discountValue) > Number(feeAmount)) {
+        errors.discount_amount = 'A discount cannot be more than the fee.';
+      }
+      if (!discountReason.trim()) {
+        errors.discount_reason = 'Say why the discount was given; it is kept with the record.';
+      }
+    }
     setStudentErrors(errors);
     if (Object.keys(errors).length > 0) return;
     if (visibleDuplicates.length > 0 && !acknowledgedDuplicate) return;
@@ -383,12 +484,26 @@ export function RegistrationWizard() {
 
   // The schedule follows the fee while it is switched on: a fee typed after
   // the rows were generated would otherwise leave six stale amounts behind.
+  function respread(fee: string, mode: DiscountMode, discount: string) {
+    if (!installmentsEnabled) return;
+    const payable = Math.max(0, Number(fee || 0) - discountRupees(fee, mode, discount));
+    setInstallments((rows) =>
+      defaultInstallments(payable, rows.length || DEFAULT_INSTALLMENT_COUNT),
+    );
+  }
+
   function onFeeAmountChange(value: string) {
     setFeeAmount(value);
-    if (!installmentsEnabled) return;
-    setInstallments((rows) =>
-      defaultInstallments(Number(value), rows.length || DEFAULT_INSTALLMENT_COUNT),
-    );
+    respread(value, discountMode, discountValue);
+  }
+
+  function onDiscountValueChange(value: string) {
+    setDiscountValue(value);
+    respread(feeAmount, discountMode, value);
+  }
+
+  function onDiscountModeChange(mode: DiscountMode) {
+    setDiscountMode(mode);
   }
 
   function onInstallmentsChange(rows: InstallmentInput[]) {
@@ -577,7 +692,24 @@ export function RegistrationWizard() {
     try {
       student = await ensureStudent();
     } catch (cause) {
-      setStudentErrors(fieldErrors(cause));
+      const errors = fieldErrors(cause);
+      setStudentErrors(errors);
+      if (errors.override_reason) {
+        // The server found a likely duplicate the wizard did not show — its
+        // own check had failed, or the record appeared since. Bring the
+        // matches back up so the counsellor can decide, and give a reason.
+        setAcknowledgedDuplicate(false);
+        setOverrideReason('');
+        checkDuplicates({
+          email: email.trim() || undefined,
+          phone: phone.trim() || undefined,
+        })
+          .then((response) => {
+            setDuplicates(response.results);
+            setDuplicateCheckFailed(false);
+          })
+          .catch(() => setDuplicateCheckFailed(true));
+      }
       goToStep('student');
       setIsSubmitting(false);
       return;
@@ -626,6 +758,8 @@ export function RegistrationWizard() {
       try {
         await setEnrollmentFee(enrollment.id, {
           agreed_amount: feeAmount.trim(),
+          ...discountPayload(discountMode, discountValue),
+          discount_reason: discountOff > 0 ? discountReason.trim() : '',
           installments: installmentsEnabled ? installments : [],
         });
         const scheduleNote = installmentsEnabled
@@ -640,7 +774,7 @@ export function RegistrationWizard() {
           });
           feeNote = `${formatCurrency(payment.amount)} received today — receipt ${payment.receipt_number}.${scheduleNote}`;
         } else {
-          feeNote = `Fee of ${formatCurrency(feeAmount)} recorded; nothing paid yet.${scheduleNote}`;
+          feeNote = `Fee of ${formatCurrency(payableAfterDiscount)} recorded; nothing paid yet.${scheduleNote}`;
         }
       } catch (cause) {
         feeNote = `Enrolled, but the fee could not be recorded (${errorMessage(cause, 'unknown error')}). Record it from the student's page.`;
@@ -662,6 +796,18 @@ export function RegistrationWizard() {
       }
     }
 
+    // The lead it came from is marked registered here; like the fee, a
+    // failure is a note, never a failed registration.
+    let leadNote = '';
+    if (lead) {
+      try {
+        await registerEnquiry(lead.id, student.id);
+        leadNote = `The lead ${lead.full_name} is marked registered.`;
+      } catch (cause) {
+        leadNote = `The lead could not be linked (${errorMessage(cause, 'unknown error')}).`;
+      }
+    }
+
     setResult({
       student,
       batchName: batchInfo.name,
@@ -669,6 +815,7 @@ export function RegistrationWizard() {
       enrollment,
       feeNote,
       followUpNote: followUpResult,
+      leadNote,
     });
     setIsSubmitting(false);
   }
@@ -717,6 +864,13 @@ export function RegistrationWizard() {
     setAcknowledgedDuplicate(false);
     setOverrideReason('');
     setCreatedStudent(null);
+    // The next student is not the lead this one came from.
+    setLead(null);
+    setLeadId('');
+    setLeadError('');
+    setDiscountMode('percent');
+    setDiscountValue('');
+    setDiscountReason('');
     setPaidNow('1000');
     setPaidMethod('cash');
     setPaidReference('');
@@ -754,9 +908,26 @@ export function RegistrationWizard() {
           </p>
         </div>
         <Button asChild variant="outline">
-          <Link href="/admissions">Back to admissions</Link>
+          <Link
+            href="/admissions"
+            onClick={(event) => {
+              event.preventDefault();
+              guardLeaving(() => router.push('/admissions'));
+            }}
+          >
+            Back to admissions
+          </Link>
         </Button>
       </div>
+      <Confirm
+        open={isLeavePromptOpen}
+        title="Leave this registration?"
+        description="Nothing has been registered yet. The details typed here will be lost."
+        confirmLabel="Leave without registering"
+        cancelLabel="Keep registering"
+        onConfirm={confirmLeave}
+        onCancel={cancelLeave}
+      />
 
       <StepIndicator
         steps={STEPS}
@@ -776,7 +947,30 @@ export function RegistrationWizard() {
           </CardHeader>
           <CardContent>
             <form onSubmit={onStudentSubmit} className="space-y-4" noValidate>
-              {studentErrors.__all__ ? <Alert variant="error">{studentErrors.__all__}</Alert> : null}
+              {lead ? (
+                <Alert variant="info">
+                  Registering the lead <span className="font-medium">{lead.full_name}</span>
+                  {lead.managed_externally
+                    ? ` from Meritto${lead.external_stage ? ` (${lead.external_stage})` : ''}`
+                    : ''}
+                  {lead.course ? `, interested in ${lead.course}` : ''}. Its details are filled
+                  in below; the lead is marked registered when you confirm.
+                </Alert>
+              ) : null}
+              {leadError ? <Alert variant="warning">{leadError}</Alert> : null}
+              {unshownError(studentErrors, STUDENT_FIELD_KEYS) ? (
+                <Alert variant="error">{unshownError(studentErrors, STUDENT_FIELD_KEYS)}</Alert>
+              ) : null}
+              {createdStudent ? (
+                <Alert variant="info">
+                  {createdStudent.user.full_name || createdStudent.user.email} is already registered as{' '}
+                  {createdStudent.student_id}. These details are saved; correct them later on the
+                  student&rsquo;s own record. Carry on with the course and batch.
+                </Alert>
+              ) : null}
+              {/* Once the record exists, editing here would change nothing:
+                  the wizard reuses it. Locked rather than silently ignored. */}
+              <fieldset disabled={Boolean(createdStudent)} className="min-w-0 space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Email" htmlFor="reg-email" error={studentErrors.email} required>
                   <Input
@@ -835,6 +1029,30 @@ export function RegistrationWizard() {
                     placeholder="e.g. 25000"
                   />
                 </Field>
+                <DiscountField
+                  id="reg-discount"
+                  agreed={feeAmount}
+                  mode={discountMode}
+                  value={discountValue}
+                  onModeChange={onDiscountModeChange}
+                  onValueChange={onDiscountValueChange}
+                  error={studentErrors.discount_percent ?? studentErrors.discount_amount}
+                  disabled={feeAmount.trim() === ''}
+                />
+                {discountOff > 0 ? (
+                  <Field
+                    label="Reason for the discount"
+                    htmlFor="reg-discount-reason"
+                    error={studentErrors.discount_reason}
+                    required
+                  >
+                    <Input
+                      value={discountReason}
+                      onChange={(event) => setDiscountReason(event.target.value)}
+                      placeholder="e.g. Referral, early bird, scholarship"
+                    />
+                  </Field>
+                ) : null}
                 <Field
                   label="Paid today (₹)"
                   htmlFor="reg-paid-now"
@@ -905,7 +1123,7 @@ export function RegistrationWizard() {
                   </p>
                   <InstallmentEditor
                     idPrefix="reg-inst"
-                    payable={Number(feeAmount)}
+                    payable={payableAfterDiscount}
                     rows={installmentsEnabled ? installments : []}
                     onChange={onInstallmentsChange}
                   />
@@ -982,8 +1200,16 @@ export function RegistrationWizard() {
                 )}
               </div>
 
+              </fieldset>
+
               {duplicateChecking ? (
                 <p className="text-xs text-ink-muted">Checking for existing students…</p>
+              ) : null}
+              {duplicateCheckFailed && !duplicateChecking && !createdStudent ? (
+                <Alert variant="warning">
+                  Could not check whether this student is already registered. You can carry on —
+                  the check runs again when you register them.
+                </Alert>
               ) : null}
               <DuplicateMatch matches={visibleDuplicates} onConfirmDifferentPerson={onContinuePastDuplicate} />
 
@@ -1185,6 +1411,7 @@ export function RegistrationWizard() {
                 <p className="text-sm">
                   Enrolment {result.enrollment.code}.{result.feeNote ? ` ${result.feeNote}` : ''}
                   {result.followUpNote ? ` ${result.followUpNote}` : ''}
+                  {result.leadNote ? ` ${result.leadNote}` : ''}
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1">
                   <Button size="sm" onClick={onSaveAndStartAnother}>
@@ -1226,7 +1453,15 @@ export function RegistrationWizard() {
                   <div>
                     <dt className="text-xs text-ink-muted">Agreed fee</dt>
                     <dd className="font-medium tabular-nums">
-                      {feeAmount.trim() === '' ? 'Not decided yet' : formatCurrency(feeAmount)}
+                      {feeAmount.trim() === ''
+                        ? 'Not decided yet'
+                        : discountOff > 0
+                          ? `${formatCurrency(feeAmount)} less ${
+                              discountMode === 'percent'
+                                ? `${Number(discountValue)}% (${formatCurrency(discountOff)})`
+                                : formatCurrency(discountOff)
+                            } = ${formatCurrency(payableAfterDiscount)}`
+                          : formatCurrency(feeAmount)}
                     </dd>
                   </div>
                   <div>
@@ -1282,7 +1517,7 @@ export function RegistrationWizard() {
                     isSubmitting ||
                     (feeAmount.trim() !== '' &&
                       installmentsEnabled &&
-                      !installmentsAddUp(installments, Number(feeAmount)))
+                      !installmentsAddUp(installments, payableAfterDiscount))
                   }
                 >
                   {isSubmitting ? 'Enrolling…' : 'Confirm and enrol'}

@@ -24,7 +24,7 @@ import pytest
 from apps.common.exceptions import ApplicationError, ConflictError
 from apps.fees.models import PaymentKind
 from apps.fees.services import (
-    discount_from_percent,
+    discount_for_percent,
     record_payment,
     refund_payment,
     set_fee_plan,
@@ -91,7 +91,7 @@ class TestDiscountAsAPercentage:
         # 12.5% of 17,555 is 2,194.375. A person rounds that up; banker's
         # rounding would give 2,194.38 here but 2,194.36 a paisa either side,
         # and a student notices a rupee.
-        assert discount_from_percent(Decimal("17555.00"), Decimal("12.5")) == Decimal("2194.38")
+        assert discount_for_percent(Decimal("17555.00"), Decimal("12.5")) == Decimal("2194.38")
 
     def test_a_percentage_over_a_hundred_is_refused(self, enrollment, admin_user):
         with pytest.raises(ApplicationError):

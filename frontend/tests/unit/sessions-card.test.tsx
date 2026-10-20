@@ -26,6 +26,7 @@ vi.mock("@/lib/auth", () => ({ logoutEverywhere }));
 const replace = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace }),
+  useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
 function row(overrides: Partial<SessionRow>): SessionRow {

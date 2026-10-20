@@ -308,6 +308,8 @@ function ManagerOverview() {
         </ChartCard>
 
         <ChartCard
+          error={dsr.error}
+          onRetry={dsr.reload}
           title="Daily report compliance"
           subtitle="Reports submitted, approved and sent back each week — submission only"
           icon={ClipboardList}

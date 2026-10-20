@@ -105,7 +105,13 @@ def on_enquiry_changed(
     sender, *, enquiry, event, changed=None, previous_stage="", actor=None, **kwargs
 ) -> None:
     """An enquiry created is `ENQUIRY_CREATED`; any change is
-    `ENQUIRY_UPDATED`, and a stage change is also `ENQUIRY_STAGE_CHANGED`."""
+    `ENQUIRY_UPDATED`, and a stage change is also `ENQUIRY_STAGE_CHANGED`.
+
+    Not for a Meritto lead: Meritto runs its own follow-ups, and an LMS rule
+    calling a lead Meritto is already working would double the contact
+    (owner's decision, 17 October 2026)."""
+    if getattr(enquiry, "is_managed_externally", False):
+        return
     enquiry_id = str(enquiry.pk)
     changed = list(changed or [])
     if event == "created":
@@ -153,3 +159,40 @@ def on_dsr_missing(sender, *, dsr, **kwargs) -> None:
             logger.exception("Failed to enqueue DSR_MISSING dispatch for %s", dsr_id)
 
     transaction.on_commit(_enqueue)
+
+
+def on_fee_payment_recorded(sender, *, payment, actor=None, **kwargs) -> None:
+    """A recorded payment is a `FEE_PAYMENT_RECORDED` occurrence."""
+    payment_id = str(payment.pk)
+
+    def _enqueue() -> None:
+        try:
+            from .tasks import dispatch_fee_payment_recorded
+
+            dispatch_fee_payment_recorded.delay(payment_id)
+        except Exception:
+            logger.exception("Failed to enqueue FEE_PAYMENT_RECORDED dispatch for %s", payment_id)
+
+    transaction.on_commit(_enqueue)
+
+
+def _on_instalment(trigger: str, installment, days: int) -> None:
+    installment_id = str(installment.pk)
+
+    def _enqueue() -> None:
+        try:
+            from .tasks import dispatch_fee_instalment
+
+            dispatch_fee_instalment.delay(installment_id, trigger, int(days))
+        except Exception:
+            logger.exception("Failed to enqueue %s dispatch for %s", trigger, installment_id)
+
+    transaction.on_commit(_enqueue)
+
+
+def on_instalment_due(sender, *, installment, days, **kwargs) -> None:
+    _on_instalment("FEE_INSTALMENT_DUE", installment, days)
+
+
+def on_instalment_overdue(sender, *, installment, days, **kwargs) -> None:
+    _on_instalment("FEE_INSTALMENT_OVERDUE", installment, days)

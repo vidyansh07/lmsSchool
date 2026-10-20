@@ -5,6 +5,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from apps.accounts.serializers import UserSerializer
+from apps.common import bulk
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
 from .models import MAX_SKILL_LENGTH, MAX_SKILLS, TrainerProfile
@@ -90,7 +91,12 @@ class TrainerListSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="user.full_name", read_only=True)
     is_active = serializers.BooleanField(source="user.is_active", read_only=True)
     is_email_verified = serializers.BooleanField(source="user.is_email_verified", read_only=True)
+    #: They set a password of their own: the invitation was accepted.
+    invitation_accepted = serializers.SerializerMethodField()
     user_id = serializers.UUIDField(source="user.id", read_only=True)
+    #: "trainer", or "manager" for a manager who also teaches — the directory
+    #: says so rather than presenting them as one more trainer.
+    role = serializers.CharField(source="user.role", read_only=True)
 
     class Meta:
         model = TrainerProfile
@@ -98,6 +104,7 @@ class TrainerListSerializer(serializers.ModelSerializer):
             "id",
             "trainer_id",
             "user_id",
+            "role",
             "email",
             "full_name",
             "professional_title",
@@ -106,9 +113,13 @@ class TrainerListSerializer(serializers.ModelSerializer):
             "is_accepting_assignments",
             "is_active",
             "is_email_verified",
+            "invitation_accepted",
             "created_at",
         )
         read_only_fields = fields
+
+    def get_invitation_accepted(self, obj) -> bool:
+        return obj.user.has_usable_password()
 
 
 class TrainerProfileFieldsSerializer(StrictModelSerializer):
@@ -173,3 +184,7 @@ class TeachingProfileSerializer(StrictSerializer):
     """Which account should be able to teach. Resolved in the view."""
 
     user_id = serializers.UUIDField()
+
+
+class TrainerBulkRequestSerializer(bulk.BulkTargetSerializer):
+    action = serializers.ChoiceField(choices=("resend_invitation",))

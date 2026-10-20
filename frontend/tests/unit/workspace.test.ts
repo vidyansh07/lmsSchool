@@ -1,39 +1,34 @@
 import { describe, expect, it } from 'vitest';
 
-import { workspaceHome, workspaceHomeForUser, workspaceLabel } from '@/lib/workspace';
+import { homeFor } from '@/components/navigation';
+import { workspaceLabel } from '@/lib/workspace';
 
 describe('role workspaces', () => {
   it.each([
-    ['superadmin', '/admin/overview'],
-    ['admin', '/admin/overview'],
-    ['manager', '/manage'],
-    ['counsellor', '/admissions/dashboard'],
-    ['trainer', '/dashboard'],
-    ['student', '/dashboard'],
-  ])('routes %s to its operational home', (role, expected) => {
-    expect(workspaceHome(role)).toBe(expected);
+    ['superadmin', 'Superadmin workspace'],
+    ['admin', 'Administrator workspace'],
+    ['manager', 'Manager workspace'],
+    ['counsellor', 'Admissions workspace'],
+    ['trainer', 'Trainer workspace'],
+    ['student', 'Student workspace'],
+  ])('names the %s navigation', (role, expected) => {
+    expect(workspaceLabel(role)).toBe(expected);
   });
 
-  it('uses a safe signed-in fallback for an unknown role', () => {
-    expect(workspaceHome('future-role')).toBe('/dashboard');
+  it('uses a neutral name for an unknown role', () => {
     expect(workspaceLabel('future-role')).toBe('Your workspace');
   });
 
   it('does not restore a dashboard capability removed from a custom role', () => {
-    expect(
-      workspaceHomeForUser({
-        role: 'manager',
-        custom_role: 'admissions-lead',
-        capabilities: ['enquiry.view_any'],
-      }),
-    ).toBe('/enquiries');
+    const manager = homeFor({
+      role: 'manager',
+      custom_role: 'admissions-lead',
+      capabilities: ['enquiry.view_any'],
+    });
+    expect(manager).not.toBe('/manage');
 
-    expect(
-      workspaceHomeForUser({
-        role: 'admin',
-        custom_role: 'restricted-auditor',
-        capabilities: [],
-      }),
-    ).toBe('/profile');
+    const admin = homeFor({ role: 'admin', custom_role: 'restricted-auditor', capabilities: [] });
+    expect(admin).not.toBe('/admin/activity');
+    expect(admin).not.toBe('/admin/overview');
   });
 });

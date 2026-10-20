@@ -36,7 +36,7 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { ApiError } from '@/lib/api';
-import { Capability } from '@/lib/capabilities';
+import { Capability, type CapabilityName } from '@/lib/capabilities';
 import { search as runSearch } from '@/lib/search';
 import { cn } from '@/lib/utils';
 import type { SearchResultGroup } from '@/types/api';
@@ -57,6 +57,60 @@ interface PaletteItem {
 interface PaletteGroup {
   label: string;
   items: PaletteItem[];
+}
+
+/**
+ * Things to *do*, not places to go — offered only to someone who may do them
+ * (the same capability the button on the destination checks), and matched on
+ * a few plain words as well as the title. Each lands on the screen that does
+ * it, with its dialog already open (`?create=1`, `hooks/use-create-param.ts`).
+ */
+const QUICK_ACTIONS: {
+  id: string;
+  title: string;
+  href: string;
+  capability: CapabilityName;
+  keywords: string;
+}[] = [
+  {
+    id: 'action:register-student',
+    title: 'Register a student',
+    href: '/admissions/new',
+    capability: Capability.enrolmentCreate,
+    keywords: 'admission enrol enroll new student registration',
+  },
+  {
+    id: 'action:add-trainer',
+    title: 'Add a trainer',
+    href: '/manage/trainers?create=1',
+    capability: Capability.trainerCreate,
+    keywords: 'onboard new trainer teacher faculty',
+  },
+  {
+    id: 'action:add-staff',
+    title: 'Add a staff account',
+    href: '/admin/users?create=1',
+    capability: Capability.userCreate,
+    keywords: 'new user account admin manager counsellor invite',
+  },
+  {
+    id: 'action:new-batch',
+    title: 'Open a new batch',
+    href: '/admin/batches?create=1',
+    capability: Capability.batchCreate,
+    keywords: 'new batch class cohort',
+  },
+];
+
+/** Every typed word appears somewhere in the text, in any order — "add
+ *  staff" finds "Add a staff account", "reports class" finds "Class reports". */
+function matchesWords(text: string, query: string): boolean {
+  const haystack = text.toLowerCase();
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .every((word) => haystack.includes(word));
 }
 
 function localGroupsFor(user: { role: string; capabilities: string[] } | null): NavGroup[] {
@@ -101,13 +155,22 @@ export function CommandPalette({
     for (const group of localGroupsFor(user)) {
       for (const item of group.items) {
         if (!isVisible(item, user)) continue;
-        if (trimmed && !item.label.toLowerCase().includes(trimmed)) continue;
+        if (trimmed && !matchesWords(item.label, trimmed)) continue;
         items.push({ id: `nav:${item.href}`, title: item.label, subtitle: group.title ?? 'Navigate', href: item.href });
         if (items.length >= MAX_LOCAL_RESULTS) return items;
       }
     }
     return items;
   }, [user, query]);
+
+  const actionItems = useMemo<PaletteItem[]>(() => {
+    const trimmed = query.trim().toLowerCase();
+    return QUICK_ACTIONS.filter(
+      (action) =>
+        can(action.capability) &&
+        (!trimmed || matchesWords(`${action.title} ${action.keywords}`, trimmed)),
+    ).map((action) => ({ id: action.id, title: action.title, subtitle: 'Do', href: action.href }));
+  }, [can, query]);
 
   const canSearch = Boolean(user) && can(Capability.searchGlobal);
   const trimmedQuery = debouncedQuery.trim();
@@ -176,8 +239,8 @@ export function CommandPalette({
   }, [searchEnabled, searchState.groups]);
 
   const flatItems = useMemo(
-    () => [...localItems, ...searchGroups.flatMap((group) => group.items)],
-    [localItems, searchGroups],
+    () => [...actionItems, ...localItems, ...searchGroups.flatMap((group) => group.items)],
+    [actionItems, localItems, searchGroups],
   );
   // A safety net for the one case the effect above does not cover: a search
   // response lands after the person stopped typing and shrinks the list out
@@ -236,6 +299,25 @@ export function CommandPalette({
         </div>
 
         <ul id="command-palette-list" role="listbox" aria-label="Results" className="max-h-96 overflow-y-auto p-2">
+          {actionItems.length > 0 ? (
+            <li role="presentation">
+              <p className="px-2 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wide text-ink-muted">
+                Quick actions
+              </p>
+              <ul>
+                {actionItems.map((item) => (
+                  <PaletteRow
+                    key={item.id}
+                    item={item}
+                    index={indexById.get(item.id) ?? 0}
+                    activeIndex={boundedIndex}
+                    onSelect={select}
+                  />
+                ))}
+              </ul>
+            </li>
+          ) : null}
+
           {localItems.length > 0 ? (
             <li role="presentation">
               <p className="px-2 pb-1 pt-2 text-2xs font-semibold uppercase tracking-wide text-ink-muted">

@@ -5,7 +5,7 @@
  * state), and the tab shown follows `?tab=` so Back and sharing work
  * (DESIGN_DECISIONS.md "Student 360").
  */
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Student360Content } from '@/app/students/[id]/page';
@@ -17,6 +17,17 @@ vi.mock('@/lib/student-360', () => ({ getStudent360 }));
 
 const useAuth = vi.hoisted(() => vi.fn());
 vi.mock('@/components/auth-provider', () => ({ useAuth }));
+
+const toast = vi.hoisted(() => vi.fn());
+vi.mock('@/components/ui/toast', () => ({ useToast: () => ({ toast }) }));
+const sendCredentialLink = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/people', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/people')>('@/lib/people');
+  return { ...actual, sendCredentialLink };
+});
+vi.mock('@/components/admissions/plan-follow-up', () => ({
+  PlanFollowUp: () => <button type="button">Plan a follow-up</button>,
+}));
 
 const push = vi.hoisted(() => vi.fn());
 const searchParams = vi.hoisted(() => ({ value: '' }));
@@ -35,6 +46,27 @@ vi.mock('@/components/students/student-activities-tab', () => ({
 vi.mock('@/components/students/timeline', () => ({
   StudentTimeline: ({ studentId }: { studentId: string }) => <div>Timeline for {studentId}</div>,
 }));
+vi.mock('@/components/export-menu', () => ({ ExportMenu: () => null }));
+const listCertificates = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/progress', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/progress')>('@/lib/progress');
+  return { ...actual, listCertificates };
+});
+const listDeliveries = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/communication', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/communication')>('@/lib/communication');
+  return { ...actual, listDeliveries };
+});
+const getStudentFees = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/fees', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/fees')>('@/lib/fees');
+  return { ...actual, getStudentFees };
+});
+const listStudentEnrollments = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/batches', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/batches')>('@/lib/batches');
+  return { ...actual, listStudentEnrollments };
+});
 vi.mock('@/app/manage/students/[enrollmentId]/page', () => ({
   StudentPerformance: ({ enrollmentId }: { enrollmentId: string }) => <div>Enrolment performance for {enrollmentId}</div>,
 }));
@@ -50,6 +82,7 @@ function user(overrides: Partial<User> = {}): User {
     role: 'student',
     is_active: true,
     is_email_verified: true,
+    invitation_accepted: true,
     profile_image_url: null,
     date_joined: '2026-01-01',
     branch_id: null,
@@ -355,5 +388,131 @@ describe('Student360Content', () => {
     render(<Student360Content studentId="student-1" />);
 
     expect(await screen.findByText('Not available')).toBeInTheDocument();
+  });
+});
+
+describe('Student360Content — fees and the other records', () => {
+  it('offers the fee ledger to someone who reads fees, and links the admissions record and the account', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 'staff-1', role: 'counsellor', capabilities: [] },
+      can: (capability: string) =>
+        ['fee.view_any', 'enrolment.create', 'user.view_any'].includes(capability),
+    });
+    getStudent360.mockResolvedValue(student360());
+    getStudentFees.mockResolvedValue({
+      student_id: 'student-1',
+      fee_status: 'paid',
+      plans: [],
+      totals: { agreed: '0', discount: '0', payable: '0', paid: '0', balance: '0' },
+    });
+    listStudentEnrollments.mockResolvedValue([]);
+    searchParams.value = 'tab=fees';
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByRole('tab', { name: 'Fees' })).toBeInTheDocument();
+    await waitFor(() => expect(getStudentFees).toHaveBeenCalledWith('student-1'));
+    expect(screen.getByRole('link', { name: 'Admissions record' })).toHaveAttribute(
+      'href',
+      '/admissions/student-1',
+    );
+    expect(screen.getByRole('link', { name: 'Account' })).toBeInTheDocument();
+  });
+
+  it('has no Fees tab for someone who cannot read fees', async () => {
+    getStudent360.mockResolvedValue(student360());
+    render(<Student360Content studentId="student-1" />);
+    expect(await screen.findByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Fees' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Account' })).toBeNull();
+  });
+});
+
+describe('Student360Content — messages and certificates', () => {
+  it('lists the certificates awarded to this student, with a verify link', async () => {
+    getStudent360.mockResolvedValue(student360());
+    listCertificates.mockResolvedValue({
+      count: 1,
+      page: 1,
+      page_size: 20,
+      total_pages: 1,
+      results: [
+        {
+          id: 'c1',
+          number: 'GRS-CERT-0001',
+          verification_code: 'ABC123',
+          course_title: 'Linux Essentials',
+          batch_code: 'GRS-B-001',
+          completion_date: '2026-09-30',
+          status: 'issued',
+          is_live: true,
+          issued_at: '2026-10-01T00:00:00Z',
+        },
+      ],
+    });
+    searchParams.value = 'tab=certificates';
+    render(<Student360Content studentId="student-1" />);
+
+    await waitFor(() => expect(listCertificates).toHaveBeenCalledWith({ student: 'student-1' }));
+    expect(await screen.findByText('GRS-CERT-0001')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Verify' })).toHaveAttribute('href', '/verify/ABC123');
+  });
+
+  it('shows the messages tab only to someone who reads the delivery log', async () => {
+    useAuth.mockReturnValue({
+      user: { id: 'staff-1', role: 'admin', capabilities: [] },
+      can: (capability: string) => capability === 'communication.view_any',
+    });
+    getStudent360.mockResolvedValue(student360());
+    listDeliveries.mockResolvedValue({ count: 0, page: 1, page_size: 20, total_pages: 1, results: [] });
+    searchParams.value = 'tab=messages';
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByText('No messages yet')).toBeInTheDocument();
+    expect(listDeliveries).toHaveBeenCalledWith(expect.objectContaining({ recipient: expect.any(String) }));
+  });
+});
+
+describe('Student360Content — actions for this student', () => {
+  it('offers the desk\'s actions by capability, each landing where the work is done', async () => {
+    const capabilities = [
+      'fee.manage_any',
+      'enrolment.create',
+      'enrolment.update_any',
+      'user.update_any',
+      'activity.create',
+    ];
+    useAuth.mockReturnValue({
+      user: { id: 'staff-1', role: 'counsellor', capabilities },
+      can: (capability: string) => capabilities.includes(capability),
+    });
+    getStudent360.mockResolvedValue(
+      student360({ profile: studentProfile({ user: user({ invitation_accepted: false }) }) }),
+    );
+    sendCredentialLink.mockResolvedValue({ sent: true, detail: 'ok' });
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByRole('button', { name: 'Plan a follow-up' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Record a payment' }));
+    expect(push).toHaveBeenCalledWith('/students/student-1?tab=fees');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move to another batch' }));
+    expect(push).toHaveBeenCalledWith('/admissions/transfer?student=student-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Resend invitation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invitation' }));
+    // A set-password invitation (the server sends one to an account that has
+    // no password yet), not a verify-email link.
+    await waitFor(() => expect(sendCredentialLink).toHaveBeenCalledWith('user-1', 'password_reset'));
+  });
+
+  it('offers no actions to somebody who can only read', async () => {
+    getStudent360.mockResolvedValue(student360());
+    render(<Student360Content studentId="student-1" />);
+    await screen.findByText('GRS-S-00001');
+    expect(screen.queryByRole('button', { name: 'Actions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Plan a follow-up' })).not.toBeInTheDocument();
   });
 });

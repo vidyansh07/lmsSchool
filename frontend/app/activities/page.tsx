@@ -30,6 +30,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { Bookmark } from "lucide-react";
 
+import { useAuth } from "@/components/auth-provider";
 import { DataTable, type DataTableColumn } from "@/components/data-table";
 import { RequireAuth } from "@/components/require-auth";
 import { ActivityDrawer } from "@/components/work/activity-drawer";
@@ -41,6 +42,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 import { Pagination } from "@/components/pagination";
+import { StaffSelect } from "@/components/staff-select";
 import { Popover, PopoverContent, PopoverHeading, PopoverTrigger } from "@/components/ui/popover";
 import { ApiError } from "@/lib/api";
 import { Capability } from "@/lib/capabilities";
@@ -134,10 +136,17 @@ function initialFiltersFromParams(params: URLSearchParams): Filters {
   };
 }
 
+/** Who work can be handed to, for the "Assigned to" filter. */
+const WORK_ROLES = ["counsellor", "manager", "admin", "trainer"] as const;
+
 function ActivitiesWorkspace() {
+  const { can } = useAuth();
+  const mayListStaff = can(Capability.userViewAny);
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<Filters>(() => initialFiltersFromParams(searchParams));
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // `?activity=<id>` opens that activity's drawer — where a notification's
+  // "Open" lands (`/activities/<id>` forwards here).
+  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get("activity"));
   const [types, setTypes] = useState<ActivityType[]>([]);
 
   useEffect(() => {
@@ -384,13 +393,19 @@ function ActivitiesWorkspace() {
             </option>
           ))}
         </Select>
-        <Input
-          aria-label="Assigned to (user id)"
-          placeholder="Assigned to (user id)"
-          value={filters.assignedTo}
-          onChange={(event) => updateFilters({ assignedTo: event.target.value })}
-          className="w-56"
-        />
+        {/* Chosen by name. Somebody who cannot list accounts (a trainer,
+            whose queue is their own) has "Mine" instead. */}
+        {mayListStaff ? (
+          <StaffSelect
+            id="filter-assigned-to"
+            ariaLabel="Assigned to"
+            emptyLabel="Assigned to anyone"
+            roles={WORK_ROLES}
+            value={filters.assignedTo}
+            onChange={(value) => updateFilters({ assignedTo: value })}
+            className="w-56"
+          />
+        ) : null}
         {/* `Checkbox` renders its own wrapping `<label>`; a second `<label>`
             around it here would nest labels invalidly, so the visible text
             sits beside it as a sibling instead, and `aria-label` carries the

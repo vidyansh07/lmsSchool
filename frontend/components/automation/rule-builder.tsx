@@ -25,6 +25,7 @@ import { Input, Select, Textarea } from "@/components/ui/input";
 import { FlowBuilder } from "@/components/automation/flow-builder";
 import { usePublishedFields } from "@/components/automation/use-published-fields";
 import { useApi } from "@/hooks/use-api";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import {
   activateAutomationRule,
   AUTOMATION_TRIGGER_PATHS,
@@ -80,6 +81,8 @@ export function RuleBuilder({ id }: { id: string }) {
   const [conditions, setConditions] = useState<AutomationCondition[]>([]);
   const [actions, setActions] = useState<AutomationAction[]>([]);
   const [dirty, setDirty] = useState(false);
+  // A refresh or a closed tab asks first while there are unsaved edits.
+  useUnsavedChanges(dirty);
 
   const [notice, setNotice] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);

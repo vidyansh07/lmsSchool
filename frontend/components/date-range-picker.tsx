@@ -19,6 +19,7 @@ import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { localIsoDate } from '@/lib/format';
 
 export interface DateRange {
   start: string;
@@ -35,7 +36,9 @@ export type DateRangePresetId =
   | 'custom';
 
 function toIsoDay(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  // Local, not UTC: "This month" built at local midnight on the 1st would
+  // otherwise start on the last day of the previous month in India.
+  return localIsoDate(date);
 }
 
 function startOfWeek(date: Date): Date {

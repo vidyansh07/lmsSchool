@@ -28,7 +28,7 @@ describe('BulkActionsBar', () => {
         actions={[]}
       />,
     );
-    expect(screen.getByText('Select all 4000 matching this filter')).toBeInTheDocument();
+    expect(screen.getByText('Select all 4,000 rows matching this filter')).toBeInTheDocument();
   });
 
   it('does not offer "select all matching" when the page already covers everything', () => {
@@ -57,7 +57,7 @@ describe('BulkActionsBar', () => {
       />,
     );
 
-    await user.click(screen.getByText('Select all 4000 matching this filter'));
+    await user.click(screen.getByText('Select all 4,000 rows matching this filter'));
     expect(onSelectAllMatching).toHaveBeenCalledOnce();
   });
 
@@ -65,14 +65,14 @@ describe('BulkActionsBar', () => {
     render(
       <BulkActionsBar
         selectedCount={20}
-        totalMatchingCount={4000}
+        totalMatchingCount={400}
         selectAllMatching
         onClear={vi.fn()}
         actions={[]}
         itemNoun="student"
       />,
     );
-    expect(screen.getByText('All 4,000 students matching the current filter are selected')).toBeInTheDocument();
+    expect(screen.getByText('All 400 students matching the current filter are selected')).toBeInTheDocument();
     expect(screen.getByText(/apply to every matching row/)).toBeInTheDocument();
   });
 
@@ -109,5 +109,22 @@ describe('BulkActionsBar', () => {
       />,
     );
     expect(screen.getByRole('button', { name: 'Archive' })).toBeDisabled();
+  });
+
+  it('says up front when "all matching" is more than one change may touch, and holds the actions', () => {
+    render(
+      <BulkActionsBar
+        selectedCount={20}
+        totalMatchingCount={1114}
+        selectAllMatching
+        onClear={vi.fn()}
+        actions={[{ id: 'resend', label: 'Resend invitations', onClick: vi.fn() }]}
+      >
+        <button type="button">Export all matching</button>
+      </BulkActionsBar>,
+    );
+    expect(screen.getByText(/at most 500 rows at once/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resend invitations' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Export all matching' })).toBeEnabled();
   });
 });

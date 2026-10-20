@@ -356,6 +356,11 @@ class Capability(models.TextChoices):
     # change it. Configuration rung, admin/superadmin only
     # (`PERMISSION_CATALOG.md` row, phase 14).
     AUTOMATION_MANAGE = "automation.manage", _("Build and manage automation rules")
+    # Connections to other systems: API keys for leads coming in (Meritto, a
+    # website form), webhooks for events going out. Configuration rung,
+    # admin/superadmin only — a key creates enquiries without a person
+    # behind it, and a webhook sends data out of the institution.
+    INTEGRATION_MANAGE = "integration.manage", _("Manage API keys and webhooks")
 
     # --- Communication (ERP Phase 19 builds the templates/Delivery model
     # this eventually sends through; Phase 14 needs the capability itself
@@ -511,6 +516,7 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.FORM_MANAGE,
         Capability.ACTIVITY_TYPE_MANAGE,
         Capability.AUTOMATION_MANAGE,
+        Capability.INTEGRATION_MANAGE,
         # Template authoring and approval (Phase 19): superadmin/admin only,
         # per the catalog — a manager or counsellor may *send* through a
         # published template (`communication.send`) but not author or
@@ -718,10 +724,16 @@ def allowed_role_transitions(actor, target) -> tuple[str, ...]:
     candidates = tuple(STAFF_ROLE_FAMILY) if target.role in STAFF_ROLE_FAMILY else (target.role,)
     # Preserve declaration order instead of exposing a frozenset's arbitrary
     # order to the select control.
+    # A centre-bound role is not offered to an account with no centre: the
+    # service refuses it until the account is placed (see `update_user`).
+    centreless = getattr(target, "branch_id", None) is None
+    centre_free = (UserRole.SUPERADMIN, UserRole.ADMIN)
     return tuple(
         role
         for role, _label in UserRole.choices
-        if role in candidates and (role == target.role or can_grant_role(actor, role))
+        if role in candidates
+        and (role == target.role or can_grant_role(actor, role))
+        and (role == target.role or not centreless or role in centre_free)
     )
 
 

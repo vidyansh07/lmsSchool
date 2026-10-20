@@ -7,6 +7,7 @@ from typing import Any
 from django.db import transaction
 
 from apps.accounts.models import User, UserRole
+from apps.accounts.roles import can_administer
 from apps.accounts.services import create_user, resolve_branch_for_new_record
 from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
@@ -74,6 +75,12 @@ def update_trainer_profile(
     ``allowed_fields`` is derived from the caller's authorization level, never
     from the request body, so a trainer cannot widen it by sending extra keys.
     """
+    if actor.pk != profile.user_id and not can_administer(actor, profile.user):
+        # Holding `trainer.update_any` is the capability; the ladder is the
+        # reach. A manager may change a trainer's availability, not a peer
+        # manager's teaching profile or an administrator's leftover one.
+        raise AuthorityError({"trainer": ["You do not have authority over this account."]})
+
     rejected = sorted(set(fields) - set(allowed_fields))
     if rejected:
         raise ApplicationError(
@@ -116,6 +123,13 @@ def get_or_create_profile_for(user: User, *, actor: User | None = None) -> Train
     if profile is not None:
         return profile
     with transaction.atomic():
+        # Two first requests at once (two tabs opening `/trainers/me/`) would
+        # both see no profile and the second create would hit the one-to-one
+        # constraint as a 500. The account row is the lock both must take.
+        User.objects.select_for_update().filter(pk=user.pk).first()
+        profile = TrainerProfile.objects.filter(user=user).first()
+        if profile is not None:
+            return profile
         profile = TrainerProfile.objects.create(
             user=user, trainer_id=next_trainer_id(), branch=user.branch
         )
@@ -146,6 +160,8 @@ def ensure_teaching_profile(*, user: User, actor: User) -> TrainerProfile:
         raise ApplicationError({"user_id": ["Only a trainer or a manager can teach a batch."]})
     if not user.is_active:
         raise ApplicationError({"user_id": ["That account is not active."]})
+    # Serialised on the account row, for the reason in `get_or_create_profile_for`.
+    User.objects.select_for_update().filter(pk=user.pk).first()
     existing = TrainerProfile.objects.filter(user=user).first()
     if existing is not None:
         return existing

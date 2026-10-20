@@ -23,6 +23,9 @@ of the listed keys; anything else is refused when the rule is saved.
 | ENQUIRY_STAGE_CHANGED | any change of an enquiry's stage (a person, a follow-up form, a call's form, or `update_enquiry` one depth deeper) | enquiry.*, including enquiry.previous_stage |
 | ENQUIRY_UPDATED | any change to an enquiry | enquiry.*, including enquiry.changed (list of field names) |
 | FORM_SUBMITTED | `forms.services.submit_assignment` (on commit) — a form sent to someone was submitted, or someone filled one in directly | submission.form (slug), submission.submitted_by_role, submission.self_filled, submission.on_time, submission.from_automation, submission.assigned_to, submission.requested_by, submission.id, form.<key> for every answer-carrying field, student.* when the form is about a student |
+| FEE_PAYMENT_RECORDED | `fees.services.record_payment` (on commit; not while seeding) | payment.id, payment.amount, payment.method, payment.receipt_number, payment.is_first, payment.recorded_by_role, fee.*, student.* |
+| FEE_INSTALMENT_DUE | beat `fees.sweep_instalments` (08:00 daily) for each unpaid instalment due in the next 7 days; once per instalment per day | instalment.days_until, instalment.*, fee.*, student.* |
+| FEE_INSTALMENT_OVERDUE | beat `fees.sweep_instalments` (08:00 daily) for each unpaid instalment up to 60 days late; once per instalment per day | instalment.days_overdue, instalment.*, fee.*, student.* |
 
 `student.*` always means: id, name, batch, branch, trainer (user id),
 counsellor (user id of `created_by` on the profile), risk_level.
@@ -34,7 +37,12 @@ present on the three enquiry triggers, and on `ACTIVITY_COMPLETED`,
 `ACTIVITY_OVERDUE` and `FORM_SUBMITTED` when the activity or form is about an
 enquiry.
 
-The builder picks a **record** (Enquiry, Activity, Form, Student) and then one
+`fee.*` means: id, course, batch, payable, paid, balance, status, is_overdue,
+discount_percent, has_discount — the fee as it stands. `instalment.*` means:
+id, sequence, count, amount, balance (what is still owed on it), due_on.
+Amounts are whole rupees where they are whole.
+
+The builder picks a **record** (Enquiry, Activity, Form, Student, Fee) and then one
 of its events — the Meritto workflow shape — but a rule stores only the
 trigger.
 
@@ -101,6 +109,13 @@ Every seeded rule can be paused from the builder; none is locked.
 | Book a demo class for an interested enquiry | ENQUIRY_STAGE_CHANGED | enquiry.stage eq interested | create_activity(demo-class, enquiry_owner, planned in 24 h, due 3 d) |
 | Follow up an unanswered call next day | ACTIVITY_COMPLETED | activity.type eq enquiry-call; form.call_status in not_answered, busy, switched_off | create_activity(enquiry-call, same_assignee, due 1 d) |
 | Tell the manager about a lost enquiry | ENQUIRY_STAGE_CHANGED | enquiry.stage eq not_interested | send_notification(manager, form.submitted, "Enquiry lost: {{enquiry.full_name}}") |
+
+### Fee rules seeded as drafts (`automation.0009`)
+
+| Name | Trigger | Conditions | Actions |
+| --- | --- | --- | --- |
+| Remind the student 3 days before an instalment | FEE_INSTALMENT_DUE | instalment.days_until eq 3 | send_notification(student, fee.reminder, "Instalment {{instalment.sequence}} is due on {{instalment.due_on}}") |
+| Follow up an instalment a week overdue | FEE_INSTALMENT_OVERDUE | instalment.days_overdue eq 7 | create_activity(follow-up, counsellor, due 1 d, "Fee overdue: call {{student.name}}") |
 
 ## Builder screen contract (see DESIGN_DECISIONS §Automation Builder)
 

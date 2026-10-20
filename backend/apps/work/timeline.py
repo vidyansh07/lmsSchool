@@ -353,7 +353,9 @@ def _attendance_day_events(user, student, since, until, cursor_bound, limit) -> 
                 kind="attendance_day",
                 title="Attendance",
                 summary=summary,
-                href=f"/manage/students/attendance?student={student.pk}&date={day.isoformat()}",
+                # The student's own record, Enrolment tab, where attendance per
+                # course is read; there is no per-day attendance screen.
+                href=f"/students/{student.pk}?tab=enrollment",
                 actor=None,
             )
         )

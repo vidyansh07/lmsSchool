@@ -22,6 +22,9 @@ const setNextDue = vi.hoisted(() => vi.fn());
 const setInstallments = vi.hoisted(() => vi.fn());
 const voidPayment = vi.hoisted(() => vi.fn());
 const getFeeHistory = vi.hoisted(() => vi.fn());
+const emailReceipt = vi.hoisted(() => vi.fn());
+const emailStatement = vi.hoisted(() => vi.fn());
+const listFeeEmails = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/fees', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/fees')>()),
@@ -31,6 +34,9 @@ vi.mock('@/lib/fees', async (importOriginal) => ({
   setInstallments,
   voidPayment,
   getFeeHistory,
+  emailReceipt,
+  emailStatement,
+  listFeeEmails,
 }));
 
 function payment(overrides: Partial<FeePayment> = {}): FeePayment {
@@ -65,6 +71,7 @@ function plan(overrides: Partial<FeePlan> = {}): FeePlan {
     batch_name: 'Morning batch',
     agreed_amount: '12000.00',
     discount_amount: '2000.00',
+    discount_percent: null,
     discount_reason: 'Referral',
     payable: '10000.00',
     paid: '1000.00',
@@ -160,6 +167,16 @@ describe('describeHistory', () => {
     ).toBe('Agreed ₹12,000, less ₹2,000 (Referral).');
     expect(
       describeHistory(
+        entry('fee.plan.set', {
+          agreed_amount: '12000.00',
+          discount_amount: '1200.00',
+          discount_percent: '10.00',
+          discount_reason: 'Referral',
+        }),
+      ),
+    ).toBe('Agreed ₹12,000, less 10% (₹1,200) (Referral).');
+    expect(
+      describeHistory(
         entry('fee.plan.updated', {
           changes: { agreed_amount: { from: '12000.00', to: '11000.00' } },
         }),
@@ -209,8 +226,10 @@ describe('FeeLedger', () => {
     expect(screen.getByText('GRS-R-00002')).toBeInTheDocument();
     expect(screen.getByText('Voided')).toBeInTheDocument();
     expect(screen.getByText(/Entered twice/)).toBeInTheDocument();
-    // Nothing to click for a reader.
+    // Nothing to click for a reader, but the statement is theirs to download.
     expect(screen.queryByRole('button', { name: /record payment/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /email statement/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /fee statement \(pdf\)/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^void$/i })).not.toBeInTheDocument();
   });
 
@@ -365,6 +384,54 @@ describe('FeeLedger', () => {
     expect(await within(dialog).findByText('Only ₹9,000 is still owed.')).toBeInTheDocument();
   });
 
+  it('says why a payment was refused when the reason is not about a field', async () => {
+    const { ApiError } = await import('@/lib/api');
+    recordPayment.mockRejectedValue(
+      new ApiError(403, 'permission_denied', 'You cannot record payments for this centre.', 'r'),
+    );
+    render(
+      <FeeLedger
+        summary={summary([plan()])}
+        enrollments={[]}
+        mayManage
+        isLoading={false}
+        error={null}
+        onChanged={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /record payment/i }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/amount/i), { target: { value: '500' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /record payment/i }));
+    expect(
+      await within(dialog).findByText('You cannot record payments for this centre.'),
+    ).toBeInTheDocument();
+  });
+
+  it('warns that a timed-out payment may already be saved and refreshes the ledger', async () => {
+    const { ApiError } = await import('@/lib/api');
+    recordPayment.mockRejectedValue(
+      new ApiError(0, 'timeout', 'The request timed out.', ''),
+    );
+    const onChanged = vi.fn();
+    render(
+      <FeeLedger
+        summary={summary([plan()])}
+        enrollments={[]}
+        mayManage
+        isLoading={false}
+        error={null}
+        onChanged={onChanged}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /record payment/i }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/amount/i), { target: { value: '500' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /record payment/i }));
+    expect(await within(dialog).findByText(/may already be saved/i)).toBeInTheDocument();
+    expect(onChanged).toHaveBeenCalled();
+  });
+
   it('voids a payment with a reason, never without one', async () => {
     voidPayment.mockResolvedValue(payment({ is_voided: true }));
     render(
@@ -385,6 +452,85 @@ describe('FeeLedger', () => {
     });
     fireEvent.click(confirm);
     await waitFor(() => expect(voidPayment).toHaveBeenCalledWith('pay-1', 'Wrong student'));
+  });
+
+  it('mails the statement, resends a receipt and lists what was sent', async () => {
+    emailStatement.mockResolvedValue({ id: 'm1', to_email: 'sam@example.test', status: 'pending' });
+    emailReceipt.mockResolvedValue({ id: 'm2', to_email: 'sam@example.test', status: 'pending' });
+    listFeeEmails.mockResolvedValue([
+      {
+        id: 'm2',
+        kind: 'fee_receipt',
+        receipt_number: 'GRS-R-00001',
+        to_email: 'sam@example.test',
+        subject: 'Receipt GRS-R-00001',
+        status: 'sent',
+        attempts: 1,
+        last_error: '',
+        sent_at: '2026-10-17T10:00:00Z',
+        created_at: '2026-10-17T10:00:00Z',
+      },
+      {
+        id: 'm1',
+        kind: 'fee_statement',
+        receipt_number: null,
+        to_email: 'sam@example.test',
+        subject: 'Your fee',
+        status: 'failed',
+        attempts: 1,
+        last_error: 'Recipient not verified',
+        sent_at: null,
+        created_at: '2026-10-17T09:00:00Z',
+      },
+    ]);
+    render(
+      <FeeLedger
+        summary={summary([plan()])}
+        enrollments={[]}
+        mayManage
+        isLoading={false}
+        error={null}
+        onChanged={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('link', { name: /fee statement \(pdf\)/i })).toHaveAttribute(
+      'href',
+      expect.stringContaining('/api/v1/fees/enrollments/enrol-1/statement/'),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /email statement/i }));
+    expect(await screen.findByText(/statement is on its way to sam@example.test/i)).toBeInTheDocument();
+    expect(emailStatement).toHaveBeenCalledWith('enrol-1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Email receipt GRS-R-00001 to the student' }));
+    expect(await screen.findByText(/Receipt GRS-R-00001 is on its way/)).toBeInTheDocument();
+    expect(emailReceipt).toHaveBeenCalledWith('pay-1');
+
+    fireEvent.click(screen.getByRole('button', { name: /mails sent to the student/i }));
+    const log = await screen.findByRole('list', { name: 'Fee mails' });
+    expect(within(log).getByText('Receipt GRS-R-00001')).toBeInTheDocument();
+    expect(within(log).getByText('Sent')).toBeInTheDocument();
+    expect(within(log).getByText('Not delivered yet')).toBeInTheDocument();
+    expect(within(log).getByText(/Recipient not verified/)).toBeInTheDocument();
+  });
+
+  it('says why a statement could not be mailed', async () => {
+    const { ApiError } = await import('@/lib/api');
+    emailStatement.mockRejectedValue(
+      new ApiError(400, 'invalid', 'This student has no active email address to send to.', ''),
+    );
+    render(
+      <FeeLedger
+        summary={summary([plan()])}
+        enrollments={[]}
+        mayManage
+        isLoading={false}
+        error={null}
+        onChanged={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /email statement/i }));
+    expect(await screen.findByText(/no active email address/i)).toBeInTheDocument();
   });
 
   it('offers to set the fee on an enrolment that has none', async () => {
@@ -410,6 +556,49 @@ describe('FeeLedger', () => {
       expect.objectContaining({
         agreed_amount: '15000',
         discount_amount: 0,
+        discount_percent: null,
+      }),
+    );
+  });
+
+  it('takes a discount as a percentage by default and shows the rupees', async () => {
+    setEnrollmentFee.mockClear();
+    setEnrollmentFee.mockResolvedValue({});
+    render(
+      <FeeLedger
+        summary={{ ...summary([]), plans: [] }}
+        enrollments={[enrollment()]}
+        mayManage
+        isLoading={false}
+        error={null}
+        onChanged={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /set the fee/i }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText(/course fee/i), { target: { value: '20000' } });
+    fireEvent.change(within(dialog).getByLabelText('Discount (%)'), { target: { value: '15' } });
+    expect(within(dialog).getByText('₹3,000 off the fee.')).toBeInTheDocument();
+    expect(within(dialog).getByText('₹17,000')).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(/reason for the discount/i), {
+      target: { value: 'Scholarship' },
+    });
+
+    // Switching to rupees carries the figure across.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rupees' }));
+    expect(within(dialog).getByLabelText('Discount (₹)')).toHaveValue(3000);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Percentage of the fee' }));
+    expect(within(dialog).getByLabelText('Discount (%)')).toHaveValue(15);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /save fee/i }));
+    await waitFor(() => expect(setEnrollmentFee).toHaveBeenCalledOnce());
+    expect(setEnrollmentFee).toHaveBeenCalledWith(
+      'enrol-2',
+      expect.objectContaining({
+        agreed_amount: '20000',
+        discount_percent: '15',
+        discount_amount: 0,
+        discount_reason: 'Scholarship',
       }),
     );
   });

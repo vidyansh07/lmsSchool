@@ -20,6 +20,7 @@ from apps.accounts.models import User, UserRole
 from apps.accounts.roles import can_administer
 from apps.accounts.services import set_user_active, transition_user_role, update_user
 from apps.common.exceptions import ApplicationError, AuthorityError
+from tests.conftest import stepped_up
 
 PASSWORD = "Str0ng-Passphrase!42"
 
@@ -404,7 +405,7 @@ def test_a_superadmin_configures_an_administrator_over_the_api(api_client_no_csr
     )
 
     assert response.status_code == 200, response.json()
-    role_response = api_client_no_csrf.post(
+    role_response = stepped_up(api_client_no_csrf).post(
         f"/api/v1/users/{admin.id}/role-transition/",
         {
             "role": UserRole.MANAGER,
@@ -525,7 +526,8 @@ def test_an_administrator_can_send_a_reset_link_but_never_learns_it(api_client_n
         format="json",
     )
 
-    assert response.status_code == 202
+    assert response.status_code == 200
+    assert response.json()["sent"] is True
     assert len(mailoutbox) == 1
     assert mailoutbox[0].to == [target.email]
     # The link went to the account holder; the response carries nothing.
@@ -571,3 +573,92 @@ def test_reading_an_account_history_needs_the_audit_capability(api_client_no_csr
 
     api_client_no_csrf.force_login(manager)
     assert api_client_no_csrf.get(f"/api/v1/users/{target.id}/audit/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_an_administrator_cannot_read_or_end_a_superadmins_sessions(api_client_no_csrf, admin_user):
+    """Sessions follow the ladder, not only the capability and the centre."""
+    from apps.accounts.sessions import UserSession
+
+    boss = User.objects.create_user(
+        email="root@example.test",
+        password="Sup3r-Str0ng-Pass!42",
+        first_name="Root",
+        role=UserRole.SUPERADMIN,
+    )
+    boss_client = api_client_no_csrf.__class__()
+    signed_in = boss_client.post(
+        "/api/v1/auth/login/",
+        {"email": boss.email, "password": "Sup3r-Str0ng-Pass!42"},
+        format="json",
+    )
+    assert signed_in.status_code == 200, signed_in.content
+
+    api_client_no_csrf.force_login(admin_user)
+    stepped_up(api_client_no_csrf)
+    listed = api_client_no_csrf.get(f"/api/v1/users/{boss.pk}/sessions/")
+    assert listed.status_code == 403, listed.content
+
+    session = UserSession.objects.filter(user=boss).first()
+    assert session is not None
+    revoked = api_client_no_csrf.delete(f"/api/v1/users/{boss.pk}/sessions/{session.pk}/")
+    assert revoked.status_code == 403
+    session.refresh_from_db()
+    assert session.revoked_at is None
+
+
+@pytest.mark.django_db
+def test_scope_grants_follow_the_ladder_and_are_never_self_service(
+    api_client_no_csrf, admin_user, manager_user, batch
+):
+    api_client_no_csrf.force_login(manager_user)
+    own = api_client_no_csrf.post(
+        f"/api/v1/users/{manager_user.pk}/scope-grants/", {"batch": str(batch.pk)}, format="json"
+    )
+    assert own.status_code == 403, own.content
+
+    upward = api_client_no_csrf.post(
+        f"/api/v1/users/{admin_user.pk}/scope-grants/", {"batch": str(batch.pk)}, format="json"
+    )
+    assert upward.status_code in (403, 404), upward.content
+
+    api_client_no_csrf.force_login(admin_user)
+    downward = api_client_no_csrf.post(
+        f"/api/v1/users/{manager_user.pk}/scope-grants/", {"batch": str(batch.pk)}, format="json"
+    )
+    assert downward.status_code == 201, downward.content
+
+
+@pytest.mark.django_db
+def test_a_centreless_account_is_placed_before_it_gets_a_centre_bound_role(branch):
+    """A superadmin has no centre; made a manager as they are, they would be
+    bounded to nothing — every screen empty, nobody to administer."""
+    from apps.accounts.services import move_user_to_branch
+    from apps.common.exceptions import ConflictError
+
+    boss = User.objects.create_user(
+        email="root-one@example.test",
+        password="Sup3r-Str0ng-Pass!42",
+        first_name="Root",
+        role=UserRole.SUPERADMIN,
+    )
+    other = User.objects.create_user(
+        email="root-two@example.test",
+        password="Sup3r-Str0ng-Pass!42",
+        first_name="Second",
+        role=UserRole.SUPERADMIN,
+    )
+    with pytest.raises(ConflictError, match="centre"):
+        transition_user_role(user=other, actor=boss, role=UserRole.MANAGER, reason="Steps back.")
+    other.refresh_from_db()
+    assert other.role == UserRole.SUPERADMIN
+
+    # An unbounded role needs no centre.
+    transition_user_role(user=other, actor=boss, role=UserRole.ADMIN, reason="Steps back a little.")
+    other.refresh_from_db()
+    assert other.role == UserRole.ADMIN
+
+    move_user_to_branch(user=other, branch=branch, actor=boss, reason="Runs Jaipur now.")
+    transition_user_role(user=other, actor=boss, role=UserRole.MANAGER, reason="Runs Jaipur now.")
+    other.refresh_from_db()
+    assert other.role == UserRole.MANAGER

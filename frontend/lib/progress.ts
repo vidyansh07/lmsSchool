@@ -90,7 +90,7 @@ export async function reopenCompletion(
 // --- Certificates ----------------------------------------------------------
 
 export async function listCertificates(
-  query: { status?: string; search?: string; page?: number } = {},
+  query: { status?: string; search?: string; page?: number; student?: string } = {},
 ): Promise<Paginated<Certificate>> {
   return apiFetch<Paginated<Certificate>>(`/api/v1/certificates/${queryString(query)}`);
 }

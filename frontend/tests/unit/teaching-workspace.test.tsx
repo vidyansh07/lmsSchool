@@ -398,7 +398,79 @@ describe('ClassWorkspace', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Finish class' })).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: 'Finish class' }));
 
+    // Ada was never marked: nothing is sent until the trainer says so.
+    expect(await screen.findByRole('alertdialog')).toHaveTextContent('1 student is not marked');
+    expect(order).toEqual([]);
+    await user.click(screen.getByRole('button', { name: 'Mark absent and finish' }));
+
     await waitFor(() => expect(order).toEqual(['register', 'report']));
+    expect(markAttendance.mock.calls[0]?.[1]).toEqual([
+      expect.objectContaining({ enrollment_id: 'e1', status: 'absent' }),
+    ]);
+    // The report's absent count agrees with the register it was sent with.
+    expect(startDsr.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ present_count: 0, absent_count: 1, student_count: 1 }),
+    );
+  });
+
+  it('going back from the unmarked warning sends nothing', async () => {
+    const user = userEvent.setup();
+    const state = fixtures({
+      entries: [registerEntry({ enrollment_id: 'e1', full_name: 'Ada Lovelace' })],
+    });
+    wireHappyPath(state);
+
+    render(<ClassWorkspace sessionId="session-1" />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Finish class' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Finish class' }));
+    await user.click(await screen.findByRole('button', { name: 'Go back and mark' }));
+
+    expect(markAttendance).not.toHaveBeenCalled();
+    expect(startDsr).not.toHaveBeenCalled();
+  });
+
+  it('submits the report the autosave already started instead of failing on 409', async () => {
+    const user = userEvent.setup();
+    const state = fixtures();
+    wireHappyPath(state);
+    startDsr.mockRejectedValue(
+      new ApiError(409, 'conflict', 'Conflict.', 'req-9', {
+        session: ['A daily status report already exists for this class.'],
+      }),
+    );
+    // Loads as not-yet-started; by the time Finish runs, the autosave has started it.
+    getSessionDsr
+      .mockResolvedValueOnce({ ...state.dsr, id: null })
+      .mockResolvedValue({ ...state.dsr, id: 'dsr-autosaved' });
+    updateDsr.mockResolvedValue({ ...state.dsr, id: 'dsr-autosaved', status: 'submitted', is_editable: false });
+
+    render(<ClassWorkspace sessionId="session-1" />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Finish class' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Finish class' }));
+    const confirm = screen.queryByRole('button', { name: 'Mark absent and finish' });
+    if (confirm) await user.click(confirm);
+
+    await waitFor(() =>
+      expect(updateDsr).toHaveBeenCalledWith('dsr-autosaved', expect.objectContaining({ submit: true })),
+    );
+    expect(startDsr).toHaveBeenCalled();
+  });
+
+  it('says why the report was refused when the reason is not about one of its fields', async () => {
+    const user = userEvent.setup();
+    const state = fixtures();
+    wireHappyPath(state);
+    startDsr.mockRejectedValue(
+      new ApiError(403, 'permission_denied', 'You no longer teach this batch.', 'req-10'),
+    );
+
+    render(<ClassWorkspace sessionId="session-1" />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Finish class' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Finish class' }));
+    const confirm = screen.queryByRole('button', { name: 'Mark absent and finish' });
+    if (confirm) await user.click(confirm);
+
+    expect(await screen.findByText('You no longer teach this batch.')).toBeInTheDocument();
   });
 
   it('stops before writing the report if the register fails to save', async () => {
