@@ -76,6 +76,23 @@ export function workspaceHomeForUser(user: {
       return '/dashboard';
   }
 
+  // Any other role — a placement officer, or anything an administrator
+  // composes out of permissions. The switch above is keyed on names this file
+  // knows, so such a person used to land on their own profile page: a correct
+  // answer to "where can you certainly go?" and a useless answer to "where do
+  // you work?". Walk the same priorities by capability instead, widest job
+  // first, and fall back to the profile only when they really hold nothing.
+  for (const [capability, home] of [
+    ['enquiry.view_any', '/enquiries'],
+    ['student.view_any', '/admin/students'],
+    ['report.view_any', '/analytics'],
+    ['trainer.view_any', '/manage/trainers'],
+    ['fee.view_any', '/fees'],
+    ['user.view_any', '/admin/users'],
+  ] as const) {
+    if (can(capability)) return home;
+  }
+
   return '/profile';
 }
 

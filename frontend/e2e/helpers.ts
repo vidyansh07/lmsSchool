@@ -47,7 +47,10 @@ export async function signIn(page: Page, email: string, password = DEMO_PASSWORD
 
     await page.goto('/login');
     await page.getByLabel('Email').fill(email);
-    await page.getByLabel('Password').fill(password);
+    // By role, not by label. The field and its show/hide button both carry
+    // "Password" in their accessible names, which is correct for a screen
+    // reader and ambiguous for a label query.
+    await page.getByRole('textbox', { name: 'Password' }).fill(password);
     await page.getByRole('button', { name: /^sign in$/i }).click();
 
     const signedIn = await page

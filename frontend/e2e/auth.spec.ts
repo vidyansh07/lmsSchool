@@ -27,7 +27,9 @@ test.describe('Authentication', () => {
   }) => {
     await page.goto('/login');
     await page.getByLabel('Email').fill(ADMIN);
-    await page.getByLabel('Password').fill('definitely-the-wrong-password');
+    await page
+      .getByRole('textbox', { name: 'Password' })
+      .fill('definitely-the-wrong-password');
     await page.getByRole('button', { name: /^sign in$/i }).click();
 
     // Next renders its own aria-live route announcer with role="alert", so the

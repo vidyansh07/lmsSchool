@@ -50,18 +50,44 @@
      Page is a cool off-white, cards are true white. That difference is what
      makes a screen read as layered at a glance instead of needing the eye to
      hunt for a hairline. */
-  --color-canvas: oklch(98.4% 0.003 247.9); /* #F8FAFC */
+  /* Light, but not white. 95.5% was too far: it read as dirty grey and dulled
+     every colour sitting on it. 97.6% keeps the page clean and still gives the
+     white highlight of a raised surface something to show against. */
+  --color-canvas: oklch(97.6% 0.005 250);
   --color-surface: oklch(100% 0 89.9); /* #FFFFFF */
-  --color-sunken: oklch(96.8% 0.007 247.9); /* #F1F5F9 - toolbars, table head, tracks */
+  /* Below the canvas, not above it. A sunken strip was lighter than the page
+     once the page darkened, so a table head floated instead of recessing. */
+  --color-sunken: oklch(95.8% 0.007 250);
   --color-line: oklch(92.9% 0.013 255.5); /* #E2E8F0 - hairlines, input borders */
   --color-line-strong: oklch(86.9% 0.02 252.9); /* #CBD5E1 - hover borders, dividers */
 
   /* ---- The rail ---------------------------------------------------------
-     The one dark surface in the product. Warm charcoal rather than a dark
-     neutral, so it belongs to the orange instead of fighting it. */
-  --color-rail: oklch(23.9% 0.029 51.8); /* #2A1B12 */
-  --color-rail-fg: oklch(92.3% 0.003 48.7); /* #E7E5E4 - 13.2:1 on the rail */
-  --color-rail-active: oklch(83.7% 0.117 66.3); /* #FDBA74 - 9.9:1 on the rail */
+
+     The sidebar, now light.
+
+     It was a warm charcoal: the one dark surface in the product, framing a
+     light interface. White reads cleaner beside the pale canvas and lets the
+     module colours carry the sidebar instead of a slab of dark.
+
+     Turning it over means turning its contents over too. The old foreground
+     was a near-white that scored 13.2:1 on charcoal and scores 1.26:1 here —
+     invisible. Everything below is the light-rail half of the same set, and
+     the five companions exist because the sidebar tints itself: an active row,
+     a hover, a divider. Those used to be `white/10` and `white/5` written into
+     the markup, which is exactly why flipping one colour broke the sidebar.
+     They are tokens now, so the rail can be recoloured again from here. */
+  --color-rail: oklch(100% 0 0); /* #FFF */
+  --color-rail-fg: oklch(30% 0.02 50); /* 13.7:1 on the rail */
+  /* Secondary rail text. A dedicated token rather than `text-rail-fg/60`,
+     which lands at 3.9:1 on white — under the 4.5 text needs. */
+  --color-rail-fg-muted: oklch(53.5% 0.035 256.8); /* 5.2:1 on the rail */
+  --color-rail-active: oklch(47% 0.143 37.3); /* 7.3:1 on the rail */
+  /* The active row's own background, and the hover beneath it. */
+  --color-rail-selected: oklch(97.1% 0.018 59.5);
+  --color-rail-hover: oklch(96.5% 0.004 250);
+  /* Dividers inside the sidebar, and the edge that separates a white rail from
+     a white card beside it. */
+  --color-rail-line: oklch(92.9% 0.013 255.5);
 
   /* ---- Ink --------------------------------------------------------------
      Three weights, all of which clear AA on canvas, surface and sunken.
@@ -70,7 +96,7 @@
      and 4.95:1 on the sunken band a table head sits on. */
   --color-ink: oklch(20.8% 0.04 265.8); /* #0F172A - 17.9:1 on surface */
   --color-ink-muted: oklch(47.9% 0.043 257.4); /* #4E5E76 - secondary text */
-  --color-ink-faint: oklch(52.3% 0.038 256.8); /* #5C6B80 - column heads, meta */
+  --color-ink-faint: oklch(53.5% 0.035 256.8); /* #5C6B80 - column heads, meta */
 
   /* ---- Action -----------------------------------------------------------
      A darkened orange, because the brand orange cannot carry a white label.
@@ -101,9 +127,9 @@
   --color-success-fg: oklch(100% 0 89.9);
   --color-success-wash: oklch(97.9% 0.021 166.1); /* #ECFDF5 */
 
-  --color-warning: oklch(55.5% 0.146 49); /* #B45307 - 5.02:1 */
+  --color-warning: oklch(50.5% 0.125 80); /* #B45307 - 5.02:1 */
   --color-warning-fg: oklch(100% 0 89.9);
-  --color-warning-wash: oklch(96.2% 0.058 95.6); /* #FEF3C7 */
+  --color-warning-wash: oklch(96.4% 0.05 88); /* #FEF3C7 */
 
   --color-danger: oklch(50.5% 0.19 27.5); /* #B91C1C - 6.47:1 */
   --color-danger-fg: oklch(100% 0 89.9);
@@ -130,6 +156,52 @@
      repaint every chart in the product for a cosmetic gain. It is also why
      `chart-colors.ts` warns past five series on one plot: the fix for a
      seven-series chart is small multiples, not a ninth colour. */
+  /* ---- Module accents --------------------------------------------------
+
+     One colour per area of the business, not one colour for the whole product.
+
+     An ERP is six jobs wearing one coat. A counsellor working a lead, a trainer
+     taking a register and an accountant chasing a payment were all looking at
+     the same orange, so nothing on screen told them which part of the system
+     they were in. These give each area an identity, and the sidebar, the
+     section headings and the stat tiles carry it.
+
+     Every one clears 3:1 against both the page and a card, so each works as an
+     icon, a rule or a boundary -- and each clears 4.5:1, so each may also carry
+     small text. They are spread around the wheel on purpose: the nearest two
+     are 45 degrees apart, which stays distinguishable for the most common kinds
+     of colour blindness, and none of them sits near the brand orange at 38.
+
+     Colour is never the only signal. Each area also has its own icon and its
+     own heading; the colour is the thing you notice from across the room. */
+  --color-academic: oklch(50% 0.14 255); /* courses, batches, classes */
+  --color-admissions: oklch(50% 0.19 300); /* enquiries, counselling */
+  --color-fees: oklch(50% 0.11 150); /* money in */
+  --color-people: oklch(50% 0.09 195); /* students, trainers, staff */
+  --color-placement: oklch(50% 0.13 75); /* employers, openings */
+  --color-reports: oklch(50% 0.18 345); /* analytics, exports */
+
+  /* The same six on the sidebar.
+
+     These were lightened to 78% when the rail was charcoal. On a white rail
+     that set scores under 2:1, so they take the ordinary values back: the
+     sidebar and a card are now the same colour, so a heading on one needs
+     exactly what it needs on the other. They stay as separate tokens because
+     the rail is the thing most likely to be recoloured again, and when it is,
+     this is the one place that has to change. */
+  --color-academic-rail: oklch(50% 0.14 255);
+  --color-admissions-rail: oklch(50% 0.19 300);
+  --color-fees-rail: oklch(50% 0.11 150);
+  --color-people-rail: oklch(50% 0.09 195);
+  --color-placement-rail: oklch(50% 0.13 75);
+  --color-reports-rail: oklch(50% 0.18 345);
+
+  /* The same six at wash strength, for a tinted row or a section banner. */
+  --color-academic-wash: oklch(97% 0.016 255);
+  --color-admissions-wash: oklch(97% 0.02 300);
+  --color-fees-wash: oklch(97.2% 0.016 150);
+  --color-placement-wash: oklch(97% 0.02 75);
+
   --color-chart-1: oklch(55.3% 0.174 38.4); /* #C2410B - 5.19:1 */
   --color-chart-2: oklch(50% 0.119 242.7); /* #0469A1 - 5.93:1 */
   --color-chart-3: oklch(50.8% 0.105 165.6); /* #047857 - 5.49:1 */
@@ -169,12 +241,14 @@
      12px cards, 8px controls, matching the reference. A control inside a
      card gets the smaller radius so a rounded card does not force
      everything within it to match. */
-  --radius-control: 0.5rem;
-  --radius-card: 0.75rem;
+  /* Softer than the hairline system needed. A neumorphic surface with a tight
+     corner reads as a mistake: the highlight has nowhere to travel. */
+  --radius-control: 0.625rem;
+  --radius-card: 1rem;
   /* A chart panel, and only a chart panel. Larger than a card because it is
      a 300px-tall object with whitespace inside it rather than a row in a
      dense list. */
-  --radius-panel: 1rem;
+  --radius-panel: 1.25rem;
   --radius-pill: 999px;
 
   /* Two shadows.
@@ -190,6 +264,37 @@
      and stays the default for anything that is not a plot. */
   --shadow-overlay: 0 4px 12px rgb(15 23 42 / 0.08), 0 24px 48px -16px rgb(15 23 42 / 0.22);
   --shadow-panel: 0 2px 10px -3px oklch(20.8% 0.04 265.8 / 0.06);
+
+  /* ---- Soft elevation (the neumorphic layer) ----------------------------
+
+     Neumorphism in its pure form gives a control the same colour as the page
+     and draws its edge only with two opposed shadows. That is the look, and it
+     is also why it fails accessibility review: the boundary of a button ends
+     up at roughly 1.2:1 against its background, where WCAG asks for 3:1, and
+     `tests/unit/theme-contrast.test.ts` enforces that here.
+
+     So this is the look without the fault. The two opposed shadows are real --
+     a cool shadow below-right, a white highlight above-left, which is what
+     makes a surface read as pressed out of the page -- and the hairline
+     border stays underneath them. The hairline is doing the accessibility
+     work; the shadows are doing the aesthetic work. Remove the border and the
+     contrast test fails, which is the correct outcome.
+
+     `--shadow-raised` is for a surface that sits above the page: a card, a
+     panel, a resting button.
+     `--shadow-pressed` is the same light inverted, for a surface the page is
+     pushed into: an input, a track, a button being held down. An input that
+     looks pressed and a button that looks raised is the whole grammar, and it
+     tells somebody where to type without a word of instruction. */
+  --shadow-raised:
+    6px 6px 14px -4px oklch(20.8% 0.04 265.8 / 0.1),
+    -5px -5px 12px -4px oklch(100% 0 0 / 0.9);
+  --shadow-raised-sm:
+    3px 3px 8px -3px oklch(20.8% 0.04 265.8 / 0.09),
+    -3px -3px 7px -3px oklch(100% 0 0 / 0.85);
+  --shadow-pressed:
+    inset 3px 3px 7px -2px oklch(20.8% 0.04 265.8 / 0.11),
+    inset -2px -2px 6px -2px oklch(100% 0 0 / 0.75);
 
   /* ---- Motion -----------------------------------------------------------
      One curve. Durations are literals at the call site (`duration-150`),

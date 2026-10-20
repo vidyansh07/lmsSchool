@@ -14,6 +14,7 @@
  */
 
 import { useState } from "react";
+import { PasswordInput } from '@/components/ui/input';
 
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -165,9 +166,8 @@ export function StepUpDialog({
           {!error && info ? <Alert variant="info">{info}</Alert> : null}
           {mode === "password" ? (
             <Field label="Password" htmlFor="step-up-password">
-              <Input
+              <PasswordInput
                 id="step-up-password"
-                type="password"
                 required
                 autoFocus
                 autoComplete="current-password"

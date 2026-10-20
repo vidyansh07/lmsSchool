@@ -22,11 +22,18 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: 'bg-action text-action-fg hover:bg-action-hover',
+        // Raised at rest, pressed while held. On a neumorphic surface that is
+        // the whole affordance: a button that does not sink when you push it
+        // reads as a picture of a button. `active:` is the cheapest honest
+        // feedback there is, and it costs nothing on a slow connection.
+        primary:
+          'bg-action text-action-fg shadow-raised-sm hover:bg-action-hover active:shadow-pressed',
         secondary: 'bg-sunken text-ink hover:bg-line',
-        outline: 'border border-line bg-surface text-ink hover:border-line-strong hover:bg-sunken',
+        outline:
+          'border border-line bg-surface text-ink shadow-raised-sm hover:border-line-strong hover:bg-sunken active:shadow-pressed',
         ghost: 'bg-transparent text-ink hover:bg-sunken',
-        destructive: 'bg-danger text-danger-fg hover:brightness-90',
+        destructive:
+          'bg-danger text-danger-fg shadow-raised-sm hover:brightness-90 active:shadow-pressed',
       },
       size: {
         // The visible box stays compact — this is a dense operations tool and a

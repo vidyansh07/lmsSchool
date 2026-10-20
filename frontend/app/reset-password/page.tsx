@@ -9,7 +9,7 @@ import { LoadingState } from '@/components/states';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/input';
 import { fieldErrors } from '@/lib/api';
 import { confirmPasswordReset } from '@/lib/auth';
 
@@ -82,8 +82,7 @@ function ResetPasswordForm() {
         hint="At least 12 characters, and not a common password."
         required
       >
-        <Input
-          type="password"
+        <PasswordInput
           autoComplete="new-password"
           value={newPassword}
           onChange={(event) => setNewPassword(event.target.value)}
@@ -91,8 +90,7 @@ function ResetPasswordForm() {
       </Field>
 
       <Field label="Confirm new password" htmlFor="confirmation" error={errors.confirmation} required>
-        <Input
-          type="password"
+        <PasswordInput
           autoComplete="new-password"
           value={confirmation}
           onChange={(event) => setConfirmation(event.target.value)}

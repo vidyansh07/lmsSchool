@@ -6,10 +6,16 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
   return (
     <div
       className={cn(
-        // A white card on an off-white page. The hairline draws the edge and
-        // the page tint does the lifting -- there is no card shadow, because a
-        // faint shadow *and* a border draws the same edge twice.
-        'rounded-card border border-line bg-surface',
+        // A white card pressed out of an off-white page. Two opposed shadows do
+        // the lifting -- cool below-right, a white highlight above-left -- and
+        // the hairline stays under them.
+        //
+        // The hairline is not decoration here. A card distinguished by shadow
+        // alone sits at about 1.2:1 against the page, and `theme-contrast`
+        // asks for 3:1 on anything that bounds a control. The shadows give the
+        // look; the border keeps it legible for somebody on a dim laptop in a
+        // bright room, which is most people most of the time.
+        'rounded-card border border-line bg-surface shadow-raised',
         className,
       )}
       {...props}

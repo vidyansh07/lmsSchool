@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { PasswordInput } from '@/components/ui/input';
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -106,8 +107,7 @@ export default function LoginPage() {
           error={errors.password}
           required
         >
-          <Input
-            type="password"
+          <PasswordInput
             autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}

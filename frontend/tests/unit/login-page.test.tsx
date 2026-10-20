@@ -46,7 +46,7 @@ function fillCredentials() {
   fireEvent.change(screen.getByLabelText("Email", { exact: false }), {
     target: { value: "a@b.test" },
   });
-  fireEvent.change(screen.getByLabelText("Password", { exact: false }), {
+  fireEvent.change(screen.getByLabelText("Password", { exact: false, selector: "input" }), {
     target: { value: "correct-password" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Sign in" }));

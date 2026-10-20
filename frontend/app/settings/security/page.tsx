@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/input";
 import { fieldErrors } from "@/lib/api";
 import { changePassword } from "@/lib/auth";
 
@@ -78,8 +78,7 @@ function SecuritySettings() {
               error={errors.current_password}
               required
             >
-              <Input
-                type="password"
+              <PasswordInput
                 autoComplete="current-password"
                 value={currentPassword}
                 onChange={(event) => setCurrentPassword(event.target.value)}
@@ -92,8 +91,7 @@ function SecuritySettings() {
               hint="At least 12 characters, and not a common password."
               required
             >
-              <Input
-                type="password"
+              <PasswordInput
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
@@ -105,8 +103,7 @@ function SecuritySettings() {
               error={errors.confirmation}
               required
             >
-              <Input
-                type="password"
+              <PasswordInput
                 autoComplete="new-password"
                 value={confirmation}
                 onChange={(event) => setConfirmation(event.target.value)}

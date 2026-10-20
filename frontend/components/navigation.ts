@@ -78,6 +78,48 @@ export interface NavItem {
   scopedRoles?: string[];
 }
 
+/**
+ * Which module colour a sidebar group wears.
+ *
+ * An ERP is six jobs in one coat. A counsellor working a lead, a trainer taking
+ * a register and somebody chasing a payment were all looking at the same
+ * orange, so nothing on screen said which part of the system they were in.
+ *
+ * Matched on the words in the group heading rather than by giving every group
+ * an explicit colour, because the headings already say what the group is for
+ * and there are twenty-four of them across six sidebars. A heading that matches
+ * nothing gets no colour, which is the safe outcome: a group with no identity
+ * reads as neutral rather than as the wrong area.
+ *
+ * The colour is never the only signal. Every item keeps its own icon and its
+ * own label; this is the thing you recognise from across the room.
+ */
+export type ModuleAccent =
+  | "academic"
+  | "admissions"
+  | "fees"
+  | "people"
+  | "placement"
+  | "reports";
+
+const ACCENT_BY_KEYWORD: [RegExp, ModuleAccent][] = [
+  [/placement|employer|opening/i, "placement"],
+  [/admission|enquir|counsel|lead/i, "admissions"],
+  [/fee|payment|invoice|money/i, "fees"],
+  [/report|analytic|data|result/i, "reports"],
+  [/people|student|trainer|learner|staff|care/i, "people"],
+  [/academic|teach|batch|course|class|content|calendar|planning/i, "academic"],
+];
+
+/** The accent for a group heading, or undefined when nothing matches. */
+export function accentFor(title: string | undefined): ModuleAccent | undefined {
+  if (!title) return undefined;
+  for (const [pattern, accent] of ACCENT_BY_KEYWORD) {
+    if (pattern.test(title)) return accent;
+  }
+  return undefined;
+}
+
 export interface NavGroup {
   /** Absent for the first group, which needs no heading above the first link. */
   title?: string;
@@ -1105,7 +1147,27 @@ export const SUPERADMIN_NAV: NavGroup[] = [
   ...ADMIN_NAV.filter((group) => group.title && group.title !== "Institution"),
 ];
 
-/** Which role-ranked sidebar a person gets. */
+/**
+ * Which sidebar a person gets.
+ *
+ * The five named trees are curated: their grouping and order are chosen for the
+ * job that role does all day, and `isVisible` then trims each one to the
+ * capabilities the person actually holds.
+ *
+ * The fallback is the part that matters. Any other signed-in staff member — a
+ * placement officer, or any role an administrator composes out of permissions —
+ * used to fall through to the *student* sidebar, and so arrived at work with
+ * links to "My assignments" and nothing they could use. The product supports
+ * custom roles properly in the backend (`Role`, `Permission`, `ScopeGrant`) and
+ * the navigation quietly did not, which made the whole feature look broken.
+ *
+ * So an unrecognised role now gets the widest staff tree, filtered by
+ * capability. That is safe because the filter is the same one every other role
+ * goes through, and because navigation has never been the thing that grants
+ * access — the server decides on every request. A link nobody may follow is
+ * removed by `isVisible`; a link that is missing when the permission exists is
+ * the failure this fixes.
+ */
 export function navFor(role: string | undefined): NavGroup[] {
   switch (role) {
     case "superadmin":
@@ -1121,10 +1183,11 @@ export function navFor(role: string | undefined): NavGroup[] {
     case "student":
       return STUDENT_NAV_GROUPS;
     default:
-      return [{ items: STUDENT_NAV }];
+      return SUPERADMIN_NAV;
   }
 }
 
+/** Base roles that are known to be staff by name. */
 export const STAFF_ROLES = [
   "superadmin",
   "admin",
@@ -1132,6 +1195,27 @@ export const STAFF_ROLES = [
   "counsellor",
   "trainer",
 ];
+
+/**
+ * Whether this person works here, rather than studies here.
+ *
+ * Asked of their capabilities, not their role name. A placement officer or any
+ * administrator-composed role holds staff capabilities and no name this file
+ * knows, and judging by name alone handed them the student layout.
+ *
+ * A student holds only `profile.*` self-service capabilities, so the test is
+ * simply: do they hold anything beyond their own record?
+ */
+export function isStaff(
+  user: { role: string; capabilities: string[] } | null | undefined,
+): boolean {
+  if (!user) return false;
+  if (STAFF_ROLES.includes(user.role)) return true;
+  if (user.role === "student") return false;
+  return user.capabilities.some(
+    (capability) => !capability.startsWith("profile."),
+  );
+}
 
 /** Whether this person should see a given entry. */
 export function isVisible(

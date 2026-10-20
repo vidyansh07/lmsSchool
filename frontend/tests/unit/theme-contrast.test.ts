@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
  * interactive components — which is why the focus ring has its own row.
  *
  * The palette this checks is the rebuilt one: three inks, one action colour,
- * four semantic states with a wash each, and a dark rail. The six accent
+ * four semantic states with a wash each, and the rail. The six accent
  * trios and three pill accents it used to cover are gone, along with the
  * per-metric colour they existed for.
  */
@@ -83,9 +83,19 @@ const PAIRS: [string, string, number, string][] = [
   ['ink', 'selected', 4.5, 'text on a selected row'],
   ['ink-muted', 'selected', 4.5, 'secondary text on a selected row'],
 
-  // The rail is the one dark surface, so its own pairs are inverted.
+  // The sidebar's own set. It has been charcoal and it is now white, and the
+  // tokens below are the ones that have to be turned over together whenever it
+  // changes — the last time one of them moved on its own, the sidebar became
+  // white text on white.
   ['rail-fg', 'rail', 4.5, 'a rail label'],
+  ['rail-fg-muted', 'rail', 4.5, 'secondary text on the rail'],
   ['rail-active', 'rail', 4.5, 'the active item on the rail'],
+  // The active row and the hover are backgrounds, so what must stay legible is
+  // the text written on them.
+  ['rail-active', 'rail-selected', 4.5, 'the active item on its own background'],
+  ['rail-fg', 'rail-hover', 4.5, 'a rail label under the pointer'],
+  // The divider only has to be seen, not read.
+  ['rail-line', 'rail', 1.2, 'a divider inside the sidebar'],
 
   // Each semantic state as small text on a card and on its own wash, plus
   // the label on the filled version.
@@ -160,5 +170,51 @@ describe('theme contrast', () => {
     // like. Only the comment explaining that should remain.
     expect(CSS).not.toMatch(/@media\s*\(prefers-color-scheme/);
     expect(CSS).toMatch(/color-scheme:\s*light\s*;/);
+  });
+});
+
+describe('module accents', () => {
+  /**
+   * An ERP is six jobs in one coat. Before these, a counsellor working a lead
+   * and a trainer taking a register saw the same orange, so nothing on screen
+   * said which part of the system they were in.
+   */
+  const MODULES = ['academic', 'admissions', 'fees', 'people', 'placement', 'reports'] as const;
+
+  it.each(MODULES)('%s is legible on the page and on a card', (area) => {
+    // 4.5, not 3: these carry section headings, not only icons.
+    expect(contrast(area, 'canvas')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(area, 'surface')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(MODULES)('%s has a rail variant that is legible on the sidebar', (area) => {
+    // Whatever the rail is, a heading on it has to be readable: these are the
+    // tokens that were built for a charcoal sidebar and would be invisible on
+    // a white one if they were ever left behind.
+    // needs. That is the whole reason there are two sets.
+    expect(contrast(`${area}-rail`, 'rail')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps the modules distinguishable from each other', () => {
+    // Nearest pair at least 30 degrees apart, so the six stay separable for the
+    // commonest kinds of colour blindness.
+    const hues = MODULES.map((area) => token(area)[2] as number).sort((a, b) => a - b);
+    // The wheel joins up, so the list is walked as a ring: the last hue's
+    // neighbour is the first one, 360 degrees round. A plain sorted list would
+    // miss two modules clashing either side of 0.
+    const gaps = hues.map((hue, index) => {
+      const previous = index === 0 ? (hues[hues.length - 1] as number) - 360 : (hues[index - 1] as number);
+      return hue - previous;
+    });
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(30);
+  });
+
+  it('keeps every area clear of the brand orange', () => {
+    // A area that matched the brand would read as a flourish, not a place.
+    const brandHue = token('action')[2];
+    for (const area of MODULES) {
+      const gap = Math.abs(token(area)[2] - brandHue);
+      expect(Math.min(gap, 360 - gap)).toBeGreaterThan(25);
+    }
   });
 });

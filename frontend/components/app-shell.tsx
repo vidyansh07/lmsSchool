@@ -55,8 +55,10 @@ import {
 import { useAuth } from '@/components/auth-provider';
 import { CommandPalette } from '@/components/command-palette';
 import {
-  navFor,
+  accentFor as accentOf,
   isVisible,
+  navFor,
+  type ModuleAccent,
   type NavGroup,
   type NavItem,
 } from '@/components/navigation';
@@ -198,8 +200,8 @@ function NavLink({
         // the filled shape is a positional signal that needs no colour vision.
         onRail
           ? active
-            ? 'bg-white/10 font-semibold text-rail-active'
-            : 'text-rail-fg/70 hover:bg-white/5 hover:text-rail-fg'
+            ? 'bg-rail-selected font-semibold text-rail-active'
+            : 'text-rail-fg-muted hover:bg-rail-hover hover:text-rail-fg'
           : active
             ? 'bg-selected font-semibold text-selected-fg'
             : 'text-ink-muted hover:bg-sunken hover:text-ink',
@@ -278,7 +280,7 @@ function Brand({
             <span
               className={cn(
                 'mt-0.5 text-2xs font-semibold uppercase tracking-[0.14em]',
-                onRail ? 'text-rail-fg/60' : 'text-ink-faint',
+                onRail ? 'text-rail-fg-muted' : 'text-ink-faint',
               )}
             >
               LMS
@@ -349,7 +351,7 @@ function AccountCard({
           <Avatar
             size="md"
             tabIndex={0}
-            className={cn(onRail ? 'bg-white/10 text-rail-fg' : 'bg-selected text-selected-fg')}
+            className={cn(onRail ? 'bg-rail-selected text-rail-fg' : 'bg-selected text-selected-fg')}
           >
             <AvatarFallback className={cn(onRail ? 'text-rail-fg' : 'text-selected-fg')}>
               {initials(name)}
@@ -363,7 +365,7 @@ function AccountCard({
             className={cn(
               'size-8 shrink-0 p-0',
               onRail
-                ? 'text-rail-fg/70 hover:bg-white/5 hover:text-rail-fg'
+                ? 'text-rail-fg-muted hover:bg-rail-hover hover:text-rail-fg'
                 : 'text-ink-muted hover:text-danger',
             )}
             aria-label="Sign out"
@@ -380,12 +382,12 @@ function AccountCard({
     <div
       className={cn(
         'flex items-center gap-3 rounded-card p-2.5',
-        onRail ? 'bg-white/5' : 'border border-line bg-surface',
+        onRail ? 'bg-rail-hover' : 'border border-line bg-surface',
       )}
     >
       <Avatar
         size="md"
-        className={cn(onRail ? 'bg-white/10 text-rail-fg' : 'bg-selected text-selected-fg')}
+        className={cn(onRail ? 'bg-rail-selected text-rail-fg' : 'bg-selected text-selected-fg')}
       >
         <AvatarFallback className={cn(onRail ? 'text-rail-fg' : 'text-selected-fg')}>
           {initials(name)}
@@ -398,7 +400,7 @@ function AccountCard({
         <p
           className={cn(
             'truncate text-2xs capitalize',
-            onRail ? 'text-rail-fg/60' : 'text-ink-faint',
+            onRail ? 'text-rail-fg-muted' : 'text-ink-faint',
           )}
         >
           {user.role}
@@ -411,7 +413,7 @@ function AccountCard({
           className={cn(
             'size-8 shrink-0 p-0',
             onRail
-              ? 'text-rail-fg/70 hover:bg-white/5 hover:text-rail-fg'
+              ? 'text-rail-fg-muted hover:bg-rail-hover hover:text-rail-fg'
               : 'text-ink-muted hover:text-danger',
           )}
           aria-label="Sign out"
@@ -518,6 +520,26 @@ function Breadcrumb({
  * the drawer has the full width of a `Sheet` to work with and never needs
  * to shrink to icons).
  */
+/**
+ * The colour each sidebar group wears, as whole class names.
+ *
+ * Written out rather than built from a string, because Tailwind scans source
+ * for complete class names: `text-${accent}-rail` compiles to nothing and the
+ * heading silently loses its colour.
+ *
+ * The rail set is used on the dark sidebar and the plain set on a light one.
+ * The dark accents score between 2.6 and 3.0 against the rail, under the 4.5 a
+ * heading needs, which is why there are two sets rather than one.
+ */
+const ACCENT_CLASS: Record<ModuleAccent, { rail: string; light: string }> = {
+  academic: { rail: 'text-academic-rail', light: 'text-academic' },
+  admissions: { rail: 'text-admissions-rail', light: 'text-admissions' },
+  fees: { rail: 'text-fees-rail', light: 'text-fees' },
+  people: { rail: 'text-people-rail', light: 'text-people' },
+  placement: { rail: 'text-placement-rail', light: 'text-placement' },
+  reports: { rail: 'text-reports-rail', light: 'text-reports' },
+};
+
 function NavGroups({
   groups,
   active,
@@ -554,7 +576,7 @@ function NavGroups({
       className={cn('flex h-full flex-col gap-4 overflow-y-auto py-3', collapsed ? 'px-1.5' : 'px-3')}
     >
       {!collapsed && workspaceName ? (
-        <p className={cn('px-3 text-2xs font-semibold', onRail ? 'text-rail-fg/60' : 'text-ink-faint')}>
+        <p className={cn('px-3 text-2xs font-semibold', onRail ? 'text-rail-fg-muted' : 'text-ink-faint')}>
           {workspaceName}
         </p>
       ) : null}
@@ -563,6 +585,7 @@ function NavGroups({
         const groupOpen =
           collapsed || !group.title || containsActive || !collapsedGroups.has(group.title);
         const groupId = `nav-group-${storageScope}-${index}`;
+        const groupAccent: ModuleAccent | undefined = accentOf(group.title);
         return (
           <div key={group.title ?? `group-${index}`} className="space-y-1">
             {/* A button gives a long role menu progressive disclosure without
@@ -573,7 +596,7 @@ function NavGroups({
                 index > 0 ? (
                   <hr
                     aria-hidden="true"
-                    className={cn('mx-2 border-t', onRail ? 'border-white/10' : 'border-line')}
+                    className={cn('mx-2 border-t', onRail ? 'border-rail-line' : 'border-line')}
                   />
                 ) : null
               ) : (
@@ -584,9 +607,18 @@ function NavGroups({
                   onClick={() => toggleGroup(group.title as string)}
                   className={cn(
                     'flex min-h-11 w-full items-center justify-between gap-2 rounded-control px-3 text-left text-2xs font-semibold uppercase tracking-[0.12em] transition-colors duration-150',
-                    onRail ? 'text-rail-fg/45' : 'text-ink-faint',
+                    // The group's own module colour when it has one, so the
+                    // area of the business a person is in is recognisable
+                    // before they read a word. A heading that matches no module
+                    // keeps the neutral tone rather than borrowing another
+                    // area's colour.
+                    groupAccent
+                      ? ACCENT_CLASS[groupAccent][onRail ? 'rail' : 'light']
+                      : onRail
+                        ? 'text-rail-fg-muted'
+                        : 'text-ink-faint',
                     onRail
-                      ? 'hover:bg-white/5 hover:text-rail-fg'
+                      ? 'hover:bg-rail-hover hover:text-rail-fg'
                       : 'hover:bg-sunken hover:text-ink',
                   )}
                 >
@@ -721,7 +753,7 @@ function Shell({
             // collapsed, matching the reference: wide enough for an icon with a
             // readable word under it, narrow enough that the table beside it
             // keeps its columns.
-            'relative hidden shrink-0 bg-rail transition-[width] duration-200 lg:block',
+            'relative hidden shrink-0 border-r border-rail-line bg-rail transition-[width] duration-200 lg:block',
             collapsed ? 'lg:w-[4.25rem]' : 'lg:w-[17rem]',
           )}
         >
@@ -736,7 +768,7 @@ function Shell({
           <div className="sticky top-0 flex h-dvh flex-col">
             <div
               className={cn(
-                'flex h-16 shrink-0 items-center border-b border-white/10',
+                'flex h-16 shrink-0 items-center border-b border-rail-line',
                 collapsed ? 'justify-center px-2' : 'px-4',
               )}
             >
@@ -751,7 +783,7 @@ function Shell({
               storageScope={navigationScope}
               workspaceName={navigationLabel}
             />
-            <div className={cn('border-t border-white/10', collapsed ? 'p-2' : 'p-3')}>
+            <div className={cn('border-t border-rail-line', collapsed ? 'p-2' : 'p-3')}>
               <AccountCard collapsed={collapsed} tone="rail" />
             </div>
           </div>
