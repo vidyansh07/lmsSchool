@@ -23,6 +23,7 @@ a data-integrity error rather than a UI oversight.
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -667,3 +668,83 @@ class LessonResource(SoftDeleteBaseModel):
 
     def __str__(self) -> str:
         return self.title
+
+
+class CoursePrice(BaseModel):
+    """What a course cost, and from when.
+
+    ``Course.default_fee`` says what a course costs today. It could not say what
+    it cost in April, and a training institute is asked that constantly: by a
+    student disputing an instalment, by an accountant closing a quarter, and by
+    the owner deciding whether last year's price rise worked.
+
+    Past students were never at risk. ``FeePlan.agreed_amount`` copies the
+    figure at the moment of enrolment and is never read back through the course
+    again, so changing the price has never reached anybody already enrolled —
+    the same snapshot rule `Certificate` and `CourseCompletion.rule_snapshot`
+    use. What was missing was the other half: the institution's own record of
+    its prices, which a single mutable column overwrites every time.
+
+    So this is history, not authority. Nothing recalculates from it, and no
+    enrolment reads it after the day it quotes. A row is written when the price
+    changes, and the course keeps its current figure where every existing
+    screen and serializer already looks for it.
+
+    Dated by day rather than by timestamp because a price is a commercial
+    decision, announced for a date — "the new fee applies from 1 November" —
+    and nobody means 00:00:00.000 by it.
+    """
+
+    course = models.ForeignKey(
+        "courses.Course",
+        on_delete=models.CASCADE,
+        related_name="price_history",
+        verbose_name=_("course"),
+    )
+    amount = models.DecimalField(
+        _("fee"),
+        max_digits=10,
+        decimal_places=2,
+        validators=[MinValueValidator(0)],
+        help_text=_("The course fee in rupees, before any discount."),
+    )
+    effective_from = models.DateField(
+        _("effective from"),
+        help_text=_("The first day this fee applies. Quotes before it use the previous fee."),
+    )
+    note = models.CharField(
+        _("note"),
+        max_length=200,
+        blank=True,
+        validators=[validate_no_control_characters],
+        help_text=_("Why the fee changed, for whoever reads this a year from now."),
+    )
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="course_prices_recorded",
+        verbose_name=_("recorded by"),
+    )
+
+    class Meta:
+        verbose_name = _("course price")
+        verbose_name_plural = _("course prices")
+        # Newest first: "what is the price now" is the common read, and it is
+        # the first row.
+        ordering = ("-effective_from", "-created_at")
+        constraints = [
+            # One price per course per day. Two prices effective the same
+            # morning is not a richer history, it is an unanswerable question.
+            models.UniqueConstraint(
+                fields=["course", "effective_from"],
+                name="course_price_one_per_day",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["course", "-effective_from"], name="course_price_lookup_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.course_id}: {self.amount} from {self.effective_from}"

@@ -27,7 +27,7 @@ Rules, and the reason for each:
 from __future__ import annotations
 
 from datetime import date, timedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from django.db import transaction
@@ -46,6 +46,7 @@ from apps.students.models import FeeStatus, StudentProfile
 from .models import (
     DEFAULT_INSTALLMENT_COUNT,
     DEFAULT_INSTALLMENT_GAP_DAYS,
+    LIVE_PAYMENT,
     MAX_INSTALLMENTS,
     MIN_FIRST_PAYMENT,
     ZERO,
@@ -53,6 +54,7 @@ from .models import (
     FeePayment,
     FeePlan,
     InstallmentStatus,
+    PaymentKind,
     PaymentMethod,
     installment_rows,
 )
@@ -76,6 +78,92 @@ def _money(value: Any, field: str) -> Decimal:
             {field: ["Amounts are kept to the paisa; use at most two decimals."]}
         )
     return amount.quantize(Decimal("0.01"))
+
+
+def _percentage(value: Any) -> Decimal | None:
+    """A discount percentage, or ``None`` when one was not given.
+
+    ``None`` and ``0`` are different answers: no percentage was offered, versus
+    a discount of nothing. The first leaves any flat discount alone; the second
+    sets the discount to zero.
+    """
+    if value is None or value == "":
+        return None
+    try:
+        percent = Decimal(str(value))
+    except Exception as exc:
+        raise ApplicationError(
+            {"discount_percent": ["Enter a percentage, for example 10 or 12.5."]}
+        ) from exc
+    if percent < ZERO or percent > Decimal("100"):
+        raise ApplicationError({"discount_percent": ["A percentage is between 0 and 100."]})
+    return percent.quantize(Decimal("0.01"))
+
+
+def discount_from_percent(agreed: Decimal, percent: Decimal) -> Decimal:
+    """The money a percentage comes to, on this fee.
+
+    Rounded half-up to the paisa, the way a person with a calculator rounds, so
+    the figure a counsellor is shown is the figure the ledger subtracts. Banker's
+    rounding — Python's default — would make 12.5% of an odd fee land a paisa
+    away from what the counsellor read out, and a student notices one rupee.
+    """
+    return (agreed * percent / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def refund_payment(*, payment: FeePayment, actor: User, reason: str) -> FeePayment:
+    """Give a payment back.
+
+    A different act from voiding. A void says the payment should never have been
+    recorded — a typo, a double entry. A refund says it was recorded correctly
+    and the money has since gone back to the student, which is what happens to a
+    booking amount when somebody decides not to join.
+
+    Both stop the payment counting towards what has been paid, and the ledger
+    keeps the row either way so an accountant can tell the two apart.
+
+    Only a payment taken on refundable terms can be refunded. Whether the
+    institution gives money back is a commercial decision made when the money is
+    taken, not one to be reopened months later by whoever is on the screen.
+    """
+    _require_manage(actor)
+    if not reason.strip():
+        raise ApplicationError(
+            {"reason": ["Say why this payment is being refunded; it is kept with the record."]}
+        )
+    if payment.is_voided:
+        raise ConflictError({"payment": ["This payment was voided; there is nothing to refund."]})
+    if payment.is_refunded:
+        raise ConflictError({"payment": ["This payment has already been refunded."]})
+    if not payment.is_refundable:
+        raise ApplicationError(
+            {
+                "payment": [
+                    "This payment was not taken on refundable terms, so it cannot be refunded."
+                ]
+            }
+        )
+
+    payment.refunded_at = timezone.now()
+    payment.refunded_by = actor
+    payment.refund_reason = reason.strip()
+    payment.full_clean()
+    payment.save(update_fields=["refunded_at", "refunded_by", "refund_reason", "updated_at"])
+
+    record(
+        action=AuditAction.FEE_PAYMENT_VOIDED,
+        actor=actor,
+        resource_type=RESOURCE_PAYMENT,
+        resource_id=payment.pk,
+        context={
+            "receipt_number": payment.receipt_number,
+            "amount": str(payment.amount),
+            "kind": payment.kind,
+            "refunded": True,
+            "reason": payment.refund_reason,
+        },
+    )
+    return payment
 
 
 def _plan_context(plan: FeePlan) -> dict[str, Any]:
@@ -102,6 +190,7 @@ def set_fee_plan(
     discount_amount: Any = ZERO,
     discount_reason: str = "",
     notes: str | None = None,
+    discount_percent: Any = None,
     installments: list[dict[str, Any]] | None = None,
     installment_count: int | None = None,
 ) -> FeePlan:
@@ -116,7 +205,14 @@ def set_fee_plan(
     """
     _require_manage(actor)
     agreed = _money(agreed_amount, "agreed_amount")
-    discount = _money(discount_amount, "discount_amount")
+    percent = _percentage(discount_percent)
+    if percent is not None:
+        # A percentage is an instruction to work out the money, not a second
+        # kind of discount. It is turned into rupees here, once, and the rupees
+        # are what the ledger keeps.
+        discount = discount_from_percent(agreed, percent)
+    else:
+        discount = _money(discount_amount, "discount_amount")
     problems: dict[str, list[str]] = {}
     if agreed < ZERO:
         problems["agreed_amount"] = ["The fee cannot be negative."]
@@ -137,6 +233,7 @@ def set_fee_plan(
             enrollment=enrollment,
             agreed_amount=agreed,
             discount_amount=discount,
+            discount_percent=percent,
             discount_reason=discount_reason.strip(),
             notes=(notes or "").strip(),
             created_by=actor,
@@ -412,8 +509,19 @@ def record_payment(
     reference: str = "",
     reference_name: str = "",
     note: str = "",
+    kind: str = PaymentKind.INSTALMENT,
+    is_refundable: bool = False,
 ) -> FeePayment:
     _require_manage(actor)
+    if kind not in PaymentKind.values:
+        raise ApplicationError({"kind": ["Choose what this payment was for."]})
+    if is_refundable and kind != PaymentKind.REGISTRATION:
+        # Refundable terms exist for the booking amount. An instalment of the
+        # course fee is payment for teaching that has been or will be given, and
+        # giving it back is a credit note, not a refund of this row.
+        raise ApplicationError(
+            {"is_refundable": ["Only a registration payment can be taken on refundable terms."]}
+        )
     plan = (
         FeePlan.objects.select_for_update()
         .select_related("enrollment__student", "enrollment__batch")
@@ -441,7 +549,7 @@ def record_payment(
                 ]
             }
         )
-    has_paid_before = plan.payments.filter(voided_at__isnull=True).exists()
+    has_paid_before = plan.payments.filter(LIVE_PAYMENT).exists()
     if not has_paid_before and value < MIN_FIRST_PAYMENT and plan.payable >= MIN_FIRST_PAYMENT:
         raise ApplicationError(
             {
@@ -461,6 +569,8 @@ def record_payment(
         reference=reference.strip(),
         reference_name=reference_name.strip(),
         note=note.strip(),
+        kind=kind,
+        is_refundable=is_refundable,
         recorded_by=actor,
     )
     payment.full_clean()
@@ -649,7 +759,7 @@ def fee_collections_trend(*, user: User, weeks: int = 12) -> list[dict[str, Any]
 
     since = timezone.localdate() - timedelta(weeks=weeks)
     live = FeePayment.objects.filter(
-        voided_at__isnull=True,
+        LIVE_PAYMENT,
         plan__enrollment__in=visible_enrollments(user),
         paid_on__gte=since,
     )
@@ -681,7 +791,7 @@ def fees_overview(*, user: User, limit: int = 20) -> dict[str, Any]:
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
     enrollments = visible_enrollments(user)
-    live = FeePayment.objects.filter(voided_at__isnull=True, plan__enrollment__in=enrollments)
+    live = FeePayment.objects.filter(LIVE_PAYMENT, plan__enrollment__in=enrollments)
 
     def collected(since: date) -> Decimal:
         return Decimal(live.filter(paid_on__gte=since).aggregate(total=Sum("amount"))["total"] or 0)

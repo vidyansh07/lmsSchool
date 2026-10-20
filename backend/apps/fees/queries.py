@@ -17,7 +17,7 @@ from decimal import Decimal
 from django.db.models import DecimalField, F, OuterRef, QuerySet, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 
-from .models import FeePayment, FeePlan
+from .models import LIVE_PAYMENT, FeePayment, FeePlan
 
 _MONEY = DecimalField(max_digits=12, decimal_places=2)
 _ZERO = Value(Decimal("0"), output_field=_MONEY)
@@ -38,8 +38,7 @@ def annotate_student_fee_totals(students: QuerySet) -> QuerySet:
     payments = FeePayment.objects.filter(
         plan__enrollment__student=OuterRef("pk"),
         plan__enrollment__deleted_at__isnull=True,
-        voided_at__isnull=True,
-    )
+    ).filter(LIVE_PAYMENT)
     next_due = (
         plans.filter(next_due_on__isnull=False).order_by("next_due_on").values("next_due_on")[:1]
     )
@@ -55,7 +54,7 @@ def annotate_student_fee_totals(students: QuerySet) -> QuerySet:
 def annotate_enrollment_fee(enrollments: QuerySet) -> QuerySet:
     """The same four figures per enrolment. ``fee_payable`` is null with no plan."""
     plan = FeePlan.objects.filter(enrollment=OuterRef("pk"))
-    payments = FeePayment.objects.filter(plan__enrollment=OuterRef("pk"), voided_at__isnull=True)
+    payments = FeePayment.objects.filter(LIVE_PAYMENT, plan__enrollment=OuterRef("pk"))
     return enrollments.annotate(
         fee_payable=Subquery(
             plan.values("enrollment")

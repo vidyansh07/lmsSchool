@@ -17,6 +17,7 @@ from .models import (
     FeePayment,
     FeePlan,
     InstallmentStatus,
+    PaymentKind,
     PaymentMethod,
     installment_rows,
 )
@@ -27,7 +28,9 @@ MONEY = {"max_digits": 10, "decimal_places": 2}
 class FeePaymentSerializer(serializers.ModelSerializer):
     recorded_by = serializers.SerializerMethodField()
     voided_by = serializers.SerializerMethodField()
+    refunded_by = serializers.SerializerMethodField()
     is_voided = serializers.BooleanField(read_only=True)
+    is_refunded = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = FeePayment
@@ -46,6 +49,12 @@ class FeePaymentSerializer(serializers.ModelSerializer):
             "voided_at",
             "voided_by",
             "void_reason",
+            "kind",
+            "is_refundable",
+            "is_refunded",
+            "refunded_at",
+            "refunded_by",
+            "refund_reason",
         )
         read_only_fields = fields
 
@@ -56,6 +65,10 @@ class FeePaymentSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_voided_by(self, obj: FeePayment) -> str | None:
         return obj.voided_by.full_name or obj.voided_by.email if obj.voided_by else None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_refunded_by(self, obj: FeePayment) -> str | None:
+        return obj.refunded_by.full_name or obj.refunded_by.email if obj.refunded_by else None
 
 
 class FeeInstallmentSerializer(serializers.Serializer):
@@ -99,6 +112,7 @@ class FeePlanSerializer(serializers.ModelSerializer):
             "batch_name",
             "agreed_amount",
             "discount_amount",
+            "discount_percent",
             "discount_reason",
             "payable",
             "paid",
@@ -152,6 +166,12 @@ class SetInstallmentsSerializer(StrictSerializer):
 class SetFeePlanSerializer(StrictSerializer):
     agreed_amount = serializers.DecimalField(min_value=0, **MONEY)
     discount_amount = serializers.DecimalField(min_value=0, required=False, default=0, **MONEY)
+    # Sent instead of `discount_amount` when the discount was agreed as a
+    # percentage. No default: left out means "no percentage was offered", which
+    # is a different answer from zero.
+    discount_percent = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=0, max_value=100, required=False
+    )
     discount_reason = SafeCharField(max_length=200, required=False, allow_blank=True, default="")
     notes = SafeCharField(max_length=1000, required=False, allow_blank=True)
     # Left out: a new fee gets the default schedule, an existing one keeps its
@@ -176,9 +196,15 @@ class RecordPaymentSerializer(StrictSerializer):
     reference = SafeCharField(max_length=100, required=False, allow_blank=True, default="")
     reference_name = SafeCharField(max_length=120, required=False, allow_blank=True, default="")
     note = SafeCharField(max_length=300, required=False, allow_blank=True, default="")
+    kind = serializers.ChoiceField(choices=PaymentKind.choices, default=PaymentKind.INSTALMENT)
+    is_refundable = serializers.BooleanField(default=False)
 
 
 class VoidPaymentSerializer(StrictSerializer):
+    reason = SafeCharField(max_length=300)
+
+
+class RefundPaymentSerializer(StrictSerializer):
     reason = SafeCharField(max_length=300)
 
 

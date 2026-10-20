@@ -28,6 +28,7 @@ from django.http import FileResponse, Http404
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListAPIView, ListCreateAPIView, get_object_or_404
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -57,6 +58,8 @@ from .serializers import (
     CourseAssignmentSerializer,
     CourseDetailSerializer,
     CourseListSerializer,
+    CoursePriceSerializer,
+    CoursePriceWriteSerializer,
     CourseStatusSerializer,
     CourseThumbnailSerializer,
     CourseWriteSerializer,
@@ -961,3 +964,60 @@ class MyCoursesView(ListAPIView):
     @extend_schema(summary="Courses I can author", tags=COURSES_TAG)
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
+
+
+class CoursePriceView(APIView):
+    """A course's fee history, and the way to change it.
+
+    Separate from the course edit endpoint on purpose. Changing a fee is not
+    the same act as fixing a typo in a description: it is a commercial decision
+    somebody announces for a date, and it is the one course field an accountant
+    will later be asked to account for. A PATCH that quietly moved
+    ``default_fee`` among ten other fields would leave no such record.
+
+    Reading the history needs only the right to see the course; changing it
+    needs the right to manage it.
+    """
+
+    permission_classes = (CanViewCourse,)
+
+    def get_course(self, request, identifier, *, for_write: bool) -> Course:
+        lookup = Q(slug=str(identifier))
+        try:
+            lookup |= Q(pk=uuid_module.UUID(str(identifier)))
+        except (ValueError, AttributeError, TypeError):
+            pass
+        course = get_object_or_404(access.visible_courses(request.user), lookup)
+        if for_write and not access.can_manage_course(request.user, course):
+            raise PermissionDenied("You do not have permission to change this course's fee.")
+        self.check_object_permissions(request, course)
+        return course
+
+    @extend_schema(
+        summary="A course's fee history",
+        responses={200: CoursePriceSerializer(many=True)},
+        tags=COURSES_TAG,
+    )
+    def get(self, request, identifier):
+        course = self.get_course(request, identifier, for_write=False)
+        history = course.price_history.select_related("recorded_by").all()
+        return Response(CoursePriceSerializer(history, many=True).data)
+
+    @extend_schema(
+        summary="Change a course's fee",
+        request=CoursePriceWriteSerializer,
+        responses={201: CoursePriceSerializer},
+        tags=COURSES_TAG,
+    )
+    def post(self, request, identifier):
+        course = self.get_course(request, identifier, for_write=True)
+        payload = CoursePriceWriteSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        price = services.record_price(
+            course=course,
+            actor=request.user,
+            amount=payload.validated_data["amount"],
+            effective_from=payload.validated_data.get("effective_from"),
+            note=payload.validated_data.get("note", ""),
+        )
+        return Response(CoursePriceSerializer(price).data, status=status.HTTP_201_CREATED)

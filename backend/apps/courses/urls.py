@@ -18,6 +18,7 @@ from .views import (
     CourseListCreateView,
     CourseModuleReorderView,
     CourseModulesView,
+    CoursePriceView,
     CoursePublishChecklistView,
     CourseStatusView,
     CourseThumbnailView,
@@ -58,6 +59,8 @@ course_patterns = [
         CourseModuleReorderView.as_view(),
         name="module-reorder",
     ),
+    # Before the bare identifier route, which would otherwise swallow it.
+    path("<str:identifier>/price/", CoursePriceView.as_view(), name="price"),
     # Accepts a UUID or a slug, so student-facing URLs can be readable.
     path("<str:identifier>/", CourseDetailView.as_view(), name="detail"),
 ]

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce
@@ -54,6 +54,18 @@ class PaymentMethod(models.TextChoices):
     BANK_TRANSFER = "bank_transfer", _("Bank transfer")
     CHEQUE = "cheque", _("Cheque")
     OTHER = "other", _("Other")
+
+
+class PaymentKind(models.TextChoices):
+    """What a payment was taken for.
+
+    ``REGISTRATION`` is the booking amount a counsellor takes when a lead
+    becomes a student. It counts against the fee like any other payment; it is
+    named because it is the one that sometimes goes back.
+    """
+
+    REGISTRATION = "registration", _("Registration")
+    INSTALMENT = "instalment", _("Instalment")
 
 
 class FeePlanStatus(models.TextChoices):
@@ -80,12 +92,25 @@ DEFAULT_INSTALLMENT_GAP_DAYS = 30
 MAX_INSTALLMENTS = 36
 
 
+#: Money the institution still holds for a plan: not struck out as a mistake,
+#: and not given back.
+#:
+#: Written once because seven places ask it — two annotations, two subqueries,
+#: a first-payment check and two dashboard totals — and a refund that counted
+#: towards "paid" in any one of them would quietly overstate a student's
+#: payments and understate their balance.
+LIVE_PAYMENT = Q(voided_at__isnull=True, refunded_at__isnull=True)
+
+#: The same rule, spelled for a query that reaches payments through a relation.
+LIVE_PAYMENT_THROUGH = Q(payments__voided_at__isnull=True, payments__refunded_at__isnull=True)
+
+
 class FeePlanQuerySet(models.QuerySet):
     def with_totals(self):
         """Annotate what is paid, so a list of plans is one query."""
         return self.annotate(
             paid_total=Coalesce(
-                Sum("payments__amount", filter=Q(payments__voided_at__isnull=True)),
+                Sum("payments__amount", filter=LIVE_PAYMENT_THROUGH),
                 ZERO,
                 output_field=models.DecimalField(max_digits=12, decimal_places=2),
             )
@@ -112,6 +137,27 @@ class FeePlan(BaseModel):
         decimal_places=2,
         default=ZERO,
         validators=[MinValueValidator(ZERO)],
+    )
+    #: What the counsellor typed, when they gave a percentage rather than a
+    #: figure. The money is `discount_amount` and always has been; this records
+    #: the intent behind it.
+    #:
+    #: Both are stored because they answer different questions and only one of
+    #: them is money. "Twenty percent off" is what was agreed and what the
+    #: student remembers; 5,000 rupees is what the ledger must subtract. If only
+    #: the percentage were stored, every total would be a multiplication waiting
+    #: to drift when the agreed fee is later corrected — and a student's balance
+    #: would move under them, which is the one thing this ledger does not do.
+    #:
+    #: Null means a flat discount was given, or none.
+    discount_percent = models.DecimalField(
+        _("discount percentage"),
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(ZERO), MaxValueValidator(Decimal("100"))],
+        help_text=_("If the discount was agreed as a percentage, the percentage agreed."),
     )
     discount_reason = models.CharField(
         _("discount reason"),
@@ -155,7 +201,7 @@ class FeePlan(BaseModel):
         annotated = getattr(self, "paid_total", None)
         if annotated is not None:
             return Decimal(annotated)
-        total = self.payments.filter(voided_at__isnull=True).aggregate(total=Sum("amount"))["total"]
+        total = self.payments.filter(LIVE_PAYMENT).aggregate(total=Sum("amount"))["total"]
         return Decimal(total or 0)
 
     @property
@@ -216,6 +262,46 @@ class FeePayment(BaseModel):
         "accounts.User", null=True, on_delete=models.SET_NULL, related_name="fee_payments_recorded"
     )
 
+    #: What this payment was for.
+    #:
+    #: A counsellor turning a lead into a student takes a booking amount —
+    #: around a thousand rupees — to hold the seat. It is a real payment that
+    #: counts against the fee, so it is a payment row and not a field somewhere
+    #: else; what makes it different is that it is sometimes given back.
+    kind = models.CharField(
+        _("kind"),
+        max_length=16,
+        choices=PaymentKind.choices,
+        default=PaymentKind.INSTALMENT,
+        db_index=True,
+    )
+    #: Whether this one was taken on the understanding it can be returned.
+    #: Decided per payment, not per institution: the same booking amount is
+    #: refundable for one student and not for another, and only the person who
+    #: took it knows which was agreed.
+    is_refundable = models.BooleanField(
+        _("refundable"),
+        default=False,
+        help_text=_("Whether this payment was taken on terms that allow it to be returned."),
+    )
+
+    # Giving money back is not the same as striking out a mistake. A void says
+    # the payment should never have been recorded; a refund says it was correct
+    # and the money has since gone back to the student. Both stop it counting
+    # towards what has been paid, and the ledger must be able to tell an
+    # accountant which happened.
+    refunded_at = models.DateTimeField(_("refunded at"), null=True, blank=True)
+    refunded_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="fee_payments_refunded",
+    )
+    refund_reason = models.CharField(
+        _("refund reason"), max_length=300, blank=True, validators=[validate_no_control_characters]
+    )
+
     # A mistake is marked, never removed.
     voided_at = models.DateTimeField(_("voided at"), null=True, blank=True)
     voided_by = models.ForeignKey(
@@ -241,6 +327,15 @@ class FeePayment(BaseModel):
     @property
     def is_voided(self) -> bool:
         return self.voided_at is not None
+
+    @property
+    def is_refunded(self) -> bool:
+        return self.refunded_at is not None
+
+    @property
+    def counts_towards_paid(self) -> bool:
+        """Whether this payment still stands as money the institution holds."""
+        return self.voided_at is None and self.refunded_at is None
 
 
 class FeeInstallment(BaseModel):

@@ -10,6 +10,7 @@ from .views import (
     EnrollmentFeeView,
     FeeCollectionsTrendView,
     FeePaymentReceiptView,
+    FeePaymentRefundView,
     FeePaymentVoidView,
     FeesOverviewView,
     MyFeesView,
@@ -45,6 +46,11 @@ urlpatterns = [
         name="history",
     ),
     path("payments/<uuid:payment_id>/void/", FeePaymentVoidView.as_view(), name="void"),
+    path(
+        "payments/<uuid:payment_id>/refund/",
+        FeePaymentRefundView.as_view(),
+        name="refund",
+    ),
     path(
         "payments/<uuid:payment_id>/receipt/",
         FeePaymentReceiptView.as_view(),

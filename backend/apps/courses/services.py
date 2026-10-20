@@ -14,6 +14,8 @@ Two rules in this module carry most of the weight:
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
@@ -31,6 +33,7 @@ from .models import (
     Category,
     Course,
     CourseAssignment,
+    CoursePrice,
     Lesson,
     LessonContentType,
     LessonResource,
@@ -710,3 +713,104 @@ __all__ = [
     "update_lesson",
     "update_module",
 ]
+
+
+def record_price(
+    *,
+    course: Course,
+    actor: User,
+    amount: Decimal,
+    effective_from: date | None = None,
+    note: str = "",
+) -> CoursePrice:
+    """Set a course's fee and keep the old one.
+
+    Writes the history row and moves ``Course.default_fee`` together, in one
+    transaction, because the two answering different questions is a bug rather
+    than a feature: every existing screen reads ``default_fee``, and a history
+    that disagrees with it is worse than no history.
+
+    Students already enrolled are untouched, and not by care taken here —
+    ``FeePlan.agreed_amount`` copied their figure when they enrolled and never
+    reads the course again. That is the guarantee; this only records what the
+    institution did.
+
+    A price dated in the future is allowed and is the normal case: a fee rise is
+    decided in October and announced for November. ``price_on`` ignores it until
+    the day arrives, so quoting today still quotes today's fee.
+    """
+    if amount < 0:
+        raise ApplicationError({"amount": ["A fee cannot be negative."]})
+    effective_from = effective_from or timezone.localdate()
+
+    with transaction.atomic():
+        existing = CoursePrice.objects.filter(course=course, effective_from=effective_from).first()
+        if existing is not None:
+            # Correcting a figure entered this morning is an edit, not a second
+            # price. The unique constraint says the same thing; this gives the
+            # caller the useful behaviour instead of an integrity error.
+            existing.amount = amount
+            existing.note = note
+            existing.recorded_by = actor
+            existing.full_clean()
+            existing.save(update_fields=["amount", "note", "recorded_by", "updated_at"])
+            price = existing
+        else:
+            price = CoursePrice(
+                course=course,
+                amount=amount,
+                effective_from=effective_from,
+                note=note,
+                recorded_by=actor,
+            )
+            price.full_clean()
+            price.save()
+
+        # `default_fee` follows the price that applies *now*, so a fee dated for
+        # next month does not change today's quotes.
+        current = price_on(course)
+        if current is not None and course.default_fee != current:
+            course.default_fee = current
+            course.updated_by = actor
+            course.save(update_fields=["default_fee", "updated_by", "updated_at"])
+
+    record(
+        action=AuditAction.COURSE_UPDATED,
+        actor=actor,
+        resource_type="course",
+        resource_id=course.pk,
+        context={
+            "code": course.code,
+            "changed_fields": ["default_fee"],
+            "price_effective_from": str(effective_from),
+            "price_amount": str(amount),
+        },
+    )
+    return price
+
+
+def price_on(course: Course, when: date | None = None) -> Decimal | None:
+    """What this course cost on ``when`` — today by default.
+
+    The latest price effective on or before the day. ``None`` when the course
+    has no history yet, which is every course until somebody records a price;
+    callers fall back to ``default_fee``, which is where the figure has always
+    lived.
+    """
+    when = when or timezone.localdate()
+    price = (
+        CoursePrice.objects.filter(course=course, effective_from__lte=when)
+        .order_by("-effective_from", "-created_at")
+        .first()
+    )
+    return price.amount if price is not None else None
+
+
+def quoted_fee(course: Course, when: date | None = None) -> Decimal | None:
+    """The fee to put in front of a counsellor for this course.
+
+    History first, then the course's own figure. A course priced before this
+    model existed has no history and must still quote, so the fallback is not a
+    transitional nicety — it is the answer for every course nobody has repriced.
+    """
+    return price_on(course, when) or course.default_fee

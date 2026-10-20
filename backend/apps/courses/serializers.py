@@ -31,6 +31,7 @@ from .models import (
     CourseAssignment,
     CourseAuthorRole,
     CourseDifficulty,
+    CoursePrice,
     CourseVisibility,
     Lesson,
     LessonContentType,
@@ -516,3 +517,28 @@ class PublishChecklistSerializer(serializers.Serializer):
 
     ready = serializers.BooleanField(read_only=True)
     blockers = serializers.ListField(child=serializers.CharField(), read_only=True)
+
+
+class CoursePriceSerializer(serializers.ModelSerializer):
+    """One line of a course's fee history."""
+
+    recorded_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CoursePrice
+        fields = ("id", "amount", "effective_from", "note", "recorded_by_name", "created_at")
+        read_only_fields = fields
+
+    def get_recorded_by_name(self, price: CoursePrice) -> str:
+        # The name, never the address: a fee history is read by anyone who may
+        # see the course, and a staff member's email is not part of the price.
+        user = price.recorded_by
+        return user.get_full_name() if user is not None else ""
+
+
+class CoursePriceWriteSerializer(serializers.Serializer):
+    """A fee change: what it becomes, from when, and why."""
+
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
+    effective_from = serializers.DateField(required=False)
+    note = serializers.CharField(max_length=200, required=False, allow_blank=True)

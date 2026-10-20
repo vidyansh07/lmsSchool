@@ -37,6 +37,7 @@ from .serializers import (
     FeePlanSerializer,
     FeesOverviewSerializer,
     RecordPaymentSerializer,
+    RefundPaymentSerializer,
     SetFeePlanSerializer,
     SetInstallmentsSerializer,
     SetNextDueSerializer,
@@ -167,6 +168,39 @@ class EnrollmentFeePaymentsView(APIView):
             plan=plan, actor=request.user, **serializer.validated_data
         )
         return Response(FeePaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
+
+
+class FeePaymentRefundView(APIView):
+    """Give a payment back.
+
+    Deliberately not a flag on the void endpoint. A void says the payment
+    should never have been recorded; a refund says it was correct and the money
+    has gone back. Separate routes keep them separate in the audit trail, where
+    somebody will later need to tell them apart.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_MANAGE_ANY
+
+    @extend_schema(
+        summary="Refund a payment taken on refundable terms",
+        request=RefundPaymentSerializer,
+        responses={200: FeePaymentSerializer},
+        tags=FEES_TAG,
+    )
+    def post(self, request, payment_id):
+        payment = get_object_or_404(
+            FeePayment.objects.filter(
+                plan__enrollment__in=batch_access.visible_enrollments(request.user)
+            ).select_related("plan__enrollment__student", "plan__enrollment__batch"),
+            pk=payment_id,
+        )
+        serializer = RefundPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        services.refund_payment(
+            payment=payment, actor=request.user, reason=serializer.validated_data["reason"]
+        )
+        return Response(FeePaymentSerializer(payment).data)
 
 
 class FeePaymentVoidView(APIView):
