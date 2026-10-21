@@ -49,6 +49,7 @@ urlpatterns = [
     path("recovery/", include("apps.common.recovery_urls")),
     path("users/", include("apps.accounts.user_urls")),
     path("branches/", include((organisation_urls.urlpatterns, "branches"))),
+    path("colleges/", include((organisation_urls.college_urlpatterns, "colleges"))),
     path(
         "students/",
         include(
