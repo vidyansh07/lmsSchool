@@ -23,6 +23,9 @@ const EDITABLE = [
   'state',
   'country',
   'postal_code',
+  'area',
+  'landmark',
+  'nationality',
   'qualification',
   'institution',
   'graduation_year',
@@ -222,6 +225,30 @@ export function StudentProfileForm() {
                 <Input
                   value={values.address_line2 ?? ''}
                   onChange={(event) => set('address_line2', event.target.value)}
+                />
+              </Field>
+              <Field
+                label="Area"
+                htmlFor="area"
+                error={errors.area}
+                hint="The part of town people name — Vaishali Nagar, Malviya Nagar."
+              >
+                <Input
+                  id="area"
+                  value={values.area ?? ''}
+                  onChange={(event) => set('area', event.target.value)}
+                />
+              </Field>
+              <Field
+                label="Landmark"
+                htmlFor="landmark"
+                error={errors.landmark}
+                hint="What you would say on the phone: opposite the petrol pump."
+              >
+                <Input
+                  id="landmark"
+                  value={values.landmark ?? ''}
+                  onChange={(event) => set('landmark', event.target.value)}
                 />
               </Field>
               <Field label="City" htmlFor="city" error={errors.city}>

@@ -97,6 +97,9 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         "state",
         "country",
         "postal_code",
+        "area",
+        "landmark",
+        "nationality",
         "qualification",
         "institution",
         "institution_kind",
@@ -180,11 +183,30 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
     address_line2 = models.CharField(
         _("address line 2"), max_length=200, blank=True, validators=[validate_no_control_characters]
     )
+    #: The part of a city a local would name — "Vaishali Nagar", "Malviya
+    #: Nagar". Jaipur addresses are given this way far more often than by
+    #: street, and a counsellor typing one into a line labelled "address line
+    #: 2" is how it ends up unsearchable.
+    area = models.CharField(
+        _("area"), max_length=120, blank=True, validators=[validate_no_control_characters]
+    )
+    #: What somebody says on the phone when asked where that is: "opposite the
+    #: petrol pump". Not an address and genuinely how people find the place.
+    landmark = models.CharField(
+        _("landmark"), max_length=120, blank=True, validators=[validate_no_control_characters]
+    )
     city = models.CharField(_("city"), max_length=100, blank=True)
     state = models.CharField(_("state"), max_length=100, blank=True)
     country = models.CharField(_("country"), max_length=100, blank=True, default="India")
     postal_code = models.CharField(_("postal code"), max_length=20, blank=True)
 
+    nationality = models.CharField(
+        _("nationality"),
+        max_length=60,
+        blank=True,
+        validators=[validate_no_control_characters],
+        help_text=_("Left blank rather than defaulted: an assumed nationality is a wrong one."),
+    )
     qualification = models.CharField(
         _("highest qualification"), max_length=32, choices=Qualification.choices, blank=True
     )

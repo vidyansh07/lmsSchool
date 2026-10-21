@@ -69,6 +69,7 @@ STUDENT_FILTER_FIELDS = (
         "qualification", kind="choice", label="Qualification", choices=Qualification.choices
     ),
     FilterField("city", kind="text", label="City"),
+    FilterField("area", kind="text", label="Area"),
     FilterField("state", kind="text", label="State"),
     # "Everyone from Infosys" — the question a referral scheme starts with.
     FilterField("institution", kind="text", label="College or employer"),

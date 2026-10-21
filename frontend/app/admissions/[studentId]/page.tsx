@@ -457,9 +457,31 @@ export function StudentDetail({ studentId }: { studentId: string }) {
               <dt className="text-xs text-ink-muted">Phone</dt>
               <dd>{student.user.phone || 'Not provided'}</dd>
             </div>
-            <div>
-              <dt className="text-xs text-ink-muted">City</dt>
-              <dd>{student.city || 'Not provided'}</dd>
+            <div className="sm:col-span-2">
+              {/* The whole address, on the first screen.
+                  A city on its own answers almost nothing — somebody ringing
+                  a student to say the class has moved needs the part of town
+                  and the landmark, which is how an address is given here.
+                  Assembled from the parts that are filled in, so a half-known
+                  address reads as a line rather than as a row of commas. */}
+              <dt className="text-xs text-ink-muted">Address</dt>
+              <dd>
+                {[
+                  student.address_line1,
+                  student.address_line2,
+                  student.area,
+                  student.city,
+                  student.state,
+                  student.postal_code,
+                ]
+                  .filter(Boolean)
+                  .join(', ') || 'Not provided'}
+                {student.landmark ? (
+                  <span className="block text-sm text-ink-muted">
+                    Near {student.landmark}
+                  </span>
+                ) : null}
+              </dd>
             </div>
             {student.roll_number ? (
               <div>

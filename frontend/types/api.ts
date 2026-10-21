@@ -135,6 +135,13 @@ export interface StudentProfile {
   state: string;
   country: string;
   postal_code: string;
+  /** The part of a city a local names first — how addresses are actually
+   *  given here. Its own field so it stays searchable. */
+  area: string;
+  /** What somebody says when asked where that is. Not an address; genuinely
+   *  how people find the place. */
+  landmark: string;
+  nationality: string;
   qualification: Qualification | "";
   institution: string;
   institution_kind: InstitutionKind | "";
