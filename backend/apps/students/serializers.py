@@ -20,7 +20,14 @@ from apps.common import bulk
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 from apps.work.models import ActivityPriority
 
-from .models import MIN_FEE_AMOUNT, FeeStatus, InstitutionKind, Qualification, StudentProfile
+from .models import (
+    MIN_FEE_AMOUNT,
+    ClassTime,
+    FeeStatus,
+    InstitutionKind,
+    Qualification,
+    StudentProfile,
+)
 
 #: Fields an administrator may set or change. Identifiers, the linked account
 #: and timestamps are absent: they are system-owned.
@@ -77,6 +84,17 @@ class StudentProfileSerializer(StrictModelSerializer):
             "emergency_contact_relationship",
             "guardian_name",
             "guardian_phone",
+            "about",
+            "career_goal",
+            "interests",
+            "skills",
+            "languages",
+            "preferred_class_time",
+            "linkedin_url",
+            "github_url",
+            "portfolio_url",
+            "open_to_placement",
+            "willing_to_relocate",
             "fee_status",
             "fee_status_updated_at",
             "fee_amount",
@@ -302,6 +320,21 @@ class StudentSelfUpdateSerializer(StrictModelSerializer):
     )
     job_title = SafeCharField(max_length=120, required=False, allow_blank=True)
     roll_number = SafeCharField(max_length=32, required=False, allow_blank=True)
+    # Declared rather than inferred so the list length is enforced at the edge.
+    # The model's `size` is a Postgres constraint, which turns an over-long
+    # list into a 500 rather than a 400 naming the field.
+    interests = serializers.ListField(
+        child=SafeCharField(max_length=60), required=False, max_length=20
+    )
+    skills = serializers.ListField(
+        child=SafeCharField(max_length=60), required=False, max_length=30
+    )
+    languages = serializers.ListField(
+        child=SafeCharField(max_length=40), required=False, max_length=10
+    )
+    preferred_class_time = serializers.ChoiceField(
+        choices=ClassTime.choices, required=False, allow_blank=True
+    )
 
     class Meta:
         model = StudentProfile

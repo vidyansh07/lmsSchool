@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
@@ -44,6 +45,20 @@ class FeeStatus(models.TextChoices):
     PAID = "paid", _("Paid")
     WAIVED = "waived", _("Waived")
     OVERDUE = "overdue", _("Overdue")
+
+
+class ClassTime(models.TextChoices):
+    """When a student can actually attend.
+
+    Asked because it decides something: a batch scheduled at a time most of its
+    students cannot make empties out in the second week, and the institute only
+    found out after it had happened.
+    """
+
+    MORNING = "morning", _("Morning")
+    AFTERNOON = "afternoon", _("Afternoon")
+    EVENING = "evening", _("Evening")
+    WEEKEND = "weekend", _("Weekend")
 
 
 class InstitutionKind(models.TextChoices):
@@ -93,6 +108,19 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         "emergency_contact_relationship",
         "guardian_name",
         "guardian_phone",
+        # What the student says about themselves. Self-edited by definition:
+        # nobody else can answer "what do you want to do".
+        "about",
+        "career_goal",
+        "interests",
+        "skills",
+        "languages",
+        "preferred_class_time",
+        "linkedin_url",
+        "github_url",
+        "portfolio_url",
+        "open_to_placement",
+        "willing_to_relocate",
     )
 
     #: Fields counted towards the completion percentage shown in the UI.
@@ -238,6 +266,83 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         related_name="fee_amount_updates",
         help_text=_("Who last set the agreed fee."),
     )
+
+    # --- What the student says about themselves ---------------------------
+    #
+    # Everything above this line is a fact the institute records about a
+    # student: their address, their fee status, who referred them. Everything
+    # below is what the student says about themselves, and it is here rather
+    # than in a separate table for the reason the rest of this model exists —
+    # it is the same person, and a profile split across two records is one
+    # nobody keeps up to date.
+    #
+    # It is asked for because it is used. A placement officer looking for
+    # somebody to put in front of an employer needs to know what they want to
+    # do and what they can already do; a batch planner needs to know when they
+    # can attend. Without this, both were guesses made from a course code.
+    #
+    # Every field is optional and self-edited. A student who fills in nothing
+    # has a complete profile in the sense that matters: the institute has no
+    # business insisting on their LinkedIn.
+
+    about = models.TextField(
+        _("about"),
+        max_length=1000,
+        blank=True,
+        validators=[validate_no_control_characters],
+        help_text=_("A few lines in the student's own words."),
+    )
+    career_goal = models.CharField(
+        _("career goal"),
+        max_length=200,
+        blank=True,
+        validators=[validate_no_control_characters],
+        help_text=_("The job or field the student is aiming for."),
+    )
+    #: Favourite subjects and topics, as the student names them. Free text in a
+    #: list rather than a fixed vocabulary: "Linux", "cloud", "cyber security"
+    #: and "networking" are what people actually say, and a dropdown built from
+    #: the course catalogue would miss everything the institute does not teach
+    #: yet — which is exactly the signal worth having.
+    interests = ArrayField(
+        models.CharField(max_length=60, validators=[validate_no_control_characters]),
+        verbose_name=_("interests"),
+        default=list,
+        blank=True,
+        size=20,
+    )
+    skills = ArrayField(
+        models.CharField(max_length=60, validators=[validate_no_control_characters]),
+        verbose_name=_("skills"),
+        default=list,
+        blank=True,
+        size=30,
+    )
+    languages = ArrayField(
+        models.CharField(max_length=40, validators=[validate_no_control_characters]),
+        verbose_name=_("languages"),
+        default=list,
+        blank=True,
+        size=10,
+    )
+    preferred_class_time = models.CharField(
+        _("preferred class time"),
+        max_length=16,
+        choices=ClassTime.choices,
+        blank=True,
+    )
+    linkedin_url = models.URLField(_("LinkedIn"), max_length=200, blank=True)
+    github_url = models.URLField(_("GitHub"), max_length=200, blank=True)
+    portfolio_url = models.URLField(_("portfolio"), max_length=200, blank=True)
+    #: Whether the student wants to be put forward for jobs. A placement
+    #: officer should not be ringing somebody who is not looking, and a student
+    #: who is looking should not have to hope they get noticed.
+    open_to_placement = models.BooleanField(
+        _("open to placement"),
+        default=False,
+        help_text=_("Whether the student wants to be put forward for jobs."),
+    )
+    willing_to_relocate = models.BooleanField(_("willing to relocate"), default=False)
 
     notes = models.TextField(
         _("internal notes"),

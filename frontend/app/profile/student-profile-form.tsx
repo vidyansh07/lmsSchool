@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
-import { Input, Select } from '@/components/ui/input';
+import { Input, Select, Textarea } from '@/components/ui/input';
 import { ApiError, fieldErrors } from '@/lib/api';
 import { getOwnStudentProfile, updateOwnStudentProfile } from '@/lib/people';
 import { FEE_STATUS_LABEL, FEE_STATUS_VARIANT, QUALIFICATION_OPTIONS } from '@/lib/labels';
@@ -31,9 +31,30 @@ const EDITABLE = [
   'emergency_contact_relationship',
   'guardian_name',
   'guardian_phone',
+  // What the student says about themselves. Everything above is a fact the
+  // institute recorded; these are the questions only they can answer, and they
+  // are asked because somebody uses the answers — a placement officer deciding
+  // who to put in front of an employer, a planner deciding when a class runs.
+  'about',
+  'career_goal',
+  'preferred_class_time',
+  'linkedin_url',
+  'github_url',
+  'portfolio_url',
 ] as const;
 
-type Editable = (typeof EDITABLE)[number];
+/**
+ * Lists, edited as one comma-separated line each.
+ *
+ * A tag widget would be nicer and is not what this needs: people type
+ * "Linux, cloud, networking" without being taught to, it works on a phone
+ * keyboard, and it survives a paste out of a CV. Split on save, joined on
+ * load.
+ */
+const LIST_FIELDS = ['interests', 'skills', 'languages'] as const;
+
+/** Yes/no answers, kept as strings so one state shape covers every field. */
+const BOOLEAN_FIELDS = ['open_to_placement', 'willing_to_relocate'] as const;
 
 export function StudentProfileForm() {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
@@ -50,11 +71,17 @@ export function StudentProfileForm() {
       .then((loaded) => {
         if (cancelled) return;
         setProfile(loaded);
-        setValues(
-          Object.fromEntries(
+        setValues({
+          ...Object.fromEntries(
             EDITABLE.map((field) => [field, String(loaded[field] ?? '')]),
           ),
-        );
+          ...Object.fromEntries(
+            LIST_FIELDS.map((field) => [field, (loaded[field] ?? []).join(', ')]),
+          ),
+          ...Object.fromEntries(
+            BOOLEAN_FIELDS.map((field) => [field, loaded[field] ? 'true' : 'false']),
+          ),
+        });
       })
       .catch((cause: unknown) => {
         if (!cancelled) setLoadError(cause instanceof ApiError ? cause : null);
@@ -67,7 +94,7 @@ export function StudentProfileForm() {
     };
   }, []);
 
-  function set(field: Editable, value: string) {
+  function set(field: string, value: string) {
     setValues((current) => ({ ...current, [field]: value }));
   }
 
@@ -86,6 +113,17 @@ export function StudentProfileForm() {
           value === '' && (field === 'date_of_birth' || field === 'graduation_year')
             ? null
             : value;
+      }
+      for (const field of LIST_FIELDS) {
+        // An empty line means an empty list, not a list holding "". Trimmed
+        // because "Linux, cloud" is how people type it.
+        payload[field] = (values[field] ?? '')
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter(Boolean);
+      }
+      for (const field of BOOLEAN_FIELDS) {
+        payload[field] = values[field] === 'true';
       }
       setProfile(await updateOwnStudentProfile(payload as Partial<StudentProfile>));
       setSaved(true);
@@ -245,6 +283,158 @@ export function StudentProfileForm() {
                   onChange={(event) => set('guardian_phone', event.target.value)}
                 />
               </Field>
+            </div>
+          </fieldset>
+
+          {/* The part only the student can answer. Kept last because the
+              fields above are the ones the office chases them for, and kept
+              on the same form because a second page is a second thing to
+              remember to save. */}
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-semibold text-ink">About you</legend>
+            <p className="text-sm text-ink-muted">
+              None of this is required. It is what we use to suggest the right
+              course, to schedule classes at a time you can make, and — if you
+              want it — to put you in front of employers.
+            </p>
+            <Field label="About you" htmlFor="about" error={errors.about}>
+              <Textarea
+                id="about"
+                rows={3}
+                value={values.about ?? ''}
+                onChange={(event) => set('about', event.target.value)}
+                placeholder="A few lines in your own words."
+              />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field
+                label="What do you want to do?"
+                htmlFor="career-goal"
+                error={errors.career_goal}
+                hint="The job or field you are aiming for."
+              >
+                <Input
+                  id="career-goal"
+                  value={values.career_goal ?? ''}
+                  onChange={(event) => set('career_goal', event.target.value)}
+                  placeholder="e.g. Linux system administrator"
+                />
+              </Field>
+              <Field
+                label="When can you attend?"
+                htmlFor="class-time"
+                error={errors.preferred_class_time}
+                hint="So we do not put you in a batch you cannot make."
+              >
+                <Select
+                  id="class-time"
+                  value={values.preferred_class_time ?? ''}
+                  onChange={(event) => set('preferred_class_time', event.target.value)}
+                >
+                  <option value="">No preference</option>
+                  <option value="morning">Morning</option>
+                  <option value="afternoon">Afternoon</option>
+                  <option value="evening">Evening</option>
+                  <option value="weekend">Weekend</option>
+                </Select>
+              </Field>
+              <Field
+                label="Subjects you enjoy"
+                htmlFor="interests"
+                error={errors.interests}
+                hint="Separate with commas."
+              >
+                <Input
+                  id="interests"
+                  value={values.interests ?? ''}
+                  onChange={(event) => set('interests', event.target.value)}
+                  placeholder="Linux, cloud, networking"
+                />
+              </Field>
+              <Field
+                label="What can you already do?"
+                htmlFor="skills"
+                error={errors.skills}
+                hint="Separate with commas."
+              >
+                <Input
+                  id="skills"
+                  value={values.skills ?? ''}
+                  onChange={(event) => set('skills', event.target.value)}
+                  placeholder="Bash, Python, Git"
+                />
+              </Field>
+              <Field
+                label="Languages you speak"
+                htmlFor="languages"
+                error={errors.languages}
+                hint="Separate with commas."
+              >
+                <Input
+                  id="languages"
+                  value={values.languages ?? ''}
+                  onChange={(event) => set('languages', event.target.value)}
+                  placeholder="Hindi, English"
+                />
+              </Field>
+              <Field label="LinkedIn" htmlFor="linkedin" error={errors.linkedin_url}>
+                <Input
+                  id="linkedin"
+                  type="url"
+                  value={values.linkedin_url ?? ''}
+                  onChange={(event) => set('linkedin_url', event.target.value)}
+                  placeholder="https://…"
+                />
+              </Field>
+              <Field label="GitHub" htmlFor="github" error={errors.github_url}>
+                <Input
+                  id="github"
+                  type="url"
+                  value={values.github_url ?? ''}
+                  onChange={(event) => set('github_url', event.target.value)}
+                  placeholder="https://…"
+                />
+              </Field>
+              <Field label="Portfolio or website" htmlFor="portfolio" error={errors.portfolio_url}>
+                <Input
+                  id="portfolio"
+                  type="url"
+                  value={values.portfolio_url ?? ''}
+                  onChange={(event) => set('portfolio_url', event.target.value)}
+                  placeholder="https://…"
+                />
+              </Field>
+            </div>
+            <div className="space-y-2">
+              {/* Opt-in, not opt-out: nobody should be put in front of an
+                  employer because they forgot to untick something. */}
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 accent-[var(--color-action)]"
+                  checked={values.open_to_placement === 'true'}
+                  onChange={(event) =>
+                    set('open_to_placement', event.target.checked ? 'true' : 'false')
+                  }
+                />
+                <span>
+                  I am looking for a job
+                  <span className="block text-ink-muted">
+                    Our placement team will see this and may put you forward.
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 accent-[var(--color-action)]"
+                  checked={values.willing_to_relocate === 'true'}
+                  onChange={(event) =>
+                    set('willing_to_relocate', event.target.checked ? 'true' : 'false')
+                  }
+                />
+                <span>I would move city for the right job</span>
+              </label>
             </div>
           </fieldset>
 

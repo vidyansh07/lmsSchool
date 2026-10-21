@@ -149,6 +149,23 @@ export interface StudentProfile {
   emergency_contact_relationship: string;
   guardian_name: string;
   guardian_phone: string;
+
+  /* What the student says about themselves. Everything above is a fact the
+     institute recorded about them; these are the questions only they can
+     answer, and they are asked because somebody uses the answers. */
+  about: string;
+  career_goal: string;
+  interests: string[];
+  skills: string[];
+  languages: string[];
+  preferred_class_time: '' | 'morning' | 'afternoon' | 'evening' | 'weekend';
+  linkedin_url: string;
+  github_url: string;
+  portfolio_url: string;
+  /** Whether they want to be put forward for jobs. */
+  open_to_placement: boolean;
+  willing_to_relocate: boolean;
+
   fee_status: FeeStatus;
   fee_status_updated_at: string | null;
   /** The fee agreed at registration, in rupees, as the API's decimal string.

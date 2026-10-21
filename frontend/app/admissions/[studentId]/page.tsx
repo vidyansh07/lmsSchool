@@ -539,6 +539,95 @@ export function StudentDetail({ studentId }: { studentId: string }) {
         </CardContent>
       </Card>
 
+      {/* What the student wrote about themselves.
+          Shown only when they have written something: a card of "Not
+          provided" six times over teaches a counsellor to stop looking, and
+          the whole value of this is that somebody looks. */}
+      {student.career_goal ||
+      student.about ||
+      student.interests?.length ||
+      student.skills?.length ||
+      student.open_to_placement ? (
+        <Card>
+          <CardHeader>
+            <CardTitle as="h2">In their own words</CardTitle>
+            <CardDescription>
+              Written by the student. Nobody else can answer these.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {student.open_to_placement ? (
+              <Badge variant="success">
+                Looking for a job{student.willing_to_relocate ? ' · will relocate' : ''}
+              </Badge>
+            ) : null}
+            {student.career_goal ? (
+              <div>
+                <dt className="text-xs text-ink-muted">Wants to be</dt>
+                <dd className="font-medium">{student.career_goal}</dd>
+              </div>
+            ) : null}
+            {student.about ? (
+              <p className="whitespace-pre-line text-sm text-ink-muted">{student.about}</p>
+            ) : null}
+            {student.skills?.length ? (
+              <div>
+                <dt className="text-xs text-ink-muted">Can already do</dt>
+                <dd className="mt-1 flex flex-wrap gap-1">
+                  {student.skills.map((skill) => (
+                    <Badge key={skill} variant="neutral">
+                      {skill}
+                    </Badge>
+                  ))}
+                </dd>
+              </div>
+            ) : null}
+            {student.interests?.length ? (
+              <div>
+                <dt className="text-xs text-ink-muted">Enjoys</dt>
+                <dd className="mt-1 flex flex-wrap gap-1">
+                  {student.interests.map((interest) => (
+                    <Badge key={interest} variant="neutral">
+                      {interest}
+                    </Badge>
+                  ))}
+                </dd>
+              </div>
+            ) : null}
+            {student.preferred_class_time ? (
+              <div>
+                <dt className="text-xs text-ink-muted">Can attend</dt>
+                <dd className="capitalize">{student.preferred_class_time}</dd>
+              </div>
+            ) : null}
+            {student.linkedin_url || student.github_url || student.portfolio_url ? (
+              <div className="flex flex-wrap gap-3 text-sm">
+                {[
+                  ['LinkedIn', student.linkedin_url],
+                  ['GitHub', student.github_url],
+                  ['Portfolio', student.portfolio_url],
+                ]
+                  .filter(([, href]) => href)
+                  .map(([label, href]) => (
+                    <a
+                      key={label}
+                      href={href as string}
+                      target="_blank"
+                      // A link to a student's own site leaves this product, so
+                      // it must not hand the destination a handle on the tab
+                      // it came from.
+                      rel="noopener noreferrer"
+                      className="text-action hover:underline"
+                    >
+                      {label}
+                    </a>
+                  ))}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <EnrolmentHistory
         studentId={student.id}
         studentCode={student.student_id}
