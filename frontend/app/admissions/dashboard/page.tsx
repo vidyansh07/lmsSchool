@@ -105,7 +105,6 @@ import { Grid, GridItem } from '@/components/ui/layout';
 import { StatCard } from '@/components/ui/stat';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { RequireAuth } from '@/components/require-auth';
-import { WarningsStrip } from '@/components/warnings-strip';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api';
@@ -516,7 +515,6 @@ export function AdmissionsDashboardContent() {
 
       <QuickActions actions={quickActions} />
 
-      <WarningsStrip />
 
       <Grid>
         <GridItem span={3}>

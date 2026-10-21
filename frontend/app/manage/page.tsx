@@ -50,7 +50,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Grid, GridItem } from '@/components/ui/layout';
 import { StatCard } from '@/components/ui/stat';
 import { PresentNowStrip } from '@/components/academics/present-now';
-import { WarningsStrip } from '@/components/warnings-strip';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
 import { formatNumber } from '@/lib/format';
@@ -252,7 +251,6 @@ function ManagerOverview() {
 
       <QuickActions actions={quickActions} />
 
-      <WarningsStrip />
 
       <PresentNowStrip />
 

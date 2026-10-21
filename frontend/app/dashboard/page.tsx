@@ -52,7 +52,6 @@ import {
 } from '@/components/student/pending-work-panel';
 import { averageMetric, StandingPanel, collectRiskItems } from '@/components/student/standing-panel';
 import { UpcomingTimeline } from '@/components/student/upcoming-timeline';
-import { WarningsStrip } from '@/components/warnings-strip';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -864,7 +863,6 @@ export function Dashboard() {
         </p>
       </div>
 
-      {isTrainer ? <WarningsStrip /> : null}
 
       {isTrainer && trainer ? (
         trainer.is_trainer ? (

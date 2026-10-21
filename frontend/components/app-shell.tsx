@@ -54,6 +54,7 @@ import {
 
 import { useAuth } from '@/components/auth-provider';
 import { CommandPalette } from '@/components/command-palette';
+import { WarningsButton } from '@/components/warnings-button';
 import {
   accentFor as accentOf,
   homeFor,
@@ -443,6 +444,9 @@ function HeaderAccount() {
   const name = user.full_name || user.email;
   return (
     <div className="flex items-center gap-1 sm:gap-2">
+      {/* Before notifications: what needs doing is the more urgent of the two,
+          and it is the one somebody came to the product to act on. */}
+      <WarningsButton />
       <Tooltip content="Notifications">
         <Button asChild variant="ghost" size="sm" className="size-9 p-0 text-ink-muted">
           <Link href="/notifications" aria-label="Notifications">

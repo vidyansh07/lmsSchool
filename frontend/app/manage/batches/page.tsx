@@ -26,7 +26,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 
 import { ManagerAttentionStrip } from '@/components/manage/attention-strip';
-import { WarningsStrip } from '@/components/warnings-strip';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { SavedViews } from '@/components/saved-views';
 import { ActiveFilters } from '@/components/active-filters';
@@ -171,7 +170,6 @@ export function BatchesHub() {
       </div>
 
       <ManagerAttentionStrip />
-      <WarningsStrip />
 
       <div className="space-y-4">
         <AttentionChip
