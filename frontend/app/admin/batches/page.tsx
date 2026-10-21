@@ -9,10 +9,13 @@ import { ExportMenu } from '@/components/export-menu';
 import { exportFiltersFrom } from '@/lib/reporting';
 import { SavedViews } from '@/components/saved-views';
 import { ActiveFilters } from '@/components/active-filters';
+import { CalendarDays, Eye, Pencil, Users } from 'lucide-react';
+
 import { labelFor } from '@/lib/labels';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
+import { RowActions } from '@/components/row-actions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/input';
@@ -90,6 +93,38 @@ function BatchList() {
         <Badge variant={BATCH_STATUS_VARIANT[batch.status]}>
           {BATCH_STATUS_LABEL[batch.status]}
         </Badge>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      sticky: 'end',
+      render: (batch) => (
+        <RowActions
+          subject={batch.name}
+          actions={[
+            { label: 'Open', icon: Eye, href: `/admin/batches/${batch.id}` },
+            {
+              label: 'Edit',
+              icon: Pencil,
+              href: `/admin/batches/${batch.id}?edit=1`,
+              capability: Capability.batchUpdateAny,
+            },
+            {
+              label: 'Students',
+              icon: Users,
+              href: `/manage/batches/${batch.id}/students`,
+              capability: Capability.enrolmentViewAny,
+            },
+            {
+              label: 'Timetable',
+              icon: CalendarDays,
+              href: `/admin/batches/${batch.id}?tab=schedule`,
+              capability: Capability.batchManageSchedule,
+            },
+          ]}
+        />
       ),
     },
   ];

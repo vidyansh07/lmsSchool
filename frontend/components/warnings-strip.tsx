@@ -12,6 +12,7 @@ import { useState } from 'react';
 import {
   AlertOctagon,
   AlertTriangle,
+  ArrowRight,
   ChevronDown,
   ChevronUp,
   Info,
@@ -20,6 +21,7 @@ import {
 
 import { ErrorState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useApi } from '@/hooks/use-api';
@@ -117,6 +119,16 @@ export function WarningsStrip({ className }: { className?: string }) {
                 : `${data?.length ?? 0} ${data?.length === 1 ? 'thing' : 'things'} to look at${errors ? `, ${errors} today` : ''}.`}
           </CardDescription>
         </div>
+        {/* The card is a glance; the page is where the list is worked
+            through. Only offered when there is something to work through. */}
+        {data && data.length > 0 ? (
+          <Button asChild variant="ghost" size="sm" className="shrink-0 gap-1">
+            <Link href="/needs-attention">
+              See all
+              <ArrowRight className="size-3.5" aria-hidden="true" />
+            </Link>
+          </Button>
+        ) : null}
       </CardHeader>
       <CardContent>
         {error ? (

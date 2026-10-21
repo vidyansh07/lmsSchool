@@ -23,6 +23,7 @@ class WarningSerializer(serializers.Serializer):
     label = serializers.CharField()
     count = serializers.IntegerField()
     href = serializers.CharField(allow_null=True)
+    explanation = serializers.CharField(allow_blank=True)
     items = WarningItemSerializer(many=True)
 
 

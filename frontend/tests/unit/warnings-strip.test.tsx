@@ -18,6 +18,7 @@ const warnings: StaffWarning[] = [
     label: '2 students past the date a payment was expected',
     count: 2,
     href: '/admin/students?fee_status=overdue',
+    explanation: '',
     items: [
       { label: 'Rahul Verma · ₹9,000 owed since 10 Sep', href: '/admissions/s1' },
       { label: 'Asha Rao · ₹4,000 owed since 12 Sep', href: '/admissions/s2' },
@@ -29,6 +30,7 @@ const warnings: StaffWarning[] = [
     label: '1 staff account never verified their email',
     count: 1,
     href: '/admin/users',
+    explanation: '',
     items: [],
   },
 ];

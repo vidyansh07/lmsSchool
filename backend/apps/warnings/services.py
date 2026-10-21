@@ -49,6 +49,67 @@ def _student_of(enrollment) -> str:
     return _person(enrollment.student.user)
 
 
+#: What each kind means, in a sentence, for somebody who has not been told.
+#:
+#: The label says what is wrong ("12 fees overdue"); this says why it matters
+#: and what happens if it is left. It lives here rather than in the browser
+#: because it belongs with the rule that produces it: a kind whose condition
+#: changes should have its wording changed in the same edit.
+#:
+#: A kind with no entry simply has no explanation, which is how a new kind
+#: behaves until somebody writes one — not a reason to fail.
+EXPLANATION: dict[str, str] = {
+    "fees_overdue": (
+        "The date these payments were expected has passed and money is still "
+        "owed. The longer a fee sits unpaid, the harder it is to collect."
+    ),
+    "fees_missing": (
+        "These students were enrolled more than a day ago and no fee has been "
+        "agreed, so nothing is owed and nothing will ever be collected."
+    ),
+    "batch_no_trainer": (
+        "These classes are running or about to, with nobody assigned to teach "
+        "them."
+    ),
+    "batch_seats": (
+        "These classes start within three days and still have empty seats. "
+        "After they begin, those seats are revenue that cannot be recovered."
+    ),
+    "trainer_clash": (
+        "A trainer is timetabled in two places at the same time. One of the "
+        "two classes will not happen as scheduled."
+    ),
+    "dsr_missing": (
+        "These classes finished and no daily report was filed, so there is no "
+        "record of what was taught or who attended."
+    ),
+    "students_at_risk": (
+        "Attendance, assessment results or both have fallen far enough that "
+        "these students are unlikely to finish without help."
+    ),
+    "not_enrolled": (
+        "These people registered more than a week ago and are still not on any "
+        "batch. They have paid attention to you; nothing is holding their seat."
+    ),
+    "account_no_centre": (
+        "These accounts are limited to one centre and have not been given one, "
+        "so they can sign in and see nothing at all."
+    ),
+    "email_unverified": (
+        "These staff accounts never confirmed their address, so password "
+        "resets and notifications will not reach them."
+    ),
+    "completions_pending": (
+        "These students have met every requirement and are waiting for someone "
+        "to approve the completion before a certificate can be issued."
+    ),
+    "batch_overrun": (
+        "These classes are past their end date and still marked active, so "
+        "they go on counting as current work in every total."
+    ),
+}
+
+
 def _warning(kind, severity, label, count, href, items=()) -> dict[str, Any]:
     return {
         "kind": kind,
@@ -56,6 +117,7 @@ def _warning(kind, severity, label, count, href, items=()) -> dict[str, Any]:
         "label": label,
         "count": count,
         "href": href,
+        "explanation": EXPLANATION.get(kind, ""),
         "items": list(items)[:ITEM_LIMIT],
     }
 

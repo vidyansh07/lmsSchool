@@ -172,9 +172,10 @@ function StudentsTable() {
         </div>
       ),
     },
-    { key: 'city', header: 'City', render: (row) => row.city || '—' },
+    { key: 'city', header: 'City', hideBelow: 'md', render: (row) => row.city || '—' },
     {
       key: 'qualification',
+      hideBelow: 'md',
       header: 'Qualification',
       render: (row) =>
         row.qualification ? (

@@ -13,11 +13,13 @@
  * one click away on `/manage/trainers/[trainerId]`; this hub's job is to get a
  * manager to the right trainer quickly, not to repeat that screen in miniature.
  */
+import { CalendarDays, Eye, Pencil } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
 import { CreateTrainerDialog } from '@/app/admin/trainers/create-trainer-dialog';
 import { useAuth } from '@/components/auth-provider';
+import { RowActions } from '@/components/row-actions';
 import { BulkActionsBar, type BulkAction } from '@/components/bulk-actions';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
@@ -277,6 +279,35 @@ export function TrainersHub() {
         <Badge variant={row.invitation_accepted ? 'success' : 'warning'}>
           {row.invitation_accepted ? 'Yes' : 'Invitation pending'}
         </Badge>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      sticky: 'end',
+      // The row already opens the trainer on click; these are the things
+      // somebody wants without leaving the list, and each needs the capability
+      // its own screen enforces.
+      render: (row) => (
+        <RowActions
+          subject={row.full_name || row.email}
+          actions={[
+            { label: 'Open', icon: Eye, href: `/manage/trainers/${row.id}` },
+            {
+              label: 'Edit',
+              icon: Pencil,
+              href: `/manage/trainers/${row.id}?edit=1`,
+              capability: Capability.trainerUpdateAny,
+            },
+            {
+              label: 'Classes',
+              icon: CalendarDays,
+              href: `/manage/batches?trainer=${row.id}`,
+              capability: Capability.batchViewAny,
+            },
+          ]}
+        />
       ),
     },
   ];

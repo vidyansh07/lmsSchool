@@ -27,6 +27,8 @@ import {
   ENROLLMENT_FILTER_KEYS,
   EnrollmentBulkActions,
 } from '@/components/admissions/enrollment-bulk-actions';
+import { CalendarDays, Eye, IndianRupee } from 'lucide-react';
+
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { exportFiltersFrom } from '@/lib/reporting';
@@ -37,6 +39,7 @@ import { labelFor } from '@/lib/labels';
 import { ListToolbar } from '@/components/list-toolbar';
 import { Pagination } from '@/components/pagination';
 import { RequireAuth } from '@/components/require-auth';
+import { RowActions } from '@/components/row-actions';
 import { EmptyState } from '@/components/states';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -194,6 +197,37 @@ export function AdmissionsList() {
         <Badge variant={ENROLLMENT_STATUS_VARIANT[row.status]}>
           {ENROLLMENT_STATUS_LABEL[row.status]}
         </Badge>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      sticky: 'end',
+      // `student_id` is optional on this row — an enrolment whose student has
+      // been removed still lists. Without it there is no record to open, so
+      // the row offers only what it can honour.
+      render: (row) => (
+        <RowActions
+          subject={row.student_name || row.student_email || row.code}
+          actions={[
+            ...(row.student_id
+              ? [{ label: 'Open', icon: Eye, href: `/admissions/${row.student_id}` }]
+              : []),
+            {
+              label: 'Fees',
+              icon: IndianRupee,
+              href: `/fees?enrollment=${row.id}`,
+              capability: Capability.feeViewAny,
+            },
+            {
+              label: 'Class',
+              icon: CalendarDays,
+              href: `/admin/batches/${row.batch_id}`,
+              capability: Capability.batchViewAny,
+            },
+          ]}
+        />
       ),
     },
   ];

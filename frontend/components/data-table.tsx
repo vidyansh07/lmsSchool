@@ -63,6 +63,18 @@ export interface DataTableColumn<Row> {
   /** Pins this column to the left or right edge of the scroll area. At most
    *  one column of each may be sticky — see the module docstring. */
   sticky?: 'start' | 'end';
+  /**
+   * Leave this column out below a breakpoint.
+   *
+   * A table does not become readable on a phone by shrinking: it becomes
+   * readable by showing less. A column that is useful on a desk and merely
+   * noise on a phone — a secondary date, a qualification, a count — says so
+   * here, and the columns that identify the row keep the width.
+   *
+   * It is hidden, not dropped: the data is still in the row and still in an
+   * export. This is about what is worth a phone's width.
+   */
+  hideBelow?: 'sm' | 'md' | 'lg';
   render: (row: Row) => ReactNode;
   /** A CSS width, e.g. `"12rem"`. Columns without one size to their content. */
   width?: string;
@@ -238,10 +250,33 @@ export function DataTable<Row>({
   //
   // A selection checkbox column, if present, always owns the left edge (at
   // `left-0`); a column marked `sticky: 'start'` sits immediately after it.
+  // Not sticky on a phone.
+  //
+  // Sticky columns are a wide-screen idea: pin the identity on the left and the
+  // actions on the right, and scroll the middle. On a 390px screen the two
+  // pinned columns take almost the whole width, and the middle — the column
+  // that says *who the row is about* — is crushed to a few pixels. A roster
+  // showing ids and buttons and no names is worse than one that simply scrolls.
+  //
+  // So below `sm` they are ordinary cells and the table scrolls as a whole.
+  // Everything stays reachable; nothing is pinned.
   function stickyPositionClass(column: DataTableColumn<Row>): string | undefined {
-    if (column.sticky === 'start') return cn('sticky z-10', selection ? 'left-10' : 'left-0');
-    if (column.sticky === 'end') return 'sticky right-0 z-10';
+    if (column.sticky === 'start') {
+      return cn('max-sm:static sm:sticky z-10', selection ? 'sm:left-10' : 'sm:left-0');
+    }
+    if (column.sticky === 'end') return 'max-sm:static sm:sticky sm:right-0 z-10';
     return undefined;
+  }
+
+  /** Tailwind needs whole class names, so the breakpoints are written out. */
+  const HIDE_BELOW: Record<NonNullable<DataTableColumn<Row>['hideBelow']>, string> = {
+    sm: 'hidden sm:table-cell',
+    md: 'hidden md:table-cell',
+    lg: 'hidden lg:table-cell',
+  };
+
+  function hiddenClass(column: DataTableColumn<Row>): string | undefined {
+    return column.hideBelow ? HIDE_BELOW[column.hideBelow] : undefined;
   }
 
   return (
@@ -308,6 +343,7 @@ export function DataTable<Row>({
                         ALIGN_CLASS[column.align ?? 'left'],
                         cellPadding,
                         stickyPositionClass(column),
+                        hiddenClass(column),
                         // Deliberately last: a header cell must win the merge
                         // over `stickyPositionClass`'s own `z-10`, so it stacks
                         // above a horizontally-sticky *body* column rather than
@@ -331,7 +367,7 @@ export function DataTable<Row>({
                         </Td>
                       ) : null}
                       {columns.map((column) => (
-                        <Td key={column.key} className={cellPadding}>
+                        <Td key={column.key} className={cn(cellPadding, hiddenClass(column))}>
                           <Skeleton className="h-4 w-full max-w-[10rem]" />
                         </Td>
                       ))}
@@ -397,6 +433,7 @@ export function DataTable<Row>({
                               cellPadding,
                               column.sticky && (isSelected ? 'bg-selected' : 'bg-surface'),
                               stickyPositionClass(column),
+                              hiddenClass(column),
                             )}
                           >
                             {column.render(row)}

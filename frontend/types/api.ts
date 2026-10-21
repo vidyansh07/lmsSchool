@@ -2280,6 +2280,8 @@ export interface StaffWarning {
   label: string;
   count: number;
   href: string | null;
+  /** Why it matters, in a sentence. Empty for a kind nobody has worded yet. */
+  explanation: string;
   items: StaffWarningItem[];
 }
 

@@ -244,3 +244,33 @@ def test_the_weekly_digest_notifies_staff_with_open_warnings(admin_user, student
     assert "need attention" in note.title
     assert "no trainer" in note.body
     assert not Notification.objects.filter(recipient=student_profile.user).exists()
+
+
+def test_every_warning_kind_explains_itself(admin_user):
+    """A label says what is wrong; the explanation says why it matters.
+
+    Checked for every kind the service can produce rather than for the few a
+    fixture happens to trigger, because a kind added without wording is
+    invisible until somebody meets it on a real dashboard.
+    """
+    from apps.warnings.services import EXPLANATION, _warning
+    import apps.warnings.services as services
+    import inspect
+    import re
+
+    source = inspect.getsource(services)
+    produced = set(re.findall(r'_warning\(\s*"([a-z_]+)"', source))
+    produced |= set(re.findall(r'_warning\(\s*\n\s*"([a-z_]+)"', source))
+
+    missing = produced - set(EXPLANATION)
+    assert not missing, f"no explanation for: {sorted(missing)}"
+
+
+def test_an_unknown_kind_still_produces_a_warning():
+    # A kind with no wording yet must not take down the strip it appears on.
+    from apps.warnings.services import _warning
+
+    built = _warning("something_new", "info", "A new thing", 1, "/somewhere")
+
+    assert built["explanation"] == ""
+    assert built["label"] == "A new thing"
