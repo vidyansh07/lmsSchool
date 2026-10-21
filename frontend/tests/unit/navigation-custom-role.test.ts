@@ -104,3 +104,33 @@ describe('a user whose capabilities have not arrived yet', () => {
     );
   });
 });
+
+describe('the sidebar does not repeat the page it leads to', () => {
+  /**
+   * An administrator's sidebar carried forty-nine entries, three of which the
+   * `/teaching` hub already lists in the same words. A menu that repeats the
+   * page it leads to is paying for itself twice: longer to read, and the
+   * thing somebody genuinely cannot find sits further down.
+   */
+  const adminHrefs = navFor('admin').flatMap((group) => group.items.map((item) => item.href));
+
+  it.each(['/teaching/assignments', '/teaching/assessments', '/teaching/projects'])(
+    'leaves %s to the teaching hub',
+    (href) => {
+      expect(adminHrefs).not.toContain(href);
+    },
+  );
+
+  it('keeps the hub itself, or those pages become unreachable', () => {
+    expect(adminHrefs).toContain('/teaching');
+  });
+
+  it.each(['/teaching/exams', '/teaching/questions'])(
+    'keeps %s, which the hub does not list',
+    (href) => {
+      // The failure this kind of tidying usually causes: removing a link whose
+      // only other route in was the menu.
+      expect(adminHrefs).toContain(href);
+    },
+  );
+});

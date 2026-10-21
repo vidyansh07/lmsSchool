@@ -649,7 +649,16 @@ export const TRAINER_NAV: NavGroup[] = [
  * the job each does all day (15 October 2026); superadmins get this one with
  * governance raised (below).
  */
-export const ADMIN_NAV: NavGroup[] = [
+export // Three entries used to sit here — Assignments, Weekly tests and Projects.
+// The `/teaching` hub already lists all three, in the same words, and this
+// sidebar carries forty-nine items for an administrator. A menu that repeats
+// the page it leads to is paying for itself twice: it is longer to read, and
+// the thing somebody actually cannot find is further down.
+//
+// Exams and the question bank stayed. They are not on that hub, so removing
+// them would have left no way to reach them at all — which is the failure this
+// kind of tidying usually causes.
+const ADMIN_NAV: NavGroup[] = [
   {
     items: [
       {
@@ -849,24 +858,6 @@ export const ADMIN_NAV: NavGroup[] = [
         label: "Class schedule",
         icon: CalendarCheck,
         capability: Capability.sessionManageAny,
-      },
-      {
-        href: "/teaching/assignments",
-        label: "Assignments",
-        icon: ClipboardList,
-        capability: Capability.assignmentManageAny,
-      },
-      {
-        href: "/teaching/assessments",
-        label: "Weekly tests",
-        icon: PenLine,
-        capability: Capability.assessmentManageAny,
-      },
-      {
-        href: "/teaching/projects",
-        label: "Projects",
-        icon: FolderKanban,
-        capability: Capability.projectManageAny,
       },
       {
         href: "/teaching/exams",
