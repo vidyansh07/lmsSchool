@@ -8,8 +8,10 @@ map of the institution, it is the name of the place they work.
 from __future__ import annotations
 
 from drf_spectacular.utils import OpenApiResponse, extend_schema
+from rest_framework import status
 from rest_framework import status as http_status
-from rest_framework.generics import ListCreateAPIView, get_object_or_404
+from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.generics import ListAPIView, ListCreateAPIView, get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -18,7 +20,12 @@ from apps.common.permissions import Capability, HasCapability
 
 from . import access, services
 from .models import Branch
-from .serializers import BranchSerializer, BranchWriteSerializer
+from .serializers import (
+    AddCollegeSerializer,
+    BranchSerializer,
+    BranchWriteSerializer,
+    CollegeSerializer,
+)
 
 ORGANISATION_TAG = ["organisation"]
 
@@ -96,3 +103,55 @@ class BranchDetailView(APIView):
             branch=branch, actor=request.user, **serializer.validated_data
         )
         return Response(BranchSerializer(updated).data)
+
+
+class CollegeListCreateView(ListAPIView):
+    """The colleges students come from, and a way to add one.
+
+    Readable by anyone who may see students, because the picker sits on the
+    registration form and a counsellor who cannot read the list cannot use it.
+    Adding needs the right to create a student — the same act, from the same
+    screen — rather than a permission of its own, which would mean an
+    administrator being fetched every time somebody met a new college.
+    """
+
+    permission_classes = (HasCapability,)
+    capability_map = {
+        "GET": Capability.STUDENT_VIEW_ANY,
+        "POST": Capability.STUDENT_CREATE,
+    }
+    serializer_class = CollegeSerializer
+    filter_backends = (SearchFilter, OrderingFilter)
+    search_fields = ("name", "city")
+    ordering_fields = ("name",)
+    ordering = ("name",)
+
+    def get_queryset(self):
+        from .models import College
+
+        # Retired colleges are not offered for new students; the students
+        # already attached to one keep it.
+        return College.objects.active()
+
+    @extend_schema(
+        summary="Add a college, or return the one already recorded",
+        request=AddCollegeSerializer,
+        responses={200: CollegeSerializer, 201: CollegeSerializer},
+        tags=["Organisation"],
+    )
+    def post(self, request):
+        payload = AddCollegeSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        from .services import find_or_create_college
+
+        before = self.get_queryset().count()
+        college = find_or_create_college(
+            actor=request.user,
+            name=payload.validated_data["name"],
+            city=payload.validated_data.get("city", ""),
+        )
+        created = self.get_queryset().count() > before
+        return Response(
+            CollegeSerializer(college).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )

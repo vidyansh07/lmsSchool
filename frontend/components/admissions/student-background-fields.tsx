@@ -19,9 +19,11 @@
 
 import { Briefcase, GraduationCap, HelpCircle, type LucideIcon } from 'lucide-react';
 
+import { CollegePicker } from '@/components/admissions/college-picker';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import type { College } from '@/lib/people';
 import type { InstitutionKind } from '@/types/api';
 
 export interface StudentBackground {
@@ -29,10 +31,19 @@ export interface StudentBackground {
   institution: string;
   graduationYear: string;
   jobTitle: string;
+  /**
+   * The college from the shared list, once somebody picks one.
+   *
+   * Beside `institution`, not instead of it: some students name an employer,
+   * and some name something nobody wants in a shared list. The link is what a
+   * report groups by; the text is what the person actually said.
+   */
+  college: College | null;
 }
 
 export const EMPTY_BACKGROUND: StudentBackground = {
   kind: '',
+  college: null,
   institution: '',
   graduationYear: '',
   jobTitle: '',
@@ -67,10 +78,15 @@ export function backgroundToProfile(background: StudentBackground): {
   institution_kind: InstitutionKind | '';
   job_title: string;
   graduation_year: number | null;
+  college: string | null;
 } {
   const year = Number.parseInt(background.graduationYear, 10);
   return {
-    institution: background.institution.trim(),
+    college: background.college?.id ?? null,
+    // Kept in step: a picked college fills the text too, so a record made
+    // through the picker still reads correctly everywhere the old field is
+    // shown — and a student who only has free text is unaffected.
+    institution: background.college?.name ?? background.institution.trim(),
     institution_kind: background.kind,
     job_title: background.kind === 'employer' ? background.jobTitle.trim() : '',
     graduation_year: background.kind === 'college' && Number.isFinite(year) ? year : null,
@@ -157,14 +173,33 @@ export function StudentBackgroundFields({
 
       {value.kind === 'college' ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="College name" htmlFor={`${idPrefix}-institution`} error={errors.institution}>
-            <Input
-              id={`${idPrefix}-institution`}
-              value={value.institution}
-              onChange={(event) => set({ institution: event.target.value })}
-              placeholder="e.g. JECRC University"
+          <Field
+            label="College"
+            htmlFor={`${idPrefix}-college`}
+            error={errors.institution}
+            hint="Search the list. If it is not there, add it — the next person will find it."
+          >
+            <CollegePicker
+              id={`${idPrefix}-college`}
+              value={value.college}
+              onChange={(college) => set({ college })}
             />
           </Field>
+          {value.college === null ? (
+            <Field
+              label="Or type the college name"
+              htmlFor={`${idPrefix}-institution`}
+              error={errors.institution}
+              hint="For anything that does not belong in the shared list."
+            >
+              <Input
+                id={`${idPrefix}-institution`}
+                value={value.institution}
+                onChange={(event) => set({ institution: event.target.value })}
+                placeholder="e.g. JECRC University"
+              />
+            </Field>
+          ) : null}
           <Field
             label="Expected graduation year"
             htmlFor={`${idPrefix}-graduation-year`}

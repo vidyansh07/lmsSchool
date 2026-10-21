@@ -94,7 +94,7 @@ import type {
   TrainerListRow,
 } from '@/types/api';
 
-type StepKey = 'student' | 'course' | 'batch' | 'trainer' | 'confirm';
+type StepKey = 'student' | 'course' | 'fees' | 'batch' | 'trainer' | 'confirm';
 
 /** The student step's own fields; any other key the server refuses with is
  *  said above the form rather than dropped (`profile.*` lifts onto these). */
@@ -115,8 +115,13 @@ const STUDENT_FIELD_KEYS = [
 const STEPS: WizardStep[] = [
   { key: 'student', label: 'Student' },
   { key: 'course', label: 'Course' },
-  { key: 'batch', label: 'Batch' },
-  { key: 'trainer', label: 'Trainer' },
+  { key: 'fees', label: 'Fees' },
+  // Batch and trainer are marked optional: a counsellor can go straight to
+  // confirming. They are not removed, because an enrolment has to sit on a
+  // batch — without one there is no enrolment and therefore no fee record at
+  // all, which is the opposite of what demoting them is for.
+  { key: 'batch', label: 'Batch', optional: true },
+  { key: 'trainer', label: 'Trainer', optional: true },
   { key: 'confirm', label: 'Confirm' },
 ];
 
@@ -159,6 +164,8 @@ export function RegistrationWizard() {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
+  const [area, setArea] = useState('');
+  const [landmark, setLandmark] = useState('');
   // Opened from a lead ("Register this lead"): `?enquiry=<id>`. Its details
   // fill the form, and the finished registration is linked back to it.
   const [leadId, setLeadId] = useState(() =>
@@ -446,11 +453,17 @@ export function RegistrationWizard() {
     }
   }
 
-  function onStudentSubmit(event: React.FormEvent) {
-    event.preventDefault();
+  /**
+   * What is wrong with the money, if anything.
+   *
+   * Written once and called from both places that can move past the fee: the
+   * fees step's own button, and the student step, which still runs it because
+   * a lead arriving pre-filled can carry a discount somebody never saw.
+   * Moving the fields to their own step without moving these rules with them
+   * is how a discount gets agreed with no reason recorded against it.
+   */
+  function feeErrors(): Record<string, string> {
     const errors: Record<string, string> = {};
-    if (!email.trim()) errors.email = 'Email is required.';
-    if (!firstName.trim()) errors.first_name = 'First name is required.';
     if (discountOff > 0 && feeAmount.trim() !== '') {
       if (discountMode === 'percent' && Number(discountValue) > 100) {
         errors.discount_percent = 'A percentage cannot be more than 100.';
@@ -462,6 +475,21 @@ export function RegistrationWizard() {
         errors.discount_reason = 'Say why the discount was given; it is kept with the record.';
       }
     }
+    return errors;
+  }
+
+  function onFeesContinue() {
+    const errors = feeErrors();
+    setStudentErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+    goToStep('batch');
+  }
+
+  function onStudentSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    const errors: Record<string, string> = { ...feeErrors() };
+    if (!email.trim()) errors.email = 'Email is required.';
+    if (!firstName.trim()) errors.first_name = 'First name is required.';
     setStudentErrors(errors);
     if (Object.keys(errors).length > 0) return;
     if (visibleDuplicates.length > 0 && !acknowledgedDuplicate) return;
@@ -520,7 +548,11 @@ export function RegistrationWizard() {
     if (feeAmount.trim() === '' && found.default_fee) onFeeAmountChange(String(Math.round(Number(found.default_fee))));
     setPickedBatch(null);
     setBatchQuery('');
-    advanceTo('batch', 'course');
+    // On to the money, not the classroom. The fee is the next thing the
+    // counsellor and the student actually talk about, and now that a course is
+    // chosen its usual price can be offered as the starting point — which is
+    // exactly what the line above has just done.
+    advanceTo('fees', 'course');
   }
 
   // --- Step 3 handlers -----------------------------------------------------
@@ -643,6 +675,8 @@ export function RegistrationWizard() {
       phone: phone.trim(),
       profile: {
         city: city.trim(),
+        area: area.trim(),
+        landmark: landmark.trim(),
         qualification,
         ...backgroundToProfile(background),
         referred_by: referrer?.id ?? null,
@@ -1003,6 +1037,33 @@ export function RegistrationWizard() {
                 <Field label="City" htmlFor="reg-city" error={studentErrors.city}>
                   <Input value={city} onChange={(event) => setCity(event.target.value)} />
                 </Field>
+                {/* The part of the address people actually navigate by. A city
+                    on its own does not get anybody to the door, and typing it
+                    into a free line is how it stops being searchable. */}
+                <Field
+                  label="Area"
+                  htmlFor="reg-area"
+                  error={studentErrors.area}
+                  hint="Vaishali Nagar, Malviya Nagar…"
+                >
+                  <Input
+                    id="reg-area"
+                    value={area}
+                    onChange={(event) => setArea(event.target.value)}
+                  />
+                </Field>
+                <Field
+                  label="Landmark"
+                  htmlFor="reg-landmark"
+                  error={studentErrors.landmark}
+                  hint="Optional. What you would say on the phone."
+                >
+                  <Input
+                    id="reg-landmark"
+                    value={landmark}
+                    onChange={(event) => setLandmark(event.target.value)}
+                  />
+                </Field>
                 <Field label="Qualification" htmlFor="reg-qualification" error={studentErrors.qualification}>
                   <Select value={qualification} onChange={(event) => setQualification(event.target.value)}>
                     <option value="">Not specified</option>
@@ -1013,122 +1074,9 @@ export function RegistrationWizard() {
                     ))}
                   </Select>
                 </Field>
-                <Field
-                  label="Agreed fee (₹)"
-                  htmlFor="reg-fee"
-                  error={studentErrors.fee_amount}
-                  hint="Decided with the student. Minimum ₹1,000; leave blank if not decided yet."
-                >
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={MIN_FEE_AMOUNT}
-                    step="1"
-                    value={feeAmount}
-                    onChange={(event) => onFeeAmountChange(event.target.value)}
-                    placeholder="e.g. 25000"
-                  />
-                </Field>
-                <DiscountField
-                  id="reg-discount"
-                  agreed={feeAmount}
-                  mode={discountMode}
-                  value={discountValue}
-                  onModeChange={onDiscountModeChange}
-                  onValueChange={onDiscountValueChange}
-                  error={studentErrors.discount_percent ?? studentErrors.discount_amount}
-                  disabled={feeAmount.trim() === ''}
-                />
-                {discountOff > 0 ? (
-                  <Field
-                    label="Reason for the discount"
-                    htmlFor="reg-discount-reason"
-                    error={studentErrors.discount_reason}
-                    required
-                  >
-                    <Input
-                      value={discountReason}
-                      onChange={(event) => setDiscountReason(event.target.value)}
-                      placeholder="e.g. Referral, early bird, scholarship"
-                    />
-                  </Field>
-                ) : null}
-                <Field
-                  label="Paid today (₹)"
-                  htmlFor="reg-paid-now"
-                  hint="The registration payment, usually ₹1,000. Blank if nothing was paid."
-                >
-                  <Input
-                    id="reg-paid-now"
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step="1"
-                    value={paidNow}
-                    onChange={(event) => setPaidNow(event.target.value)}
-                    disabled={feeAmount.trim() === ''}
-                  />
-                </Field>
-                <Field label="Payment method" htmlFor="reg-paid-method">
-                  <Select
-                    id="reg-paid-method"
-                    value={paidMethod}
-                    onChange={(event) => setPaidMethod(event.target.value as PaymentMethod)}
-                    disabled={feeAmount.trim() === '' || paidNow.trim() === ''}
-                  >
-                    {PAYMENT_METHOD_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field
-                  label="Reference number"
-                  htmlFor="reg-paid-reference"
-                  hint={
-                    paidMethod === 'upi'
-                      ? 'The UPI transaction id.'
-                      : paidMethod === 'bank_transfer'
-                        ? 'The bank reference number.'
-                        : 'Any receipt or slip number, if there is one.'
-                  }
-                >
-                  <Input
-                    id="reg-paid-reference"
-                    value={paidReference}
-                    onChange={(event) => setPaidReference(event.target.value)}
-                    disabled={feeAmount.trim() === '' || paidNow.trim() === ''}
-                  />
-                </Field>
-                <Field
-                  label="Reference name"
-                  htmlFor="reg-paid-reference-name"
-                  hint="Who paid or handled it: a parent, the owner, the scanner operator."
-                >
-                  <Input
-                    id="reg-paid-reference-name"
-                    value={paidReferenceName}
-                    onChange={(event) => setPaidReferenceName(event.target.value)}
-                    disabled={feeAmount.trim() === '' || paidNow.trim() === ''}
-                  />
-                </Field>
                 <BranchField idPrefix="reg-branch" value={branchId} onChange={setBranchId} error={studentErrors.branch} />
               </div>
 
-              {feeAmount.trim() !== '' && Number(feeAmount) > 0 ? (
-                <div className="rounded-lg border border-line bg-sunken/40 p-3">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
-                    Instalments
-                  </p>
-                  <InstallmentEditor
-                    idPrefix="reg-inst"
-                    payable={payableAfterDiscount}
-                    rows={installmentsEnabled ? installments : []}
-                    onChange={onInstallmentsChange}
-                  />
-                </div>
-              ) : null}
 
               <div className="rounded-lg border border-line bg-sunken/40 p-3">
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
@@ -1240,6 +1188,149 @@ export function RegistrationWizard() {
               emptyMessage="No courses match."
               autoFocus
             />
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Fees, after the course and before anything about a classroom.
+          The money used to be typed on the same screen as the student's name,
+          above the course it is the fee *for* — so a counsellor agreed an
+          amount before choosing what it bought, and the course's own price
+          could not be offered as a default until afterwards. Its own step,
+          in the order the conversation actually happens. */}
+      {step === 'fees' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Fees</CardTitle>
+            <CardDescription>
+              What was agreed, and anything paid today. Nothing is charged until
+              the last step.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field
+                  label="Agreed fee (₹)"
+                  htmlFor="reg-fee"
+                  error={studentErrors.fee_amount}
+                  hint="Decided with the student. Minimum ₹1,000; leave blank if not decided yet."
+                >
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min={MIN_FEE_AMOUNT}
+                    step="1"
+                    value={feeAmount}
+                    onChange={(event) => onFeeAmountChange(event.target.value)}
+                    placeholder="e.g. 25000"
+                  />
+                </Field>
+                <DiscountField
+                  id="reg-discount"
+                  agreed={feeAmount}
+                  mode={discountMode}
+                  value={discountValue}
+                  onModeChange={onDiscountModeChange}
+                  onValueChange={onDiscountValueChange}
+                  error={studentErrors.discount_percent ?? studentErrors.discount_amount}
+                  disabled={feeAmount.trim() === ''}
+                />
+                {discountOff > 0 ? (
+                  <Field
+                    label="Reason for the discount"
+                    htmlFor="reg-discount-reason"
+                    error={studentErrors.discount_reason}
+                    required
+                  >
+                    <Input
+                      value={discountReason}
+                      onChange={(event) => setDiscountReason(event.target.value)}
+                      placeholder="e.g. Referral, early bird, scholarship"
+                    />
+                  </Field>
+                ) : null}
+                <Field
+                  label="Paid today (₹)"
+                  htmlFor="reg-paid-now"
+                  hint="The registration payment, usually ₹1,000. Blank if nothing was paid."
+                >
+                  <Input
+                    id="reg-paid-now"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="1"
+                    value={paidNow}
+                    onChange={(event) => setPaidNow(event.target.value)}
+                    disabled={feeAmount.trim() === ''}
+                  />
+                </Field>
+                <Field label="Payment method" htmlFor="reg-paid-method">
+                  <Select
+                    id="reg-paid-method"
+                    value={paidMethod}
+                    onChange={(event) => setPaidMethod(event.target.value as PaymentMethod)}
+                    disabled={feeAmount.trim() === '' || paidNow.trim() === ''}
+                  >
+                    {PAYMENT_METHOD_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field
+                  label="Reference number"
+                  htmlFor="reg-paid-reference"
+                  hint={
+                    paidMethod === 'upi'
+                      ? 'The UPI transaction id.'
+                      : paidMethod === 'bank_transfer'
+                        ? 'The bank reference number.'
+                        : 'Any receipt or slip number, if there is one.'
+                  }
+                >
+                  <Input
+                    id="reg-paid-reference"
+                    value={paidReference}
+                    onChange={(event) => setPaidReference(event.target.value)}
+                    disabled={feeAmount.trim() === '' || paidNow.trim() === ''}
+                  />
+                </Field>
+                <Field
+                  label="Reference name"
+                  htmlFor="reg-paid-reference-name"
+                  hint="Who paid or handled it: a parent, the owner, the scanner operator."
+                >
+                  <Input
+                    id="reg-paid-reference-name"
+                    value={paidReferenceName}
+                    onChange={(event) => setPaidReferenceName(event.target.value)}
+                    disabled={feeAmount.trim() === '' || paidNow.trim() === ''}
+                  />
+                </Field>
+            </div>
+              {feeAmount.trim() !== '' && Number(feeAmount) > 0 ? (
+                <div className="rounded-lg border border-line bg-sunken/40 p-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
+                    Instalments
+                  </p>
+                  <InstallmentEditor
+                    idPrefix="reg-inst"
+                    payable={payableAfterDiscount}
+                    rows={installmentsEnabled ? installments : []}
+                    onChange={onInstallmentsChange}
+                  />
+                </div>
+              ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={onFeesContinue}>Continue</Button>
+              {/* Leaving it blank is a real answer: a fee nobody has agreed
+                  yet is better recorded as undecided than as a guess. */}
+              <Button variant="ghost" onClick={() => goToStep('batch')}>
+                Decide the fee later
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : null}

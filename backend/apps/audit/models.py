@@ -313,6 +313,7 @@ class AuditAction(models.TextChoices):
     # can see rather than what they are, and it should be findable with a
     # single query.
     BRANCH_CREATED = "branch.created", _("Branch created")
+    COLLEGE_CREATED = "college.created", _("College added")
     BRANCH_UPDATED = "branch.updated", _("Branch updated")
     USER_BRANCH_CHANGED = "user.branch_changed", _("Account moved between branches")
 

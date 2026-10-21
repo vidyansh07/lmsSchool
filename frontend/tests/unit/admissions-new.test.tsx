@@ -265,6 +265,12 @@ async function goToConfirmWithExistingBatch(user: ReturnType<typeof userEvent.se
   await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
   await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
 
+  // Fees now sit between the course and the batch: the money is the next thing
+  // the counsellor and student talk about, and the course's own price can only
+  // be offered as a default once a course has been chosen.
+  await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toBeInTheDocument());
+  await user.click(screen.getByRole('button', { name: 'Continue' }));
+
   await waitFor(() => expect(screen.getByLabelText('Search batches')).toBeInTheDocument());
   await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
   await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
@@ -337,6 +343,12 @@ describe('RegistrationWizard — duplicate detection', () => {
 
     await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+
+    // Through the fees step, which now sits between the course and the
+    // batch. This test is not about the money, so it is left as the course
+    // priced it.
+    await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Trainer' })).toBeInTheDocument());
@@ -409,13 +421,51 @@ describe('RegistrationWizard — moving through the steps', () => {
     expect(screen.getByText('First name is required.')).toBeInTheDocument();
   });
 
-  it('advances to the batch step the moment a course is chosen', async () => {
+  it('advances to the fees step the moment a course is chosen', async () => {
+    // Choosing the course is itself the click that moves forward, and what it
+    // moves to is the money — the next thing actually discussed, and the first
+    // point at which the course's own price can be offered as a default.
     const user = userEvent.setup();
     render(<RegistrationWizard />);
     await fillStudentStep(user);
     await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
     await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Fees' })).toBeInTheDocument());
+  });
+
+  it('offers the course fee as the starting point once a course is chosen', async () => {
+    // The reason fees follow the course rather than preceding it: until a
+    // course is chosen there is no price to offer, so the counsellor was
+    // typing one from memory.
+    listCourses.mockResolvedValue({
+      ...emptyPage<CourseListRow>(),
+      results: [{ ...COURSE, default_fee: '12000.00' }],
+    });
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+
+    await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toHaveValue(12000));
+  });
+
+  it('lets the fee be decided later rather than guessed', async () => {
+    // A fee nobody has agreed yet is better recorded as undecided than as a
+    // number somebody made up to get past the screen.
+    const user = userEvent.setup();
+    render(<RegistrationWizard />);
+    await fillStudentStep(user);
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+
+    await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: /decide the fee later/i }));
+
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Batch' })).toBeInTheDocument());
   });
 
@@ -443,6 +493,12 @@ describe('RegistrationWizard — moving through the steps', () => {
     await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
     await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+
+    // Through the fees step, which now sits between the course and the
+    // batch. This test is not about the money, so it is left as the course
+    // priced it.
+    await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: /create a new batch/i })).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: /create a new batch/i }));
@@ -506,6 +562,12 @@ describe('RegistrationWizard — confirming', () => {
     await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
     await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+
+    // Through the fees step, which now sits between the course and the
+    // batch. This test is not about the money, so it is left as the course
+    // priced it.
+    await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
     await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
@@ -532,11 +594,18 @@ describe('RegistrationWizard — confirming', () => {
     await user.click(screen.getByRole('radio', { name: /working professional/i }));
     await user.type(screen.getByLabelText('Company name'), 'Infosys');
     await user.type(screen.getByLabelText('Designation'), 'Senior Engineer');
-    await user.type(screen.getByLabelText(/Agreed fee/), '25000');
     await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
 
     await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+
+    // The fee is agreed after the course is chosen, and the course's own
+    // price is already in the box — cleared here because this test is about
+    // a figure agreed at the desk, not the list price.
+    await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toBeInTheDocument());
+    await user.clear(screen.getByLabelText(/Agreed fee/));
+    await user.type(screen.getByLabelText(/Agreed fee/), '25000');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
     await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
@@ -590,6 +659,12 @@ describe('RegistrationWizard — confirming', () => {
     await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
     await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+
+    // Through the fees step, which now sits between the course and the
+    // batch. This test is not about the money, so it is left as the course
+    // priced it.
+    await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
     await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
@@ -674,6 +749,12 @@ describe('RegistrationWizard — confirming', () => {
     await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
     await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+
+    // Through the fees step, which now sits between the course and the
+    // batch. This test is not about the money, so it is left as the course
+    // priced it.
+    await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
 
     await user.click(screen.getByRole('button', { name: /create a new batch/i }));
     await user.type(screen.getByLabelText('Batch name', { exact: false }), 'Evening cohort');
@@ -846,8 +927,17 @@ describe('RegistrationWizard — confirming', () => {
     const user = userEvent.setup();
     render(<RegistrationWizard />);
     await fillStudentStep(user);
-    await user.type(screen.getByLabelText(/Agreed fee/), '25000');
+await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
 
+    // The fee is agreed after the course is chosen, and the course's own
+    // price is already in the box — cleared here because this test is about
+    // a figure agreed at the desk, not the list price.
+    await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toBeInTheDocument());
+    await user.clear(screen.getByLabelText(/Agreed fee/));
+    await user.type(screen.getByLabelText(/Agreed fee/), '25000');
+    
     // Six rows, thirty days apart, adding up to the fee — before anything is saved.
     const amounts = await screen.findAllByLabelText(/instalment \d+ amount/i);
     expect(amounts).toHaveLength(6);
@@ -865,9 +955,9 @@ describe('RegistrationWizard — confirming', () => {
     await user.type(screen.getByLabelText('Reference number'), 'UPI-4471');
     await user.type(screen.getByLabelText('Reference name'), 'Father');
 
-    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
-    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+    
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
     await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
@@ -899,19 +989,30 @@ describe('RegistrationWizard — confirming', () => {
     const user = userEvent.setup();
     render(<RegistrationWizard />);
     await fillStudentStep(user);
+    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+
+    // The fee is agreed after the course is chosen, and the course's own
+    // price is already in the box — cleared here because this test is about
+    // a figure agreed at the desk, not the list price.
+    await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toBeInTheDocument());
+    await user.clear(screen.getByLabelText(/Agreed fee/));
     await user.type(screen.getByLabelText(/Agreed fee/), '25000');
     await user.type(screen.getByLabelText('Discount (%)'), '10');
     expect(screen.getByText('₹2,500 off the fee.')).toBeInTheDocument();
     expect(await screen.findByText(/adds up to ₹22,500/i)).toBeInTheDocument();
 
-    // A discount without a reason does not get past this step.
-    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
+    // A discount without a reason does not get past this step: money taken off
+    // a fee is a decision somebody has to be able to account for later. Tried
+    // for real rather than asserted on sight — the point is that the button
+    // refuses, not that a message exists somewhere.
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByText(/say why the discount was given/i)).toBeInTheDocument();
-    await user.type(screen.getByLabelText(/reason for the discount/i), 'Early bird');
+    expect(screen.queryByText(/Morning batch/)).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
-    await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+    await user.type(screen.getByLabelText(/reason for the discount/i), 'Early bird');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
     await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());
@@ -949,6 +1050,12 @@ describe('RegistrationWizard — confirming', () => {
     await user.click(screen.getByRole('button', { name: /next: choose a course/i }));
     await waitFor(() => expect(screen.getByText(/Linux Essentials/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search courses results'), 'course-1');
+
+    // Through the fees step, which now sits between the course and the
+    // batch. This test is not about the money, so it is left as the course
+    // priced it.
+    await waitFor(() => expect(screen.getByLabelText(/Agreed fee/)).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(screen.getByText(/Morning batch/)).toBeInTheDocument());
     await user.selectOptions(screen.getByLabelText('Search batches results'), 'batch-1');
     await waitFor(() => expect(screen.getByText(/Tina Trainer/)).toBeInTheDocument());

@@ -5,6 +5,15 @@ import { cn } from '@/lib/utils';
 export interface WizardStep {
   key: string;
   label: string;
+  /**
+   * A step somebody may walk past.
+   *
+   * Said out loud rather than left to be discovered: a counsellor registering
+   * a student has no reason to think about a trainer, and a sequence that
+   * looks mandatory gets treated as mandatory. It changes nothing about where
+   * the step sits or what it does.
+   */
+  optional?: boolean;
 }
 
 /**
@@ -77,6 +86,14 @@ export function StepIndicator({
                 {isDone && !isCurrent ? <Check className="size-3.5" /> : index + 1}
               </span>
               {step.label}
+              {step.optional ? (
+                <span
+                  aria-hidden="true"
+                  className="ml-1 text-2xs font-normal text-ink-faint"
+                >
+                  optional
+                </span>
+              ) : null}
             </button>
             {index < steps.length - 1 ? (
               <span aria-hidden="true" className="text-ink-muted">

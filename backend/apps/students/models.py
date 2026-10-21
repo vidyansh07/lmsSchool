@@ -103,6 +103,7 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         "qualification",
         "institution",
         "institution_kind",
+        "college",
         "job_title",
         "roll_number",
         "graduation_year",
@@ -209,6 +210,22 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
     )
     qualification = models.CharField(
         _("highest qualification"), max_length=32, choices=Qualification.choices, blank=True
+    )
+    #: The college this student came from, picked from a list.
+    #:
+    #: Alongside `institution`, not instead of it. That column holds a thousand
+    #: real answers, some naming an employer rather than a college, and
+    #: throwing them away to make a foreign key tidy would be losing data to
+    #: gain a diagram. This is what a report groups by; that is what somebody
+    #: wrote.
+    college = models.ForeignKey(
+        "organisation.College",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="students",
+        verbose_name=_("college"),
+        help_text=_("Picked from the college list. Free-text institution is kept separately."),
     )
     institution = models.CharField(
         _("college or employer"),

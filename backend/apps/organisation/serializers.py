@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from rest_framework import serializers
+
 from apps.common.serializers import SafeCharField, StrictModelSerializer
 
-from .models import Branch
+from .models import Branch, College
 
 
 class BranchSerializer(StrictModelSerializer):
@@ -32,3 +34,17 @@ class BranchWriteSerializer(StrictModelSerializer):
     class Meta:
         model = Branch
         fields = ("code", "name", "city")
+
+
+class CollegeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = College
+        fields = ("id", "name", "city", "is_active")
+        read_only_fields = ("id", "is_active")
+
+
+class AddCollegeSerializer(serializers.Serializer):
+    """Adding a college from inside the flow that needed it."""
+
+    name = SafeCharField(max_length=200)
+    city = SafeCharField(max_length=80, required=False, allow_blank=True, default="")

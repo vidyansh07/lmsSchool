@@ -118,3 +118,44 @@ def set_branch_active(*, branch: Branch, is_active: bool, actor: User, reason: s
         durable=False,
     )
     return branch
+
+
+def find_or_create_college(*, actor, name: str, city: str = ""):
+    """The college by that name, adding it only if it is genuinely new.
+
+    Find-or-create rather than create, because the whole point of the list is
+    that one college is one row. A counsellor who cannot see "Arya College of
+    Engineering" in the picker and types it again should land on the existing
+    row, not make a second one that differs by a capital letter.
+
+    Matching is on the flattened name, so case and spacing do not make a twin.
+    It is deliberately not fuzzy: "Arya College" and "Arya Institute" are two
+    different places, and a system that silently merged them would be worse
+    than one that occasionally holds both.
+    """
+    from .models import College
+
+    cleaned = " ".join((name or "").split())
+    if not cleaned:
+        raise ApplicationError({"name": ["Give the college a name."]})
+
+    existing = College.objects.filter(match_key=College.key_for(cleaned)).first()
+    if existing is not None:
+        # A college somebody retired is reinstated by being asked for again,
+        # rather than refused or duplicated.
+        if not existing.is_active:
+            existing.is_active = True
+            existing.save(update_fields=["is_active", "updated_at"])
+        return existing
+
+    college = College(name=cleaned, city=(city or "").strip(), created_by=actor)
+    college.full_clean()
+    college.save()
+    record(
+        action=AuditAction.COLLEGE_CREATED,
+        actor=actor,
+        resource_type="college",
+        resource_id=college.pk,
+        context={"name": college.name, "city": college.city},
+    )
+    return college

@@ -285,3 +285,30 @@ export async function studentFilterFields(
 ): Promise<{ fields: FilterFieldSpec[] }> {
   return apiFetch<{ fields: FilterFieldSpec[] }>('/api/v1/students/filter-fields/', { signal });
 }
+
+// --- Colleges ---------------------------------------------------------------
+
+export interface College {
+  id: string;
+  name: string;
+  city: string;
+  is_active: boolean;
+}
+
+export async function listColleges(
+  query: ListQuery = {},
+  signal?: AbortSignal,
+): Promise<Paginated<College>> {
+  return apiFetch<Paginated<College>>(`/api/v1/colleges/${queryString(query)}`, { signal });
+}
+
+/**
+ * Add a college, or get back the one already recorded.
+ *
+ * The server matches on the flattened name, so a counsellor who types a
+ * college that exists in a different case lands on the existing row instead of
+ * creating a twin — which is the whole reason the list exists.
+ */
+export async function addCollege(name: string, city = ''): Promise<College> {
+  return apiMutate<College>('/api/v1/colleges/', { method: 'POST', body: { name, city } });
+}
