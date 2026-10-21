@@ -19,6 +19,13 @@ const overview: FeesOverview = {
   overdue: [
     {
       id: 'plan-1',
+    gross_payable: '20000.00',
+    written_off: '0.00',
+    refund_due: '0.00',
+    is_cancelled: false,
+    settled_amount: null,
+    cancelled_at: null,
+    cancellation_reason: '',
       enrollment_id: 'enrol-1',
       enrollment_code: 'GRS-E-00001',
       enrollment_status: 'active',

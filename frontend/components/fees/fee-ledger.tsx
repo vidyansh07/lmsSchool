@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   BadgeIndianRupee,
+  Ban,
   CalendarClock,
   ChevronDown,
   ChevronUp,
@@ -73,6 +74,8 @@ import {
   setEnrollmentFee,
   setInstallments,
   setNextDue,
+  cancelAdmission,
+  refundPayment,
   voidPayment,
 } from '@/lib/fees';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format';
@@ -875,9 +878,29 @@ function PaymentsTable({
 }) {
   const [emailingId, setEmailingId] = useState('');
   const [voidingId, setVoidingId] = useState('');
+  // Refunding is a separate act from voiding and has its own endpoint, so it
+  // gets its own state rather than a flag on the void: a void says the payment
+  // should never have been recorded, a refund says it was right and the money
+  // has gone back, and an accountant has to be able to tell them apart.
+  const [refundingId, setRefundingId] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+
+  async function confirmRefund(payment: FeePayment) {
+    setBusy(true);
+    setMessage('');
+    try {
+      await refundPayment(payment.id, reason.trim());
+      setRefundingId('');
+      setReason('');
+      onVoided();
+    } catch (cause) {
+      setMessage(errorMessage(cause, 'Could not refund this payment.'));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function confirmVoid(payment: FeePayment) {
     setBusy(true);
@@ -979,16 +1002,22 @@ function PaymentsTable({
                 <Td>{payment.recorded_by || 'Unknown'}</Td>
                 {mayManage ? (
                   <Td className="text-right">
-                    {payment.is_voided ? null : voidingId === payment.id ? (
+                    {payment.is_voided || payment.is_refunded ? null : voidingId ===
+                        payment.id || refundingId === payment.id ? (
                       <form
                         className="flex flex-wrap items-center justify-end gap-2"
                         onSubmit={(event) => {
                           event.preventDefault();
-                          void confirmVoid(payment);
+                          if (refundingId === payment.id) void confirmRefund(payment);
+                          else void confirmVoid(payment);
                         }}
                       >
                         <Input
-                          aria-label="Why this payment is being voided"
+                          aria-label={
+                            refundingId === payment.id
+                              ? 'Why this payment is being refunded'
+                              : 'Why this payment is being voided'
+                          }
                           className="h-8 w-44 text-xs"
                           placeholder="Reason (kept on record)"
                           autoFocus
@@ -1001,14 +1030,17 @@ function PaymentsTable({
                           variant="destructive"
                           disabled={busy || reason.trim() === ''}
                         >
-                          Void
+                          {refundingId === payment.id ? 'Refund' : 'Void'}
                         </Button>
                         <Button
                           type="button"
                           size="sm"
                           variant="ghost"
                           disabled={busy}
-                          onClick={() => setVoidingId('')}
+                          onClick={() => {
+                            setVoidingId('');
+                            setRefundingId('');
+                          }}
                         >
                           Keep
                         </Button>
@@ -1027,6 +1059,21 @@ function PaymentsTable({
                           <Mail className="size-4" aria-hidden="true" />
                           {emailingId === payment.id ? 'Sending…' : 'Email'}
                         </Button>
+                        {payment.is_refundable ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="text-ink-muted"
+                            onClick={() => {
+                              setRefundingId(payment.id);
+                              setVoidingId('');
+                              setReason('');
+                            }}
+                          >
+                            Refund
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           size="sm"
@@ -1034,6 +1081,7 @@ function PaymentsTable({
                           className="text-ink-muted"
                           onClick={() => {
                             setVoidingId(payment.id);
+                            setRefundingId('');
                             setReason('');
                           }}
                         >
@@ -1052,6 +1100,131 @@ function PaymentsTable({
   );
 }
 
+/**
+ * End an admission and settle its money.
+ *
+ * One dialog, because it is one decision: somebody looks at how much of the
+ * course has run, agrees what the institute keeps, and everything else
+ * follows — the rest written off, anything paid above it owed back. Splitting
+ * that into "cancel the enrolment" and "then fix the fee" is how the two came
+ * to disagree in the first place.
+ *
+ * The charge defaults to nothing, because cancelling early and keeping
+ * nothing is the common case, and a number already in the box is a number
+ * somebody accepts without thinking.
+ */
+function CancelAdmissionDialog({
+  open,
+  onOpenChange,
+  plan,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  plan: FeePlan;
+  onSaved: () => void;
+}) {
+  const [charge, setCharge] = useState('0');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const paid = Number(plan.paid);
+  const keeping = Number(charge || 0);
+  const writtenOff = Math.max(Number(plan.payable) - keeping, 0);
+  const owedBack = Math.max(paid - keeping, 0);
+  const stillOwed = Math.max(keeping - paid, 0);
+
+  async function onSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setMessage('');
+    try {
+      await cancelAdmission(plan.enrollment_id, {
+        cancellation_charge: charge.trim() === '' ? '0' : charge.trim(),
+        reason: reason.trim(),
+      });
+      onOpenChange(false);
+      onSaved();
+    } catch (cause) {
+      setMessage(errorMessage(cause, 'Could not cancel this admission.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Cancel this admission</DialogTitle>
+          <DialogDescription>
+            This ends the admission and settles its fee. It cannot be undone — a
+            student who comes back is admitted again.
+          </DialogDescription>
+        </DialogHeader>
+        <form className="space-y-3" onSubmit={onSubmit}>
+          {message ? <Alert variant="error">{message}</Alert> : null}
+          <Field
+            label="Cancellation charge (₹)"
+            htmlFor="cancel-charge"
+            hint="What the institute keeps. Leave at zero to write the whole fee off."
+          >
+            <Input
+              id="cancel-charge"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={Number(plan.payable)}
+              value={charge}
+              onChange={(event) => setCharge(event.target.value)}
+            />
+          </Field>
+          <Field label="Why it is being cancelled" htmlFor="cancel-reason" required>
+            <Input
+              id="cancel-reason"
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder="Kept with the record"
+            />
+          </Field>
+
+          {/* Said before it happens, not after. Cancelling moves money in
+              three directions at once and somebody is about to be told one of
+              these numbers on the phone. */}
+          <dl className="space-y-1 rounded-md bg-sunken/60 px-3 py-2 text-sm">
+            <div className="flex justify-between">
+              <dt className="text-ink-muted">Written off</dt>
+              <dd>{money(String(writtenOff))}</dd>
+            </div>
+            {stillOwed > 0 ? (
+              <div className="flex justify-between">
+                <dt className="text-ink-muted">Still owed by the student</dt>
+                <dd>{money(String(stillOwed))}</dd>
+              </div>
+            ) : null}
+            {owedBack > 0 ? (
+              <div className="flex justify-between font-medium text-warning">
+                <dt>To refund</dt>
+                <dd>{money(String(owedBack))}</dd>
+              </div>
+            ) : null}
+          </dl>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
+              Keep the admission
+            </Button>
+            <Button type="submit" variant="destructive" disabled={busy || reason.trim() === ''}>
+              {busy ? 'Cancelling…' : 'Cancel the admission'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function FeePlanCard({
   plan,
   mayManage,
@@ -1061,7 +1234,9 @@ export function FeePlanCard({
   mayManage: boolean;
   onChanged: () => void;
 }) {
-  const [dialog, setDialog] = useState<'fee' | 'payment' | 'due' | 'schedule' | null>(null);
+  const [dialog, setDialog] = useState<
+    'fee' | 'payment' | 'due' | 'schedule' | 'cancel' | null
+  >(null);
   const scheduled = plan.installments.length > 0;
   const [showHistory, setShowHistory] = useState(false);
   const [showEmails, setShowEmails] = useState(false);
@@ -1185,6 +1360,42 @@ export function FeePlanCard({
         <p className="mt-3 rounded-md bg-sunken/60 px-3 py-2 text-sm">{plan.notes}</p>
       ) : null}
 
+      {/* A cancelled admission explains itself, because the numbers above it
+          change meaning: `payable` becomes the charge that was agreed, not
+          the course fee. Without this a plan reading "₹3,000" looks like a
+          cheap course rather than a settled cancellation. */}
+      {plan.is_cancelled ? (
+        <dl className="mt-3 space-y-1 rounded-md border border-line bg-sunken/60 px-3 py-2 text-sm">
+          <div className="flex justify-between">
+            <dt className="font-medium text-ink">Admission cancelled</dt>
+            <dd className="text-ink-muted">
+              {plan.cancelled_at ? formatDate(plan.cancelled_at) : null}
+            </dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-ink-muted">Originally charged</dt>
+            <dd>{money(plan.gross_payable)}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-ink-muted">Kept</dt>
+            <dd>{money(plan.settled_amount ?? '0')}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt className="text-ink-muted">Written off</dt>
+            <dd>{money(plan.written_off)}</dd>
+          </div>
+          {Number(plan.refund_due) > 0 ? (
+            <div className="flex justify-between font-medium text-warning">
+              <dt>Still to refund</dt>
+              <dd>{money(plan.refund_due)}</dd>
+            </div>
+          ) : null}
+          {plan.cancellation_reason ? (
+            <p className="pt-1 text-ink-muted">{plan.cancellation_reason}</p>
+          ) : null}
+        </dl>
+      ) : null}
+
       {mayManage ? (
         <div className="mt-4 flex flex-wrap gap-2">
           <Button size="sm" onClick={() => setDialog('payment')} disabled={balance <= 0}>
@@ -1214,6 +1425,20 @@ export function FeePlanCard({
             <BadgeIndianRupee className="size-4" aria-hidden="true" />
             Change fee
           </Button>
+          {/* Last, and only while there is an admission to end. A cancelled
+              plan keeps its history on screen; the way back is a new
+              admission, not an undo. */}
+          {plan.is_cancelled ? null : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-danger"
+              onClick={() => setDialog('cancel')}
+            >
+              <Ban className="size-4" aria-hidden="true" />
+              Cancel admission
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -1321,6 +1546,12 @@ export function FeePlanCard({
           <RecordPaymentDialog
             open={dialog === 'payment'}
             onOpenChange={(open) => setDialog(open ? 'payment' : null)}
+            plan={plan}
+            onSaved={onChanged}
+          />
+          <CancelAdmissionDialog
+            open={dialog === 'cancel'}
+            onOpenChange={(open) => setDialog(open ? 'cancel' : null)}
             plan={plan}
             onSaved={onChanged}
           />

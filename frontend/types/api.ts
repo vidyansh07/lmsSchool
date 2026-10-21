@@ -1960,6 +1960,16 @@ export interface InstallmentInput {
 }
 
 export interface FeePayment {
+  /** What the payment was for. The booking amount is named because it is the
+   *  one that sometimes goes back. */
+  kind: 'registration' | 'instalment';
+  /** Whether it was taken on terms that allow it to be returned — decided when
+   *  the money was taken, not months later by whoever is on the screen. */
+  is_refundable: boolean;
+  is_refunded: boolean;
+  refunded_at: string | null;
+  refunded_by: string | null;
+  refund_reason: string;
   id: string;
   receipt_number: string;
   amount: string;
@@ -1985,6 +1995,18 @@ export interface FeePayment {
  */
 export interface FeePlan {
   id: string;
+  /** What was charged before any cancellation. `payable` is what is owed now. */
+  gross_payable: string;
+  /** The part of the fee a cancellation decided not to pursue. */
+  written_off: string;
+  /** Money held that is no longer the institute's: paid above the charge. */
+  refund_due: string;
+  is_cancelled: boolean;
+  /** What is owed after cancellation. `null` when never cancelled — which is
+   *  a different fact from "cancelled and kept nothing". */
+  settled_amount: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string;
   enrollment_id: string;
   enrollment_code: string;
   enrollment_status: EnrollmentStatus;

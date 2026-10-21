@@ -173,3 +173,33 @@ export async function feeCollectionsTrend(
   const query = params.weeks ? `?weeks=${params.weeks}` : '';
   return apiFetch<FeeCollectionsTrendPoint[]>(`${BASE}/collections-trend/${query}`);
 }
+
+/**
+ * Give a payment back.
+ *
+ * A different act from voiding, on a different endpoint. A void says the
+ * payment should never have been recorded; a refund says it was correct and
+ * the money has gone back. An accountant has to be able to tell them apart.
+ */
+export async function refundPayment(paymentId: string, reason: string): Promise<FeePayment> {
+  return apiMutate<FeePayment>(`/api/v1/fees/payments/${paymentId}/refund/`, {
+    method: 'POST',
+    body: { reason },
+  });
+}
+
+/**
+ * End an admission and settle its money in one request.
+ *
+ * One call rather than "cancel the enrolment, then fix the fee": they are one
+ * decision, and doing half of it is how the two came to disagree.
+ */
+export async function cancelAdmission(
+  enrollmentId: string,
+  body: { cancellation_charge: string; reason: string },
+): Promise<FeePlan> {
+  return apiMutate<FeePlan>(`/api/v1/fees/enrollments/${enrollmentId}/cancel/`, {
+    method: 'POST',
+    body,
+  });
+}

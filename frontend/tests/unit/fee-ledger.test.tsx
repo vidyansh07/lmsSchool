@@ -5,9 +5,10 @@
  * reader without `fee.manage_any` sees numbers, not buttons.
  */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FeeLedger, describeHistory, money } from '@/components/fees/fee-ledger';
+import { FeeLedger, FeePlanCard, describeHistory, money } from '@/components/fees/fee-ledger';
 import type {
   Enrollment,
   FeeHistoryEntry,
@@ -21,6 +22,8 @@ const setEnrollmentFee = vi.hoisted(() => vi.fn());
 const setNextDue = vi.hoisted(() => vi.fn());
 const setInstallments = vi.hoisted(() => vi.fn());
 const voidPayment = vi.hoisted(() => vi.fn());
+const refundPayment = vi.hoisted(() => vi.fn());
+const cancelAdmission = vi.hoisted(() => vi.fn());
 const getFeeHistory = vi.hoisted(() => vi.fn());
 const emailReceipt = vi.hoisted(() => vi.fn());
 const emailStatement = vi.hoisted(() => vi.fn());
@@ -33,6 +36,8 @@ vi.mock('@/lib/fees', async (importOriginal) => ({
   setNextDue,
   setInstallments,
   voidPayment,
+  refundPayment,
+  cancelAdmission,
   getFeeHistory,
   emailReceipt,
   emailStatement,
@@ -55,6 +60,12 @@ function payment(overrides: Partial<FeePayment> = {}): FeePayment {
     voided_at: null,
     voided_by: null,
     void_reason: '',
+    kind: 'instalment',
+    is_refundable: false,
+    is_refunded: false,
+    refunded_at: null,
+    refunded_by: null,
+    refund_reason: '',
     ...overrides,
   };
 }
@@ -63,6 +74,13 @@ function plan(overrides: Partial<FeePlan> = {}): FeePlan {
   return {
     installments: [],
     id: 'plan-1',
+    gross_payable: '20000.00',
+    written_off: '0.00',
+    refund_due: '0.00',
+    is_cancelled: false,
+    settled_amount: null,
+    cancelled_at: null,
+    cancellation_reason: '',
     enrollment_id: 'enrol-1',
     enrollment_code: 'GRS-E-00001',
     enrollment_status: 'active',
@@ -627,5 +645,114 @@ describe('FeeLedger', () => {
     fireEvent.click(screen.getByRole('button', { name: /who changed what/i }));
     expect(await screen.findByText('Agreed ₹12,000.')).toBeInTheDocument();
     expect(screen.getByText(/kiran@example.test/)).toBeInTheDocument();
+  });
+});
+
+
+describe('ending an admission and giving money back', () => {
+  /**
+   * Both acts are destructive and both are offered only to somebody who may
+   * manage fees — the server enforces that, and a button nobody may press is
+   * a puzzle, so the screen does not draw one.
+   */
+  beforeEach(() => {
+    refundPayment.mockReset().mockResolvedValue({});
+    cancelAdmission.mockReset().mockResolvedValue({});
+  });
+
+  it('offers no cancel button to somebody who may not manage fees', () => {
+    render(<FeePlanCard plan={plan()} mayManage={false} onChanged={() => {}} />);
+
+    expect(screen.queryByRole('button', { name: /cancel admission/i })).not.toBeInTheDocument();
+  });
+
+  it('offers it to somebody who may', () => {
+    render(<FeePlanCard plan={plan()} mayManage onChanged={() => {}} />);
+
+    expect(screen.getByRole('button', { name: /cancel admission/i })).toBeInTheDocument();
+  });
+
+  it('will not cancel without a reason', async () => {
+    // Money written off is a decision somebody has to account for later.
+    const user = userEvent.setup();
+    render(<FeePlanCard plan={plan()} mayManage onChanged={() => {}} />);
+
+    await user.click(screen.getByRole('button', { name: /cancel admission/i }));
+
+    expect(screen.getByRole('button', { name: /cancel the admission/i })).toBeDisabled();
+    expect(cancelAdmission).not.toHaveBeenCalled();
+  });
+
+  it('says what cancelling will do before it does it', async () => {
+    // Cancelling moves money in three directions at once, and somebody is
+    // about to read one of these numbers down the phone.
+    const user = userEvent.setup();
+    render(
+      <FeePlanCard
+        plan={plan({ payable: '20000.00', paid: '8000.00' })}
+        mayManage
+        onChanged={() => {}}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /cancel admission/i }));
+    await user.clear(screen.getByLabelText(/cancellation charge/i));
+    await user.type(screen.getByLabelText(/cancellation charge/i), '3000');
+
+    expect(screen.getByText('₹17,000')).toBeInTheDocument();
+    expect(screen.getByText('To refund')).toBeInTheDocument();
+    expect(screen.getByText('₹5,000')).toBeInTheDocument();
+  });
+
+  it('sends the charge and the reason', async () => {
+    const user = userEvent.setup();
+    render(<FeePlanCard plan={plan()} mayManage onChanged={() => {}} />);
+
+    await user.click(screen.getByRole('button', { name: /cancel admission/i }));
+    await user.clear(screen.getByLabelText(/cancellation charge/i));
+    await user.type(screen.getByLabelText(/cancellation charge/i), '3000');
+    await user.type(screen.getByLabelText(/why it is being cancelled/i), 'Four weeks attended');
+    await user.click(screen.getByRole('button', { name: /cancel the admission/i }));
+
+    await waitFor(() =>
+      expect(cancelAdmission).toHaveBeenCalledWith('enrol-1', {
+        cancellation_charge: '3000',
+        reason: 'Four weeks attended',
+      }),
+    );
+  });
+
+  it('does not offer to cancel an admission that is already cancelled', () => {
+    // The way back is a new admission, not an undo.
+    render(
+      <FeePlanCard
+        plan={plan({ is_cancelled: true, settled_amount: '3000.00' })}
+        mayManage
+        onChanged={() => {}}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /cancel admission/i })).not.toBeInTheDocument();
+  });
+
+  it('explains a cancelled plan, because its numbers changed meaning', () => {
+    // Without this, a plan reading "₹3,000" looks like a cheap course rather
+    // than a settled cancellation.
+    render(
+      <FeePlanCard
+        plan={plan({
+          is_cancelled: true,
+          settled_amount: '3000.00',
+          gross_payable: '20000.00',
+          written_off: '17000.00',
+          cancellation_reason: 'Four weeks attended',
+        })}
+        mayManage
+        onChanged={() => {}}
+      />,
+    );
+
+    expect(screen.getByText('Admission cancelled')).toBeInTheDocument();
+    expect(screen.getByText('Four weeks attended')).toBeInTheDocument();
   });
 });

@@ -95,6 +95,12 @@ class FeePlanSerializer(serializers.ModelSerializer):
     balance = serializers.DecimalField(read_only=True, **MONEY)
     status = serializers.CharField(read_only=True)
     is_overdue = serializers.BooleanField(read_only=True)
+    # What a cancellation settled. `payable` is already what is owed *now*, so
+    # these are the figures a screen needs to explain how it got there.
+    gross_payable = serializers.DecimalField(read_only=True, **MONEY)
+    written_off = serializers.DecimalField(read_only=True, **MONEY)
+    refund_due = serializers.DecimalField(read_only=True, **MONEY)
+    is_cancelled = serializers.BooleanField(read_only=True)
     created_by = serializers.SerializerMethodField()
     updated_by = serializers.SerializerMethodField()
     payments = FeePaymentSerializer(many=True, read_only=True)
@@ -121,6 +127,13 @@ class FeePlanSerializer(serializers.ModelSerializer):
             "next_due_amount",
             "next_due_on",
             "is_overdue",
+            "gross_payable",
+            "written_off",
+            "refund_due",
+            "is_cancelled",
+            "settled_amount",
+            "cancelled_at",
+            "cancellation_reason",
             "notes",
             "created_by",
             "updated_by",
