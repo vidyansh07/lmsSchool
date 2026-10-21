@@ -834,3 +834,89 @@ def fees_overview(*, user: User, limit: int = 20) -> dict[str, Any]:
         "overdue": overdue[:limit],
         "due_soon": due_soon[:limit],
     }
+
+
+def ledger_reconciliation(*, user: User) -> dict[str, Any]:
+    """Every rupee the institute has charged, placed in exactly one bucket.
+
+    The fees panel answers "how are we doing": collected this month, who is
+    late. It cannot answer "does it add up", because it never states what was
+    charged in the first place and it drops a cancelled admission entirely —
+    so money on a cancelled enrolment leaves the screen without ever being
+    accounted for.
+
+    This states the identity instead::
+
+        charged = received + written off + outstanding + unreconciled
+
+    and computes each side independently, so the two can disagree and say so.
+    A summary that derives the last number by subtraction always balances and
+    therefore proves nothing.
+
+    What each bucket means
+    ----------------------
+    ``charged``      every plan's agreed fee less its discount, cancelled
+                     admissions included. What the institute said was owed.
+    ``received``     money it holds: payments that were neither voided nor
+                     refunded. A void is a mistake and was never money, so it
+                     is absent from both sides rather than netted off.
+    ``refunded``     money taken and given back. Reported because an owner
+                     asks for it, and *not* part of the identity — it is
+                     already excluded from ``received``.
+    ``written_off``  the balance on a cancelled admission the institute has
+                     decided not to pursue.
+    ``outstanding``  still owed on a live admission.
+    ``unreconciled`` what the first four fail to account for. It should be
+                     zero. It is not zero today, and that is the point: a
+                     cancelled admission keeps its full balance with nothing
+                     written off, so the money sits in neither bucket. Until
+                     cancelling an admission settles its fee, this number
+                     names the gap rather than hiding it.
+
+    Scoped like every other figure here: computed over the enrolments the
+    caller can already see, so a counsellor at one centre reconciles their own
+    centre and not the institute.
+    """
+    from apps.batches.access import visible_enrollments
+
+    enrollments = visible_enrollments(user)
+    plans = FeePlan.objects.filter(enrollment__in=enrollments).with_totals()
+
+    charged = ZERO
+    received = ZERO
+    written_off = ZERO
+    outstanding = ZERO
+    cancelled_count = 0
+
+    for plan in plans.select_related("enrollment"):
+        charged += plan.payable
+        received += plan.paid
+        if plan.enrollment.status in LIVE_STATUSES:
+            # A credit balance is somebody who overpaid. It is not negative
+            # outstanding — they owe nothing — so it is clamped here and shows
+            # up as `unreconciled` instead of quietly reducing what others owe.
+            outstanding += max(plan.balance, ZERO)
+        # Nothing is written off yet, deliberately. Cancelling an admission
+        # does not settle its fee today: the plan keeps its full balance and
+        # the enrolment simply stops being chased. So a cancelled plan's money
+        # is counted in `charged` and lands in neither `outstanding` nor
+        # `written_off` — which is what makes `unreconciled` non-zero and what
+        # gives the cancellation work a number to drive down.
+
+    refunded = Decimal(
+        FeePayment.objects.filter(
+            plan__enrollment__in=enrollments, refunded_at__isnull=False, voided_at__isnull=True
+        ).aggregate(total=Sum("amount"))["total"]
+        or 0
+    )
+    cancelled_count = enrollments.exclude(status__in=LIVE_STATUSES).count()
+
+    return {
+        "charged": charged,
+        "received": received,
+        "refunded": refunded,
+        "written_off": written_off,
+        "outstanding": outstanding,
+        "unreconciled": charged - received - written_off - outstanding,
+        "cancelled_enrolments": cancelled_count,
+    }

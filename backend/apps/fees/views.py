@@ -38,6 +38,7 @@ from .serializers import (
     FeePlanBriefSerializer,
     FeePlanSerializer,
     FeesOverviewSerializer,
+    LedgerReconciliationSerializer,
     RecordPaymentSerializer,
     RefundPaymentSerializer,
     SetFeePlanSerializer,
@@ -170,6 +171,28 @@ class EnrollmentFeePaymentsView(APIView):
             plan=plan, actor=request.user, **serializer.validated_data
         )
         return Response(FeePaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
+
+
+class LedgerReconciliationView(APIView):
+    """Does the money add up?
+
+    Staff-only and scoped like every other figure here: computed over the
+    enrolments the caller can already see, so a counsellor at one centre
+    reconciles their own centre rather than the institute.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_VIEW_ANY
+
+    @extend_schema(
+        summary="Every rupee charged, placed in one bucket",
+        responses={200: LedgerReconciliationSerializer},
+        tags=FEES_TAG,
+    )
+    def get(self, request):
+        return Response(
+            LedgerReconciliationSerializer(services.ledger_reconciliation(user=request.user)).data
+        )
 
 
 class FeePaymentRefundView(APIView):

@@ -290,3 +290,20 @@ class FeeEmailQueuedSerializer(serializers.Serializer):
     id = serializers.UUIDField()
     to_email = serializers.EmailField()
     status = serializers.CharField()
+
+
+class LedgerReconciliationSerializer(serializers.Serializer):
+    """Every rupee charged, placed in exactly one bucket.
+
+    `unreconciled` is what the buckets fail to explain and should be zero. It
+    is reported rather than folded into another figure, because a total that
+    balances by construction proves nothing.
+    """
+
+    charged = serializers.DecimalField(**MONEY)
+    received = serializers.DecimalField(**MONEY)
+    refunded = serializers.DecimalField(**MONEY)
+    written_off = serializers.DecimalField(**MONEY)
+    outstanding = serializers.DecimalField(**MONEY)
+    unreconciled = serializers.DecimalField(**MONEY)
+    cancelled_enrolments = serializers.IntegerField()

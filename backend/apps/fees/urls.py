@@ -17,6 +17,7 @@ from .views import (
     FeePaymentRefundView,
     FeePaymentVoidView,
     FeesOverviewView,
+    LedgerReconciliationView,
     MyFeesView,
     StudentFeesView,
 )
@@ -26,6 +27,7 @@ app_name = "fees"
 urlpatterns = [
     path("me/", MyFeesView.as_view(), name="me"),
     path("overview/", FeesOverviewView.as_view(), name="overview"),
+    path("reconciliation/", LedgerReconciliationView.as_view(), name="reconciliation"),
     path("collections-trend/", FeeCollectionsTrendView.as_view(), name="collections-trend"),
     path("students/<uuid:student_id>/", StudentFeesView.as_view(), name="student"),
     path("enrollments/<uuid:enrollment_id>/", EnrollmentFeeView.as_view(), name="enrollment"),
