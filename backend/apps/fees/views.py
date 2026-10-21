@@ -30,6 +30,7 @@ from apps.students import access as students_access
 from . import mail, services
 from .models import FeePayment, FeePlan
 from .serializers import (
+    CancelAdmissionSerializer,
     FeeCollectionsTrendPointSerializer,
     FeeEmailQueuedSerializer,
     FeeEmailSerializer,
@@ -171,6 +172,38 @@ class EnrollmentFeePaymentsView(APIView):
             plan=plan, actor=request.user, **serializer.validated_data
         )
         return Response(FeePaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
+
+
+class CancelAdmissionView(APIView):
+    """End an admission and settle its money in one request.
+
+    One endpoint rather than "cancel the enrolment, then fix the fee",
+    because they are one decision and doing half of it is how the two came to
+    disagree.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_MANAGE_ANY
+
+    @extend_schema(
+        summary="Cancel an admission and settle its fee",
+        request=CancelAdmissionSerializer,
+        responses={200: FeePlanSerializer},
+        tags=FEES_TAG,
+    )
+    def post(self, request, enrollment_id):
+        enrollment = get_object_or_404(
+            batch_access.visible_enrollments(request.user), pk=enrollment_id
+        )
+        payload = CancelAdmissionSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        plan = services.cancel_admission(
+            enrollment=enrollment,
+            actor=request.user,
+            cancellation_charge=payload.validated_data["cancellation_charge"],
+            reason=payload.validated_data["reason"],
+        )
+        return Response(FeePlanSerializer(plan).data)
 
 
 class LedgerReconciliationView(APIView):

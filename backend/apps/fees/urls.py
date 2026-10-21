@@ -3,6 +3,7 @@
 from django.urls import path
 
 from .views import (
+    CancelAdmissionView,
     EnrollmentFeeEmailStatementView,
     EnrollmentFeeEmailsView,
     EnrollmentFeeHistoryView,
@@ -45,6 +46,11 @@ urlpatterns = [
         "enrollments/<uuid:enrollment_id>/payments/",
         EnrollmentFeePaymentsView.as_view(),
         name="payments",
+    ),
+    path(
+        "enrollments/<uuid:enrollment_id>/cancel/",
+        CancelAdmissionView.as_view(),
+        name="cancel",
     ),
     path(
         "enrollments/<uuid:enrollment_id>/history/",

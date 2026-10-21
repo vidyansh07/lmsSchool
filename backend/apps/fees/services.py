@@ -40,7 +40,8 @@ from apps.audit.models import AuditLog
 from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
 from apps.common.identifiers import next_receipt_number
-from apps.enrollments.models import LIVE_STATUSES, Enrollment
+from apps.enrollments.models import LIVE_STATUSES, Enrollment, EnrollmentStatus
+from apps.enrollments.services import set_enrollment_status
 from apps.students.models import FeeStatus, StudentProfile
 
 from . import mail
@@ -847,7 +848,7 @@ def ledger_reconciliation(*, user: User) -> dict[str, Any]:
 
     This states the identity instead::
 
-        charged = received + written off + outstanding + unreconciled
+        charged = (received - refund due) + written off + outstanding + unreconciled
 
     and computes each side independently, so the two can disagree and say so.
     A summary that derives the last number by subtraction always balances and
@@ -866,12 +867,15 @@ def ledger_reconciliation(*, user: User) -> dict[str, Any]:
     ``written_off``  the balance on a cancelled admission the institute has
                      decided not to pursue.
     ``outstanding``  still owed on a live admission.
-    ``unreconciled`` what the first four fail to account for. It should be
-                     zero. It is not zero today, and that is the point: a
-                     cancelled admission keeps its full balance with nothing
-                     written off, so the money sits in neither bucket. Until
-                     cancelling an admission settles its fee, this number
-                     names the gap rather than hiding it.
+    ``refund_due``   money held that is no longer the institute's: somebody
+                     paid more than the cancellation charge they ended up
+                     owing. A liability from the moment of cancellation,
+                     whether or not anybody has paid it back yet.
+    ``unreconciled`` what the others fail to account for. It should be zero,
+                     and it is — every rupee charged is now either held,
+                     written off, still owed, or owed back. It is reported
+                     rather than assumed so that the day it stops being zero,
+                     somebody finds out.
 
     Scoped like every other figure here: computed over the enrolments the
     caller can already see, so a counsellor at one centre reconciles their own
@@ -888,20 +892,19 @@ def ledger_reconciliation(*, user: User) -> dict[str, Any]:
     outstanding = ZERO
     cancelled_count = 0
 
+    refund_due = ZERO
     for plan in plans.select_related("enrollment"):
-        charged += plan.payable
+        # What was charged, before any cancellation. A settled plan still owes
+        # its history to this figure.
+        charged += plan.gross_payable
         received += plan.paid
-        if plan.enrollment.status in LIVE_STATUSES:
-            # A credit balance is somebody who overpaid. It is not negative
-            # outstanding — they owe nothing — so it is clamped here and shows
-            # up as `unreconciled` instead of quietly reducing what others owe.
-            outstanding += max(plan.balance, ZERO)
-        # Nothing is written off yet, deliberately. Cancelling an admission
-        # does not settle its fee today: the plan keeps its full balance and
-        # the enrolment simply stops being chased. So a cancelled plan's money
-        # is counted in `charged` and lands in neither `outstanding` nor
-        # `written_off` — which is what makes `unreconciled` non-zero and what
-        # gives the cancellation work a number to drive down.
+        written_off += plan.written_off
+        refund_due += plan.refund_due
+        # What is still owed: the fee on a live admission, the agreed charge on
+        # a cancelled one. A credit balance is clamped — somebody who overpaid
+        # owes nothing, and letting it go negative would quietly reduce what
+        # everybody else owes.
+        outstanding += max(plan.payable - plan.paid, ZERO)
 
     refunded = Decimal(
         FeePayment.objects.filter(
@@ -915,8 +918,125 @@ def ledger_reconciliation(*, user: User) -> dict[str, Any]:
         "charged": charged,
         "received": received,
         "refunded": refunded,
+        "refund_due": refund_due,
         "written_off": written_off,
         "outstanding": outstanding,
-        "unreconciled": charged - received - written_off - outstanding,
+        # `refund_due` is subtracted because money owed back is held but not
+        # earned. Without it a cancellation where the student had overpaid
+        # would leave the identity short by exactly the amount to be returned.
+        "unreconciled": charged - (received - refund_due) - written_off - outstanding,
         "cancelled_enrolments": cancelled_count,
     }
+
+
+def cancel_admission(
+    *,
+    enrollment: Enrollment,
+    actor: User,
+    cancellation_charge: Any = ZERO,
+    reason: str,
+) -> FeePlan:
+    """End an admission and settle its money in one act.
+
+    Cancelling used to be a status change. It stopped the chasing and settled
+    nothing: the fee was still charged, the balance was owed by nobody, and no
+    decision to write it off had been recorded anywhere — so the money sat in
+    no bucket and the ledger could not be made to add up.
+
+    This decides all of it at once, because they are one decision in real life.
+    Somebody looks at how much of the course has run, agrees a figure, and
+    everything else follows:
+
+    * the charge becomes what is owed, so a student who has paid nothing still
+      owes it and still appears in what is outstanding;
+    * the rest of the original fee is written off — recorded as a decision,
+      not lost;
+    * anything paid above the charge becomes a refund due, which is a
+      liability from this moment whether or not anybody has paid it back yet.
+
+    The original fee stays on the row. A cancellation that overwrote it would
+    make "what did we charge" unanswerable, and that is the figure every
+    reconciliation starts from.
+
+    Cancelling is not reversible here. A student who comes back enrols again —
+    which the model already allows, since only live enrolments are barred from
+    repeating — and that is a new admission with its own fee, not this one
+    reinstated with its history rewritten.
+    """
+    _require_manage(actor)
+    if not reason.strip():
+        raise ApplicationError(
+            {"reason": ["Say why the admission is being cancelled; it is kept with the record."]}
+        )
+
+    charge = _money(cancellation_charge, "cancellation_charge")
+    if charge < ZERO:
+        raise ApplicationError({"cancellation_charge": ["A charge cannot be negative."]})
+
+    with transaction.atomic():
+        plan = (
+            FeePlan.objects.select_for_update()
+            .select_related("enrollment__student__user", "enrollment__batch")
+            .filter(enrollment=enrollment)
+            .first()
+        )
+        if plan is None:
+            raise ApplicationError(
+                {"enrollment": ["This admission has no fee to settle; cancel the enrolment."]}
+            )
+        if plan.is_cancelled:
+            raise ConflictError({"enrollment": ["This admission has already been cancelled."]})
+        if charge > plan.gross_payable:
+            raise ApplicationError(
+                {
+                    "cancellation_charge": [
+                        "A cancellation charge cannot be more than the fee itself."
+                    ]
+                }
+            )
+
+        plan.settled_amount = charge
+        plan.cancelled_at = timezone.now()
+        plan.cancelled_by = actor
+        plan.cancellation_reason = reason.strip()
+        # Nothing further is expected: what is owed is the charge, and chasing
+        # a schedule drawn up for the full fee would be wrong.
+        plan.next_due_amount = None
+        plan.next_due_on = None
+        plan.updated_by = actor
+        plan.full_clean()
+        plan.save(
+            update_fields=[
+                "settled_amount",
+                "cancelled_at",
+                "cancelled_by",
+                "cancellation_reason",
+                "next_due_amount",
+                "next_due_on",
+                "updated_by",
+                "updated_at",
+            ]
+        )
+
+        if enrollment.status != EnrollmentStatus.CANCELLED:
+            # The enrolment and its money are one decision; doing half of it
+            # is how the two came to disagree in the first place.
+            set_enrollment_status(
+                enrollment=enrollment, target=EnrollmentStatus.CANCELLED, actor=actor
+            )
+
+    record(
+        action=AuditAction.ENROLLMENT_CANCELLED,
+        actor=actor,
+        resource_type=RESOURCE_PLAN,
+        resource_id=plan.pk,
+        context={
+            **_plan_context(plan),
+            "charged": str(plan.gross_payable),
+            "cancellation_charge": str(charge),
+            "written_off": str(plan.written_off),
+            "refund_due": str(plan.refund_due),
+            "reason": plan.cancellation_reason,
+        },
+    )
+    return plan

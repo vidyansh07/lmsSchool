@@ -156,6 +156,40 @@ class FeePlan(BaseModel):
         blank=True,
         validators=[validate_no_control_characters],
     )
+    #: What is owed after an admission is cancelled — the cancellation charge
+    #: the institute keeps. ``None`` means the admission was never cancelled.
+    #:
+    #: Stored rather than derived because it is a decision, not a calculation:
+    #: somebody looked at how much of the course had run and agreed a figure.
+    #: Deriving it later from a rule would rewrite history every time the rule
+    #: changed, which is the thing this ledger does not do.
+    #:
+    #: Zero is a real answer and a common one — cancelled early, nothing kept —
+    #: which is exactly why it is nullable. "Charged nothing" and "never
+    #: cancelled" are different facts and a zero cannot tell them apart.
+    settled_amount = models.DecimalField(
+        _("settled amount"),
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(ZERO)],
+        help_text=_("What is owed after cancellation. Empty if not cancelled."),
+    )
+    cancelled_at = models.DateTimeField(_("cancelled at"), null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="fee_plans_cancelled",
+    )
+    cancellation_reason = models.CharField(
+        _("cancellation reason"),
+        max_length=300,
+        blank=True,
+        validators=[validate_no_control_characters],
+    )
     next_due_amount = models.DecimalField(
         _("next amount expected"), max_digits=10, decimal_places=2, null=True, blank=True
     )
@@ -184,7 +218,46 @@ class FeePlan(BaseModel):
 
     @property
     def payable(self) -> Decimal:
+        """What is owed.
+
+        After a cancellation that is the settled amount — the charge agreed at
+        the time — and not the original fee. The original is still on the row
+        as `agreed_amount`, so what was charged before and what is owed after
+        are both answerable; a cancellation that overwrote the fee would lose
+        the first.
+        """
+        if self.settled_amount is not None:
+            return self.settled_amount
         return self.agreed_amount - self.discount_amount
+
+    @property
+    def gross_payable(self) -> Decimal:
+        """What was charged before any cancellation. What the institute said
+        was owed, which is the figure a reconciliation starts from."""
+        return self.agreed_amount - self.discount_amount
+
+    @property
+    def written_off(self) -> Decimal:
+        """The part of the original fee the institute decided not to pursue."""
+        if self.settled_amount is None:
+            return ZERO
+        return max(self.gross_payable - self.settled_amount, ZERO)
+
+    @property
+    def refund_due(self) -> Decimal:
+        """Money held that is no longer the institute's.
+
+        Somebody who paid more than the cancellation charge is owed the
+        difference. It is a liability from the moment of cancellation, whether
+        or not anybody has got round to paying it back.
+        """
+        if self.settled_amount is None:
+            return ZERO
+        return max(self.paid - self.settled_amount, ZERO)
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.cancelled_at is not None
 
     @property
     def paid(self) -> Decimal:

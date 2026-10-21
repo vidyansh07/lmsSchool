@@ -303,7 +303,15 @@ class LedgerReconciliationSerializer(serializers.Serializer):
     charged = serializers.DecimalField(**MONEY)
     received = serializers.DecimalField(**MONEY)
     refunded = serializers.DecimalField(**MONEY)
+    refund_due = serializers.DecimalField(**MONEY)
     written_off = serializers.DecimalField(**MONEY)
     outstanding = serializers.DecimalField(**MONEY)
     unreconciled = serializers.DecimalField(**MONEY)
     cancelled_enrolments = serializers.IntegerField()
+
+
+class CancelAdmissionSerializer(StrictSerializer):
+    """Ending an admission: what is kept, and why."""
+
+    cancellation_charge = serializers.DecimalField(min_value=0, required=False, default=0, **MONEY)
+    reason = SafeCharField(max_length=300)
