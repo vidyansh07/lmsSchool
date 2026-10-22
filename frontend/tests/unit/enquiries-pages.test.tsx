@@ -411,9 +411,10 @@ describe("EnquiryScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add follow-up" }));
 
     await waitFor(() => expect(addEnquiryNote).toHaveBeenCalled());
-    const [, payload] = addEnquiryNote.mock.calls[0];
-    expect(payload.body).toBe("Call back Monday.");
-    expect(payload.next_follow_up_at).toBe(new Date("2026-10-26T10:30").toISOString());
+    expect(addEnquiryNote).toHaveBeenCalledWith("e-1", {
+      body: "Call back Monday.",
+      next_follow_up_at: new Date("2026-10-26T10:30").toISOString(),
+    });
   });
 
   it("refuses to send an empty follow-up rather than writing a blank one", async () => {

@@ -2083,6 +2083,36 @@ export interface StudentFeeSummary {
   plans: FeePlan[];
 }
 
+/**
+ * `GET /fees/reconciliation/` — every rupee charged, placed in exactly one
+ * bucket, over the enrolments the caller may see.
+ *
+ * The identity the screen states:
+ *
+ *     charged = (received − refund_due) + written_off + outstanding + unreconciled
+ *
+ * The backend computes each side independently rather than deriving the last
+ * figure by subtraction, so `unreconciled` is a real finding: it should be
+ * zero, and the day it is not, somebody needs to know.
+ */
+export interface LedgerReconciliation {
+  /** Every plan's agreed fee less its discount, cancelled admissions included. */
+  charged: string;
+  /** Money the institute holds: payments neither voided nor refunded. */
+  received: string;
+  /** Money taken and given back. Reported, and already excluded from `received`. */
+  refunded: string;
+  /** Held but no longer the institute's — somebody paid more than they ended up owing. */
+  refund_due: string;
+  /** The balance on a cancelled admission the institute decided not to pursue. */
+  written_off: string;
+  /** Still owed on a live admission. */
+  outstanding: string;
+  /** What the buckets fail to explain. Should be zero. */
+  unreconciled: string;
+  cancelled_enrolments: number;
+}
+
 export interface FeesOverview {
   collected_today: string;
   collected_this_week: string;

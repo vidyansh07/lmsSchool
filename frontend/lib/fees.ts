@@ -17,6 +17,7 @@ import type {
   FeeCollectionsTrendPoint,
   FeesOverview,
   InstallmentInput,
+  LedgerReconciliation,
   PaymentMethod,
   StudentFeeSummary,
 } from '@/types/api';
@@ -161,6 +162,13 @@ export async function getStudentFees(studentId: string): Promise<StudentFeeSumma
 
 export async function getMyFees(): Promise<StudentFeeSummary> {
   return apiFetch<StudentFeeSummary>(`${BASE}/me/`);
+}
+
+/** Does the money add up? Every rupee charged in one bucket, over the
+ *  enrolments the caller may see — so a counsellor reconciles their own
+ *  centre, not the institute. Needs `fee.view_any`. */
+export async function ledgerReconciliation(): Promise<LedgerReconciliation> {
+  return apiFetch<LedgerReconciliation>('/api/v1/fees/reconciliation/');
 }
 
 export async function getFeesOverview(): Promise<FeesOverview> {

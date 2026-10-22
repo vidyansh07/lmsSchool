@@ -18,6 +18,7 @@ import { useState } from 'react';
 
 import { useAuth } from '@/components/auth-provider';
 import { FeesPanel } from '@/components/counsellor/fees-panel';
+import { ReconciliationPanel } from '@/components/fees/reconciliation-panel';
 import { RequireAuth } from '@/components/require-auth';
 import { ErrorState } from '@/components/states';
 import { Button } from '@/components/ui/button';
@@ -28,9 +29,9 @@ import { Grid, GridItem, PageHeader, Section } from '@/components/ui/layout';
 import { useSection } from '@/hooks/use-section';
 import { formatWeekLabel } from '@/lib/analytics';
 import { Capability } from '@/lib/capabilities';
-import { feeCollectionsTrend, getFeesOverview } from '@/lib/fees';
+import { feeCollectionsTrend, getFeesOverview, ledgerReconciliation } from '@/lib/fees';
 import { formatCurrency, formatNumber } from '@/lib/format';
-import type { FeeCollectionsTrendPoint, FeesOverview } from '@/types/api';
+import type { FeeCollectionsTrendPoint, FeesOverview, LedgerReconciliation } from '@/types/api';
 
 const PERIODS = [4, 12, 26, 52] as const;
 
@@ -43,6 +44,10 @@ export function FeesWorkspace() {
     [] as FeeCollectionsTrendPoint[],
     [weeks],
   );
+  // "Does it add up" is a separate question from "how are we doing", and a
+  // separate fetch: a reconciliation that fails to load must not take the
+  // collections figures down with it.
+  const reconciliation = useSection<LedgerReconciliation | null>(() => ledgerReconciliation(), null);
 
   const trend = collections.data.map((point) => ({
     date: formatWeekLabel(point.week),
@@ -112,6 +117,25 @@ export function FeesWorkspace() {
               : null
           }
           onRetry={overview.reload}
+        />
+      </Section>
+
+      <Section
+        title="Does it add up?"
+        meta="Every rupee charged — cancellations included — placed in exactly one bucket"
+      >
+        <ReconciliationPanel
+          data={reconciliation.data}
+          isLoading={reconciliation.isLoading}
+          error={
+            reconciliation.error
+              ? {
+                  message: reconciliation.error.message,
+                  requestId: reconciliation.error.requestId || undefined,
+                }
+              : null
+          }
+          onRetry={reconciliation.reload}
         />
       </Section>
 
