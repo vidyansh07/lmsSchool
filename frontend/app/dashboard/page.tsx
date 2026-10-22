@@ -29,6 +29,7 @@ import {
   BookOpen,
   CalendarClock,
   ClipboardList,
+  Briefcase,
   GraduationCap,
   IndianRupee,
   PlayCircle,
@@ -47,6 +48,7 @@ import { CertificatesPanel } from '@/components/student/certificates-panel';
 import { FeedbackPanel } from '@/components/student/feedback-panel';
 import { FeesPanel } from '@/components/student/fees-panel';
 import { NotificationsPanel } from '@/components/student/notifications-panel';
+import { PlacementsPanel } from '@/components/student/placements-panel';
 import {
   PendingWorkPanel,
   tallyAssignments,
@@ -84,6 +86,7 @@ import {
 } from '@/lib/batch-labels';
 import { listNotifications } from '@/lib/communication';
 import { getMyFees } from '@/lib/fees';
+import { listPlacements } from '@/lib/placements';
 import { greeting } from '@/lib/greeting';
 import {
   getMyPerformance,
@@ -101,6 +104,7 @@ import type {
   Certificate,
   DashboardBatch,
   StudentAssignment,
+  Placement,
   StudentDashboard,
   StudentFeeSummary,
   StudentProject,
@@ -284,6 +288,13 @@ export function StudentView({ data }: { data: StudentDashboard }) {
   // `/my-fees` reads. `null` until it resolves, so the panel renders its
   // loading state rather than a fabricated zero balance.
   const fees = useDashboardSection(() => getMyFees(), null as StudentFeeSummary | null);
+  // The caller's own offers. `GET /placements/` is scoped to them, so this
+  // is their record and nobody else's; the panel renders nothing when there
+  // are none, which is most students most of the time.
+  const placements = useDashboardSection(
+    () => listPlacements({ page_size: 5 }).then((page) => page.results),
+    [] as Placement[],
+  );
   const notifications = useDashboardSection(
     () =>
       // The dashboard only ever shows a short preview, so the default page
@@ -599,6 +610,26 @@ export function StudentView({ data }: { data: StudentDashboard }) {
               />
             </CardContent>
           </Card>
+
+          {placements.data.length > 0 || placements.error ? (
+            <Card className="">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Briefcase className="size-5 text-action" aria-hidden="true" />
+                  My offers
+                </CardTitle>
+                <CardDescription>Recorded by the placement desk.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PlacementsPanel
+                  placements={placements.data}
+                  isLoading={placements.isLoading}
+                  error={placements.error}
+                  onRetry={placements.reload}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card className="">
             <CardHeader>

@@ -21,6 +21,7 @@ import type {
   DashboardBatch,
   DashboardCourse,
   FeePlan,
+  Placement,
   Paginated,
   StudentAssignment,
   StudentDashboard,
@@ -37,6 +38,7 @@ const listMyFeedback = vi.hoisted(() => vi.fn());
 const listMyCertificates = vi.hoisted(() => vi.fn());
 const listNotifications = vi.hoisted(() => vi.fn());
 const getMyFees = vi.hoisted(() => vi.fn());
+const listPlacements = vi.hoisted(() => vi.fn());
 const getStudentDashboard = vi.hoisted(() => vi.fn());
 const getTrainerDashboard = vi.hoisted(() => vi.fn());
 const useAuthMock = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
@@ -47,6 +49,7 @@ vi.mock('@/lib/performance', () => ({ getMyPerformance, listMyFeedback }));
 vi.mock('@/lib/progress', () => ({ listMyCertificates, certificatePdfUrl: (id: string) => `/pdf/${id}` }));
 vi.mock('@/lib/communication', () => ({ listNotifications }));
 vi.mock('@/lib/fees', () => ({ getMyFees }));
+vi.mock('@/lib/placements', () => ({ listPlacements }));
 vi.mock('@/lib/batches', () => ({ getStudentDashboard, getTrainerDashboard }));
 // The trainer's queue chart. Null by default: its empty state, nothing more.
 const trainerWorkload = vi.hoisted(() => vi.fn(() => Promise.resolve(null)));
@@ -115,6 +118,9 @@ function emptyBuckets() {
     enrollments_without_plan: 0,
     plans: [],
   } as StudentFeeSummary);
+  // No offer recorded: the card is absent rather than a standing "no offers
+  // yet" tile on every student's dashboard.
+  listPlacements.mockResolvedValue(paginated([]));
 }
 
 function dashboardCourse(overrides: Partial<DashboardCourse> = {}): DashboardCourse {
@@ -374,6 +380,51 @@ describe('StudentView — full data', () => {
       'href',
       '/my-fees',
     );
+  });
+
+  it("shows the student their own offers, and no card at all when there are none", async () => {
+    emptyBuckets();
+    render(<StudentView data={emptyStudentDashboard()} />);
+
+    await screen.findByText('My fees');
+    expect(screen.queryByText('My offers')).not.toBeInTheDocument();
+  });
+
+  it("shows an offer with its status and package once the desk records one", async () => {
+    emptyBuckets();
+    listPlacements.mockResolvedValue(
+      paginated([
+        {
+          id: 'offer-1',
+          student_id: 'student-1',
+          student_name: 'Asha Rao',
+          student_code: 'GRS-S-00001',
+          enrollment_id: null,
+          course_title: null,
+          branch_id: 'branch-1',
+          branch_name: 'Jaipur corporate',
+          company: 'Infosys',
+          role_title: 'Associate Engineer',
+          location: 'Bengaluru',
+          status: 'accepted',
+          is_placed: true,
+          annual_package: '450000.00',
+          offered_on: '2026-09-01',
+          joined_on: null,
+          notes: '',
+          recorded_by: 'Kiran Counsellor',
+          created_at: '2026-09-01T10:00:00Z',
+          updated_at: '2026-09-01T10:00:00Z',
+        } as Placement,
+      ]),
+    );
+
+    render(<StudentView data={emptyStudentDashboard()} />);
+
+    expect(await screen.findByText('My offers')).toBeInTheDocument();
+    expect(screen.getByText('Infosys')).toBeInTheDocument();
+    expect(screen.getByText('Accepted')).toBeInTheDocument();
+    expect(screen.getByText('₹4,50,000')).toBeInTheDocument();
   });
 
   it('keeps the rest of the page working when one secondary section fails to load', async () => {
