@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from apps.common.serializers import SafeCharField, StrictModelSerializer
+from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
 from .models import Branch, College
 
@@ -43,8 +43,14 @@ class CollegeSerializer(serializers.ModelSerializer):
         read_only_fields = ("id", "is_active")
 
 
-class AddCollegeSerializer(serializers.Serializer):
-    """Adding a college from inside the flow that needed it."""
+class AddCollegeSerializer(StrictSerializer):
+    """Adding a college from inside the flow that needed it.
+
+    Strict, like every other serializer that parses client input: a request
+    naming a field this never listed is refused rather than silently dropped,
+    which is also how somebody finds out whether a field exists at all
+    (`tests/test_erp_security_sweep.py`).
+    """
 
     name = SafeCharField(max_length=200)
     city = SafeCharField(max_length=80, required=False, allow_blank=True, default="")

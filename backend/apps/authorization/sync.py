@@ -36,6 +36,7 @@ CATEGORY_BY_RESOURCE = {
     "dsr": "operations",
     "performance": "operations",
     "review": "operations",
+    "placement": "operations",
     "activity": "operations",
     "platform": "configuration",
     "organisation": "configuration",

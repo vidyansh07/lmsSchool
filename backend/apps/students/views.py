@@ -82,6 +82,10 @@ STUDENT_FILTER_FIELDS = (
     FilterField("branch", kind="uuid", path="branch_id", label="Centre"),
     FilterField("created_at", kind="date", label="Registered on"),
     FilterField("is_active", kind="boolean", path="user__is_active", label="Account active"),
+    # "Who is looking for a job" — where the placement officer's own list
+    # starts. The flag is the student's own answer (`SELF_EDITABLE_FIELDS`),
+    # so this filter reports what they said rather than what anybody assumed.
+    FilterField("open_to_placement", kind="boolean", label="Open to placement"),
 )
 
 

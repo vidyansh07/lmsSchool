@@ -536,8 +536,12 @@ class CoursePriceSerializer(serializers.ModelSerializer):
         return user.get_full_name() if user is not None else ""
 
 
-class CoursePriceWriteSerializer(serializers.Serializer):
-    """A fee change: what it becomes, from when, and why."""
+class CoursePriceWriteSerializer(StrictSerializer):
+    """A fee change: what it becomes, from when, and why.
+
+    Strict: an unknown field in a request that changes a price is refused,
+    not dropped (`tests/test_erp_security_sweep.py`).
+    """
 
     amount = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
     effective_from = serializers.DateField(required=False)

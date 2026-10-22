@@ -335,6 +335,15 @@ class AuditAction(models.TextChoices):
     ENQUIRY_CREATED = "enquiry.created", _("Enquiry created")
     ENQUIRY_UPDATED = "enquiry.updated", _("Enquiry updated")
 
+    # --- Placement
+    #
+    # Durable, unlike most of the operational actions above: an offer and its
+    # package are what somebody will later ask to see the history of, and
+    # "who changed the package, and when" is not a question a pruned log can
+    # answer.
+    PLACEMENT_RECORDED = "placement.recorded", _("Placement recorded")
+    PLACEMENT_UPDATED = "placement.updated", _("Placement updated")
+
     # --- Activity engine (ERP Phase 9)
     #
     # `activity.created`, `activity.completed` and `activity.reviewed` are

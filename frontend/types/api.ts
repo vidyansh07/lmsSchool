@@ -2113,6 +2113,48 @@ export interface LedgerReconciliation {
   cancelled_enrolments: number;
 }
 
+/** One offer made to one student, and what became of it
+ *  (`apps.placements.models.Placement`). One row per offer: somebody who
+ *  interviewed at four places and joined the third has four of these. */
+export type PlacementStatus = 'offered' | 'accepted' | 'joined' | 'declined' | 'withdrawn';
+
+export interface Placement {
+  id: string;
+  student_id: string;
+  student_name: string;
+  student_code: string | null;
+  enrollment_id: string | null;
+  course_title: string | null;
+  branch_id: string;
+  branch_name: string | null;
+  company: string;
+  role_title: string;
+  location: string;
+  status: PlacementStatus;
+  /** Whether this offer means the student has a job out of it: accepted or
+   *  joined. An offer nobody has accepted is not a placement. */
+  is_placed: boolean;
+  /** Annual, in rupees, as a decimal string. `null` when the package has not
+   *  been stated yet — which is a real offer, unlike a zero. */
+  annual_package: string | null;
+  offered_on: string;
+  joined_on: string | null;
+  notes: string;
+  recorded_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** `GET /placements/summary/`. `placed_students` counts people; every other
+ *  figure counts offers. */
+export interface PlacementSummary {
+  offers: number;
+  open_offers: number;
+  closed_offers: number;
+  placed_students: number;
+  offers_this_month: number;
+}
+
 export interface FeesOverview {
   collected_today: string;
   collected_this_week: string;

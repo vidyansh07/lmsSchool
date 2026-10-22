@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   Award,
+  Briefcase,
   BarChart3,
   Bell,
   BookOpen,
@@ -239,6 +240,20 @@ const FEES_HOME: NavItem = {
   icon: Wallet,
   capability: Capability.feeViewAny,
 };
+/** The placement desk. Its own group rather than another line under
+ *  "Students", so the module reads as the independent thing it is — and so
+ *  `accentFor` gives it the placement accent the shell already defines. */
+const PLACEMENT_GROUP: NavGroup = {
+  title: "Placement",
+  items: [
+    {
+      href: "/placement",
+      label: "Placement desk",
+      icon: Briefcase,
+      capability: Capability.placementViewAny,
+    },
+  ],
+};
 /** Leads Meritto sent, waiting to be registered (17 October 2026). */
 const READY_TO_ADMIT: NavItem = {
   href: "/admissions/ready",
@@ -429,6 +444,7 @@ export const MANAGER_NAV: NavGroup[] = [
       },
     ],
   },
+  PLACEMENT_GROUP,
   // A manager who also teaches keeps their own classes one click away.
   { title: "Teaching", items: [...TEACHING_ITEMS, ...CLASSROOM_ITEMS] },
   {
@@ -542,6 +558,7 @@ export const COUNSELLOR_NAV: NavGroup[] = [
       { href: "/courses", label: "Course catalogue", icon: BookOpen },
     ],
   },
+  PLACEMENT_GROUP,
   {
     title: "Reports",
     items: [
@@ -792,6 +809,7 @@ const ADMIN_NAV: NavGroup[] = [
       },
     ],
   },
+  PLACEMENT_GROUP,
   {
     title: "Batches and courses",
     items: [

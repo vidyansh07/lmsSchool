@@ -57,6 +57,8 @@ export const Capability = {
   dsrReview: "dsr.review",
   performanceViewAny: "performance.view_any",
   reviewManageAny: "review.manage_any",
+  placementViewAny: "placement.view_any",
+  placementManage: "placement.manage",
   assignmentViewAny: "assignment.view_any",
   assignmentManageAny: "assignment.manage_any",
   assignmentGradeAny: "assignment.grade_any",

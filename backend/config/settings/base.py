@@ -107,6 +107,7 @@ LOCAL_APPS = [
     "apps.projects",
     "apps.progress",
     "apps.performance",
+    "apps.placements",
     "apps.certificates",
     "apps.notifications",
     "apps.announcements",
@@ -524,6 +525,11 @@ SPECTACULAR_SETTINGS = {
         "MessageChannelEnum": "apps.communication.models.MessageChannel.choices",
         "AttendanceModeEnum": "apps.attendance.models.AttendanceMode.choices",
         "InstallmentStatusEnum": "apps.fees.models.InstallmentStatus.choices",
+        # What a payment was taken for — the fifth choice set on a field
+        # named `kind`, and the one that pushed the collision past
+        # drf-spectacular's own resolution (it had been naming it
+        # `Kind0c7Enum`, a hash nobody reading a generated client could place).
+        "PaymentKindEnum": "apps.fees.models.PaymentKind.choices",
         "QualificationEnum": "apps.students.models.Qualification.choices",
         "PublishStatusEnum": "apps.courses.models.PublishStatus.choices",
         "CourseVisibilityEnum": "apps.courses.models.CourseVisibility.choices",
@@ -560,6 +566,9 @@ SPECTACULAR_SETTINGS = {
         # — a name derived from a hash, which would reach a generated client and
         # mean nothing to whoever read it.
         "BatchKindEnum": "apps.batches.models.BatchKind.choices",
+        # Where an offer stands. One more choice set on a field named
+        # `status`, which without this resolves to a hash-derived name.
+        "PlacementStatusEnum": "apps.placements.models.PlacementStatus.choices",
         "CompletionStatusEnum": "apps.progress.models.CompletionStatus.choices",
         "CertificateStatusEnum": "apps.certificates.models.CertificateStatus.choices",
         "NotificationKindEnum": "apps.notifications.models.NotificationKind.choices",

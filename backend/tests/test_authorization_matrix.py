@@ -236,6 +236,13 @@ STUDENT_REACHABLE = frozenset(
         # Their own fees; every other fee route needs `fee.view_any` or a
         # record that is theirs, and both are covered in `test_fees.py`.
         "/api/v1/fees/me/",
+        # Their own offers. `visible_placements` scopes to the student, so
+        # this is their own record and nobody else's — asserted in
+        # `test_placements.py`, including that a classmate's offer by id is a
+        # 404 and that a student cannot write one. `/placements/summary/` is
+        # deliberately *not* here: it is the placement desk's own figure and
+        # needs `placement.view_any`.
+        "/api/v1/placements/",
         # Search and saved filters (ERP Phase 11): `search.global` is in
         # `BASE_CAPABILITIES` — every role, a student included — and a saved
         # filter is per-user data with no capability beyond being signed in.

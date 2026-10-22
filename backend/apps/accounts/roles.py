@@ -191,6 +191,19 @@ class Capability(models.TextChoices):
     )
     REVIEW_MANAGE_ANY = "review.manage_any", _("Record feedback and performance reviews")
 
+    # --- Placement
+    #
+    # Where a student ended up, and the offers on the way there. Separated
+    # from the student record's own rights because placement is a different
+    # job done by different people: a placement officer needs every offer at
+    # their centre and has no business changing a fee or a batch, and a
+    # counsellor who runs admissions should not have to hold placement rights
+    # to do their own work. A trainer who does the soft-skills and interview
+    # work holds neither by default — an administrator grants them through a
+    # custom role (ADR-02), which is what that machinery is for.
+    PLACEMENT_VIEW_ANY = "placement.view_any", _("See any student's placements and offers")
+    PLACEMENT_MANAGE = "placement.manage", _("Record and change a placement or an offer")
+
     # --- Assignments
     #
     # A trainer holds none of these globally. Their authority over an assignment
@@ -448,6 +461,8 @@ _MANAGER_CAPABILITIES = frozenset(
         Capability.DSR_REVIEW,
         Capability.PERFORMANCE_VIEW_ANY,
         Capability.REVIEW_MANAGE_ANY,
+        Capability.PLACEMENT_VIEW_ANY,
+        Capability.PLACEMENT_MANAGE,
         Capability.ASSIGNMENT_VIEW_ANY,
         Capability.ASSIGNMENT_MANAGE_ANY,
         Capability.ASSIGNMENT_GRADE_ANY,
