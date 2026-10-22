@@ -30,6 +30,7 @@ import {
   CalendarClock,
   ClipboardList,
   GraduationCap,
+  IndianRupee,
   PlayCircle,
   TrendingUp,
   Users,
@@ -44,6 +45,7 @@ import { RequireAuth } from '@/components/require-auth';
 import { EmptyState, ErrorState, LoadingState } from '@/components/states';
 import { CertificatesPanel } from '@/components/student/certificates-panel';
 import { FeedbackPanel } from '@/components/student/feedback-panel';
+import { FeesPanel } from '@/components/student/fees-panel';
 import { NotificationsPanel } from '@/components/student/notifications-panel';
 import {
   PendingWorkPanel,
@@ -81,6 +83,7 @@ import {
   formatEventTime,
 } from '@/lib/batch-labels';
 import { listNotifications } from '@/lib/communication';
+import { getMyFees } from '@/lib/fees';
 import { greeting } from '@/lib/greeting';
 import {
   getMyPerformance,
@@ -99,6 +102,7 @@ import type {
   DashboardBatch,
   StudentAssignment,
   StudentDashboard,
+  StudentFeeSummary,
   StudentProject,
   TrainerDashboard,
 } from '@/types/api';
@@ -276,6 +280,10 @@ export function StudentView({ data }: { data: StudentDashboard }) {
   );
   const certificates = useDashboardSection(() => listMyCertificates(), [] as Certificate[]);
   const feedback = useDashboardSection(() => listMyFeedback(), [] as PerformanceFeedback[]);
+  // The caller's own fee summary — `GET /fees/mine/`, the same endpoint
+  // `/my-fees` reads. `null` until it resolves, so the panel renders its
+  // loading state rather than a fabricated zero balance.
+  const fees = useDashboardSection(() => getMyFees(), null as StudentFeeSummary | null);
   const notifications = useDashboardSection(
     () =>
       // The dashboard only ever shows a short preview, so the default page
@@ -571,6 +579,24 @@ export function StudentView({ data }: { data: StudentDashboard }) {
               <Button asChild variant="ghost" size="sm" className="mt-2">
                 <Link href="/my-batches">All my batches</Link>
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <IndianRupee className="size-5 text-action" aria-hidden="true" />
+                My fees
+              </CardTitle>
+              <CardDescription>What is paid, what is owed, and every receipt.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FeesPanel
+                summary={fees.data}
+                isLoading={fees.isLoading}
+                error={fees.error}
+                onRetry={fees.reload}
+              />
             </CardContent>
           </Card>
 

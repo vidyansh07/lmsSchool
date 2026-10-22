@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Student360Content } from '@/app/students/[id]/page';
 import { ApiError } from '@/lib/api';
-import type { Student360Response, StudentProfile, User } from '@/types/api';
+import type { Enrollment, Student360Response, StudentProfile, User } from '@/types/api';
 
 const getStudent360 = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/student-360', () => ({ getStudent360 }));
@@ -147,6 +147,7 @@ function student360(overrides: Partial<Student360Response> = {}): Student360Resp
   return {
     profile: studentProfile(),
     enrollment: null,
+    enrollments: [],
     batch: { id: 'batch-1', code: 'GRS-B-001', name: 'Morning Linux batch' },
     trainer: { id: 'trainer-1', name: 'Tina Trainer' },
     counsellor: { id: 'counsellor-1', name: 'Cara Counsellor' },
@@ -402,6 +403,70 @@ describe('Student360Content', () => {
     render(<Student360Content studentId="student-1" />);
 
     expect(await screen.findByText('Not available')).toBeInTheDocument();
+  });
+});
+
+function enrollment(overrides: Partial<Enrollment> = {}): Enrollment {
+  return {
+    id: 'enrol-1',
+    code: 'GRS-E-001',
+    course_id: 'course-1',
+    course_code: 'RH124',
+    course_title: 'Red Hat System Administration I',
+    course_slug: 'rh124',
+    batch_id: 'batch-1',
+    batch_code: 'GRS-B-001',
+    batch_name: 'Morning Linux batch',
+    batch_status: 'active',
+    trainer_name: 'Tina Trainer',
+    status: 'active',
+    enrolled_at: '2026-02-03T04:00:00Z',
+    start_date: null,
+    access_end_date: null,
+    completed_at: null,
+    grants_access: true,
+    ...overrides,
+  } as Enrollment;
+}
+
+describe('Student360Content — the courses on the first page', () => {
+  it('lists every course the student is on, with its batch, trainer and status', async () => {
+    getStudent360.mockResolvedValueOnce(
+      student360({
+        enrollments: [
+          enrollment(),
+          enrollment({
+            id: 'enrol-2',
+            course_title: 'Python Programming',
+            course_slug: 'python',
+            batch_name: 'Evening Python batch',
+            trainer_name: '',
+            status: 'completed',
+          }),
+        ],
+      }),
+    );
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByText('Courses (2)')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: 'Red Hat System Administration I' }),
+    ).toHaveAttribute('href', '/courses/rh124');
+    expect(screen.getByRole('link', { name: 'Python Programming' })).toBeInTheDocument();
+    expect(screen.getByText('Morning Linux batch · Tina Trainer')).toBeInTheDocument();
+    // A batch with nobody teaching it yet says so rather than rendering a
+    // trailing separator with a blank after it.
+    expect(screen.getByText('Evening Python batch · Not assigned')).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.getByText('Completed')).toBeInTheDocument();
+  });
+
+  it('says so plainly for a student with no enrolment, rather than an empty list', async () => {
+    getStudent360.mockResolvedValueOnce(student360({ enrollments: [] }));
+    render(<Student360Content studentId="student-1" />);
+
+    expect(await screen.findByText('Not enrolled on any course yet.')).toBeInTheDocument();
+    expect(screen.queryByText(/^Courses \(/)).not.toBeInTheDocument();
   });
 });
 

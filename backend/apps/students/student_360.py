@@ -163,14 +163,23 @@ def _batch_summary(batch) -> dict[str, Any] | None:
     return {"id": str(batch.pk), "code": batch.code, "name": batch.name, "status": batch.status}
 
 
-def _most_relevant_enrollment(student: StudentProfile) -> Enrollment | None:
-    """The newest live enrolment, or failing that the newest of any status.
+def _enrollments(student: StudentProfile) -> list[Enrollment]:
+    """Every course this student has ever been enrolled on, live ones first
+    and newest first within each group.
 
-    One query: ordering by "is this row live" before recency, rather than a
-    live-first query that falls back to a second one, keeps this flat
-    regardless of how many enrolments the student has had.
+    One query for the whole list, and `build` takes the most relevant
+    enrolment from its head rather than asking again — ordering by "is this
+    row live" before recency, rather than a live-first query that falls back
+    to a second one, keeps this flat regardless of how many enrolments the
+    student has had.
+
+    Not scoped to the caller's own batches: the record's Overview tab only
+    renders for someone who may already read this student, and the same
+    reading (whole history, live first) is what `_most_relevant_enrollment`
+    has always picked from. Money is *not* in `EnrollmentSerializer` and is
+    not added here — fees stay behind their own capability on their own tab.
     """
-    return (
+    return list(
         Enrollment.objects.filter(student=student)
         .select_related("course", "batch__trainer__user", "created_by")
         .annotate(
@@ -181,8 +190,13 @@ def _most_relevant_enrollment(student: StudentProfile) -> Enrollment | None:
             )
         )
         .order_by("_live_first", "-enrolled_at")
-        .first()
     )
+
+
+def _most_relevant_enrollment(enrollments: list[Enrollment]) -> Enrollment | None:
+    """The newest live enrolment, or failing that the newest of any status —
+    the head of `_enrollments`' ordering, with no query of its own."""
+    return enrollments[0] if enrollments else None
 
 
 def _neutral_attendance() -> dict[str, Any]:
@@ -346,7 +360,8 @@ def build(user, student: StudentProfile) -> dict[str, Any]:
     is_admin = has_capability(user, Capability.STUDENT_VIEW_ANY)
     profile_serializer = AdminStudentProfileSerializer if is_admin else StudentProfileSerializer
 
-    enrollment = _most_relevant_enrollment(student)
+    enrollments = _enrollments(student)
+    enrollment = _most_relevant_enrollment(enrollments)
     batch = enrollment.batch if enrollment else None
     trainer = batch.trainer.user if batch and batch.trainer_id else None
     counsellor = enrollment.created_by if enrollment else None
@@ -355,6 +370,9 @@ def build(user, student: StudentProfile) -> dict[str, Any]:
     return {
         "profile": profile_serializer(student).data,
         "enrollment": EnrollmentSerializer(enrollment).data if enrollment else None,
+        # Every course, not just the most relevant one: "which courses is
+        # this person on" is the first question the record has to answer.
+        "enrollments": EnrollmentSerializer(enrollments, many=True).data,
         "batch": _batch_summary(batch),
         "trainer": _person_brief(trainer),
         "counsellor": _person_brief(counsellor),

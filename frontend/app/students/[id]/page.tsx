@@ -72,7 +72,17 @@ import { Stat, StatGrid } from '@/components/manage/stat';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ApiError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
-import { formatCount, formatDate, formatNumber, formatPercent, formatRelative, NO_DATA, NOT_AVAILABLE } from '@/lib/format';
+import {
+  formatCount,
+  formatDate,
+  formatNumber,
+  formatPercent,
+  formatRelative,
+  NO_DATA,
+  NOT_ASSIGNED,
+  NOT_AVAILABLE,
+} from '@/lib/format';
+import { ENROLLMENT_STATUS_LABEL, ENROLLMENT_STATUS_VARIANT } from '@/lib/batch-labels';
 import {
   FEE_STATUS_LABEL,
   FEE_STATUS_VARIANT,
@@ -289,9 +299,62 @@ function Header({ data, onOpenRiskTab }: { data: Student360Response; onOpenRiskT
   );
 }
 
+/**
+ * Which courses this person is on — the first question the record has to
+ * answer, so it sits at the top of Overview rather than behind the Enrolment
+ * tab (which shows performance for *one* enrolment, not the list).
+ *
+ * Live enrolments come first, as the API orders them; the head of that list
+ * is the same row the header and every other tab already read, so nothing
+ * here can disagree with them. No money: fees are their own tab behind their
+ * own capability, and `Enrollment` carries no amount to leak.
+ */
+function CoursesCard({ enrollments }: { enrollments: Enrollment[] }) {
+  return (
+    <Card>
+      <CardContent className="pt-5">
+        <p className="mb-3 text-sm font-medium text-ink">
+          {enrollments.length > 1 ? `Courses (${enrollments.length})` : 'Course'}
+        </p>
+        {enrollments.length === 0 ? (
+          <p className="text-sm text-ink-muted">Not enrolled on any course yet.</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {enrollments.map((entry) => (
+              <li key={entry.id} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0 space-y-0.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/courses/${entry.course_slug}`}
+                      className="font-medium text-ink underline-offset-4 hover:underline"
+                    >
+                      {entry.course_title}
+                    </Link>
+                    <Badge variant={ENROLLMENT_STATUS_VARIANT[entry.status]}>
+                      {ENROLLMENT_STATUS_LABEL[entry.status]}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-ink-muted">
+                    {entry.batch_name} · {entry.trainer_name || NOT_ASSIGNED}
+                  </p>
+                </div>
+                <dl className="shrink-0 text-right text-sm">
+                  <dt className="text-xs text-ink-muted">Enrolled</dt>
+                  <dd className="tabular-nums text-ink">{formatDate(entry.enrolled_at)}</dd>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function OverviewTab({ data }: { data: Student360Response }) {
   return (
     <div className="space-y-6">
+      <CoursesCard enrollments={data.enrollments} />
       <Card>
         <CardContent className="space-y-4 pt-5">
           <div className="flex items-center justify-between gap-3">

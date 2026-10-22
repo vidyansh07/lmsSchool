@@ -210,6 +210,74 @@ def test_student_360_without_an_enrollment_degrades_to_neutral_values(
 
 
 # ---------------------------------------------------------------------------
+# Courses — every enrolment, not just the most relevant one
+# ---------------------------------------------------------------------------
+
+
+def test_the_360_carries_every_enrolment_live_ones_first(
+    api_client_no_csrf, admin_user, student_profile, enrollment, upcoming_batch
+):
+    """Which courses this person is on, answered in full and in the order a
+    reader wants it: live enrolments before finished ones, newest first
+    within each group. `enrollment` stays the head of that list, so no other
+    tab can disagree with the Overview one."""
+    from apps.enrollments.models import EnrollmentStatus
+    from apps.enrollments.services import enrol_student
+
+    second = enrol_student(student=student_profile, batch=upcoming_batch, actor=admin_user)
+    # Finish the newer one: being newer must not float it above a live
+    # enrolment, which is the whole point of the ordering.
+    second.status = EnrollmentStatus.COMPLETED
+    second.save(update_fields=["status"])
+
+    body = _client(admin_user).get(_url(student_profile)).json()
+
+    assert [row["id"] for row in body["enrollments"]] == [str(enrollment.pk), str(second.pk)]
+    assert body["enrollment"]["id"] == body["enrollments"][0]["id"]
+    assert body["enrollments"][0]["course_title"] == enrollment.course.title
+    assert body["enrollments"][1]["status"] == EnrollmentStatus.COMPLETED
+
+
+def test_the_360s_enrolment_list_carries_no_money(
+    api_client_no_csrf, admin_user, student_profile, enrollment
+):
+    """Fees live behind `fee.view_any` on their own tab. The courses card is
+    rendered for everybody who may read the student at all, so no amount may
+    ride along in its rows."""
+    body = _client(admin_user).get(_url(student_profile)).json()
+
+    row = body["enrollments"][0]
+    assert not [key for key in row if "fee" in key or "amount" in key or "paid" in key]
+
+
+def test_a_student_with_no_enrolment_gets_an_empty_course_list(
+    api_client_no_csrf, admin_user, student_profile
+):
+    body = _client(admin_user).get(_url(student_profile)).json()
+    assert body["enrollments"] == []
+
+
+def test_a_trainer_reading_the_student_sees_their_other_course_without_its_fees(
+    trainer_profile, student_profile, enrollment, upcoming_batch, admin_user
+):
+    """A trainer who teaches one of the student's batches reads the record,
+    and the courses card tells them the whole picture — the same reading
+    `enrollment` has always given them. What it must not do is widen into
+    anything money-shaped."""
+    from apps.enrollments.services import enrol_student
+
+    other = enrol_student(student=student_profile, batch=upcoming_batch, actor=admin_user)
+
+    response = _client(trainer_profile.user).get(_url(student_profile))
+    assert response.status_code == 200
+    body = response.json()
+
+    assert {row["id"] for row in body["enrollments"]} == {str(enrollment.pk), str(other.pk)}
+    for row in body["enrollments"]:
+        assert not [key for key in row if "fee" in key or "amount" in key]
+
+
+# ---------------------------------------------------------------------------
 # Permission — exactly the sibling endpoints' rule, reused
 # ---------------------------------------------------------------------------
 

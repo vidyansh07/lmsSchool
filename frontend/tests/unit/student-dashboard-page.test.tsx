@@ -20,9 +20,11 @@ import type {
   Certificate,
   DashboardBatch,
   DashboardCourse,
+  FeePlan,
   Paginated,
   StudentAssignment,
   StudentDashboard,
+  StudentFeeSummary,
   StudentProject,
   TrainerDashboard,
 } from '@/types/api';
@@ -34,6 +36,7 @@ const getMyPerformance = vi.hoisted(() => vi.fn());
 const listMyFeedback = vi.hoisted(() => vi.fn());
 const listMyCertificates = vi.hoisted(() => vi.fn());
 const listNotifications = vi.hoisted(() => vi.fn());
+const getMyFees = vi.hoisted(() => vi.fn());
 const getStudentDashboard = vi.hoisted(() => vi.fn());
 const getTrainerDashboard = vi.hoisted(() => vi.fn());
 const useAuthMock = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
@@ -43,11 +46,51 @@ vi.mock('@/lib/projects', () => ({ listMyProjects }));
 vi.mock('@/lib/performance', () => ({ getMyPerformance, listMyFeedback }));
 vi.mock('@/lib/progress', () => ({ listMyCertificates, certificatePdfUrl: (id: string) => `/pdf/${id}` }));
 vi.mock('@/lib/communication', () => ({ listNotifications }));
+vi.mock('@/lib/fees', () => ({ getMyFees }));
 vi.mock('@/lib/batches', () => ({ getStudentDashboard, getTrainerDashboard }));
 // The trainer's queue chart. Null by default: its empty state, nothing more.
 const trainerWorkload = vi.hoisted(() => vi.fn(() => Promise.resolve(null)));
 vi.mock('@/lib/reporting', () => ({ trainerWorkload }));
 vi.mock('@/components/auth-provider', () => ({ useAuth: () => useAuthMock.value }));
+
+/** One fee plan as `GET /fees/mine/` sends it: a ₹20,000 course with ₹5,000
+ *  paid, so the dashboard card has something real to total. */
+function feePlan(): FeePlan {
+  return {
+    id: 'plan-1',
+    gross_payable: '20000.00',
+    written_off: '0.00',
+    refund_due: '0.00',
+    is_cancelled: false,
+    settled_amount: null,
+    cancelled_at: null,
+    cancellation_reason: '',
+    enrollment_id: 'enrol-1',
+    enrollment_code: 'GRS-E-001',
+    enrollment_status: 'active',
+    course_title: 'Red Hat System Administration I',
+    batch_code: 'GRS-B-001',
+    batch_name: 'Morning Linux batch',
+    agreed_amount: '20000.00',
+    discount_amount: '0.00',
+    discount_percent: null,
+    discount_reason: '',
+    payable: '20000.00',
+    paid: '5000.00',
+    balance: '15000.00',
+    status: 'partial',
+    next_due_amount: '5000.00',
+    next_due_on: '2026-04-01',
+    is_overdue: true,
+    notes: '',
+    created_by: null,
+    updated_by: null,
+    created_at: '2026-02-01T10:00:00Z',
+    updated_at: '2026-03-01T10:00:00Z',
+    installments: [],
+    payments: [],
+  };
+}
 
 function paginated<T>(results: T[]): Paginated<T> {
   return { count: results.length, page: 1, page_size: 20, total_pages: 1, next: null, previous: null, results };
@@ -60,6 +103,18 @@ function emptyBuckets() {
   listMyFeedback.mockResolvedValue([] as PerformanceFeedback[]);
   listMyCertificates.mockResolvedValue([] as Certificate[]);
   listNotifications.mockResolvedValue(paginated<AppNotification>([]));
+  // A student with no fee on record yet — the panel's own empty state, which
+  // is what a brand-new account genuinely looks like.
+  getMyFees.mockResolvedValue({
+    payable_total: '0.00',
+    paid_total: '0.00',
+    balance_total: '0.00',
+    next_due_amount: null,
+    next_due_on: null,
+    is_overdue: false,
+    enrollments_without_plan: 0,
+    plans: [],
+  } as StudentFeeSummary);
 }
 
 function dashboardCourse(overrides: Partial<DashboardCourse> = {}): DashboardCourse {
@@ -292,6 +347,33 @@ describe('StudentView — full data', () => {
     expect(screen.getAllByText('Not available').length).toBeGreaterThan(0);
     expect(screen.getByText(/62% attended/)).toBeInTheDocument();
     expect(document.body.textContent ?? '').not.toMatch(/NaN/);
+  });
+
+  it("answers the money question on the dashboard itself, not only behind a link", async () => {
+    emptyBuckets();
+    getMyFees.mockResolvedValue({
+      payable_total: '20000.00',
+      paid_total: '5000.00',
+      balance_total: '15000.00',
+      next_due_amount: '5000.00',
+      next_due_on: '2026-04-01',
+      is_overdue: true,
+      enrollments_without_plan: 0,
+      plans: [feePlan()],
+    } as StudentFeeSummary);
+
+    render(<StudentView data={emptyStudentDashboard()} />);
+
+    expect(await screen.findByText('My fees')).toBeInTheDocument();
+    // Twice over: the balance across every course, and this course's own
+    // outstanding line.
+    expect(screen.getAllByText('₹15,000')).toHaveLength(2);
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+    expect(screen.getByText('Red Hat System Administration I')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'My fees in full' })).toHaveAttribute(
+      'href',
+      '/my-fees',
+    );
   });
 
   it('keeps the rest of the page working when one secondary section fails to load', async () => {

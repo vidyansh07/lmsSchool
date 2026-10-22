@@ -17,6 +17,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CertificatesPanel } from '@/components/student/certificates-panel';
 import { FeedbackPanel } from '@/components/student/feedback-panel';
+import { FeesPanel } from '@/components/student/fees-panel';
 import { NotificationsPanel } from '@/components/student/notifications-panel';
 import {
   PendingWorkPanel,
@@ -31,7 +32,10 @@ import type {
   AppNotification,
   CalendarEvent,
   Certificate,
+  FeePayment,
+  FeePlan,
   StudentAssignment,
+  StudentFeeSummary,
   StudentProject,
   Submission,
 } from '@/types/api';
@@ -646,5 +650,179 @@ describe('NotificationsPanel', () => {
       />,
     );
     expect(screen.getByText('Notification')).toBeInTheDocument();
+  });
+});
+
+// --- FeesPanel -----------------------------------------------------------
+
+describe('FeesPanel', () => {
+  function payment(overrides: Partial<FeePayment> = {}): FeePayment {
+    return {
+      kind: 'instalment',
+      is_refundable: false,
+      is_refunded: false,
+      refunded_at: null,
+      refunded_by: null,
+      refund_reason: '',
+      id: 'pay-1',
+      receipt_number: 'GRS-R-0001',
+      amount: '5000.00',
+      paid_on: '2026-03-01',
+      method: 'cash',
+      reference: '',
+      reference_name: '',
+      note: '',
+      recorded_by: 'Cara Counsellor',
+      created_at: '2026-03-01T10:00:00Z',
+      is_voided: false,
+      voided_at: null,
+      voided_by: null,
+      void_reason: '',
+      ...overrides,
+    };
+  }
+
+  function plan(overrides: Partial<FeePlan> = {}): FeePlan {
+    return {
+      id: 'plan-1',
+      gross_payable: '20000.00',
+      written_off: '0.00',
+      refund_due: '0.00',
+      is_cancelled: false,
+      settled_amount: null,
+      cancelled_at: null,
+      cancellation_reason: '',
+      enrollment_id: 'enrol-1',
+      enrollment_code: 'GRS-E-001',
+      enrollment_status: 'active',
+      course_title: 'Red Hat System Administration I',
+      batch_code: 'GRS-B-001',
+      batch_name: 'Morning Linux batch',
+      agreed_amount: '20000.00',
+      discount_amount: '0.00',
+      discount_percent: null,
+      discount_reason: '',
+      payable: '20000.00',
+      paid: '5000.00',
+      balance: '15000.00',
+      status: 'partial',
+      next_due_amount: '5000.00',
+      next_due_on: '2026-04-01',
+      is_overdue: false,
+      notes: '',
+      created_by: null,
+      updated_by: null,
+      created_at: '2026-02-01T10:00:00Z',
+      updated_at: '2026-03-01T10:00:00Z',
+      installments: [],
+      payments: [payment()],
+      ...overrides,
+    };
+  }
+
+  function summary(overrides: Partial<StudentFeeSummary> = {}): StudentFeeSummary {
+    return {
+      payable_total: '20000.00',
+      paid_total: '5000.00',
+      balance_total: '15000.00',
+      next_due_amount: '5000.00',
+      next_due_on: '2026-04-01',
+      is_overdue: false,
+      enrollments_without_plan: 0,
+      plans: [plan()],
+      ...overrides,
+    };
+  }
+
+  it('shows the backend totals, what falls due next, and each receipt', () => {
+    render(<FeesPanel summary={summary()} />);
+
+    // Scoped to the totals row: ₹15,000 is deliberately also the course's own
+    // outstanding line below it, and an unscoped query cannot tell which one
+    // it found.
+    const totals = screen.getByText('Agreed').closest('dl') as HTMLElement;
+    expect(within(totals).getByText('₹20,000')).toBeInTheDocument();
+    expect(within(totals).getByText('₹5,000')).toBeInTheDocument();
+    expect(within(totals).getByText('₹15,000')).toBeInTheDocument();
+    // The course that still owes it, and the receipt for what has been paid.
+    expect(screen.getByText('Red Hat System Administration I')).toBeInTheDocument();
+    expect(screen.getByText('GRS-R-0001')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'My fees in full' })).toHaveAttribute(
+      'href',
+      '/my-fees',
+    );
+  });
+
+  it('marks an overdue instalment rather than letting it read as merely upcoming', () => {
+    render(<FeesPanel summary={summary({ is_overdue: true })} />);
+    expect(screen.getByText('Overdue')).toBeInTheDocument();
+  });
+
+  it('leaves a voided or refunded payment out of the receipts — it is no longer money paid', () => {
+    render(
+      <FeesPanel
+        summary={summary({
+          plans: [
+            plan({
+              payments: [
+                payment({ id: 'void', receipt_number: 'GRS-R-VOID', is_voided: true }),
+                payment({ id: 'ref', receipt_number: 'GRS-R-REF', is_refunded: true }),
+                payment({ id: 'good', receipt_number: 'GRS-R-GOOD' }),
+              ],
+            }),
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('GRS-R-GOOD')).toBeInTheDocument();
+    expect(screen.queryByText('GRS-R-VOID')).not.toBeInTheDocument();
+    expect(screen.queryByText('GRS-R-REF')).not.toBeInTheDocument();
+  });
+
+  it('shows the newest receipts first and links out for the rest', () => {
+    render(
+      <FeesPanel
+        summary={summary({
+          plans: [
+            plan({
+              payments: [
+                payment({ id: 'p1', receipt_number: 'R-1', paid_on: '2026-01-01' }),
+                payment({ id: 'p2', receipt_number: 'R-2', paid_on: '2026-02-01' }),
+                payment({ id: 'p3', receipt_number: 'R-3', paid_on: '2026-03-01' }),
+                payment({ id: 'p4', receipt_number: 'R-4', paid_on: '2026-04-01' }),
+              ],
+            }),
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText('R-4')).toBeInTheDocument();
+    expect(screen.queryByText('R-1')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Every payment and receipt' })).toBeInTheDocument();
+  });
+
+  it('names a course whose fee has not been set instead of showing it as owing nothing', () => {
+    render(<FeesPanel summary={summary({ plans: [], enrollments_without_plan: 2 })} />);
+    expect(screen.getByText(/2 courses with no fee set yet/)).toBeInTheDocument();
+  });
+
+  it('says there are no fees yet for a student with neither a plan nor an enrolment', () => {
+    render(<FeesPanel summary={summary({ plans: [], enrollments_without_plan: 0 })} />);
+    expect(screen.getByText(/No fees on record yet/)).toBeInTheDocument();
+  });
+
+  it('renders the loading state rather than a fabricated zero balance', () => {
+    render(<FeesPanel summary={null} isLoading />);
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByText('₹0')).not.toBeInTheDocument();
+  });
+
+  it('offers a retry when the fee summary fails to load', async () => {
+    const onRetry = vi.fn();
+    render(<FeesPanel summary={null} error={apiError} onRetry={onRetry} />);
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(onRetry).toHaveBeenCalled();
   });
 });

@@ -3136,6 +3136,11 @@ export interface Student360Batch {
 export interface Student360Response {
   profile: StudentProfile;
   enrollment: Enrollment | null;
+  /** Every course the student has been enrolled on, live ones first and
+   *  newest first within each group; `enrollment` above is this list's head.
+   *  Empty for a student with no enrolment at all. Carries no money — fees
+   *  stay behind `fee.view_any` on their own tab. */
+  enrollments: Enrollment[];
   batch: Student360Batch | null;
   trainer: ActivityPersonBrief | null;
   counsellor: ActivityPersonBrief | null;
