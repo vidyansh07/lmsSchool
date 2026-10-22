@@ -8,6 +8,7 @@ from apps.common import bulk
 from apps.common.serializers import SafeCharField, StrictSerializer
 
 from .models import Enquiry, EnquiryStage, LeadChannel
+from .services import NOTE_MAX_LENGTH
 
 
 def _person(user) -> dict | None:
@@ -108,6 +109,7 @@ class EnquiryHistorySerializer(serializers.Serializer):
 
 class EnquiryDetailSerializer(EnquirySerializer):
     history = serializers.SerializerMethodField()
+    notes = serializers.SerializerMethodField()
 
     def get_history(self, enquiry: Enquiry) -> list[dict]:
         from apps.audit.models import AuditLog
@@ -118,6 +120,36 @@ class EnquiryDetailSerializer(EnquirySerializer):
             .order_by("-created_at")[:50]
         )
         return EnquiryHistorySerializer(rows, many=True).data
+
+    def get_notes(self, enquiry: Enquiry) -> list[dict]:
+        """The follow-up thread, oldest first (`EnquiryNote.Meta.ordering`),
+        capped at the same 50 the History card is. The cap is the last 50, not
+        the first: a long-running lead's recent messages are the ones being
+        worked from, and the detail endpoint must not grow without bound."""
+        rows = list(enquiry.notes.select_related("author").order_by("-created_at")[:50])
+        rows.reverse()
+        return EnquiryNoteSerializer(rows, many=True).data
+
+
+class EnquiryNoteSerializer(serializers.Serializer):
+    """One message in the follow-up thread, as it is read back."""
+
+    id = serializers.UUIDField(read_only=True)
+    body = serializers.CharField(read_only=True)
+    author = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField(read_only=True)
+
+    def get_author(self, note) -> dict | None:
+        return _person(note.author)
+
+
+class EnquiryNoteCreateSerializer(StrictSerializer):
+    """Writing one. `next_follow_up_at` is optional: a note that does not say
+    when the next call is leaves the enquiry's own follow-up date alone,
+    rather than clearing it."""
+
+    body = SafeCharField(max_length=NOTE_MAX_LENGTH)
+    next_follow_up_at = serializers.DateTimeField(required=False, allow_null=True)
 
 
 class EnquiryRegisterSerializer(StrictSerializer):

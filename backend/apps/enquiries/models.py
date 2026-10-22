@@ -6,7 +6,8 @@ counsellor owns it. It is created when the enquiry form is submitted (or
 filled in directly by a counsellor), updated when a follow-up form or a
 counselling call's form is answered about it, and moved along by people and
 automation rules. Activities (calls, demo classes) hang off it the same way
-they hang off a student.
+they hang off a student, and an `EnquiryNote` is one message in its
+follow-up thread.
 """
 
 from __future__ import annotations
@@ -15,7 +16,12 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.common.models import SoftDeleteBaseModel, SoftDeleteQuerySet, soft_delete_managers
+from apps.common.models import (
+    BaseModel,
+    SoftDeleteBaseModel,
+    SoftDeleteQuerySet,
+    soft_delete_managers,
+)
 
 
 class EnquiryStage(models.TextChoices):
@@ -178,3 +184,53 @@ class Enquiry(SoftDeleteBaseModel):
     @property
     def is_managed_externally(self) -> bool:
         return self.external_system in MANAGING_SYSTEMS
+
+
+class EnquiryNote(BaseModel):
+    """One message in an enquiry's follow-up thread: what was said when the
+    counsellor rang, what the lead asked for, what was promised.
+
+    A thread of short notes, not a form and not an activity. The two
+    neighbouring records this deliberately is *not*:
+
+    * `Activity` (a counselling call, a demo class) is a piece of scheduled,
+      assignable, reviewable work with a lifecycle — created, assigned,
+      started, completed, scored. Pushing a one-line note through those four
+      transitions would put every "called, no answer" in somebody's work
+      queue and in the performance engine's input.
+    * `AuditLog` (the enquiry's History card) records what the *system* was
+      told to change. A note is what a person wants the next person to know,
+      which no audit row can hold.
+
+    Immutable once written: a follow-up thread is a record of what was said
+    at the time, so there is no edit and no delete here. Keeping the note
+    when its author's account is removed (`SET_NULL`) is the same choice
+    `Enquiry.owner` makes, for the same reason — the enquiry's history must
+    not develop holes because somebody left.
+    """
+
+    enquiry = models.ForeignKey(
+        Enquiry, on_delete=models.CASCADE, related_name="notes", verbose_name=_("enquiry")
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name=_("author"),
+    )
+    body = models.TextField(_("note"))
+
+    class Meta:
+        verbose_name = _("enquiry note")
+        verbose_name_plural = _("enquiry notes")
+        # Oldest first: a thread reads downwards, unlike the lists elsewhere
+        # in this app, which is why this does not inherit `BaseModel.Meta`.
+        ordering = ("created_at",)
+        indexes = [
+            models.Index(fields=["enquiry", "created_at"], name="enquiry_note_created_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Note on {self.enquiry_id}"

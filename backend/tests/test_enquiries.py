@@ -504,3 +504,151 @@ def test_enquiries_can_be_filtered_by_follow_up_and_date(api_client_no_csrf, cou
         ).json()["count"]
         == 0
     )
+
+
+# ---------------------------------------------------------------------------
+# The follow-up thread
+# ---------------------------------------------------------------------------
+
+
+def test_a_follow_up_note_is_written_read_back_and_dated(api_client_no_csrf, counsellor_user):
+    """A note goes in, comes back with its author and time, and — when it
+    says when the next call is — moves the enquiry's own follow-up date and
+    stamps the contact in the same act."""
+    enquiry = _fill_enquiry(counsellor_user).enquiry
+    url = f"{ENQUIRIES}{enquiry.pk}/notes/"
+    when = (timezone.now() + timedelta(days=2)).replace(microsecond=0)
+
+    api_client_no_csrf.force_login(counsellor_user)
+    created = api_client_no_csrf.post(
+        url,
+        {"body": "Rang at 11. Wants the evening batch.", "next_follow_up_at": when.isoformat()},
+        format="json",
+    )
+    assert created.status_code == 201, created.content
+    body = created.json()
+    assert body["body"] == "Rang at 11. Wants the evening batch."
+    assert body["author"]["name"] == counsellor_user.get_full_name()
+
+    enquiry.refresh_from_db()
+    assert enquiry.next_follow_up_at == when
+    assert enquiry.last_contacted_at is not None
+
+    listed = api_client_no_csrf.get(url).json()
+    assert [row["body"] for row in listed] == ["Rang at 11. Wants the evening batch."]
+
+
+def test_the_thread_reads_downwards_and_rides_along_on_the_detail_response(
+    api_client_no_csrf, counsellor_user
+):
+    enquiry = _fill_enquiry(counsellor_user).enquiry
+    for text in ("First call, no answer.", "Second call, spoke to father.", "Visiting Friday."):
+        services.add_note(actor=counsellor_user, enquiry=enquiry, body=text)
+
+    api_client_no_csrf.force_login(counsellor_user)
+    detail = api_client_no_csrf.get(f"{ENQUIRIES}{enquiry.pk}/").json()
+
+    # Oldest first: a conversation reads downwards, unlike this app's lists.
+    assert [row["body"] for row in detail["notes"]] == [
+        "First call, no answer.",
+        "Second call, spoke to father.",
+        "Visiting Friday.",
+    ]
+
+
+def test_a_note_without_a_next_date_leaves_the_follow_up_alone_rather_than_clearing_it(
+    counsellor_user,
+):
+    enquiry = _fill_enquiry(counsellor_user).enquiry
+    when = (timezone.now() + timedelta(days=3)).replace(microsecond=0)
+    services.update(actor=counsellor_user, enquiry=enquiry, fields={"next_follow_up_at": when})
+
+    services.add_note(actor=counsellor_user, enquiry=enquiry, body="Left a WhatsApp message.")
+
+    enquiry.refresh_from_db()
+    assert enquiry.next_follow_up_at == when
+
+
+def test_an_empty_or_oversized_note_is_refused(api_client_no_csrf, counsellor_user):
+    enquiry = _fill_enquiry(counsellor_user).enquiry
+    url = f"{ENQUIRIES}{enquiry.pk}/notes/"
+    api_client_no_csrf.force_login(counsellor_user)
+
+    for payload in ({"body": ""}, {"body": "   "}, {"body": "x" * (services.NOTE_MAX_LENGTH + 1)}):
+        response = api_client_no_csrf.post(url, payload, format="json")
+        assert response.status_code == 400, payload
+
+    from apps.enquiries.models import EnquiryNote
+
+    assert EnquiryNote.objects.count() == 0
+
+
+def test_a_students_own_account_cannot_reach_an_enquirys_thread(
+    api_client_no_csrf, counsellor_user, student_profile
+):
+    """Enquiries are the admissions desk's records. A student is told so on
+    the thread exactly as they are on every other enquiry endpoint — never
+    handed somebody's lead notes."""
+    enquiry = _fill_enquiry(counsellor_user).enquiry
+    url = f"{ENQUIRIES}{enquiry.pk}/notes/"
+
+    api_client_no_csrf.force_login(student_profile.user)
+    assert api_client_no_csrf.get(url).status_code == 403
+    assert api_client_no_csrf.post(url, {"body": "Let me in."}, format="json").status_code == 403
+
+
+def test_another_centres_staff_cannot_read_or_write_the_thread(
+    api_client_no_csrf, counsellor_user, other_branch_manager
+):
+    enquiry = _fill_enquiry(counsellor_user).enquiry
+    services.add_note(actor=counsellor_user, enquiry=enquiry, body="Jaipur's own note.")
+    url = f"{ENQUIRIES}{enquiry.pk}/notes/"
+
+    api_client_no_csrf.force_login(other_branch_manager)
+    # 404, not 403: an enquiry outside the caller's centre is not theirs to
+    # know about at all — the same answer the detail endpoint gives.
+    assert api_client_no_csrf.get(url).status_code == 404
+    assert api_client_no_csrf.post(url, {"body": "Mine now."}, format="json").status_code == 404
+
+
+def test_a_trainer_who_can_see_nothing_in_the_pipeline_gets_nothing_here(
+    api_client_no_csrf, counsellor_user, trainer
+):
+    enquiry = _fill_enquiry(counsellor_user).enquiry
+    api_client_no_csrf.force_login(trainer)
+    assert api_client_no_csrf.get(f"{ENQUIRIES}{enquiry.pk}/notes/").status_code == 404
+
+
+def test_a_meritto_lead_takes_no_note_because_its_follow_ups_live_in_meritto(
+    api_client_no_csrf, counsellor_user
+):
+    enquiry = _fill_enquiry(counsellor_user).enquiry
+    Enquiry.objects.filter(pk=enquiry.pk).update(external_system="meritto", external_id="MER-9")
+    enquiry.refresh_from_db()
+
+    api_client_no_csrf.force_login(counsellor_user)
+    refused = api_client_no_csrf.post(
+        f"{ENQUIRIES}{enquiry.pk}/notes/", {"body": "Rang them."}, format="json"
+    )
+    assert refused.status_code == 400, refused.content
+    assert "Meritto" in str(refused.json())
+
+    from apps.enquiries.models import EnquiryNote
+
+    assert EnquiryNote.objects.count() == 0
+
+
+def test_a_colleague_at_the_same_centre_without_the_capability_cannot_post(
+    api_client_no_csrf, counsellor_user, trainer_profile
+):
+    """Reading an enquiry and writing on it are different rights. A trainer
+    who somehow reaches the enquiry (by owning it) is the only trainer who
+    may write on it; one who merely shares the centre may not."""
+    enquiry = _fill_enquiry(counsellor_user).enquiry
+    api_client_no_csrf.force_login(trainer_profile.user)
+    assert (
+        api_client_no_csrf.post(
+            f"{ENQUIRIES}{enquiry.pk}/notes/", {"body": "Hello."}, format="json"
+        ).status_code
+        == 404
+    )

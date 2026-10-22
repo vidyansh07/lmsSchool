@@ -30,6 +30,8 @@ from .models import MANAGED_MESSAGE, SOURCE_CHOICES, Enquiry, EnquiryStage, Lead
 from .serializers import (
     EnquiryBulkRequestSerializer,
     EnquiryDetailSerializer,
+    EnquiryNoteCreateSerializer,
+    EnquiryNoteSerializer,
     EnquiryRegisterSerializer,
     EnquirySerializer,
     EnquiryUpdateSerializer,
@@ -321,3 +323,54 @@ class EnquiryRegisterView(APIView):
         services.link_registration(actor=request.user, enquiry=enquiry, student=student)
         refreshed = get_object_or_404(access.visible_enquiries(request.user), pk=enquiry_id)
         return Response(EnquiryDetailSerializer(refreshed, context={"request": request}).data)
+
+
+class EnquiryNoteView(APIView):
+    """The enquiry's follow-up thread: read it, or add one message to it.
+
+    The thread is on the detail response too (`notes`), so an open screen
+    needs no extra call to show it; this endpoint exists for posting, and
+    `GET` is here so a thread longer than the detail response's cap can be
+    paged to later without the shape changing.
+
+    Writing needs what changing the enquiry needs — its owner, or
+    `enquiry.manage` at that centre — enforced in `services.add_note`, not
+    here: the frontend hides the composer on `can_manage`, and that is a
+    courtesy, never the control.
+    """
+
+    permission_classes = (IsActiveUser,)
+    serializer_class = EnquiryNoteSerializer
+    throttle_classes = (BurstThrottle,)
+
+    def _get(self, request, enquiry_id) -> Enquiry:
+        _refuse_students(request.user)
+        return get_object_or_404(access.visible_enquiries(request.user), pk=enquiry_id)
+
+    @extend_schema(
+        summary="An enquiry's follow-up thread",
+        responses={200: EnquiryNoteSerializer(many=True)},
+        tags=TAG,
+    )
+    def get(self, request, enquiry_id):
+        enquiry = self._get(request, enquiry_id)
+        rows = enquiry.notes.select_related("author").order_by("created_at")
+        return Response(EnquiryNoteSerializer(rows, many=True).data)
+
+    @extend_schema(
+        summary="Add a follow-up note",
+        request=EnquiryNoteCreateSerializer,
+        responses={201: EnquiryNoteSerializer},
+        tags=TAG,
+    )
+    def post(self, request, enquiry_id):
+        enquiry = self._get(request, enquiry_id)
+        serializer = EnquiryNoteCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        note = services.add_note(
+            actor=request.user,
+            enquiry=enquiry,
+            body=serializer.validated_data["body"],
+            next_follow_up_at=serializer.validated_data.get("next_follow_up_at"),
+        )
+        return Response(EnquiryNoteSerializer(note).data, status=201)

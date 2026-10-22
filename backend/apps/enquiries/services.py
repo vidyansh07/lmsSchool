@@ -20,7 +20,14 @@ from django.utils import timezone
 from apps.audit.services import AuditAction, record
 from apps.common.exceptions import ApplicationError
 
-from .models import CLOSED_STAGES, MANAGED_MESSAGE, Enquiry, EnquiryStage, channel_for_source
+from .models import (
+    CLOSED_STAGES,
+    MANAGED_MESSAGE,
+    Enquiry,
+    EnquiryNote,
+    EnquiryStage,
+    channel_for_source,
+)
 from .signals import enquiry_changed
 
 #: Form question key → enquiry field. Keys not listed are kept on the form
@@ -343,6 +350,54 @@ def apply_answers(*, actor, enquiry: Enquiry, values: dict[str, Any]) -> list[st
     if status:
         Enquiry.objects.filter(pk=enquiry.pk).update(last_contacted_at=timezone.now())
     return changed
+
+
+#: The longest a single follow-up note may be. Long enough for what was said
+#: on a call; short enough that the thread stays readable and one paste cannot
+#: fill a column. The serializer enforces the same number, so a note arriving
+#: through the API is refused rather than silently cut in half here.
+NOTE_MAX_LENGTH = 2000
+
+
+@transaction.atomic
+def add_note(*, actor, enquiry: Enquiry, body: str, next_follow_up_at: Any = None) -> EnquiryNote:
+    """Write one message into an enquiry's follow-up thread, and — when the
+    caller said when they will ring next — move the enquiry's own follow-up
+    date in the same act.
+
+    Authority is `access.can_manage_enquiry`: the enquiry's owner, or
+    `enquiry.manage` at that centre. That function already refuses a lead
+    Meritto manages (owner's decision, 17 October 2026), which is the
+    behaviour wanted here too — a note the LMS keeps about a lead whose
+    follow-ups live in Meritto would be a record nobody working that lead
+    ever reads.
+
+    `last_contacted_at` is stamped because writing a follow-up note *is* the
+    contact being recorded; it is written with `queryset.update` rather than
+    through `update()` above because it is not a field a person may set by
+    hand (it is not in `EDITABLE_FIELDS`), exactly as `apply_answers` stamps
+    it for a completed call.
+    """
+    from .access import can_manage_enquiry
+
+    if not can_manage_enquiry(actor, enquiry):
+        from apps.common.exceptions import AuthorityError
+
+        if enquiry.is_managed_externally:
+            raise ApplicationError({"non_field_errors": [MANAGED_MESSAGE]})
+        raise AuthorityError("You cannot add a follow-up note to this enquiry.")
+
+    text = (body or "").strip()
+    if not text:
+        raise ApplicationError({"body": ["A follow-up note needs something in it."]})
+    if len(text) > NOTE_MAX_LENGTH:
+        raise ApplicationError({"body": [f"Keep a note under {NOTE_MAX_LENGTH} characters."]})
+
+    note = EnquiryNote.objects.create(enquiry=enquiry, author=actor, body=text)
+    if next_follow_up_at is not None:
+        update(actor=actor, enquiry=enquiry, fields={"next_follow_up_at": next_follow_up_at})
+    Enquiry.objects.filter(pk=enquiry.pk).update(last_contacted_at=timezone.now())
+    return note
 
 
 @transaction.atomic

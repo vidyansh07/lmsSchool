@@ -3589,9 +3589,20 @@ export interface EnquiryHistoryEntry {
   created_at: string;
 }
 
+/** One message in an enquiry's follow-up thread: what was said when the
+ *  counsellor rang, read oldest first the way a conversation runs. */
+export interface EnquiryNote {
+  id: string;
+  body: string;
+  author: { id: string; name: string } | null;
+  created_at: string;
+}
+
 /** `GET /enquiries/{id}/`. */
 export interface EnquiryDetail extends Enquiry {
   history: EnquiryHistoryEntry[];
+  /** The last 50 follow-up notes, oldest first. */
+  notes: EnquiryNote[];
 }
 
 /** `GET /enquiries/summary/`. */

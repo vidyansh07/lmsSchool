@@ -15,9 +15,10 @@ const useApi = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-api", () => ({ useApi }));
 
 const updateEnquiry = vi.hoisted(() => vi.fn());
+const addEnquiryNote = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/enquiries", async () => {
   const actual = await vi.importActual<typeof import("@/lib/enquiries")>("@/lib/enquiries");
-  return { ...actual, updateEnquiry };
+  return { ...actual, updateEnquiry, addEnquiryNote };
 });
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -97,6 +98,7 @@ function enquiry(overrides: Partial<EnquiryDetail> = {}): EnquiryDetail {
         created_at: "2026-10-01T10:00:00Z",
       },
     ],
+    notes: [],
     ...overrides,
   };
 }
@@ -345,6 +347,104 @@ describe("EnquiryScreen", () => {
     );
     expect(await screen.findByText("Saved.")).toBeInTheDocument();
     expect(reload).toHaveBeenCalled();
+  });
+
+  it("reads the follow-up thread downwards and writes the next one into it", async () => {
+    const reload = mockDetail(
+      enquiry({
+        notes: [
+          {
+            id: "n-1",
+            body: "First call, no answer.",
+            author: { id: "u-1", name: "Kiran Counsellor" },
+            created_at: "2026-10-02T06:00:00Z",
+          },
+          {
+            id: "n-2",
+            body: "Spoke to father. Wants the evening batch.",
+            author: { id: "u-1", name: "Kiran Counsellor" },
+            created_at: "2026-10-03T06:00:00Z",
+          },
+        ],
+      }),
+    );
+    addEnquiryNote.mockResolvedValue({
+      id: "n-3",
+      body: "Visiting Friday.",
+      author: { id: "u-1", name: "Kiran Counsellor" },
+      created_at: "2026-10-04T06:00:00Z",
+    });
+    render(<EnquiryScreen id="e-1" />);
+
+    const thread = screen.getAllByRole("listitem").map((row) => row.textContent ?? "");
+    const first = thread.findIndex((text) => text.includes("First call, no answer."));
+    const second = thread.findIndex((text) => text.includes("Spoke to father."));
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(second).toBeGreaterThan(first);
+
+    fireEvent.change(screen.getByLabelText("What happened"), {
+      target: { value: "Visiting Friday." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add follow-up" }));
+    await waitFor(() => expect(addEnquiryNote).toHaveBeenCalledWith("e-1", { body: "Visiting Friday." }));
+    expect(reload).toHaveBeenCalled();
+  });
+
+  it("sends the next follow-up date with the note when one is given", async () => {
+    mockDetail(enquiry());
+    addEnquiryNote.mockResolvedValue({
+      id: "n-1",
+      body: "Call back Monday.",
+      author: null,
+      created_at: "2026-10-04T06:00:00Z",
+    });
+    render(<EnquiryScreen id="e-1" />);
+
+    fireEvent.change(screen.getByLabelText("What happened"), {
+      target: { value: "Call back Monday." },
+    });
+    // "Next call" in the composer, not Pipeline's own "Next follow-up" field
+    // further up the page — the same date, set from where the note is written.
+    fireEvent.change(screen.getByLabelText("Next call"), {
+      target: { value: "2026-10-26T10:30" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add follow-up" }));
+
+    await waitFor(() => expect(addEnquiryNote).toHaveBeenCalled());
+    const [, payload] = addEnquiryNote.mock.calls[0];
+    expect(payload.body).toBe("Call back Monday.");
+    expect(payload.next_follow_up_at).toBe(new Date("2026-10-26T10:30").toISOString());
+  });
+
+  it("refuses to send an empty follow-up rather than writing a blank one", async () => {
+    mockDetail(enquiry());
+    render(<EnquiryScreen id="e-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Add follow-up" }));
+    expect(await screen.findByText("Write what was said before sending.")).toBeInTheDocument();
+    expect(addEnquiryNote).not.toHaveBeenCalled();
+  });
+
+  it("shows the thread but no composer to somebody who cannot change the enquiry", () => {
+    mockDetail(
+      enquiry({
+        can_manage: false,
+        owner: { id: "u-9", name: "Someone" },
+        notes: [
+          {
+            id: "n-1",
+            body: "Already called.",
+            author: { id: "u-9", name: "Someone" },
+            created_at: "2026-10-02T06:00:00Z",
+          },
+        ],
+      }),
+    );
+    render(<EnquiryScreen id="e-1" />);
+
+    expect(screen.getByText("Already called.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("What happened")).not.toBeInTheDocument();
+    expect(screen.getByText("You can read this thread but not add to it.")).toBeInTheDocument();
   });
 
   it("moves the lead online when its source is changed to a web source", async () => {

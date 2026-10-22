@@ -8,7 +8,13 @@
  */
 
 import { apiFetch, apiMutate } from "./api";
-import type { EnquiryDetail, EnquiryStage, EnquirySummary, LeadChannel } from "@/types/api";
+import type {
+  EnquiryDetail,
+  EnquiryNote,
+  EnquiryStage,
+  EnquirySummary,
+  LeadChannel,
+} from "@/types/api";
 
 export interface EnquiryChanges {
   stage?: EnquiryStage;
@@ -42,6 +48,21 @@ export async function registerEnquiry(id: string, studentId: string): Promise<En
   return apiMutate<EnquiryDetail>(`/api/v1/enquiries/${id}/register/`, {
     method: "POST",
     body: { student: studentId },
+  });
+}
+
+/** Adds one message to the enquiry's follow-up thread. `next_follow_up_at`
+ *  is optional: leaving it out keeps whatever date the enquiry already has
+ *  rather than clearing it. Needs the same right changing the enquiry does —
+ *  its owner, or `enquiry.manage` at its centre — and is refused for a lead
+ *  Meritto manages, whose follow-ups live in Meritto. */
+export async function addEnquiryNote(
+  id: string,
+  note: { body: string; next_follow_up_at?: string },
+): Promise<EnquiryNote> {
+  return apiMutate<EnquiryNote>(`/api/v1/enquiries/${id}/notes/`, {
+    method: "POST",
+    body: note,
   });
 }
 

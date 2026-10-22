@@ -36,7 +36,12 @@ import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { useApi } from "@/hooks/use-api";
 import { errorMessage, fieldErrors } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
-import { registerLeadHref, updateEnquiry, type EnquiryChanges } from "@/lib/enquiries";
+import {
+  addEnquiryNote,
+  registerLeadHref,
+  updateEnquiry,
+  type EnquiryChanges,
+} from "@/lib/enquiries";
 import { formatDateTime } from "@/lib/format";
 import {
   ACTIVITY_STATUS_LABEL,
@@ -382,6 +387,128 @@ function LogActivityDialog({
   );
 }
 
+/**
+ * The enquiry's follow-up thread: what was said on each call, oldest at the
+ * top, with a box to add the next one.
+ *
+ * A conversation, not a table. Everything else about an enquiry is a record
+ * of what the *system* was told to change (the History card) or a piece of
+ * scheduled work (the Activities card); this is the one place a counsellor
+ * writes for whoever picks the lead up next, and it reads downwards like the
+ * conversation it describes.
+ *
+ * Saying when the next call is moves the enquiry's own follow-up date in the
+ * same act — the thing that was previously two screens apart (write the note
+ * here, then remember to set the date up in Pipeline). Leaving it blank
+ * leaves that date alone rather than clearing it.
+ *
+ * The composer is hidden for somebody who may read the enquiry but not
+ * change it. That is a courtesy: `services.add_note` enforces the same right
+ * on the server, and a Meritto lead takes no note at all.
+ */
+function FollowUpThreadCard({
+  enquiry,
+  onPosted,
+}: {
+  enquiry: EnquiryDetail;
+  onPosted: () => void;
+}) {
+  const uid = useId();
+  const [body, setBody] = useState("");
+  const [followUp, setFollowUp] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    const text = body.trim();
+    if (!text) {
+      setErrors({ body: "Write what was said before sending." });
+      return;
+    }
+    setSaving(true);
+    setErrors({});
+    try {
+      await addEnquiryNote(enquiry.id, {
+        body: text,
+        next_follow_up_at: followUp ? new Date(followUp).toISOString() : undefined,
+      });
+      setBody("");
+      setFollowUp("");
+      onPosted();
+    } catch (cause) {
+      setErrors(fieldErrors(cause));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Follow-ups</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {enquiry.notes.length === 0 ? (
+          <p className="text-sm text-ink-muted">
+            No follow-up written yet. The first call, what they asked for, what was promised — it
+            goes here.
+          </p>
+        ) : (
+          <ol className="space-y-3">
+            {enquiry.notes.map((note) => (
+              <li key={note.id} className="rounded-card border border-line px-3 py-2">
+                <p className="whitespace-pre-wrap text-sm text-ink">{note.body}</p>
+                <p className="mt-1 text-2xs text-ink-faint">
+                  {note.author?.name || "Automation"} · {formatDateTime(note.created_at)}
+                </p>
+              </li>
+            ))}
+          </ol>
+        )}
+
+        {enquiry.can_manage ? (
+          <div className="space-y-3 border-t border-line pt-4">
+            <Field label="What happened" htmlFor={`${uid}-body`} error={errors.body}>
+              <Textarea
+                id={`${uid}-body`}
+                rows={3}
+                value={body}
+                onChange={(event) => setBody(event.target.value)}
+                placeholder="Rang at 11. Wants the evening batch, will visit Friday."
+              />
+            </Field>
+            <Field
+              label="Next call"
+              htmlFor={`${uid}-next`}
+              hint="Optional. Setting it here moves the enquiry's follow-up date too, so the
+              counsellor does not have to remember to change it up in Pipeline as well."
+              error={errors.next_follow_up_at}
+            >
+              <Input
+                id={`${uid}-next`}
+                type="datetime-local"
+                value={followUp}
+                onChange={(event) => setFollowUp(event.target.value)}
+              />
+            </Field>
+            {errors.non_field_errors ? (
+              <Alert variant="error">{errors.non_field_errors}</Alert>
+            ) : null}
+            <Button onClick={submit} disabled={saving}>
+              <Send className="size-4" aria-hidden="true" />
+              {saving ? "Saving…" : "Add follow-up"}
+            </Button>
+          </div>
+        ) : (
+          <p className="border-t border-line pt-4 text-sm text-ink-muted">
+            You can read this thread but not add to it.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function ActivitiesCard({ enquiry }: { enquiry: EnquiryDetail }) {
   const { data, error, isLoading, reload } = useApi<Paginated<Activity>>(
     `/api/v1/activities/?enquiry=${enquiry.id}&ordering=-created_at`,
@@ -685,6 +812,7 @@ export function EnquiryScreen({ id }: { id: string }) {
               </CardContent>
             </Card>
           ) : null}
+          <FollowUpThreadCard enquiry={data} onPosted={reload} />
           <ActivitiesCard enquiry={data} />
           <FormsCard enquiry={data} maySend={maySend} />
         </>
