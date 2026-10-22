@@ -19,11 +19,12 @@
  * risk rule produced ("78% attended, below the 75% risk threshold"), which is
  * a better "review everything" surface than a bare label ever could be.
  *
- * Feedback about this student loads separately from the rest of the page —
- * `Feedback` has no student filter on the server, so this reads the whole
- * visible set and matches by student code, and giving that its own
- * loading/error/retry means a slow or failing feedback fetch never blocks
- * the performance figures above it from rendering.
+ * Feedback about this student loads separately from the rest of the page
+ * (`GET /performance/feedback/?student=`), so a slow or failing feedback
+ * fetch never blocks the performance figures above it from rendering. It is
+ * also where feedback is *written*: `review.manage_any` gets a "Leave
+ * feedback" button here, which is the only place in the app that calls the
+ * write the API has always offered.
  *
  * The route itself (`/manage/students/[enrollmentId]`) now only redirects to
  * the Student 360 page's Enrolment tab (DESIGN_DECISIONS.md, "Student 360":
@@ -36,9 +37,10 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, MessageSquarePlus } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
+import { FeedbackDialog } from '@/components/manage/feedback-dialog';
 import { ReviewsPanel } from '@/components/manage/reviews-panel';
 import { Stat, StatGrid } from '@/components/manage/stat';
 import { RequireAuth } from '@/components/require-auth';
@@ -85,22 +87,32 @@ function RiskBanner({ performance }: { performance: StudentPerformanceRow }) {
   );
 }
 
-/** Loads and filters independently of the rest of the page — see the module docstring. */
-function StudentFeedbackSection({ studentCode }: { studentCode: string | null }) {
+/** Loads independently of the rest of the page — see the module docstring. */
+function StudentFeedbackSection({
+  studentId,
+  studentName,
+  canWrite,
+}: {
+  studentId: string | null;
+  studentName: string | null;
+  /** `review.manage_any` — a caller without it reads the same list. */
+  canWrite: boolean;
+}) {
   const [items, setItems] = useState<FeedbackItem[] | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
+  const [isWriting, setIsWriting] = useState(false);
 
-  // No studentCode still resolves through a promise, rather than setting
+  // No studentId still resolves through a promise, rather than setting
   // `items` synchronously here — a setState call reachable directly from the
   // effect body (not from inside a `.then()`) risks a cascading render, the
   // same reasoning `hooks/use-api.ts` documents for its own request effect.
   const load = useCallback(() => {
     let cancelled = false;
-    const request = studentCode ? listFeedback() : Promise.resolve<FeedbackItem[]>([]);
+    const request = studentId ? listFeedback(studentId) : Promise.resolve<FeedbackItem[]>([]);
     request
       .then((all) => {
         if (cancelled) return;
-        setItems(studentCode ? all.filter((item) => item.student_code === studentCode) : []);
+        setItems(all);
       })
       .catch((cause: unknown) => {
         if (!cancelled) setError(cause instanceof ApiError ? cause : null);
@@ -108,9 +120,28 @@ function StudentFeedbackSection({ studentCode }: { studentCode: string | null })
     return () => {
       cancelled = true;
     };
-  }, [studentCode]);
+  }, [studentId]);
 
   useEffect(() => load(), [load]);
+
+  const writeButton =
+    canWrite && studentId ? (
+      <Button size="sm" onClick={() => setIsWriting(true)}>
+        <MessageSquarePlus className="size-4" aria-hidden="true" />
+        Leave feedback
+      </Button>
+    ) : null;
+
+  const dialog =
+    canWrite && studentId ? (
+      <FeedbackDialog
+        studentId={studentId}
+        studentName={studentName}
+        open={isWriting}
+        onClose={() => setIsWriting(false)}
+        onSaved={load}
+      />
+    ) : null;
 
   if (error) {
     return (
@@ -124,23 +155,42 @@ function StudentFeedbackSection({ studentCode }: { studentCode: string | null })
   }
   if (items === null) return <LoadingState label="Loading feedback…" rows={2} />;
   if (items.length === 0) {
-    return <EmptyState title="No feedback yet" description="Nothing has been left for this student." />;
+    return (
+      <>
+        <EmptyState
+          title="No feedback yet"
+          description="Nothing has been left for this student."
+          action={writeButton ?? undefined}
+        />
+        {dialog}
+      </>
+    );
   }
   return (
-    <ul className="divide-y divide-line rounded-card border border-line">
-      {items.map((item) => (
-        <li
-          key={item.id}
-          className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-sunken/40"
-          data-testid="student-feedback-item"
-        >
-          <p className="text-sm">{fallback(item.body, NO_DATA)}</p>
-          <p className="text-xs text-ink-muted">
-            {fallback(item.author_name, UNKNOWN)} · {fallback(item.batch_code)} · {formatDate(item.created_at)}
-          </p>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-3">
+      <ul className="divide-y divide-line rounded-card border border-line">
+        {items.map((item) => (
+          <li
+            key={item.id}
+            className="animate-fade-in space-y-1 px-4 py-3 transition-colors hover:bg-sunken/40"
+            data-testid="student-feedback-item"
+          >
+            <p className="text-sm">{fallback(item.body, NO_DATA)}</p>
+            <p className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+              <span>
+                {fallback(item.author_name, UNKNOWN)} · {fallback(item.batch_code)} ·{' '}
+                {formatDate(item.created_at)}
+              </span>
+              {/* Whether the student reads it is the field that distinguishes
+                  feedback from a review, so staff see which kind this is. */}
+              {item.visible_to_subject ? null : <Badge variant="neutral">Staff only</Badge>}
+            </p>
+          </li>
+        ))}
+      </ul>
+      {writeButton}
+      {dialog}
+    </div>
   );
 }
 
@@ -360,7 +410,11 @@ export function StudentPerformance({
           <CardDescription>What has been left for this student.</CardDescription>
         </CardHeader>
         <CardContent>
-          <StudentFeedbackSection studentCode={studentCode} />
+          <StudentFeedbackSection
+            studentId={studentId}
+            studentName={enrollment.student_name ?? null}
+            canWrite={can(Capability.reviewManageAny)}
+          />
         </CardContent>
       </Card>
     </div>

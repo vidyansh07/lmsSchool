@@ -1,9 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StudentPerformance } from '@/app/manage/students/[enrollmentId]/page';
 import { ApiError } from '@/lib/api';
-import type { StudentPerformanceRow } from '@/lib/manage';
+import type { FeedbackItem, StudentPerformanceRow } from '@/lib/manage';
 import type { Enrollment } from '@/types/api';
 
 const getEnrollment = vi.hoisted(() => vi.fn());
@@ -14,9 +14,10 @@ vi.mock('@/lib/batches', async () => {
 
 const getBatchPerformance = vi.hoisted(() => vi.fn());
 const listFeedback = vi.hoisted(() => vi.fn());
+const createFeedback = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/manage', async () => {
   const actual = await vi.importActual<typeof import('@/lib/manage')>('@/lib/manage');
-  return { ...actual, getBatchPerformance, listFeedback };
+  return { ...actual, getBatchPerformance, listFeedback, createFeedback };
 });
 
 const listReviews = vi.hoisted(() => vi.fn());
@@ -71,10 +72,25 @@ function performanceRow(overrides: Partial<StudentPerformanceRow> = {}): Student
   };
 }
 
+function feedbackItem(overrides: Partial<FeedbackItem> = {}): FeedbackItem {
+  return {
+    id: 'fb-1',
+    student_code: 'GRS-S-00001',
+    trainer_code: null,
+    batch_code: 'GRS-B-001',
+    body: 'Great progress this week.',
+    visible_to_subject: true,
+    author_name: 'Tina Trainer',
+    created_at: '2026-08-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   getEnrollment.mockReset();
   getBatchPerformance.mockReset();
   listFeedback.mockReset().mockResolvedValue([]);
+  createFeedback.mockReset().mockResolvedValue({});
   listReviews.mockReset().mockResolvedValue([]);
   useAuth.mockReset().mockReturnValue({ can: () => true });
 });
@@ -192,16 +208,99 @@ describe('StudentPerformance', () => {
     await waitFor(() => expect(screen.getByText('No feedback yet')).toBeInTheDocument());
   });
 
-  it('shows only the feedback matching this student’s code', async () => {
+  it('asks the server for this student’s feedback rather than filtering the whole visible set', async () => {
+    getEnrollment.mockResolvedValue(enrollment());
+    getBatchPerformance.mockResolvedValue([performanceRow()]);
+    listFeedback.mockResolvedValue([feedbackItem()]);
+    render(<StudentPerformance enrollmentId="enrol-1" />);
+
+    await waitFor(() => expect(screen.getByText('Great progress this week.')).toBeInTheDocument());
+    // The id, not the code: `?student=` is applied after the endpoint's own
+    // scoping, so it can narrow the list and never widen it.
+    expect(listFeedback).toHaveBeenCalledWith('student-1');
+  });
+
+  it('marks feedback the student cannot read, so staff know which kind it is', async () => {
     getEnrollment.mockResolvedValue(enrollment());
     getBatchPerformance.mockResolvedValue([performanceRow()]);
     listFeedback.mockResolvedValue([
-      { id: 'fb-1', student_code: 'GRS-S-00001', trainer_code: null, batch_code: 'GRS-B-001', body: 'Great progress this week.', author_name: 'Tina Trainer', created_at: '2026-08-01T00:00:00Z' },
-      { id: 'fb-2', student_code: 'GRS-S-00099', trainer_code: null, batch_code: 'GRS-B-001', body: 'Not this student.', author_name: 'Someone Else', created_at: '2026-08-01T00:00:00Z' },
+      feedbackItem({ id: 'fb-1', body: 'Shown to them.' }),
+      feedbackItem({ id: 'fb-2', body: 'A note for the next review.', visible_to_subject: false }),
     ]);
     render(<StudentPerformance enrollmentId="enrol-1" />);
+
+    await waitFor(() => expect(screen.getByText('Shown to them.')).toBeInTheDocument());
+    expect(screen.getAllByText('Staff only')).toHaveLength(1);
+  });
+
+  it('leaves feedback about the student and reloads the list', async () => {
+    getEnrollment.mockResolvedValue(enrollment());
+    getBatchPerformance.mockResolvedValue([performanceRow()]);
+    render(<StudentPerformance enrollmentId="enrol-1" />);
+
+    await waitFor(() => expect(screen.getByText('No feedback yet')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Leave feedback/i }));
+    expect(screen.getByText('Feedback for Jane Student')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Feedback'), {
+      target: { value: 'Asked good questions today.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save feedback' }));
+
+    await waitFor(() =>
+      expect(createFeedback).toHaveBeenCalledWith({
+        student: 'student-1',
+        body: 'Asked good questions today.',
+        visibleToSubject: true,
+      }),
+    );
+    // Reloaded, rather than the new row being pushed into local state where
+    // it could disagree with what the server actually stored.
+    await waitFor(() => expect(listFeedback).toHaveBeenCalledTimes(2));
+  });
+
+  it('can keep a note off the student’s own dashboard', async () => {
+    getEnrollment.mockResolvedValue(enrollment());
+    getBatchPerformance.mockResolvedValue([performanceRow()]);
+    render(<StudentPerformance enrollmentId="enrol-1" />);
+
+    await waitFor(() => expect(screen.getByText('No feedback yet')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Leave feedback/i }));
+    fireEvent.change(screen.getByLabelText('Feedback'), { target: { value: 'For the review.' } });
+    fireEvent.click(screen.getByLabelText(/Show this to the student/));
+    fireEvent.click(screen.getByRole('button', { name: 'Save feedback' }));
+
+    await waitFor(() =>
+      expect(createFeedback).toHaveBeenCalledWith({
+        student: 'student-1',
+        body: 'For the review.',
+        visibleToSubject: false,
+      }),
+    );
+  });
+
+  it('writes nothing when the feedback is blank', async () => {
+    getEnrollment.mockResolvedValue(enrollment());
+    getBatchPerformance.mockResolvedValue([performanceRow()]);
+    render(<StudentPerformance enrollmentId="enrol-1" />);
+
+    await waitFor(() => expect(screen.getByText('No feedback yet')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Leave feedback/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save feedback' }));
+
+    expect(await screen.findByText('Write the feedback before saving.')).toBeInTheDocument();
+    expect(createFeedback).not.toHaveBeenCalled();
+  });
+
+  it('offers no way to write feedback to somebody who may only read it', async () => {
+    useAuth.mockReturnValue({ can: () => false });
+    getEnrollment.mockResolvedValue(enrollment());
+    getBatchPerformance.mockResolvedValue([performanceRow()]);
+    listFeedback.mockResolvedValue([feedbackItem()]);
+    render(<StudentPerformance enrollmentId="enrol-1" />);
+
     await waitFor(() => expect(screen.getByText('Great progress this week.')).toBeInTheDocument());
-    expect(screen.queryByText('Not this student.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Leave feedback/i })).not.toBeInTheDocument();
   });
 
   it('shows a not-found state for an enrolment that does not exist or is not visible', async () => {

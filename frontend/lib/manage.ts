@@ -393,19 +393,55 @@ export interface FeedbackItem {
   trainer_code: string | null;
   batch_code: string | null;
   body: string;
+  /** Whether the person it is about may read it. A manager's private note
+   *  about somebody is feedback too, just not shown to them. */
+  visible_to_subject: boolean;
   author_name: string | null;
   created_at: string;
 }
 
 /**
- * Every piece of feedback the caller may see, across every student and
- * trainer. There is no server-side filter by subject yet, so the student page
- * (the one caller of this today) fetches the visible set and matches
- * `student_code` itself — workable at today's institution size, and flagged
- * as a candidate for a real `?student=` filter if that stops being true.
+ * The feedback the caller may see — about one student when `studentId` is
+ * given, otherwise everything visible to them across students and trainers.
+ *
+ * `?student=` is applied by the server *after* its own scoping
+ * (`FeedbackListView`), so naming somebody else's id returns nothing rather
+ * than their feedback: it narrows a scoped list and can never widen it. The
+ * earlier version of this function had no subject argument and the one screen
+ * that called it matched `student_code` client-side, which meant fetching
+ * every visible row to show a handful.
  */
-export function listFeedback(): Promise<FeedbackItem[]> {
-  return apiFetch<FeedbackItem[]>('/api/v1/performance/feedback/');
+export function listFeedback(studentId?: string): Promise<FeedbackItem[]> {
+  const query = studentId ? `?student=${encodeURIComponent(studentId)}` : '';
+  return apiFetch<FeedbackItem[]>(`/api/v1/performance/feedback/${query}`);
+}
+
+/**
+ * Leaves one piece of feedback about a student — a line after a class, a
+ * remark worth recording. Needs `review.manage_any`, and the student must be
+ * one the caller can already see (the server resolves the id out of its own
+ * scoped queryset, so another centre's student is a 404 rather than a note
+ * filed against somebody the caller cannot read).
+ *
+ * `visibleToSubject` decides whether the student reads it on their own
+ * dashboard. The default is `true`, matching the API's: most feedback is
+ * written to be read by the person it is about.
+ */
+export function createFeedback(input: {
+  student: string;
+  body: string;
+  batch?: string;
+  visibleToSubject?: boolean;
+}): Promise<FeedbackItem> {
+  return apiMutate<FeedbackItem>('/api/v1/performance/feedback/', {
+    method: 'POST',
+    body: {
+      student: input.student,
+      body: input.body,
+      ...(input.batch ? { batch: input.batch } : {}),
+      visible_to_subject: input.visibleToSubject ?? true,
+    },
+  });
 }
 
 // --- Shared display helpers -------------------------------------------
