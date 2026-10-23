@@ -678,6 +678,16 @@ describe('FeesPanel', () => {
       voided_at: null,
       voided_by: null,
       void_reason: '',
+    clearing_status: 'cleared',
+    cleared_on: null,
+    bank: null,
+    bank_name: null,
+    category: null,
+    category_name: null,
+    apply_tax: false,
+    tax_group: null,
+    tax_group_name: null,
+    instalment: null,
       ...overrides,
     };
   }

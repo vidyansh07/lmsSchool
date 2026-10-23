@@ -25,6 +25,8 @@ from .models import (
     ClassTime,
     ContactKind,
     FeeStatus,
+    Guardian,
+    GuardianRelation,
     InstitutionKind,
     Qualification,
     StudentContact,
@@ -401,3 +403,43 @@ class FeeStatusUpdateSerializer(StrictSerializer):
 
 class StudentBulkRequestSerializer(bulk.BulkTargetSerializer):
     action = serializers.ChoiceField(choices=("resend_invitation",))
+
+
+class GuardianSerializer(serializers.ModelSerializer):
+    """A guardian as every screen reads one."""
+
+    relation_label = serializers.CharField(source="get_relation_display", read_only=True)
+
+    class Meta:
+        model = Guardian
+        fields = (
+            "id",
+            "name",
+            "relation",
+            "relation_label",
+            "mobile",
+            "email",
+            "occupation",
+            "is_primary",
+        )
+        read_only_fields = fields
+
+
+class GuardianWriteSerializer(StrictSerializer):
+    """One row of the Guardian Details step."""
+
+    name = SafeCharField(max_length=150)
+    relation = serializers.ChoiceField(
+        choices=GuardianRelation.choices, required=False, default=GuardianRelation.GUARDIAN
+    )
+    mobile = SafeCharField(max_length=20, required=False, allow_blank=True, default="")
+    email = serializers.EmailField(max_length=254, required=False, allow_blank=True, default="")
+    occupation = SafeCharField(max_length=120, required=False, allow_blank=True, default="")
+    is_primary = serializers.BooleanField(required=False, default=False)
+
+
+class SetGuardiansSerializer(StrictSerializer):
+    """The whole set at once — see `services.set_guardians` for why this
+    replaces rather than merges."""
+
+    guardians = GuardianWriteSerializer(many=True)

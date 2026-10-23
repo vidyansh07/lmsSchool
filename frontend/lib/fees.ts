@@ -117,11 +117,42 @@ export async function recordPayment(
     reference?: string;
     reference_name?: string;
     note?: string;
+    /** Which instalment it settles, when it settles one. Never the source of
+     *  truth for whether that instalment is paid — the server still reads
+     *  that off the ledger. */
+    instalment?: string;
+    /** Where it went through and under what heading. All recorded, none
+     *  computed: the amount is the amount. */
+    bank?: string;
+    category?: string;
+    apply_tax?: boolean;
+    tax_group?: string;
   },
 ): Promise<FeePayment> {
   return apiMutate<FeePayment>(`${BASE}/enrollments/${enrollmentId}/payments/`, {
     method: 'POST',
     body: payload,
+  });
+}
+
+/** The bank honoured a cheque, a draft or a deposit. Nothing about the money
+ *  moves — it was already received — only the clearing state. */
+export async function clearPayment(
+  paymentId: string,
+  clearedOn?: string,
+): Promise<FeePayment> {
+  return apiMutate<FeePayment>(`${BASE}/payments/${paymentId}/clear/`, {
+    method: 'POST',
+    body: clearedOn ? { cleared_on: clearedOn } : {},
+  });
+}
+
+/** It did not. The payment is voided — the cheque was never payment — and the
+ *  reason the bank gave is kept with it. */
+export async function bouncePayment(paymentId: string, reason: string): Promise<FeePayment> {
+  return apiMutate<FeePayment>(`${BASE}/payments/${paymentId}/bounce/`, {
+    method: 'POST',
+    body: { reason },
   });
 }
 

@@ -42,6 +42,8 @@ from .serializers import (
     FeeAmountUpdateSerializer,
     FeeStatusUpdateSerializer,
     FollowUpCreateSerializer,
+    GuardianSerializer,
+    SetGuardiansSerializer,
     StudentBulkRequestSerializer,
     StudentCreateSerializer,
     StudentDuplicateSerializer,
@@ -587,3 +589,47 @@ class StudentBulkView(APIView):
             lambda student: student.user.get_full_name() or student.student_id,
         )
         return Response(bulk.BulkResultSerializer(result).data)
+
+
+class StudentGuardiansView(APIView):
+    """A student's parents and guardians: read them, or replace the set.
+
+    Reading is reading the student (`access.visible_students`); a student
+    reads their own. Replacing needs `student.update_any` — a guardian is who
+    the institute rings about money and attendance, and that is not something
+    the student decides about themselves.
+    """
+
+    permission_classes = (IsActiveUser,)
+    serializer_class = GuardianSerializer
+
+    def _student(self, request, student_id):
+        return get_object_or_404(access.visible_students(request.user), pk=student_id)
+
+    @extend_schema(
+        summary="A student's guardians",
+        responses={200: GuardianSerializer(many=True)},
+        tags=["Students"],
+    )
+    def get(self, request, student_id):
+        student = self._student(request, student_id)
+        return Response(GuardianSerializer(student.guardians.all(), many=True).data)
+
+    @extend_schema(
+        summary="Replace a student's guardians",
+        request=SetGuardiansSerializer,
+        responses={200: GuardianSerializer(many=True)},
+        tags=["Students"],
+    )
+    def put(self, request, student_id):
+        student = self._student(request, student_id)
+        if not has_capability(request.user, Capability.STUDENT_UPDATE_ANY):
+            raise AuthorityError("You cannot change this student's guardians.")
+        serializer = SetGuardiansSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        rows = services.set_guardians(
+            actor=request.user,
+            student=student,
+            guardians=[dict(row) for row in serializer.validated_data["guardians"]],
+        )
+        return Response(GuardianSerializer(rows, many=True).data)

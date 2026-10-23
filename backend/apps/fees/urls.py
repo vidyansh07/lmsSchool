@@ -22,7 +22,9 @@ from .views import (
     FeesOverviewView,
     LedgerReconciliationView,
     MyFeesView,
+    PaymentCategoryListView,
     StudentFeesView,
+    TaxGroupListView,
 )
 
 app_name = "fees"
@@ -30,6 +32,8 @@ app_name = "fees"
 urlpatterns = [
     path("me/", MyFeesView.as_view(), name="me"),
     path("overview/", FeesOverviewView.as_view(), name="overview"),
+    path("payment-categories/", PaymentCategoryListView.as_view(), name="payment-categories"),
+    path("tax-groups/", TaxGroupListView.as_view(), name="tax-groups"),
     path("reconciliation/", LedgerReconciliationView.as_view(), name="reconciliation"),
     path("collections-trend/", FeeCollectionsTrendView.as_view(), name="collections-trend"),
     path("students/<uuid:student_id>/", StudentFeesView.as_view(), name="student"),

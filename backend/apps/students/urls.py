@@ -11,6 +11,7 @@ from .views import (
     StudentFeeStatusView,
     StudentFilterFieldsView,
     StudentFollowUpView,
+    StudentGuardiansView,
     StudentListCreateView,
     StudentMeView,
 )
@@ -28,6 +29,11 @@ urlpatterns = [
     path("filter-fields/", StudentFilterFieldsView.as_view(), name="filter-fields"),
     path("<uuid:student_id>/", StudentDetailView.as_view(), name="detail"),
     path("<uuid:student_id>/360/", Student360View.as_view(), name="360"),
+    path(
+        "<uuid:student_id>/guardians/",
+        StudentGuardiansView.as_view(),
+        name="guardians",
+    ),
     path("<uuid:student_id>/fee-status/", StudentFeeStatusView.as_view(), name="fee-status"),
     path("<uuid:student_id>/fee-amount/", StudentFeeAmountView.as_view(), name="fee-amount"),
     path("<uuid:student_id>/follow-ups/", StudentFollowUpView.as_view(), name="follow-ups"),

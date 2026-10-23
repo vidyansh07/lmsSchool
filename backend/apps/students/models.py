@@ -532,3 +532,70 @@ class StudentContact(TimeStampedModel, UUIDPrimaryKeyModel):
 
     def __str__(self) -> str:
         return f"{self.code}{self.value}" if self.code else self.value
+
+
+class GuardianRelation(models.TextChoices):
+    """Who the guardian is to the student."""
+
+    FATHER = "father", _("Father")
+    MOTHER = "mother", _("Mother")
+    GUARDIAN = "guardian", _("Guardian")
+    SPOUSE = "spouse", _("Spouse")
+    SIBLING = "sibling", _("Sibling")
+    OTHER = "other", _("Other")
+
+
+class Guardian(TimeStampedModel, UUIDPrimaryKeyModel):
+    """A parent or guardian of a student.
+
+    The record has carried `guardian_name` and `guardian_phone` since the
+    beginning — one guardian, two fields, no relation and no email. A real
+    student often has two (both parents, or a parent and an uncle paying the
+    fee), and the messaging settings ask whether a notice goes to the *first*
+    guardian or to *all* of them, which two flat fields cannot express.
+
+    Those two fields are **not** removed. They hold thousands of real
+    answers, and `0013` copies each into a guardian row here rather than
+    discarding it. They stay readable, and nothing new writes them: this is
+    where a guardian lives now.
+
+    `is_primary` is the "First Guardian of the student" the message settings
+    name. Exactly one per student, kept so by `services.set_guardians` rather
+    than by a constraint — the swap is two writes, and a partial unique index
+    would fail between them.
+    """
+
+    student = models.ForeignKey(
+        "students.StudentProfile",
+        on_delete=models.CASCADE,
+        related_name="guardians",
+        verbose_name=_("student"),
+    )
+    name = models.CharField(_("name"), max_length=150, validators=[validate_no_control_characters])
+    relation = models.CharField(
+        _("relation"),
+        max_length=12,
+        choices=GuardianRelation.choices,
+        default=GuardianRelation.GUARDIAN,
+    )
+    mobile = models.CharField(
+        _("mobile"), max_length=20, blank=True, validators=[validate_phone_number]
+    )
+    email = models.EmailField(_("email"), max_length=254, blank=True)
+    occupation = models.CharField(
+        _("occupation"), max_length=120, blank=True, validators=[validate_no_control_characters]
+    )
+    #: The guardian a notice goes to when the institute sends to one rather
+    #: than all. See the class docstring.
+    is_primary = models.BooleanField(_("first guardian"), default=False)
+
+    class Meta:
+        verbose_name = _("guardian")
+        verbose_name_plural = _("guardians")
+        # The first guardian first, then oldest first — the order the desk
+        # entered them, which is the order it expects to read them back.
+        ordering = ("-is_primary", "created_at")
+        indexes = [models.Index(fields=["student", "-is_primary"], name="guardian_student_idx")]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.get_relation_display()})"

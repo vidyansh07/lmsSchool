@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.generics import get_object_or_404
+from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -43,12 +43,14 @@ from .serializers import (
     FeePlanSerializer,
     FeesOverviewSerializer,
     LedgerReconciliationSerializer,
+    PaymentCategorySerializer,
     RecordPaymentSerializer,
     RefundPaymentSerializer,
     SetFeePlanSerializer,
     SetInstallmentsSerializer,
     SetNextDueSerializer,
     StudentFeeSummarySerializer,
+    TaxGroupSerializer,
     VoidPaymentSerializer,
 )
 
@@ -638,3 +640,41 @@ class FeePaymentEmailReceiptView(APIView):
         with transaction.atomic():
             message = mail.email_receipt(payment, automatic=False)
         return Response(FeeEmailQueuedSerializer(message).data, status=status.HTTP_202_ACCEPTED)
+
+
+class PaymentCategoryListView(ListAPIView):
+    """What a payment can be *for* — Fees, Registration, an exam fee.
+
+    An administrator's list, read by the payment dialog. Gated on reading
+    fees rather than managing them: the fee tab shows a payment's category on
+    every row, so somebody who may read a payment may read the names.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_VIEW_ANY
+    serializer_class = PaymentCategorySerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return PaymentCategory.objects.active()
+
+    @extend_schema(summary="Payment categories", tags=FEES_TAG)
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+class TaxGroupListView(ListAPIView):
+    """The named taxes a payment can be taken under. Recorded, never
+    computed — see `apps.fees.models.TaxGroup`."""
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_VIEW_ANY
+    serializer_class = TaxGroupSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return TaxGroup.objects.active()
+
+    @extend_schema(summary="Tax groups", tags=FEES_TAG)
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)

@@ -2002,6 +2002,11 @@ export interface InstallmentInput {
   due_on: string;
 }
 
+/** Whether money taken has reached the bank. A cheque is `uncleared` from the
+ *  moment it is handed over until the bank honours it; `bounced` means it did
+ *  not, and the payment is voided along with it. */
+export type ClearingStatus = 'cleared' | 'uncleared' | 'bounced';
+
 export interface FeePayment {
   /** What the payment was for. The booking amount is named because it is the
    *  one that sometimes goes back. */
@@ -2028,6 +2033,22 @@ export interface FeePayment {
   voided_at: string | null;
   voided_by: string | null;
   void_reason: string;
+  /** Uncleared money still counts as received: the student has paid and the
+   *  balance has dropped. What is uncertain is whether the bank will honour
+   *  it. */
+  clearing_status: ClearingStatus;
+  cleared_on: string | null;
+  /** Where it went through and under what heading — recorded facts about one
+   *  payment, never inputs to a calculation. */
+  bank: string | null;
+  bank_name: string | null;
+  category: string | null;
+  category_name: string | null;
+  apply_tax: boolean;
+  tax_group: string | null;
+  tax_group_name: string | null;
+  /** The instalment it was taken against, when it was taken against one. */
+  instalment: string | null;
 }
 
 /**

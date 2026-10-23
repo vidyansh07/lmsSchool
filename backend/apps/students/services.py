@@ -362,3 +362,52 @@ def get_or_create_profile_for(user: User, *, actor: User | None = None) -> Stude
             context={"student_id": profile.student_id, "backfilled": True},
         )
     return profile
+
+
+@transaction.atomic
+def set_guardians(*, actor, student, guardians: list[dict[str, Any]]):
+    """Replace a student's guardians with the list given.
+
+    Replace rather than merge: the form shows every guardian at once and the
+    counsellor edits them as a set, so "what was sent is what there is" is the
+    only reading that matches what they saw. A guardian removed from the form
+    is a guardian the family no longer wants contacted, which is a decision,
+    not an accident.
+
+    Exactly one is primary — the "First Guardian of the student" the message
+    settings name. If the caller marks none, the first row is it: a student
+    with guardians and no primary is a notice with nowhere to go.
+    """
+    from .models import Guardian
+
+    rows = [row for row in guardians if (row.get("name") or "").strip()]
+    if len(rows) != len(guardians):
+        raise ApplicationError({"guardians": ["Every guardian needs a name."]})
+
+    primary_index = next(
+        (index for index, row in enumerate(rows) if row.get("is_primary")), 0 if rows else None
+    )
+
+    student.guardians.all().delete()
+    created = []
+    for index, row in enumerate(rows):
+        created.append(
+            Guardian.objects.create(
+                student=student,
+                name=(row.get("name") or "").strip(),
+                relation=row.get("relation") or "guardian",
+                mobile=(row.get("mobile") or "").strip(),
+                email=(row.get("email") or "").strip(),
+                occupation=(row.get("occupation") or "").strip(),
+                is_primary=index == primary_index,
+            )
+        )
+    record(
+        action=AuditAction.STUDENT_UPDATED,
+        actor=actor,
+        resource_type="student",
+        resource_id=student.pk,
+        context={"guardians": len(created)},
+        durable=False,
+    )
+    return created

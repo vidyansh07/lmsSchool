@@ -17,8 +17,10 @@ from .models import (
     FeePayment,
     FeePlan,
     InstallmentStatus,
+    PaymentCategory,
     PaymentKind,
     PaymentMethod,
+    TaxGroup,
     installment_rows,
 )
 
@@ -372,3 +374,17 @@ class CancelAdmissionSerializer(StrictSerializer):
 
     cancellation_charge = serializers.DecimalField(min_value=0, required=False, default=0, **MONEY)
     reason = SafeCharField(max_length=300)
+
+
+class PaymentCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentCategory
+        fields = ("id", "name", "is_default", "is_active")
+        read_only_fields = fields
+
+
+class TaxGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaxGroup
+        fields = ("id", "name", "is_default", "is_active")
+        read_only_fields = fields
