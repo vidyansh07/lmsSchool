@@ -141,6 +141,11 @@ class Capability(models.TextChoices):
     COURSE_UPDATE_ANY = "course.update_any", _("Edit any course")
     COURSE_PUBLISH_ANY = "course.publish_any", _("Change the status of any course")
     COURSE_ASSIGN_AUTHORS = "course.assign_authors", _("Assign authors to a course")
+    #: Destroying a course, as against archiving it. Archiving is the
+    #: ordinary end of a course's life and every manager may do it; a
+    #: delete leaves nothing to look back at, so it sits on the
+    #: administrator rung with the other irreversible acts.
+    COURSE_DELETE = "course.delete", _("Delete a course")
 
     # --- Batches, schedules and enrolment
     #
@@ -522,6 +527,8 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.EXPORT_VIEW_ANY,
         Capability.RECORD_VIEW_DELETED,
         Capability.RECORD_RESTORE,
+        # Archiving a course is every manager's; destroying one is not.
+        Capability.COURSE_DELETE,
         Capability.ROLE_VIEW,
         Capability.ROLE_MANAGE,
         Capability.PERMISSION_ASSIGN,

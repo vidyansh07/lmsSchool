@@ -15,6 +15,7 @@ from .views import (
     CourseAuthorDetailView,
     CourseAuthorsView,
     CourseDetailView,
+    CourseFeeInstalmentView,
     CourseListCreateView,
     CourseModuleReorderView,
     CourseModulesView,
@@ -61,6 +62,11 @@ course_patterns = [
     ),
     # Before the bare identifier route, which would otherwise swallow it.
     path("<str:identifier>/price/", CoursePriceView.as_view(), name="price"),
+    path(
+        "<str:identifier>/instalments/",
+        CourseFeeInstalmentView.as_view(),
+        name="fee-instalments",
+    ),
     # Accepts a UUID or a slug, so student-facing URLs can be readable.
     path("<str:identifier>/", CourseDetailView.as_view(), name="detail"),
 ]

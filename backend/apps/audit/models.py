@@ -135,6 +135,8 @@ class AuditAction(models.TextChoices):
     COURSE_CREATED = "course.created", _("Course created")
     COURSE_UPDATED = "course.updated", _("Course updated")
     COURSE_STATUS_CHANGED = "course.status.changed", _("Course status changed")
+    COURSE_DELETED = "course.deleted", _("Course deleted")
+    COURSE_FEE_SCHEDULE_SET = "course.fee_schedule.set", _("Course instalment structure set")
     COURSE_AUTHOR_ASSIGNED = "course.author.assigned", _("Course author assigned")
     COURSE_AUTHOR_REMOVED = "course.author.removed", _("Course author removed")
     COURSE_CONTENT_REORDERED = "course.content.reordered", _("Course content reordered")

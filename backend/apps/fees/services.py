@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from typing import Any
 
 from django.db import transaction
@@ -257,7 +257,13 @@ def set_fee_plan(
             },
         )
         if installments is None:
-            installments = default_installments(
+            # The course may carry its own structure ("half up front, the rest
+            # at thirty days"), which is what the counsellor set up once so
+            # they would not retype it per admission. Failing that, the even
+            # split. Either way it is copied in now and never read back.
+            installments = course_installments(
+                plan, start=timezone.localdate()
+            ) or default_installments(
                 plan.payable, count=installment_count, start=timezone.localdate()
             )
         _replace_installments(plan, actor=actor, items=installments)
@@ -324,6 +330,39 @@ def set_fee_plan(
 # ---------------------------------------------------------------------------
 # The schedule
 # ---------------------------------------------------------------------------
+
+
+def course_installments(plan: FeePlan, *, start: date | None = None) -> list[dict[str, Any]]:
+    """The schedule this plan's course says to collect by default.
+
+    The course keeps *percentages* (`courses.CourseFeeInstalment`), so the
+    rupees are worked out here against what this student actually has to pay —
+    fee less their discount. Shares are rounded down and the leftover paisa go
+    on the first instalment, so the schedule sums to exactly `plan.payable`
+    whatever the percentages were; an asserted invariant rather than a hope,
+    because a schedule that is a rupee short of the fee leaves a student
+    permanently almost-paid.
+
+    An empty list means the course has no structure, and the caller falls back
+    to the even split.
+    """
+    rows = list(plan.enrollment.course.fee_instalments.all())
+    payable = plan.payable
+    if not rows or payable <= ZERO:
+        return []
+    first_day = start or timezone.localdate()
+    amounts = [
+        (payable * row.percent / Decimal(100)).quantize(Decimal("0.01"), rounding=ROUND_DOWN)
+        for row in rows
+    ]
+    amounts[0] += payable - sum(amounts)
+    assert sum(amounts) == payable, "course instalment structure must sum to the payable fee"
+    return [
+        {"amount": amount, "due_on": first_day + timedelta(days=row.due_after_days)}
+        for row, amount in zip(rows, amounts, strict=True)
+        # A share small enough to round to nothing is not an instalment.
+        if amount > ZERO
+    ]
 
 
 def default_installments(

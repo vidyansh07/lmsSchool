@@ -16,6 +16,8 @@ cannot set ``status``, ``code`` or ``created_by`` by including them.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -31,6 +33,7 @@ from .models import (
     CourseAssignment,
     CourseAuthorRole,
     CourseDifficulty,
+    CourseFeeInstalment,
     CoursePrice,
     CourseVisibility,
     Lesson,
@@ -340,6 +343,32 @@ class CourseAssignmentSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class CourseFeeInstalmentSerializer(serializers.ModelSerializer):
+    """One row of a course's default instalment structure."""
+
+    class Meta:
+        model = CourseFeeInstalment
+        fields = ("id", "sequence", "label", "percent", "due_after_days")
+        read_only_fields = fields
+
+
+class CourseFeeInstalmentRowSerializer(StrictSerializer):
+    """A row as the structure screen sends it. Sequence is the array order, so
+    there is no way for a client to send two rows claiming to be the first."""
+
+    label = SafeCharField(max_length=60, required=False, allow_blank=True)
+    percent = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=Decimal("0.01"), max_value=Decimal("100")
+    )
+    due_after_days = serializers.IntegerField(min_value=0, max_value=3650, required=False)
+
+
+class CourseFeeInstalmentWriteSerializer(StrictSerializer):
+    """The whole structure at once: what it is now, not what changed."""
+
+    instalments = CourseFeeInstalmentRowSerializer(many=True, allow_empty=True)
+
+
 class CourseListSerializer(serializers.ModelSerializer):
     """Catalogue row. Flat, small, and safe for an unauthenticated-adjacent view."""
 
@@ -387,6 +416,7 @@ class CourseDetailSerializer(CourseListSerializer):
     instructors = serializers.SerializerMethodField()
     can_manage = serializers.SerializerMethodField()
     can_publish = serializers.SerializerMethodField()
+    fee_instalments = serializers.SerializerMethodField()
 
     class Meta(CourseListSerializer.Meta):
         fields = (
@@ -400,6 +430,7 @@ class CourseDetailSerializer(CourseListSerializer):
             "instructors",
             "can_manage",
             "can_publish",
+            "fee_instalments",
         )
         read_only_fields = fields
 
@@ -421,6 +452,11 @@ class CourseDetailSerializer(CourseListSerializer):
             data["lessons"] = LessonSummarySerializer(lessons, many=True).data
             payload.append(data)
         return payload
+
+    @extend_schema_field(CourseFeeInstalmentSerializer(many=True))
+    def get_fee_instalments(self, obj: Course):
+        """The course's default instalment structure, in order."""
+        return CourseFeeInstalmentSerializer(obj.fee_instalments.all(), many=True).data
 
     @extend_schema_field(
         serializers.ListField(child=serializers.DictField(child=serializers.CharField()))

@@ -33,6 +33,7 @@ from .models import (
     Category,
     Course,
     CourseAssignment,
+    CourseFeeInstalment,
     CoursePrice,
     Lesson,
     LessonContentType,
@@ -814,3 +815,129 @@ def quoted_fee(course: Course, when: date | None = None) -> Decimal | None:
     transitional nicety — it is the answer for every course nobody has repriced.
     """
     return price_on(course, when) or course.default_fee
+
+
+# ---------------------------------------------------------------------------
+# The course's default instalment structure
+# ---------------------------------------------------------------------------
+
+#: The same ceiling the fee ledger puts on a plan's schedule
+#: (`apps.fees.models.MAX_INSTALLMENTS`). Repeated rather than imported: the
+#: dependency between these two apps points from fees to courses, and a
+#: template that could not be applied to a plan would be a trap.
+MAX_FEE_INSTALMENTS = 36
+
+
+@transaction.atomic
+def set_fee_instalments(
+    *, course: Course, actor: User, rows: list[dict[str, Any]]
+) -> list[CourseFeeInstalment]:
+    """Replace the course's instalment structure with ``rows``.
+
+    Replace-as-set, because the screen shows the whole structure at once and
+    the person editing it is answering "what is it now", not "what changed".
+    An empty list is a real answer: collect the fee however each admission
+    decides, with no default structure at all.
+
+    The shares must add up to exactly 100. A structure summing to 90 would
+    leave a tenth of every fee unscheduled and nobody would notice until a
+    student's statement did not add up, so it is refused here rather than
+    quietly accepted.
+    """
+    cleaned: list[dict[str, Any]] = []
+    if len(rows) > MAX_FEE_INSTALMENTS:
+        raise ApplicationError(
+            {"instalments": [f"At most {MAX_FEE_INSTALMENTS} instalments can be scheduled."]}
+        )
+    total = Decimal("0")
+    for index, row in enumerate(rows):
+        try:
+            percent = Decimal(str(row.get("percent"))).quantize(Decimal("0.01"))
+        except (ArithmeticError, TypeError, ValueError):
+            raise ApplicationError(
+                {"instalments": [f"Instalment {index + 1} needs a share of the fee."]}
+            ) from None
+        if percent <= 0:
+            raise ApplicationError(
+                {"instalments": [f"Instalment {index + 1} must be more than zero."]}
+            )
+        days = row.get("due_after_days") or 0
+        try:
+            days = int(days)
+        except (TypeError, ValueError):
+            raise ApplicationError(
+                {"instalments": [f"Instalment {index + 1} has an unreadable number of days."]}
+            ) from None
+        if days < 0:
+            raise ApplicationError(
+                {"instalments": [f"Instalment {index + 1} cannot be due before the admission."]}
+            )
+        total += percent
+        cleaned.append(
+            {
+                "sequence": index + 1,
+                "label": (row.get("label") or "").strip(),
+                "percent": percent,
+                "due_after_days": days,
+            }
+        )
+    if cleaned and total != Decimal("100.00"):
+        raise ApplicationError(
+            {"instalments": [f"The shares add up to {total}%, not 100%."]},
+        )
+
+    course.fee_instalments.all().delete()
+    created = [CourseFeeInstalment.objects.create(course=course, **row) for row in cleaned]
+    record(
+        action=AuditAction.COURSE_FEE_SCHEDULE_SET,
+        actor=actor,
+        resource_type="course",
+        resource_id=course.pk,
+        context={
+            "code": course.code,
+            "instalments": [
+                {
+                    "sequence": row["sequence"],
+                    "percent": str(row["percent"]),
+                    "due_after_days": row["due_after_days"],
+                }
+                for row in cleaned
+            ],
+        },
+    )
+    return created
+
+
+@transaction.atomic
+def delete_course(*, course: Course, actor: User, reason: str = "") -> None:
+    """Destroy a course that never got off the ground.
+
+    Archiving is the ordinary end of a course's life and keeps everything;
+    this is the other case — a course created by mistake, or a duplicate. It
+    is refused the moment anybody has been taught under it: a batch or an
+    enrolment is somebody's record of what they studied, and the database says
+    the same thing with ``PROTECT``. This checks first so the counsellor gets
+    a sentence rather than an integrity error.
+    """
+    blockers: list[str] = []
+    batches = course.batches.count()
+    if batches:
+        blockers.append(f"{batches} batch(es) run this course")
+    enrolments = course.enrollments.count()
+    if enrolments:
+        blockers.append(f"{enrolments} student(s) are enrolled on it")
+    if blockers:
+        raise ConflictError(
+            "This course cannot be deleted because " + ", and ".join(blockers) + ". Archive it "
+            "instead, which keeps the record and takes it out of the catalogue."
+        )
+
+    code, title, course_id = course.code, course.title, course.pk
+    course.delete()
+    record(
+        action=AuditAction.COURSE_DELETED,
+        actor=actor,
+        resource_type="course",
+        resource_id=course_id,
+        context={"code": code, "title": title, "reason": reason.strip()},
+    )

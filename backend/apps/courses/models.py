@@ -23,6 +23,8 @@ a data-integrity error rather than a UI oversight.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -748,3 +750,66 @@ class CoursePrice(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.course_id}: {self.amount} from {self.effective_from}"
+
+
+class CourseFeeInstalment(BaseModel):
+    """How this course's fee is collected by default: the structure a
+    counsellor would otherwise retype at every admission.
+
+    ClassPro's "Add Fee Instalment Structure" sits on the course, not on the
+    student, and that is the right place for it: "three instalments, half up
+    front, the rest at thirty and sixty days" is a property of what is being
+    sold. A `FeePlan` still owns the student's actual schedule — the rows here
+    are a *template*, copied into the plan the day it is created and never read
+    back afterwards, the same snapshot rule `CoursePrice` follows. Changing the
+    structure therefore never moves a due date for anybody already enrolled.
+
+    A share is a **percentage**, not rupees. The money a plan has to collect is
+    the fee less whatever discount that student was given, so a template in
+    rupees would be wrong for every discounted admission and would have to be
+    patched by hand. Percentages scale, and the rupee amounts are worked out
+    once, with the odd paisa landing on the first instalment, so the schedule
+    always sums to exactly what is payable.
+    """
+
+    course = models.ForeignKey(
+        "courses.Course",
+        on_delete=models.CASCADE,
+        related_name="fee_instalments",
+        verbose_name=_("course"),
+    )
+    sequence = models.PositiveSmallIntegerField(
+        _("sequence"), help_text=_("1 for the first instalment, 2 for the next, and so on.")
+    )
+    label = models.CharField(
+        _("label"),
+        max_length=60,
+        blank=True,
+        validators=[validate_no_control_characters],
+        help_text=_('What the receipt calls it — "Admission", "First instalment".'),
+    )
+    percent = models.DecimalField(
+        _("share"),
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01")), MaxValueValidator(100)],
+        help_text=_("Percentage of the payable fee. The rows must add up to 100."),
+    )
+    due_after_days = models.PositiveSmallIntegerField(
+        _("due after (days)"),
+        default=0,
+        help_text=_("Days after the fee is agreed. 0 means due on the day of admission."),
+    )
+
+    class Meta:
+        verbose_name = _("course fee instalment")
+        verbose_name_plural = _("course fee instalments")
+        ordering = ("course", "sequence")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["course", "sequence"], name="course_fee_instalment_sequence_uniq"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.course_id} #{self.sequence}: {self.percent}%"

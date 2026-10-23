@@ -57,6 +57,8 @@ from .serializers import (
     CategoryWriteSerializer,
     CourseAssignmentSerializer,
     CourseDetailSerializer,
+    CourseFeeInstalmentSerializer,
+    CourseFeeInstalmentWriteSerializer,
     CourseListSerializer,
     CoursePriceSerializer,
     CoursePriceWriteSerializer,
@@ -302,6 +304,80 @@ class CourseDetailView(APIView):
             course=course, actor=request.user, **serializer.validated_data
         )
         return Response(CourseDetailSerializer(updated, context={"request": request}).data)
+
+    @extend_schema(
+        summary="Delete a course",
+        responses={
+            204: OpenApiResponse(description="Deleted."),
+            409: OpenApiResponse(description="The course has batches or enrolments."),
+        },
+        tags=COURSES_TAG,
+    )
+    def delete(self, request, identifier):
+        """Destroy a course nobody has studied under.
+
+        Two rights, not one: an assigned owner may edit and archive their own
+        course, but destroying a catalogue entry is the administrator's
+        (`course.delete`). The service refuses a course with batches or
+        enrolments whoever asks.
+        """
+        course = self.get_course(request, identifier)
+        if not has_capability(request.user, Capability.COURSE_DELETE):
+            return _forbidden(request, "You do not have permission to delete courses.")
+        services.delete_course(course=course, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class CourseFeeInstalmentView(APIView):
+    """A course's default instalment structure: read it, replace it.
+
+    Reading needs only the right to see the course — a counsellor quoting a
+    fee needs to say how it is collected. Replacing it is managing the course,
+    the same right that changes its price.
+    """
+
+    permission_classes = (CanViewCourse,)
+
+    def get_course(self, request, identifier, *, for_write: bool) -> Course:
+        lookup = Q(slug=str(identifier))
+        try:
+            lookup |= Q(pk=uuid_module.UUID(str(identifier)))
+        except (ValueError, AttributeError, TypeError):
+            pass
+        course = get_object_or_404(access.visible_courses(request.user), lookup)
+        if for_write and not access.can_manage_course(request.user, course):
+            raise PermissionDenied(
+                "You do not have permission to change this course's instalments."
+            )
+        self.check_object_permissions(request, course)
+        return course
+
+    @extend_schema(
+        summary="A course's default instalment structure",
+        responses={200: CourseFeeInstalmentSerializer(many=True)},
+        tags=COURSES_TAG,
+    )
+    def get(self, request, identifier):
+        course = self.get_course(request, identifier, for_write=False)
+        rows = course.fee_instalments.all()
+        return Response(CourseFeeInstalmentSerializer(rows, many=True).data)
+
+    @extend_schema(
+        summary="Replace a course's default instalment structure",
+        request=CourseFeeInstalmentWriteSerializer,
+        responses={200: CourseFeeInstalmentSerializer(many=True)},
+        tags=COURSES_TAG,
+    )
+    def put(self, request, identifier):
+        course = self.get_course(request, identifier, for_write=True)
+        payload = CourseFeeInstalmentWriteSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        rows = services.set_fee_instalments(
+            course=course,
+            actor=request.user,
+            rows=payload.validated_data["instalments"],
+        )
+        return Response(CourseFeeInstalmentSerializer(rows, many=True).data)
 
 
 class CourseStatusView(APIView):
