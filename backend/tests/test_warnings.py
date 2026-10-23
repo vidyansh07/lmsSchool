@@ -243,7 +243,13 @@ def test_the_weekly_digest_notifies_staff_with_open_warnings(admin_user, student
     note = Notification.objects.get(recipient=admin_user, kind=NotificationKind.WARNING_DIGEST)
     assert "need attention" in note.title
     assert "no trainer" in note.body
-    assert not Notification.objects.filter(recipient=student_profile.user).exists()
+    # The digest is for staff. Narrowed to the digest kind rather than
+    # asserting the student has *no* notification at all: they legitimately
+    # have others (a payment receipt, for one), and a blanket assertion here
+    # fails for reasons that have nothing to do with the digest.
+    assert not Notification.objects.filter(
+        recipient=student_profile.user, kind=NotificationKind.WARNING_DIGEST
+    ).exists()
 
 
 def test_every_warning_kind_explains_itself(admin_user):
@@ -253,10 +259,11 @@ def test_every_warning_kind_explains_itself(admin_user):
     fixture happens to trigger, because a kind added without wording is
     invisible until somebody meets it on a real dashboard.
     """
-    from apps.warnings.services import EXPLANATION, _warning
-    import apps.warnings.services as services
     import inspect
     import re
+
+    import apps.warnings.services as services
+    from apps.warnings.services import EXPLANATION
 
     source = inspect.getsource(services)
     produced = set(re.findall(r'_warning\(\s*"([a-z_]+)"', source))

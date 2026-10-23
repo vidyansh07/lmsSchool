@@ -23,7 +23,6 @@ from decimal import Decimal
 import pytest
 
 from apps.enrollments.models import EnrollmentStatus
-from apps.enrollments.services import set_enrollment_status
 from apps.fees.models import PaymentKind
 from apps.fees.services import (
     cancel_admission,

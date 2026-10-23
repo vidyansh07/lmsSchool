@@ -291,3 +291,124 @@ class EmailMessage(BaseModel):
     @property
     def is_deliverable(self) -> bool:
         return self.status in (EmailStatus.PENDING, EmailStatus.FAILED)
+
+
+class MessageEvent(models.TextChoices):
+    """The things that happen which somebody outside the office should hear
+    about.
+
+    Not the same list as `NotificationKind`, and deliberately so. That one is
+    every reason the *product* speaks to a signed-in person, in-app. This is
+    the institute's own outbound messaging: the moments a student, a parent
+    or the counsellor who owns the student is told something, by SMS, email
+    or a push notification. The two lists overlap and neither contains the
+    other — "export ready" is never an SMS to a parent, and "cheque bounced"
+    is never an in-app card for a trainer.
+
+    Grouped by the tab they sit under on the settings screen.
+    """
+
+    # --- Admission
+    ADMISSION_ADDED = "admission.added", _("Admission added")
+    ADMISSION_CANCELLED = "admission.cancelled", _("Admission cancelled")
+
+    # --- Payment
+    PAYMENT_MADE = "payment.made", _("Payment made")
+    CHEQUE_CLEARANCE = "payment.cheque_cleared", _("Cheque clearance")
+    CHEQUE_BOUNCED = "payment.cheque_bounced", _("Cheque bounced")
+    REFUND = "payment.refund", _("Refund")
+    FEE_REMINDER = "payment.reminder", _("Fee reminder")
+
+    # --- Student
+    BIRTHDAY = "student.birthday", _("Birthday")
+
+
+#: Which tab each event sits under on the settings screen, in the order the
+#: screen draws them. A tab with no events is not shown rather than drawn
+#: empty — an empty tab is a promise the product does not keep.
+EVENT_TABS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Student", (MessageEvent.BIRTHDAY,)),
+    ("Admission", (MessageEvent.ADMISSION_ADDED, MessageEvent.ADMISSION_CANCELLED)),
+    (
+        "Payment",
+        (
+            MessageEvent.PAYMENT_MADE,
+            MessageEvent.CHEQUE_CLEARANCE,
+            MessageEvent.CHEQUE_BOUNCED,
+            MessageEvent.REFUND,
+            MessageEvent.FEE_REMINDER,
+        ),
+    ),
+)
+
+
+class MessageRecipient(models.TextChoices):
+    """Who hears about it.
+
+    `OWNER` is the counsellor the student belongs to (`StudentProfile.owner`)
+    — the one who answers for them. It is on this list because an institute
+    wants its own desk told when a cheque bounces, not only the family.
+    """
+
+    STUDENT = "student", _("Student")
+    GUARDIAN = "guardian", _("Guardian")
+    OWNER = "owner", _("Owner")
+
+
+class MessageChannelKind(models.TextChoices):
+    """How it reaches them. Named `*Kind` because
+    `apps.communication.MessageChannel` already means a delivery's channel,
+    and two identically named enums in one product is how somebody imports
+    the wrong one."""
+
+    SMS = "sms", _("SMS")
+    EMAIL = "email", _("E-Mail")
+    PUSH = "push", _("Notification")
+
+
+class MessageRuleQuerySet(models.QuerySet):
+    def enabled(self):
+        return self.filter(is_enabled=True)
+
+
+class MessageRule(BaseModel):
+    """One cell of the message matrix: this event, this recipient, this
+    channel, on or off.
+
+    A row per cell rather than a JSON blob, because this is the thing an
+    administrator will ask "who changed that" about the first time a parent
+    gets an SMS they should not have — and a row has an audit trail, a blob
+    has a diff nobody can read.
+
+    Institute-wide, not per centre. `apps.configuration` already settled that
+    question for `AcademicPolicy` and the institution's own name: GRRAS is
+    one institute with two Jaipur centres, and two sets of messaging rules
+    would be two things to keep in step for no one's benefit. The day a
+    second city needs its own, this grows a nullable `branch` and the absent
+    value keeps meaning "everywhere".
+
+    A missing row means **off**. Defaults are seeded (see
+    `0014_seed_message_rules`) rather than implied, so the settings screen
+    shows the institute's actual answer and not a guess that changes when
+    somebody edits the code.
+    """
+
+    event = models.CharField(_("event"), max_length=40, choices=MessageEvent.choices)
+    recipient = models.CharField(_("recipient"), max_length=10, choices=MessageRecipient.choices)
+    channel = models.CharField(_("channel"), max_length=10, choices=MessageChannelKind.choices)
+    is_enabled = models.BooleanField(_("enabled"), default=False)
+
+    objects = MessageRuleQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = _("message rule")
+        verbose_name_plural = _("message rules")
+        ordering = ("event", "recipient", "channel")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["event", "recipient", "channel"], name="messagerule_unique_cell"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.event} → {self.recipient} by {self.channel}"

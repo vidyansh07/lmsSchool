@@ -969,6 +969,12 @@ const ADMIN_NAV: NavGroup[] = [
         capability: Capability.settingsManage,
       },
       {
+        href: "/admin/settings/messages",
+        label: "Message settings",
+        icon: Send,
+        capability: Capability.settingsManage,
+      },
+      {
         href: "/admin/academics",
         label: "Academic rules",
         icon: Settings2,

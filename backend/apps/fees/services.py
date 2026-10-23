@@ -26,6 +26,7 @@ Rules, and the reason for each:
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -42,6 +43,7 @@ from apps.common.exceptions import ApplicationError, AuthorityError, ConflictErr
 from apps.common.identifiers import next_receipt_number
 from apps.enrollments.models import LIVE_STATUSES, Enrollment, EnrollmentStatus
 from apps.enrollments.services import set_enrollment_status
+from apps.notifications.models import MessageEvent
 from apps.students.models import FeeStatus, StudentProfile
 
 from . import mail
@@ -63,6 +65,8 @@ from .models import (
     installment_rows,
 )
 from .signals import payment_recorded
+
+logger = logging.getLogger("grras.fees")
 
 HUNDRED = Decimal("100")
 
@@ -640,9 +644,40 @@ def record_payment(
     )
     sync_student_fee_status(plan.enrollment.student, actor=actor)
     mail.queue_safely(mail.email_receipt, payment)
+    _announce_payment(payment, event=MessageEvent.PAYMENT_MADE)
     if not mail.is_suppressed():
         payment_recorded.send(sender=FeePayment, payment=payment, actor=actor)
     return payment
+
+
+def _announce_payment(payment: FeePayment, *, event: str) -> None:
+    """Tell whoever the message matrix says to tell about this payment.
+
+    Wrapped and swallowed on purpose: a notification that fails must never
+    roll back the payment that caused it. The receipt is the record; this is
+    a courtesy on top of it.
+    """
+    from apps.notifications.messaging import deliver_for_event
+    from apps.notifications.models import NotificationKind
+
+    titles = {
+        MessageEvent.PAYMENT_MADE: f"Payment of {payment.amount} received",
+        MessageEvent.CHEQUE_CLEARANCE: f"Your payment of {payment.amount} has cleared",
+        MessageEvent.CHEQUE_BOUNCED: f"Your payment of {payment.amount} did not clear",
+    }
+    try:
+        deliver_for_event(
+            event,
+            student=payment.plan.enrollment.student,
+            kind=NotificationKind.FEE_PAYMENT_RECEIVED,
+            title=titles.get(event, "Payment update"),
+            body=f"Receipt {payment.receipt_number}.",
+            link_path="/my-fees",
+            resource_type=RESOURCE_PAYMENT,
+            resource_id=payment.pk,
+        )
+    except Exception:
+        logger.exception("could not announce payment %s", payment.pk)
 
 
 @transaction.atomic
@@ -665,6 +700,7 @@ def mark_payment_cleared(*, payment: FeePayment, actor: User, cleared_on: date |
     payment.cleared_on = when
     payment.cleared_by = actor
     payment.save(update_fields=["clearing_status", "cleared_on", "cleared_by", "updated_at"])
+    _announce_payment(payment, event=MessageEvent.CHEQUE_CLEARANCE)
     record(
         action=AuditAction.FEE_PAYMENT_CLEARED,
         actor=actor,
@@ -695,6 +731,7 @@ def mark_payment_bounced(*, payment: FeePayment, actor: User, reason: str):
 
     payment.clearing_status = ClearingStatus.BOUNCED
     payment.save(update_fields=["clearing_status", "updated_at"])
+    _announce_payment(payment, event=MessageEvent.CHEQUE_BOUNCED)
     # Voiding does the money part, the audit entry and the fee-status sync.
     return void_payment(payment=payment, actor=actor, reason=f"Bounced: {reason.strip()}")
 

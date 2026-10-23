@@ -52,3 +52,34 @@ class PreferenceWriteSerializer(StrictSerializer):
     email_schedule = serializers.BooleanField(required=False)
     email_announcements = serializers.BooleanField(required=False)
     email_administrative = serializers.BooleanField(required=False)
+
+
+class MessageRuleSerializer(serializers.Serializer):
+    """One cell of the matrix."""
+
+    event = serializers.CharField()
+    recipient = serializers.CharField()
+    channel = serializers.CharField()
+    is_enabled = serializers.BooleanField()
+
+
+class MessageMatrixSerializer(serializers.Serializer):
+    """The whole screen in one answer: the tabs and their events in the order
+    they are drawn, the recipients, the channels, and which cells are on.
+
+    The *shape* is sent with the data on purpose. A screen that hardcodes the
+    list of events drifts the moment one is added, and the first anybody
+    knows is a row the settings page cannot turn off.
+    """
+
+    tabs = serializers.ListField(child=serializers.DictField())
+    recipients = serializers.ListField(child=serializers.DictField())
+    channels = serializers.ListField(child=serializers.DictField())
+    rules = MessageRuleSerializer(many=True)
+
+
+class SetMessageRulesSerializer(StrictSerializer):
+    """Changing cells. Only the ones that moved are sent — the screen has
+    thirty and a person changes one."""
+
+    rules = MessageRuleSerializer(many=True)

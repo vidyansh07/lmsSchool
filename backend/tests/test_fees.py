@@ -118,7 +118,7 @@ def test_a_discount_typed_as_a_percentage_is_worked_out_in_rupees(
     assert response.status_code == 200, response.json()
     body = response.json()
     assert body["discount_percent"] == "12.50"
-    assert body["discount_amount"] == "3124.88"  # 24,999 × 12.5% = 3,124.875, half up
+    assert body["discount_amount"] == "3124.88"  # 24,999 at 12.5% = 3,124.875, half up
     assert body["payable"] == "21874.12"
     entry = AuditLog.objects.get(action=AuditAction.FEE_PLAN_SET)
     assert entry.context["discount_percent"] == "12.50"

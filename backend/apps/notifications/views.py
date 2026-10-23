@@ -17,14 +17,25 @@ from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.common.permissions import IsActiveUser
+from apps.audit.services import AuditAction, record
+from apps.common.exceptions import ApplicationError
+from apps.common.permissions import Capability, HasCapability, IsActiveUser
 
-from . import services
-from .models import Notification
+from . import messaging, services
+from .models import (
+    EVENT_TABS,
+    MessageChannelKind,
+    MessageEvent,
+    MessageRecipient,
+    MessageRule,
+    Notification,
+)
 from .serializers import (
+    MessageMatrixSerializer,
     NotificationSerializer,
     PreferenceSerializer,
     PreferenceWriteSerializer,
+    SetMessageRulesSerializer,
     UnreadCountSerializer,
 )
 
@@ -135,3 +146,99 @@ class PreferenceView(APIView):
         serializer.is_valid(raise_exception=True)
         preference = services.update_preferences(user=request.user, **serializer.validated_data)
         return Response(PreferenceSerializer(preference).data)
+
+
+class MessageSettingsView(APIView):
+    """The message matrix: who hears about what, and how.
+
+    `settings.manage` — the institution's own settings, which is an
+    administrator's job. Deliberately not `platform.configure`, which is
+    superadmin-only and exists to withhold the ladder's top rung: locking
+    every administrator out of the screen they are the intended user of would
+    be the wrong reading of "this is a policy decision".
+
+    It is still not a counsellor's or a manager's. Whether a parent gets a
+    text message about their child's money is a decision the institute takes
+    once, not one that is made from whichever screen somebody happens to
+    open.
+
+    `GET` sends the shape as well as the data — the tabs, their events in
+    order, the recipients and the channels — so the screen never carries its
+    own copy of the list. A screen that hardcodes the events drifts the
+    moment one is added, and the first anybody knows is a message nobody can
+    turn off.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.SETTINGS_MANAGE
+    serializer_class = MessageMatrixSerializer
+
+    @extend_schema(
+        summary="Message settings",
+        responses={200: MessageMatrixSerializer},
+        tags=["Notifications"],
+    )
+    def get(self, request):
+        return Response(self._shape())
+
+    @extend_schema(
+        summary="Change message settings",
+        request=SetMessageRulesSerializer,
+        responses={200: MessageMatrixSerializer},
+        tags=["Notifications"],
+    )
+    def put(self, request):
+        serializer = SetMessageRulesSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        known_events = set(MessageEvent.values)
+        known_recipients = set(MessageRecipient.values)
+        known_channels = set(MessageChannelKind.values)
+        for row in serializer.validated_data["rules"]:
+            if (
+                row["event"] not in known_events
+                or row["recipient"] not in known_recipients
+                or row["channel"] not in known_channels
+            ):
+                # Refused rather than ignored: a cell nobody can see is a
+                # message nobody can turn off.
+                raise ApplicationError({"rules": ["No such event, recipient or channel."]})
+            messaging.set_cell(
+                event=row["event"],
+                recipient=row["recipient"],
+                channel=row["channel"],
+                enabled=row["is_enabled"],
+            )
+
+        record(
+            action=AuditAction.SYSTEM_SETTINGS_UPDATED,
+            actor=request.user,
+            resource_type="message_settings",
+            resource_id="",
+            context={"cells": len(serializer.validated_data["rules"])},
+            durable=False,
+        )
+        return Response(self._shape())
+
+    def _shape(self) -> dict:
+        labels = dict(MessageEvent.choices)
+        return {
+            "tabs": [
+                {
+                    "title": title,
+                    "events": [{"key": event, "label": labels[event]} for event in events],
+                }
+                for title, events in EVENT_TABS
+            ],
+            "recipients": [{"key": key, "label": label} for key, label in MessageRecipient.choices],
+            "channels": [{"key": key, "label": label} for key, label in MessageChannelKind.choices],
+            "rules": [
+                {
+                    "event": rule.event,
+                    "recipient": rule.recipient,
+                    "channel": rule.channel,
+                    "is_enabled": rule.is_enabled,
+                }
+                for rule in MessageRule.objects.all()
+            ],
+        }

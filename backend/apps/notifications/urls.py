@@ -11,5 +11,6 @@ urlpatterns = [
     path("unread/", views.UnreadCountView.as_view(), name="notification-unread"),
     path("read-all/", views.MarkAllReadView.as_view(), name="notification-read-all"),
     path("preferences/", views.PreferenceView.as_view(), name="notification-preferences"),
+    path("message-settings/", views.MessageSettingsView.as_view(), name="message-settings"),
     path("<uuid:notification_id>/read/", views.MarkReadView.as_view(), name="notification-read"),
 ]

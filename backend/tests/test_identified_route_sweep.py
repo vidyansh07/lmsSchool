@@ -28,12 +28,10 @@ What counts as a pass:
 from __future__ import annotations
 
 import re
-import uuid
 
 import pytest
 from django.urls import URLPattern, URLResolver, get_resolver
 
-from apps.accounts.models import UserRole
 from tests.test_authorization_matrix import _declared_capabilities
 
 #: A syntactically valid id that belongs to nobody.
