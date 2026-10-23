@@ -63,6 +63,13 @@ class User(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(
         _("first name"), max_length=100, validators=[validate_person_name]
     )
+    middle_name = models.CharField(
+        _("middle name"),
+        max_length=150,
+        blank=True,
+        validators=[validate_person_name],
+        help_text=_("Optional. Shown between the first and last name wherever a full name is."),
+    )
     last_name = models.CharField(
         _("last name"), max_length=100, blank=True, validators=[validate_person_name]
     )
@@ -189,7 +196,9 @@ class User(UUIDPrimaryKeyModel, AbstractBaseUser, PermissionsMixin):
 
     @property
     def full_name(self) -> str:
-        return f"{self.first_name} {self.last_name}".strip()
+        return " ".join(
+            part for part in (self.first_name, self.middle_name, self.last_name) if part
+        ).strip()
 
     def get_full_name(self) -> str:
         return self.full_name

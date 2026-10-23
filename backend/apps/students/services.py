@@ -67,8 +67,10 @@ def create_student(
     *,
     email: str,
     first_name: str,
+    middle_name: str = "",
     last_name: str = "",
     phone: str = "",
+    contacts: list[dict[str, Any]] | None = None,
     actor: User,
     branch=None,
     profile_fields: dict[str, Any] | None = None,
@@ -130,6 +132,9 @@ def create_student(
         branch=branch,
         send_invitation=send_invitation,
     )
+    if middle_name.strip():
+        user.middle_name = middle_name.strip()
+        user.save(update_fields=["middle_name", "updated_at"])
 
     profile = StudentProfile(
         user=user,
@@ -143,6 +148,7 @@ def create_student(
         profile.fee_amount_updated_by = actor
     profile.full_clean(exclude=["user", "student_id", "branch"])
     profile.save()
+    _write_contacts(profile, contacts or [])
 
     if duplicates:
         record(
@@ -170,6 +176,38 @@ def create_student(
         },
     )
     return profile
+
+
+def _write_contacts(profile: StudentProfile, contacts: list[dict[str, Any]]) -> None:
+    """The *extra* ways to reach a student.
+
+    The first mobile and the first email are the account's own `phone` and
+    `email`; these are the rest, and a row repeating one of them is dropped
+    rather than stored twice — the form sends every box it drew, and the
+    first one is already on the account.
+    """
+    from .models import ContactKind, StudentContact
+
+    account_values = {
+        (ContactKind.MOBILE, (profile.user.phone or "").strip()),
+        (ContactKind.EMAIL, (profile.user.email or "").strip().casefold()),
+    }
+    seen: set[tuple[str, str]] = set()
+    for row in contacts:
+        kind = row.get("kind")
+        value = (row.get("value") or "").strip()
+        if not value:
+            continue
+        key = (kind, value.casefold() if kind == ContactKind.EMAIL else value)
+        if key in account_values or key in seen:
+            continue
+        seen.add(key)
+        StudentContact.objects.create(
+            student=profile,
+            kind=kind,
+            code=(row.get("code") or "").strip(),
+            value=value,
+        )
 
 
 def _check_fee_amount(fee_amount: Decimal, *, actor: User) -> None:

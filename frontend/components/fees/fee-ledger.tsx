@@ -471,7 +471,7 @@ function RecordPaymentForm({ onOpenChange, plan, onSaved }: PlanDialogProps) {
             hint={
               method === 'upi'
                 ? 'The UPI transaction id.'
-                : method === 'bank_transfer'
+                : method === 'net_banking'
                   ? 'The bank reference number.'
                   : 'Any receipt or slip number, if there is one.'
             }
@@ -1137,6 +1137,19 @@ function CancelAdmissionDialog({
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
+    // Checked here rather than left to the input's own `max`. A browser
+    // refuses to submit a form holding a value outside its constraints and
+    // says so in a bubble the test suite cannot see and some browsers barely
+    // show — so the counsellor met a dialog whose button did nothing. The
+    // form is `noValidate` and this is the message instead.
+    if (keeping > Number(plan.payable)) {
+      setMessage(`The charge cannot be more than the ${money(plan.payable)} owed.`);
+      return;
+    }
+    if (!reason.trim()) {
+      setMessage('Say why it is being cancelled.');
+      return;
+    }
     setBusy(true);
     setMessage('');
     try {
@@ -1163,7 +1176,7 @@ function CancelAdmissionDialog({
             student who comes back is admitted again.
           </DialogDescription>
         </DialogHeader>
-        <form className="space-y-3" onSubmit={onSubmit}>
+        <form className="space-y-3" onSubmit={onSubmit} noValidate>
           {message ? <Alert variant="error">{message}</Alert> : null}
           <Field
             label="Cancellation charge (₹)"

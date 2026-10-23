@@ -160,3 +160,90 @@ class College(BaseModel):
         self.name = " ".join(self.name.split())
         self.match_key = self.key_for(self.name)
         super().save(*args, **kwargs)
+
+
+class AcademicYearQuerySet(models.QuerySet):
+    def open(self):
+        return self.filter(is_closed=False)
+
+    def current(self):
+        return self.filter(is_current=True).first()
+
+
+class AcademicYear(BaseModel):
+    """The year an admission belongs to: 2026, 2027.
+
+    Not derived from the admission date, which is why it is a record rather
+    than a number. An institute admits for next year in December, and a
+    counsellor doing that must be able to say so; a year taken from the
+    calendar would file that admission under the wrong one and every report
+    for both years would be wrong.
+
+    Exactly one year is `is_current`, which is what a new admission starts
+    with and what every filter defaults to. Closing a year stops it being
+    offered for new admissions and leaves everything already filed under it
+    exactly as it was: closing is not deleting, and last year's figures must
+    not move.
+    """
+
+    name = models.CharField(
+        _("name"),
+        max_length=20,
+        unique=True,
+        validators=[validate_no_control_characters],
+        help_text=_("As people say it: 2026, or 2026-27."),
+    )
+    starts_on = models.DateField(_("starts on"), null=True, blank=True)
+    ends_on = models.DateField(_("ends on"), null=True, blank=True)
+    #: The year a new admission starts with. Exactly one row has it, enforced
+    #: by `services.set_current_academic_year` rather than by a constraint:
+    #: a partial unique index would make the swap a two-statement dance that
+    #: fails in the middle, and the service does it in one transaction.
+    is_current = models.BooleanField(_("current"), default=False, db_index=True)
+    is_closed = models.BooleanField(
+        _("closed"),
+        default=False,
+        db_index=True,
+        help_text=_("A closed year takes no new admissions. Its records are untouched."),
+    )
+
+    objects = AcademicYearQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = _("academic year")
+        verbose_name_plural = _("academic years")
+        # Newest first: the year somebody wants is almost always the latest.
+        ordering = ("-name",)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class BankQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(is_active=True)
+
+
+class Bank(BaseModel):
+    """A bank a cheque or a transfer came through.
+
+    A list rather than free text for the reason `College` is: "HDFC", "HDFC
+    Bank" and "hdfc bank ltd" are one bank and three rows, and the day
+    somebody reconciles a bank statement against this ledger, three rows is
+    the problem.
+    """
+
+    name = models.CharField(
+        _("name"), max_length=120, unique=True, validators=[validate_no_control_characters]
+    )
+    is_active = models.BooleanField(_("active"), default=True, db_index=True)
+
+    objects = BankQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = _("bank")
+        verbose_name_plural = _("banks")
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name

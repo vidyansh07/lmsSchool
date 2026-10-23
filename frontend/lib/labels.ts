@@ -173,14 +173,23 @@ export const INSTITUTION_KIND_OPTIONS: {
 
 export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   cash: "Cash",
-  upi: "UPI",
-  card: "Card",
-  bank_transfer: "Bank transfer",
+  cash_deposit: "Cash deposit in bank",
   cheque: "Cheque",
+  demand_draft: "Demand Draft",
+  swipe_card: "Swipe Card",
+  net_banking: "Net Banking",
+  payment_gateway: "Payment Gateway",
+  emi_card: "EMI card",
+  google_pay: "Google Pay",
+  paytm: "Paytm",
+  upi: "UPI",
+  paypal: "Paypal",
+  phonepe: "PhonePe",
+  credit_card: "Credit card",
   other: "Other",
 };
 
-/** The methods a counsellor can pick when recording a payment: cash, UPI, bank. */
+/** The methods a counsellor can pick when recording a payment. */
 export const PAYMENT_METHOD_OPTIONS: { value: PaymentMethod; label: string }[] =
   PAYMENT_METHODS_OFFERED.map((value) => ({ value, label: PAYMENT_METHOD_LABEL[value] }));
 

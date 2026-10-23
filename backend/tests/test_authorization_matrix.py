@@ -243,6 +243,17 @@ STUDENT_REACHABLE = frozenset(
         # deliberately *not* here: it is the placement desk's own figure and
         # needs `placement.view_any`.
         "/api/v1/placements/",
+        # Their own admissions. `visible_admissions` borrows the student's own
+        # rule (`students.access.visible_students`), so this is their record
+        # and nobody else's; `test_admissions_api.py` asserts that a classmate's
+        # is absent, that `?student=` cannot widen the list, and that a student
+        # may write and cancel nothing.
+        "/api/v1/admissions/",
+        # The years an admission is filed under. A label and two dates, and
+        # the student's own record shows one beside every course name
+        # ("Data Analytics (2026)") — withholding the list would leave them
+        # reading an id. Managing them is `platform.configure`, elsewhere.
+        "/api/v1/academic-years/",
         # Search and saved filters (ERP Phase 11): `search.global` is in
         # `BASE_CAPABILITIES` — every role, a student included — and a saved
         # filter is per-user data with no capability beyond being signed in.

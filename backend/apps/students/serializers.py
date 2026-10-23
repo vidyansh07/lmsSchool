@@ -23,9 +23,11 @@ from apps.work.models import ActivityPriority
 from .models import (
     MIN_FEE_AMOUNT,
     ClassTime,
+    ContactKind,
     FeeStatus,
     InstitutionKind,
     Qualification,
+    StudentContact,
     StudentProfile,
 )
 
@@ -35,7 +37,15 @@ from .models import (
 # notes, and who referred them. The referral is here and not in the
 # self-editable set on purpose — a student naming their own referrer is how a
 # referral scheme gets gamed.
-ADMIN_EDITABLE_FIELDS = (*StudentProfile.SELF_EDITABLE_FIELDS, "notes", "referred_by")
+#: `owner` is here and not in `SELF_EDITABLE_FIELDS` on purpose: who answers
+#: for a student is the desk's decision, and a student who could set it could
+#: hand themselves to a counsellor who has never met them.
+ADMIN_EDITABLE_FIELDS = (
+    *StudentProfile.SELF_EDITABLE_FIELDS,
+    "notes",
+    "referred_by",
+    "owner",
+)
 
 
 class StudentProfileSerializer(StrictModelSerializer):
@@ -218,6 +228,21 @@ class StudentProfileFieldsSerializer(StrictModelSerializer):
         fields = ADMIN_EDITABLE_FIELDS
 
 
+class StudentContactWriteSerializer(StrictSerializer):
+    """One extra way to reach a student, as the form sends it."""
+
+    kind = serializers.ChoiceField(choices=ContactKind.choices)
+    code = SafeCharField(max_length=8, required=False, allow_blank=True, default="")
+    value = SafeCharField(max_length=254)
+
+
+class StudentContactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudentContact
+        fields = ("id", "kind", "code", "value")
+        read_only_fields = fields
+
+
 class StudentCreateSerializer(StrictSerializer):
     """Administrator creating a student account and profile together.
 
@@ -229,8 +254,13 @@ class StudentCreateSerializer(StrictSerializer):
 
     email = serializers.EmailField(max_length=254)
     first_name = SafeCharField(max_length=100)
+    middle_name = SafeCharField(max_length=150, required=False, allow_blank=True, default="")
     last_name = SafeCharField(max_length=100, required=False, allow_blank=True, default="")
     phone = SafeCharField(max_length=20, required=False, allow_blank=True, default="")
+    #: The extra ways to reach them — a second mobile, a landline, a second
+    #: email. The *first* of each is the account's own `phone`/`email` above;
+    #: these are the rest. See `students.models.StudentContact`.
+    contacts = StudentContactWriteSerializer(many=True, required=False)
     branch = serializers.UUIDField(required=False, allow_null=True)
     profile = StudentProfileFieldsSerializer(required=False)
     # Top-level, not inside ``profile``: that sub-object is the self-editable

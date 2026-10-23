@@ -1285,7 +1285,7 @@ export function RegistrationWizard() {
                   hint={
                     paidMethod === 'upi'
                       ? 'The UPI transaction id.'
-                      : paidMethod === 'bank_transfer'
+                      : paidMethod === 'net_banking'
                         ? 'The bank reference number.'
                         : 'Any receipt or slip number, if there is one.'
                   }

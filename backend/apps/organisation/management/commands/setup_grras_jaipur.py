@@ -124,11 +124,7 @@ class Command(BaseCommand):
         existing = Role.all_objects.filter(slug=PLACEMENT_OFFICER["slug"]).first()
         if existing is not None:
             return f"present  role {existing.name}"
-        actor = (
-            User.objects.filter(role=UserRole.SUPERADMIN, is_active=True)
-            .order_by("pk")
-            .first()
-        )
+        actor = User.objects.filter(role=UserRole.SUPERADMIN, is_active=True).order_by("pk").first()
         if actor is None:
             # Roles are created by somebody, and the audit trail records who.
             # With no administrator yet there is nobody to attribute it to, so

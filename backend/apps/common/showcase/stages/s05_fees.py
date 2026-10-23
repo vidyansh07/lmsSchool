@@ -143,14 +143,30 @@ ZERO = Decimal("0")
 #: The SITP courses have no ``default_fee``; these are the plausible figures.
 SITP_FEES = [Decimal(n) for n in range(12000, 25001, 500)]
 
-#: (weight, method). UPI first, because that is how an Indian institute is paid.
+#: (weight, method). UPI first, because that is how an Indian institute is
+#: paid. Every method appears, including the rarer ones — the showcase exists
+#: so somebody can see each state of the product, and a method that never
+#: occurs in the demo data is a screen nobody can look at. `OTHER` is legacy
+#: and is weighted accordingly: it only ever meant "nobody recorded it".
 METHODS: tuple[tuple[int, str], ...] = (
-    (40, PaymentMethod.UPI),
-    (25, PaymentMethod.CASH),
-    (15, PaymentMethod.BANK_TRANSFER),
-    (10, PaymentMethod.CARD),
-    (7, PaymentMethod.CHEQUE),
-    (3, PaymentMethod.OTHER),
+    (30, PaymentMethod.UPI),
+    (18, PaymentMethod.CASH),
+    (10, PaymentMethod.NET_BANKING),
+    (8, PaymentMethod.SWIPE_CARD),
+    (6, PaymentMethod.CHEQUE),
+    (5, PaymentMethod.GOOGLE_PAY),
+    (5, PaymentMethod.PHONEPE),
+    (4, PaymentMethod.PAYTM),
+    (4, PaymentMethod.PAYMENT_GATEWAY),
+    (3, PaymentMethod.CASH_DEPOSIT),
+    (3, PaymentMethod.CREDIT_CARD),
+    (2, PaymentMethod.DEMAND_DRAFT),
+    (2, PaymentMethod.EMI_CARD),
+    # Rare, but not so rare that the draw misses them: the seed is
+    # deterministic, and `test_seed_showcase_fees` asserts every method
+    # occurs — a method with no payment is a screen nobody can look at.
+    (3, PaymentMethod.PAYPAL),
+    (2, PaymentMethod.OTHER),
 )
 BANKS = ("SBI", "HDFC Bank", "ICICI Bank", "Bank of Baroda", "Axis Bank", "PNB")
 #: Who takes the money at the desk. Counsellors twice: it is mostly their job.
@@ -356,11 +372,26 @@ def _paid_on(ctx: Context, draw: random.Random, floor: date) -> date:
 def _reference(draw: random.Random, method: str) -> str:
     if method == PaymentMethod.UPI:
         return f"UPI {draw.randrange(10**11, 10**12)}"
-    if method == PaymentMethod.BANK_TRANSFER:
+    if method == PaymentMethod.NET_BANKING:
         return f"UTR {draw.choice(BANKS).split()[0].upper()}N{draw.randrange(10**10, 10**11)}"
     if method == PaymentMethod.CHEQUE:
         return f"Cheque {draw.randint(100000, 999999)}, {draw.choice(BANKS)}"
-    if method == PaymentMethod.CARD:
+    if method == PaymentMethod.DEMAND_DRAFT:
+        return f"DD {draw.randint(100000, 999999)}, {draw.choice(BANKS)}"
+    if method == PaymentMethod.CASH_DEPOSIT:
+        return f"Deposit slip {draw.randint(10000, 99999)}, {draw.choice(BANKS)}"
+    if method in (
+        PaymentMethod.GOOGLE_PAY,
+        PaymentMethod.PHONEPE,
+        PaymentMethod.PAYTM,
+        PaymentMethod.PAYPAL,
+    ):
+        return f"{PaymentMethod(method).label} {draw.randrange(10**11, 10**12)}"
+    if method == PaymentMethod.PAYMENT_GATEWAY:
+        return f"PG {draw.randrange(10**11, 10**12)}"
+    if method in (PaymentMethod.CREDIT_CARD, PaymentMethod.EMI_CARD):
+        return f"Card ending {draw.randint(1000, 9999)}"
+    if method == PaymentMethod.SWIPE_CARD:
         return f"Card ending {draw.randint(1000, 9999)}"
     if method == PaymentMethod.OTHER:
         return "Paid by the employer"

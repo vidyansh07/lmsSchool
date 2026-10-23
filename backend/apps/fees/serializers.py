@@ -31,6 +31,11 @@ class FeePaymentSerializer(serializers.ModelSerializer):
     refunded_by = serializers.SerializerMethodField()
     is_voided = serializers.BooleanField(read_only=True)
     is_refunded = serializers.BooleanField(read_only=True)
+    #: Names, not ids: these are printed on a receipt and read in a list, and
+    #: no screen looks them up again.
+    bank_name = serializers.CharField(source="bank.name", read_only=True, default=None)
+    category_name = serializers.CharField(source="category.name", read_only=True, default=None)
+    tax_group_name = serializers.CharField(source="tax_group.name", read_only=True, default=None)
 
     class Meta:
         model = FeePayment
@@ -55,6 +60,16 @@ class FeePaymentSerializer(serializers.ModelSerializer):
             "refunded_at",
             "refunded_by",
             "refund_reason",
+            "clearing_status",
+            "cleared_on",
+            "bank",
+            "bank_name",
+            "category",
+            "category_name",
+            "apply_tax",
+            "tax_group",
+            "tax_group_name",
+            "instalment",
         )
         read_only_fields = fields
 
@@ -216,9 +231,38 @@ class RecordPaymentSerializer(StrictSerializer):
     note = SafeCharField(max_length=300, required=False, allow_blank=True, default="")
     kind = serializers.ChoiceField(choices=PaymentKind.choices, default=PaymentKind.INSTALMENT)
     is_refundable = serializers.BooleanField(default=False)
+    #: Where it went through and under what heading. All recorded, none
+    #: computed: the amount is the amount.
+    bank = serializers.UUIDField(required=False, allow_null=True)
+    category = serializers.UUIDField(required=False, allow_null=True)
+    apply_tax = serializers.BooleanField(required=False, default=False)
+    tax_group = serializers.UUIDField(required=False, allow_null=True)
+    #: Which instalment it was taken against, when it was taken against one.
+    #: Never the source of truth for whether that instalment is settled —
+    #: that is still read off the ledger.
+    instalment = serializers.UUIDField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if attrs.get("apply_tax") and not attrs.get("tax_group"):
+            raise serializers.ValidationError(
+                {"tax_group": ["Choose the tax group this was taken under."]}
+            )
+        return attrs
 
 
 class VoidPaymentSerializer(StrictSerializer):
+    reason = SafeCharField(max_length=300)
+
+
+class ClearPaymentSerializer(StrictSerializer):
+    """The bank honoured a cheque, a draft or a deposit."""
+
+    cleared_on = serializers.DateField(required=False)
+
+
+class BouncePaymentSerializer(StrictSerializer):
+    """It did not. The money is voided; this says what the bank said."""
+
     reason = SafeCharField(max_length=300)
 
 

@@ -188,7 +188,7 @@ def test_fees_stage_builds_every_state_and_is_idempotent(django_capture_on_commi
         live_amounts = [p.amount for p in plan_payments if not p.is_voided]
         assert live_amounts[0] >= Decimal("1000")
     # Cheques, UPI, transfers and cards carry a reference; cash does not.
-    for method in (PaymentMethod.UPI, PaymentMethod.CHEQUE, PaymentMethod.BANK_TRANSFER):
+    for method in (PaymentMethod.UPI, PaymentMethod.CHEQUE, PaymentMethod.NET_BANKING):
         assert not payments.filter(method=method, reference="").exists(), method
     assert not payments.filter(method=PaymentMethod.CASH).exclude(reference="").exists()
 

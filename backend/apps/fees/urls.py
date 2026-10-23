@@ -13,6 +13,8 @@ from .views import (
     EnrollmentFeeStatementView,
     EnrollmentFeeView,
     FeeCollectionsTrendView,
+    FeePaymentBounceView,
+    FeePaymentClearView,
     FeePaymentEmailReceiptView,
     FeePaymentReceiptView,
     FeePaymentRefundView,
@@ -73,6 +75,8 @@ urlpatterns = [
         name="email-statement",
     ),
     path("payments/<uuid:payment_id>/void/", FeePaymentVoidView.as_view(), name="void"),
+    path("payments/<uuid:payment_id>/clear/", FeePaymentClearView.as_view(), name="clear"),
+    path("payments/<uuid:payment_id>/bounce/", FeePaymentBounceView.as_view(), name="bounce"),
     path(
         "payments/<uuid:payment_id>/refund/",
         FeePaymentRefundView.as_view(),

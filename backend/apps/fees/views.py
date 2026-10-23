@@ -25,12 +25,15 @@ from apps.batches import access as batch_access
 from apps.common.caching import MINUTE, remember
 from apps.common.permissions import Capability, HasCapability, IsActiveUser
 from apps.enrollments.models import Enrollment
+from apps.organisation.models import Bank
 from apps.students import access as students_access
 
 from . import mail, services
-from .models import FeePayment, FeePlan
+from .models import FeePayment, FeePlan, PaymentCategory, TaxGroup
 from .serializers import (
+    BouncePaymentSerializer,
     CancelAdmissionSerializer,
+    ClearPaymentSerializer,
     FeeCollectionsTrendPointSerializer,
     FeeEmailQueuedSerializer,
     FeeEmailSerializer,
@@ -50,6 +53,27 @@ from .serializers import (
 )
 
 FEES_TAG = ["Fees"]
+
+
+def _payment(user, payment_id) -> FeePayment:
+    """One payment, out of the enrolments the caller may see — so a payment id
+    from another centre is the same 404 a guessed id gets."""
+    return get_object_or_404(
+        FeePayment.objects.filter(
+            plan__enrollment__in=batch_access.visible_enrollments(user)
+        ).select_related("plan__enrollment__student", "plan__enrollment__batch"),
+        pk=payment_id,
+    )
+
+
+def _reference_or_404(queryset, value):
+    """One of the reference lists a payment points at (bank, category, tax
+    group), or `None` when the field was left out. A named row that is not
+    there — or has been retired — is a 404 about that row rather than a
+    payment quietly recorded without it."""
+    if not value:
+        return None
+    return get_object_or_404(queryset, pk=value)
 
 
 def _enrollment(user, enrollment_id) -> Enrollment:
@@ -168,10 +192,76 @@ class EnrollmentFeePaymentsView(APIView):
         plan = _plan_or_404(enrollment)
         serializer = RecordPaymentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+
+        # Each of these is an id naming a row the payment points at. They are
+        # resolved here rather than in the service so a bad id is a 404 about
+        # that row, not a crash inside the ledger.
+        bank = _reference_or_404(Bank.objects.active(), data.pop("bank", None))
+        category = _reference_or_404(PaymentCategory.objects.active(), data.pop("category", None))
+        tax_group = _reference_or_404(TaxGroup.objects.active(), data.pop("tax_group", None))
+        instalment_id = data.pop("instalment", None)
+        instalment = (
+            get_object_or_404(plan.installments.all(), pk=instalment_id) if instalment_id else None
+        )
+
         payment = services.record_payment(
-            plan=plan, actor=request.user, **serializer.validated_data
+            plan=plan,
+            actor=request.user,
+            bank=bank,
+            category=category,
+            tax_group=tax_group,
+            instalment=instalment,
+            **data,
         )
         return Response(FeePaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
+
+
+class FeePaymentClearView(APIView):
+    """The bank honoured a cheque, a draft or a deposit."""
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_MANAGE_ANY
+    serializer_class = ClearPaymentSerializer
+
+    @extend_schema(
+        summary="Mark a payment cleared",
+        request=ClearPaymentSerializer,
+        responses={200: FeePaymentSerializer},
+        tags=FEES_TAG,
+    )
+    def post(self, request, payment_id):
+        payment = _payment(request.user, payment_id)
+        serializer = ClearPaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        cleared = services.mark_payment_cleared(
+            payment=payment, actor=request.user, **serializer.validated_data
+        )
+        return Response(FeePaymentSerializer(cleared).data)
+
+
+class FeePaymentBounceView(APIView):
+    """It did not. The money is voided — the cheque was never payment — and
+    the reason the bank gave is kept with it."""
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_MANAGE_ANY
+    serializer_class = BouncePaymentSerializer
+
+    @extend_schema(
+        summary="Mark a payment bounced",
+        request=BouncePaymentSerializer,
+        responses={200: FeePaymentSerializer},
+        tags=FEES_TAG,
+    )
+    def post(self, request, payment_id):
+        payment = _payment(request.user, payment_id)
+        serializer = BouncePaymentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        bounced = services.mark_payment_bounced(
+            payment=payment, actor=request.user, **serializer.validated_data
+        )
+        return Response(FeePaymentSerializer(bounced).data)
 
 
 class CancelAdmissionView(APIView):

@@ -68,6 +68,12 @@ urlpatterns = [
     path("trainers/", include("apps.trainers.urls")),
     path("fees/", include("apps.fees.urls")),
     path("placements/", include("apps.placements.urls")),
+    path("admissions/", include("apps.admissions.urls")),
+    path(
+        "academic-years/",
+        include((organisation_urls.academic_year_urlpatterns, "academic-years")),
+    ),
+    path("banks/", include((organisation_urls.bank_urlpatterns, "banks"))),
     path("activity/", include("apps.activity.urls")),
     path("warnings/", include("apps.warnings.urls")),
     path("requirements/", include("apps.requirements.urls")),

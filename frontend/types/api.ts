@@ -1931,14 +1931,57 @@ export interface GradeBand {
 
 // --- Fees --------------------------------------------------------------------
 
+/** The fourteen ways the desk is paid, plus `other` for rows imported before
+ *  anybody recorded a method. `card` and `bank_transfer` were this list's
+ *  original, vaguer names and were migrated to `swipe_card` and
+ *  `net_banking`. */
 export type PaymentMethod =
-  "cash" | "upi" | "card" | "bank_transfer" | "cheque" | "other";
+  | "cash"
+  | "cash_deposit"
+  | "cheque"
+  | "demand_draft"
+  | "swipe_card"
+  | "net_banking"
+  | "payment_gateway"
+  | "emi_card"
+  | "google_pay"
+  | "paytm"
+  | "upi"
+  | "paypal"
+  | "phonepe"
+  | "credit_card"
+  | "other";
 
 /** Derived by the server from the numbers; never stored, never set by hand. */
 export type FeePlanStatus = "unpaid" | "partial" | "paid" | "waived";
 
-/** The three ways money arrives at the desk; the others stay readable on old receipts. */
-export const PAYMENT_METHODS_OFFERED: readonly PaymentMethod[] = ["cash", "upi", "bank_transfer"];
+/** What the payment dialog offers, in the order it lists them. `other` is
+ *  absent on purpose: it says nothing, and every real way of paying now has
+ *  its own name. It stays readable on old receipts. */
+export const PAYMENT_METHODS_OFFERED: readonly PaymentMethod[] = [
+  "cash",
+  "cash_deposit",
+  "cheque",
+  "demand_draft",
+  "swipe_card",
+  "net_banking",
+  "payment_gateway",
+  "emi_card",
+  "google_pay",
+  "paytm",
+  "upi",
+  "paypal",
+  "phonepe",
+  "credit_card",
+];
+
+/** The methods whose money is not in the bank the moment it is taken, so the
+ *  payment starts Uncleared and the dialog asks which bank. */
+export const PAYMENT_METHODS_UNCLEARED: readonly PaymentMethod[] = [
+  "cheque",
+  "demand_draft",
+  "cash_deposit",
+];
 
 /** Derived by the server by pouring what was paid over the schedule in order. */
 export type InstallmentStatus = "paid" | "pending" | "overdue" | "upcoming";

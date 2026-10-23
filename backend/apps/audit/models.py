@@ -122,6 +122,10 @@ class AuditAction(models.TextChoices):
     FEE_INSTALLMENTS_SET = "fee.installments.set", _("Instalment schedule set")
     FEE_PAYMENT_RECORDED = "fee.payment.recorded", _("Payment recorded")
     FEE_PAYMENT_VOIDED = "fee.payment.voided", _("Payment voided")
+    #: A cheque, draft or deposit the bank has now honoured. A *bounce* has no
+    #: action of its own: the money was never payment, so it is voided, which
+    #: already has one.
+    FEE_PAYMENT_CLEARED = "fee.payment.cleared", _("Payment cleared")
     TRAINER_CREATED = "trainer.created", _("Trainer created")
     TRAINER_UPDATED = "trainer.updated", _("Trainer profile updated")
 
@@ -341,6 +345,9 @@ class AuditAction(models.TextChoices):
     # package are what somebody will later ask to see the history of, and
     # "who changed the package, and when" is not a question a pruned log can
     # answer.
+    ADMISSION_CREATED = "admission.created", _("Admission recorded")
+    ADMISSION_CANCELLED = "admission.cancelled", _("Admission cancelled")
+
     PLACEMENT_RECORDED = "placement.recorded", _("Placement recorded")
     PLACEMENT_UPDATED = "placement.updated", _("Placement updated")
 

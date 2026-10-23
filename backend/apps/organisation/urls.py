@@ -16,3 +16,14 @@ urlpatterns = [
 college_urlpatterns = [
     path("", views.CollegeListCreateView.as_view(), name="list"),
 ]
+
+#: The years an admission is filed under, and the banks a payment came
+#: through. Both are reference lists a screen picks from, mounted beside the
+#: colleges for the same reason: they are not places the institute runs.
+academic_year_urlpatterns = [
+    path("", views.AcademicYearListView.as_view(), name="list"),
+]
+
+bank_urlpatterns = [
+    path("", views.BankListView.as_view(), name="list"),
+]

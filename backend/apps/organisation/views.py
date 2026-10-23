@@ -16,12 +16,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.pagination import DefaultPagination
-from apps.common.permissions import Capability, HasCapability
+from apps.common.permissions import Capability, HasCapability, IsActiveUser
 
 from . import access, services
 from .models import Branch
 from .serializers import (
+    AcademicYearSerializer,
     AddCollegeSerializer,
+    BankSerializer,
     BranchSerializer,
     BranchWriteSerializer,
     CollegeSerializer,
@@ -155,3 +157,52 @@ class CollegeListCreateView(ListAPIView):
             CollegeSerializer(college).data,
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+class AcademicYearListView(ListAPIView):
+    """The years an admission can be filed under.
+
+    Readable by anyone signed in, like the branding and the public settings:
+    the year is a label that appears beside a course name on a student's own
+    record ("Data Analytics (2026)"), so withholding the list would leave a
+    student reading an id. It discloses nothing — a name and two dates.
+
+    Managing them is an administrator's job and lives on the settings screen
+    (`platform.configure`), not here.
+    """
+
+    permission_classes = (IsActiveUser,)
+    serializer_class = AcademicYearSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        from .models import AcademicYear
+
+        return AcademicYear.objects.all()
+
+    @extend_schema(summary="Academic years", tags=["Organisation"])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+class BankListView(ListAPIView):
+    """The banks a cheque or a transfer came through.
+
+    Gated on reading fees, because the only place it is used is the payment
+    dialog: somebody who cannot see a payment has no use for the list of
+    banks one might have come through.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_VIEW_ANY
+    serializer_class = BankSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        from .models import Bank
+
+        return Bank.objects.active()
+
+    @extend_schema(summary="Banks", tags=["Organisation"])
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)

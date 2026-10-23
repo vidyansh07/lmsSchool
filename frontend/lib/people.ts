@@ -157,8 +157,13 @@ export async function createStudent(payload: {
   branch?: string | null;
   email: string;
   first_name: string;
+  middle_name?: string;
   last_name?: string;
   phone?: string;
+  /** The *extra* ways to reach them. The first mobile and the first email are
+   *  `phone` and `email` above; these are the rest, and a row repeating one
+   *  of those is dropped by the server rather than stored twice. */
+  contacts?: { kind: 'mobile' | 'landline' | 'email'; code?: string; value: string }[];
   profile?: Record<string, unknown>;
   /** Rupees, minimum 1000. Omit or `null` when no fee was agreed yet. */
   fee_amount?: string | number | null;

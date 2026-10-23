@@ -51,7 +51,9 @@ from .models import (
     LIVE_PAYMENT,
     MAX_INSTALLMENTS,
     MIN_FIRST_PAYMENT,
+    UNCLEARED_ON_ARRIVAL,
     ZERO,
+    ClearingStatus,
     FeeInstallment,
     FeePayment,
     FeePlan,
@@ -155,8 +157,6 @@ def refund_payment(*, payment: FeePayment, actor: User, reason: str) -> FeePayme
         },
     )
     return payment
-
-
 
 
 def _plan_context(plan: FeePlan) -> dict[str, Any]:
@@ -516,7 +516,25 @@ def record_payment(
     note: str = "",
     kind: str = PaymentKind.INSTALMENT,
     is_refundable: bool = False,
+    bank=None,
+    category=None,
+    apply_tax: bool = False,
+    tax_group=None,
+    instalment=None,
 ) -> FeePayment:
+    """Append a payment to a plan.
+
+    `bank`, `category`, `apply_tax` and `tax_group` are recorded facts about
+    one payment, never inputs to a calculation: the amount is the amount
+    (owner's decision, 23 October 2026 — record the tax, do not compute it).
+
+    `clearing_status` is derived from the method, not passed in. A cheque, a
+    draft or a cash deposit is money taken that the bank has not confirmed, so
+    it starts `UNCLEARED` and somebody marks it cleared later; everything
+    else is settled the moment it is recorded. Deriving it here rather than
+    accepting it means no screen can record a cheque that claims to have
+    already cleared.
+    """
     _require_manage(actor)
     if kind not in PaymentKind.values:
         raise ApplicationError({"kind": ["Choose what this payment was for."]})
@@ -565,6 +583,9 @@ def record_payment(
             }
         )
 
+    if instalment is not None and instalment.plan_id != plan.pk:
+        raise ApplicationError({"instalment": ["That instalment belongs to another fee."]})
+
     payment = FeePayment(
         plan=plan,
         receipt_number=next_receipt_number(),
@@ -577,6 +598,15 @@ def record_payment(
         kind=kind,
         is_refundable=is_refundable,
         recorded_by=actor,
+        bank=bank,
+        category=category,
+        apply_tax=bool(apply_tax),
+        tax_group=tax_group if apply_tax else None,
+        instalment=instalment,
+        clearing_status=(
+            ClearingStatus.UNCLEARED if method in UNCLEARED_ON_ARRIVAL else ClearingStatus.CLEARED
+        ),
+        cleared_on=None if method in UNCLEARED_ON_ARRIVAL else when,
     )
     payment.full_clean()
     payment.save()
@@ -602,6 +632,7 @@ def record_payment(
             "amount": str(value),
             "paid_on": when.isoformat(),
             "method": method,
+            "clearing": payment.clearing_status,
             "reference": payment.reference,
             "reference_name": payment.reference_name,
             "balance_after": str(plan.balance),
@@ -612,6 +643,60 @@ def record_payment(
     if not mail.is_suppressed():
         payment_recorded.send(sender=FeePayment, payment=payment, actor=actor)
     return payment
+
+
+@transaction.atomic
+def mark_payment_cleared(*, payment: FeePayment, actor: User, cleared_on: date | None = None):
+    """The bank honoured it.
+
+    Only moves a payment that is waiting: clearing one twice is a no-op worth
+    refusing rather than a second audit entry saying the same thing. A voided
+    payment cannot clear — there is nothing there to clear.
+    """
+    _require_manage(actor)
+    if payment.voided_at is not None:
+        raise ApplicationError({"non_field_errors": ["A voided payment cannot clear."]})
+    if payment.clearing_status != ClearingStatus.UNCLEARED:
+        raise ApplicationError({"non_field_errors": ["This payment is not waiting to clear."]})
+    when = cleared_on or timezone.localdate()
+    if when < payment.paid_on:
+        raise ApplicationError({"cleared_on": ["It cannot have cleared before it was taken."]})
+    payment.clearing_status = ClearingStatus.CLEARED
+    payment.cleared_on = when
+    payment.cleared_by = actor
+    payment.save(update_fields=["clearing_status", "cleared_on", "cleared_by", "updated_at"])
+    record(
+        action=AuditAction.FEE_PAYMENT_CLEARED,
+        actor=actor,
+        resource_type=RESOURCE_PAYMENT,
+        resource_id=payment.pk,
+        context={**_plan_context(payment.plan), "receipt_number": payment.receipt_number},
+        durable=False,
+    )
+    return payment
+
+
+@transaction.atomic
+def mark_payment_bounced(*, payment: FeePayment, actor: User, reason: str):
+    """The bank did not honour it.
+
+    A bounce is not a new kind of state for the money: the cheque was never
+    payment, so the payment is *voided* — the existing act for "this should
+    never have counted" — which takes it out of received, out of the balance
+    and out of every total while leaving the record of it. `clearing_status`
+    records why, so the fee tab can say "bounced" rather than the vaguer
+    "voided".
+    """
+    _require_manage(actor)
+    if payment.clearing_status != ClearingStatus.UNCLEARED:
+        raise ApplicationError({"non_field_errors": ["This payment is not waiting to clear."]})
+    if not (reason or "").strip():
+        raise ApplicationError({"reason": ["Say what the bank said."]})
+
+    payment.clearing_status = ClearingStatus.BOUNCED
+    payment.save(update_fields=["clearing_status", "updated_at"])
+    # Voiding does the money part, the audit entry and the fee-status sync.
+    return void_payment(payment=payment, actor=actor, reason=f"Bounced: {reason.strip()}")
 
 
 @transaction.atomic

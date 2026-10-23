@@ -48,12 +48,143 @@ ZERO = Decimal("0")
 
 
 class PaymentMethod(models.TextChoices):
+    """How the money arrived.
+
+    The fourteen ways the desk is actually paid, in the order the counsellor
+    reads them. `CARD` and `BANK_TRANSFER` were this list's original, vaguer
+    names and are migrated to `SWIPE_CARD` and `NET_BANKING`; `OTHER` stays
+    for rows imported before anybody recorded a method, and is not offered
+    when taking a new payment.
+    """
+
     CASH = "cash", _("Cash")
-    UPI = "upi", _("UPI")
-    CARD = "card", _("Card")
-    BANK_TRANSFER = "bank_transfer", _("Bank transfer")
+    CASH_DEPOSIT = "cash_deposit", _("Cash deposit in bank")
     CHEQUE = "cheque", _("Cheque")
+    DEMAND_DRAFT = "demand_draft", _("Demand Draft")
+    SWIPE_CARD = "swipe_card", _("Swipe Card")
+    NET_BANKING = "net_banking", _("Net Banking")
+    PAYMENT_GATEWAY = "payment_gateway", _("Payment Gateway")
+    EMI_CARD = "emi_card", _("EMI card")
+    GOOGLE_PAY = "google_pay", _("Google Pay")
+    PAYTM = "paytm", _("Paytm")
+    UPI = "upi", _("UPI")
+    PAYPAL = "paypal", _("Paypal")
+    PHONEPE = "phonepe", _("PhonePe")
+    CREDIT_CARD = "credit_card", _("Credit card")
+    #: Legacy only. Never offered for a new payment.
     OTHER = "other", _("Other")
+
+
+#: The methods a counsellor may choose when taking money, in the order the
+#: dialog lists them. `OTHER` is deliberately absent: it says nothing, and
+#: every real way of paying now has its own name above.
+SELECTABLE_PAYMENT_METHODS = (
+    PaymentMethod.CASH,
+    PaymentMethod.CASH_DEPOSIT,
+    PaymentMethod.CHEQUE,
+    PaymentMethod.DEMAND_DRAFT,
+    PaymentMethod.SWIPE_CARD,
+    PaymentMethod.NET_BANKING,
+    PaymentMethod.PAYMENT_GATEWAY,
+    PaymentMethod.EMI_CARD,
+    PaymentMethod.GOOGLE_PAY,
+    PaymentMethod.PAYTM,
+    PaymentMethod.UPI,
+    PaymentMethod.PAYPAL,
+    PaymentMethod.PHONEPE,
+    PaymentMethod.CREDIT_CARD,
+)
+
+
+class ClearingStatus(models.TextChoices):
+    """Whether money taken has actually reached the bank.
+
+    A cheque handed over on Tuesday is money received — the student has paid,
+    the balance drops, the receipt prints — but it is not money the institute
+    holds until the bank says so. `UNCLEARED` is that gap, and it is a real
+    one: the receipt itself says "subject to realisation of cheque".
+
+    `BOUNCED` is terminal here only in the sense that the clearing question
+    is answered. What happens to the *money* is the ledger's existing answer:
+    the payment is voided with a reason, which takes it out of received, out
+    of the balance and out of every total, while leaving the record of it.
+    """
+
+    CLEARED = "cleared", _("Cleared")
+    UNCLEARED = "uncleared", _("Uncleared")
+    BOUNCED = "bounced", _("Bounced")
+
+
+#: The methods whose money is not in the bank the moment it is taken. Anything
+#: else clears as it is recorded — cash is cash, and a UPI transfer has either
+#: arrived or not happened at all.
+UNCLEARED_ON_ARRIVAL = frozenset(
+    {PaymentMethod.CHEQUE, PaymentMethod.DEMAND_DRAFT, PaymentMethod.CASH_DEPOSIT}
+)
+
+
+class PaymentCategoryQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(is_active=True)
+
+
+class PaymentCategory(BaseModel):
+    """What a payment was for: Fees, Registration, Exam fee.
+
+    An administrator's list (Organization → Payment Categories), not an enum,
+    because every institute's list is different and none of them is a code
+    change. Exactly one is the default, which is what the payment dialog
+    opens with.
+    """
+
+    name = models.CharField(
+        _("name"), max_length=60, unique=True, validators=[validate_no_control_characters]
+    )
+    is_default = models.BooleanField(_("default"), default=False, db_index=True)
+    is_active = models.BooleanField(_("active"), default=True, db_index=True)
+
+    objects = PaymentCategoryQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = _("payment category")
+        verbose_name_plural = _("payment categories")
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class TaxGroupQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(is_active=True)
+
+
+class TaxGroup(BaseModel):
+    """A named tax a payment was taken under — GST, and whatever else.
+
+    Recorded, never computed (owner's decision, 23 October 2026). The amount
+    on a payment is the amount that changed hands; this says under which tax
+    it was taken, so the receipt and an accountant's export can say so. The
+    day somebody wants the split, a rate goes here and the arithmetic goes in
+    one service — which is why this is a row with a name rather than a
+    boolean on the payment.
+    """
+
+    name = models.CharField(
+        _("name"), max_length=60, unique=True, validators=[validate_no_control_characters]
+    )
+    is_default = models.BooleanField(_("default"), default=False, db_index=True)
+    is_active = models.BooleanField(_("active"), default=True, db_index=True)
+
+    objects = TaxGroupQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = _("tax group")
+        verbose_name_plural = _("tax groups")
+        ordering = ("name",)
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class PaymentKind(models.TextChoices):
@@ -324,6 +455,76 @@ class FeePayment(BaseModel):
     )
     recorded_by = models.ForeignKey(
         "accounts.User", null=True, on_delete=models.SET_NULL, related_name="fee_payments_recorded"
+    )
+
+    # --- Where the money went through, and under what heading
+    #
+    # All four are recorded facts about one payment, never inputs to a
+    # calculation: the amount is the amount. `apply_tax`/`tax_group` say what
+    # the desk declared at the counter so the receipt and an accountant's
+    # export can repeat it (owner's decision, 23 October 2026 — record it,
+    # do not compute it).
+    bank = models.ForeignKey(
+        "organisation.Bank",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="payments",
+        verbose_name=_("bank"),
+        help_text=_("The bank a cheque, draft or deposit went through."),
+    )
+    category = models.ForeignKey(
+        PaymentCategory,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="payments",
+        verbose_name=_("payment category"),
+    )
+    apply_tax = models.BooleanField(_("tax applied"), default=False)
+    tax_group = models.ForeignKey(
+        TaxGroup,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="payments",
+        verbose_name=_("tax group"),
+    )
+
+    # --- Has it reached the bank?
+    #
+    # A cheque is received the day it is handed over and held the day it
+    # clears, and the gap between them is real money nobody has yet. The
+    # balance follows *received*, as it always has; `clearing_status` is what
+    # the Uncleared figure reads, and what the receipt's "subject to
+    # realisation of cheque" refers to.
+    clearing_status = models.CharField(
+        _("clearing"),
+        max_length=10,
+        choices=ClearingStatus.choices,
+        default=ClearingStatus.CLEARED,
+        db_index=True,
+    )
+    cleared_on = models.DateField(_("cleared on"), null=True, blank=True)
+    cleared_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    #: Which instalment this payment was taken against, when it was taken
+    #: against one. Optional, and never the source of truth for whether an
+    #: instalment is paid: that is still read off the ledger by covering the
+    #: schedule in order with what has been received, so a payment made
+    #: without naming an instalment still settles the schedule.
+    instalment = models.ForeignKey(
+        "fees.FeeInstallment",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="payments",
+        verbose_name=_("instalment"),
     )
 
     #: What this payment was for.

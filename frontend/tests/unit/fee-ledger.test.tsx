@@ -267,13 +267,27 @@ describe('FeeLedger', () => {
     fireEvent.click(screen.getByRole('button', { name: /record payment/i }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText(/amount/i), { target: { value: '4000' } });
-    // Only cash, UPI and bank transfer are offered.
+    // The fourteen ways the desk is actually paid, in the order the dialog
+    // lists them. `other` is deliberately absent: it says nothing, and every
+    // real way of paying has its own name.
     const method = within(dialog).getByLabelText(/payment method/i) as HTMLSelectElement;
     expect(Array.from(method.options).map((option) => option.value)).toEqual([
       'cash',
+      'cash_deposit',
+      'cheque',
+      'demand_draft',
+      'swipe_card',
+      'net_banking',
+      'payment_gateway',
+      'emi_card',
+      'google_pay',
+      'paytm',
       'upi',
-      'bank_transfer',
+      'paypal',
+      'phonepe',
+      'credit_card',
     ]);
+    expect(Array.from(method.options).map((option) => option.value)).not.toContain('other');
     fireEvent.change(method, { target: { value: 'upi' } });
     fireEvent.change(within(dialog).getByLabelText(/reference number/i), {
       target: { value: 'UPI-99' },
@@ -754,5 +768,31 @@ describe('ending an admission and giving money back', () => {
 
     expect(screen.getByText('Admission cancelled')).toBeInTheDocument();
     expect(screen.getByText('Four weeks attended')).toBeInTheDocument();
+  });
+});
+
+describe('Cancelling an admission — the charge that silently did nothing', () => {
+  it('says the charge is too big instead of a button that does nothing', async () => {
+    // The amount input carries `max`, and a browser refuses to submit a form
+    // holding a value outside its own constraints — so this dialog's confirm
+    // button did nothing at all, with no message anywhere. The form is now
+    // `noValidate` and the check is ours.
+    const user = userEvent.setup();
+    render(
+      <FeePlanCard
+        plan={plan({ payable: '20000.00', paid: '5000.00' })}
+        mayManage
+        onChanged={() => {}}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /cancel admission/i }));
+    await user.clear(screen.getByLabelText(/cancellation charge/i));
+    await user.type(screen.getByLabelText(/cancellation charge/i), '99999');
+    await user.type(screen.getByLabelText(/why it is being cancelled/i), 'Moved city.');
+    await user.click(screen.getByRole('button', { name: /cancel the admission/i }));
+
+    expect(await screen.findByText(/cannot be more than the .* owed/i)).toBeInTheDocument();
+    expect(cancelAdmission).not.toHaveBeenCalled();
   });
 });

@@ -108,6 +108,7 @@ LOCAL_APPS = [
     "apps.progress",
     "apps.performance",
     "apps.placements",
+    "apps.admissions",
     "apps.certificates",
     "apps.notifications",
     "apps.announcements",
@@ -530,6 +531,10 @@ SPECTACULAR_SETTINGS = {
         # drf-spectacular's own resolution (it had been naming it
         # `Kind0c7Enum`, a hash nobody reading a generated client could place).
         "PaymentKindEnum": "apps.fees.models.PaymentKind.choices",
+        # What an admission charges for, and what sort of contact a row
+        # holds — the sixth and seventh choice sets on a field named `kind`.
+        "AdmissionLineKindEnum": "apps.admissions.models.LineKind.choices",
+        "StudentContactKindEnum": "apps.students.models.ContactKind.choices",
         "QualificationEnum": "apps.students.models.Qualification.choices",
         "PublishStatusEnum": "apps.courses.models.PublishStatus.choices",
         "CourseVisibilityEnum": "apps.courses.models.CourseVisibility.choices",

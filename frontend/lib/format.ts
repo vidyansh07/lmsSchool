@@ -108,6 +108,23 @@ export function formatCurrency(
   }).format(number);
 }
 
+/**
+ * Money the way the admissions and fee screens write it: `"Rs. 30,000"`.
+ *
+ * Deliberately not `formatCurrency`, which writes `₹30,000`. These screens
+ * say "Rs." throughout — the receipt does, the reports do — and the two
+ * spellings must never appear on one page, which is what happens the moment
+ * a component reaches for whichever formatter is nearest.
+ */
+export function formatRupees(value: unknown, { decimals = 0 }: { decimals?: number } = {}): string {
+  const number = toFiniteNumber(value);
+  if (number === null) return 'Rs. 0';
+  return `Rs. ${number.toLocaleString('en-IN', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}`;
+}
+
 export function formatPercent(
   value: unknown,
   options: { fallbackLabel?: FallbackLabel; maximumFractionDigits?: number } = {},

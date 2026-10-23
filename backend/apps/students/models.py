@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
@@ -85,11 +86,24 @@ class Qualification(models.TextChoices):
     OTHER = "other", _("Other")
 
 
+class Gender(models.TextChoices):
+    """As the admissions form asks it.
+
+    Two values because that is what the form this mirrors offers and what the
+    desk is asked to record. The field itself is never required on an
+    existing record — see `StudentProfile.gender`.
+    """
+
+    MALE = "male", _("Male")
+    FEMALE = "female", _("Female")
+
+
 class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
     #: Fields a student may edit on their own record. Everything else is
     #: administrator-only. The serializer layer reads this list, so adding a
     #: field does not silently become self-editable.
     SELF_EDITABLE_FIELDS = (
+        "gender",
         "date_of_birth",
         "address_line1",
         "address_line2",
@@ -176,6 +190,14 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
         ),
     )
 
+    #: Asked for on the new-student form, which the admissions desk fills in
+    #: front of the student (owner's decision, 23 October 2026). Blank is a
+    #: real state and always will be: 7,377 students were registered before
+    #: this field existed, and a record that has never been asked must not be
+    #: blocked from being saved for the want of an answer nobody sought.
+    gender = models.CharField(
+        _("gender"), max_length=10, choices=Gender.choices, blank=True, default=""
+    )
     date_of_birth = models.DateField(_("date of birth"), null=True, blank=True)
 
     address_line1 = models.CharField(
@@ -394,6 +416,18 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
     # to be able to credit that later. Recorded by the counsellor, never by the
     # student, and kept if the referrer's record is later removed: the fact of
     # the referral does not stop being true.
+    #: The counsellor this student belongs to. ClassPro calls it the Owner,
+    #: and so does this: it is who answers for the student, which is a
+    #: different question from who entered them (`created_by` on their
+    #: enrolments) and from who sent them (`referred_by` below).
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="owned_students",
+        verbose_name=_("owner"),
+    )
     referred_by = models.ForeignKey(
         "self",
         null=True,
@@ -429,3 +463,72 @@ class StudentProfile(UUIDPrimaryKeyModel, TimeStampedModel):
     @property
     def is_profile_complete(self) -> bool:
         return self.completion_percent == 100
+
+
+class ContactKind(models.TextChoices):
+    """What sort of contact a row holds."""
+
+    MOBILE = "mobile", _("Mobile")
+    LANDLINE = "landline", _("Landline")
+    EMAIL = "email", _("Email")
+
+
+class StudentContact(TimeStampedModel, UUIDPrimaryKeyModel):
+    """One more way to reach a student: a second mobile, a landline, a second
+    email address.
+
+    A student has one number and one address on their own record, and a real
+    one often has three: their own mobile, a parent's, and the landline at
+    home. The desk used to put the second number in the notes.
+
+    **These are the extras, never the primary.** The student's main mobile is
+    `User.phone` and their main email is `User.email`, exactly as before, and
+    those two remain the only ones anything sends to by default. So there is
+    no `is_primary` column here: a flag that has to agree with a field on
+    another table is two truths about one fact, and the day they disagree
+    nobody can say which is right. Ticking "primary" in the form is an
+    *action* — the service swaps the chosen number into `User.phone` and
+    moves the old one down here — not a value stored twice.
+
+    **A contact email never signs anybody in.** The account's own address is
+    the login and the only one that must be unique across the institute;
+    these are addresses to write to, and two students may legitimately share
+    one (siblings, a family address). Treating the two as interchangeable is
+    how one student ends up able to sign in as another.
+
+    Landlines live only here, because the account has no field for one.
+    """
+
+    student = models.ForeignKey(
+        "students.StudentProfile",
+        on_delete=models.CASCADE,
+        related_name="contacts",
+        verbose_name=_("student"),
+    )
+    kind = models.CharField(_("kind"), max_length=10, choices=ContactKind.choices, db_index=True)
+    #: The dialling code for a mobile (`+91`), or the STD code for a landline
+    #: (`0141`). Blank for an email, which has no such thing.
+    code = models.CharField(
+        _("code"), max_length=8, blank=True, validators=[validate_no_control_characters]
+    )
+    value = models.CharField(
+        _("value"), max_length=254, validators=[validate_no_control_characters]
+    )
+
+    class Meta:
+        verbose_name = _("student contact")
+        verbose_name_plural = _("student contacts")
+        # Oldest first within a kind: the order they were added is the order
+        # the desk expects to read them back.
+        ordering = ("kind", "created_at")
+        indexes = [
+            models.Index(fields=["student", "kind"], name="studentcontact_kind_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "kind", "value"], name="studentcontact_unique_value"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.code}{self.value}" if self.code else self.value

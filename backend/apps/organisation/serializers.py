@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
-from .models import Branch, College
+from .models import AcademicYear, Bank, Branch, College
 
 
 class BranchSerializer(StrictModelSerializer):
@@ -54,3 +54,30 @@ class AddCollegeSerializer(StrictSerializer):
 
     name = SafeCharField(max_length=200)
     city = SafeCharField(max_length=80, required=False, allow_blank=True, default="")
+
+
+class AcademicYearSerializer(serializers.ModelSerializer):
+    """A year, as every screen that files something under one reads it."""
+
+    class Meta:
+        model = AcademicYear
+        fields = ("id", "name", "starts_on", "ends_on", "is_current", "is_closed")
+        read_only_fields = fields
+
+
+class AcademicYearWriteSerializer(StrictSerializer):
+    """Adding or changing one. `is_current` is not here: moving it is its own
+    act (exactly one year holds it) and has its own endpoint, so a careless
+    PATCH cannot leave the institute with two current years or none."""
+
+    name = SafeCharField(max_length=20)
+    starts_on = serializers.DateField(required=False, allow_null=True)
+    ends_on = serializers.DateField(required=False, allow_null=True)
+    is_closed = serializers.BooleanField(required=False, default=False)
+
+
+class BankSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Bank
+        fields = ("id", "name", "is_active")
+        read_only_fields = fields
