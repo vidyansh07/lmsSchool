@@ -123,7 +123,9 @@ def create_activity_type(*, actor, **fields: Any) -> ActivityType:
         raise ConflictError({"slug": ["An activity type with this slug already exists."]})
     try:
         with transaction.atomic():
-            activity_type = ActivityType.objects.create(**fields)
+            activity_type = ActivityType.objects.create(
+                created_by=actor, updated_by=actor, **fields
+            )
     except IntegrityError:
         # A concurrent create won the slug race between the check above and
         # this insert — same translation `apps.forms.services.create_definition`
@@ -153,7 +155,8 @@ def update_activity_type(*, actor, activity_type: ActivityType, **fields: Any) -
             setattr(activity_type, name, value)
             changed.append(name)
     if changed:
-        activity_type.save(update_fields=[*changed, "updated_at"])
+        activity_type.updated_by = actor
+        activity_type.save(update_fields=[*changed, "updated_by", "updated_at"])
         _forget_types()
         record(
             action=AuditAction.ACTIVITY_TYPE_UPDATED,
@@ -217,6 +220,42 @@ def _clean_prefill(form_version, prefill: dict | None) -> dict:
 
 
 @transaction.atomic
+def _refuse_a_clash(activity_type: ActivityType, assignee, planned_at) -> None:
+    """A type with `check_conflict` on may not be double-booked on one person.
+
+    The rule is per *type*, which is the reference CRM's own shape and the
+    right one: two follow-up calls overlapping on a busy morning is normal,
+    two mock interviews with the same trainer at four o'clock is not a busy
+    morning, it is a mistake.
+
+    A type with no default duration is treated as taking a minute, so "the
+    same slot" still means something; without that, a zero-length window
+    overlaps nothing and the setting would quietly do nothing at all.
+    """
+    minutes = activity_type.default_duration_minutes or 1
+    window_end = planned_at + timedelta(minutes=minutes)
+    others = (
+        Activity.objects.filter(
+            activity_type=activity_type,
+            assigned_to=assignee,
+            planned_at__isnull=False,
+        )
+        .exclude(status__in=(ActivityStatus.CANCELLED, ActivityStatus.MISSED))
+        .only("planned_at", "duration_minutes", "title")
+    )
+    for other in others:
+        other_end = other.planned_at + timedelta(minutes=other.duration_minutes or minutes)
+        if other.planned_at < window_end and planned_at < other_end:
+            raise ConflictError(
+                {
+                    "planned_at": [
+                        f"{assignee.get_full_name() or 'That person'} already has "
+                        f"\u201c{other.title}\u201d then."
+                    ]
+                }
+            )
+
+
 def create_activity(
     *,
     actor,
@@ -294,6 +333,9 @@ def create_activity(
         validate_assignee(
             activity_type, assigned_to, branch_id=branch.pk, batch_id=batch.pk if batch else None
         )
+
+    if activity_type.check_conflict and assigned_to is not None and planned_at is not None:
+        _refuse_a_clash(activity_type, assigned_to, planned_at)
 
     if student_visible is True and not activity_type.visible_to_student:
         # An activity may override the type's default to *hidden*, never to
@@ -400,6 +442,23 @@ def transition_activity(
                     f"An activity in '{activity.status}' cannot move to '{to_status}'."
                 ],
                 "allowed": sorted(legal_targets(activity.status)),
+            }
+        )
+
+    if (
+        to_status == ActivityStatus.REOPENED
+        and activity.status == ActivityStatus.COMPLETED
+        and not activity.activity_type.reopen_allowed
+    ):
+        # A type that has turned reopening off means "done is done" — an
+        # exam, a certificate check. Said in a sentence rather than refused
+        # through the actor check, which would blame the wrong thing.
+        raise ApplicationError(
+            {
+                "non_field_errors": [
+                    "A completed "
+                    f"{activity.activity_type.name} cannot be opened again. Create a new one."
+                ]
             }
         )
 

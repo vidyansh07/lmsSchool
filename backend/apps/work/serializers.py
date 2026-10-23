@@ -18,6 +18,7 @@ of 404ing it and leak that the id exists (rule 2).
 
 from __future__ import annotations
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.common.serializers import SafeCharField, StrictSerializer
@@ -59,11 +60,33 @@ class ActivityTypeSerializer(serializers.Serializer):
     next_action = serializers.JSONField(read_only=True, allow_null=True)
     is_system = serializers.BooleanField(read_only=True)
     status = serializers.CharField(read_only=True)
+    check_conflict = serializers.BooleanField(read_only=True)
+    reopen_allowed = serializers.BooleanField(read_only=True)
+    invite_organiser = serializers.BooleanField(read_only=True)
+    invite_owner = serializers.BooleanField(read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
 
     def get_form(self, activity_type: ActivityType) -> str | None:
         return activity_type.form.slug if activity_type.form_id else None
+
+    @extend_schema_field(serializers.CharField())
+    def get_created_by_name(self, activity_type: ActivityType) -> str:
+        return self._who(activity_type.created_by, activity_type.is_system)
+
+    @extend_schema_field(serializers.CharField())
+    def get_updated_by_name(self, activity_type: ActivityType) -> str:
+        return self._who(activity_type.updated_by, activity_type.is_system)
+
+    @staticmethod
+    def _who(user, is_system: bool) -> str:
+        """The name, never the address: this list is read by anyone who may
+        see the catalog. A seeded row has no person behind it and says so."""
+        if user is not None:
+            return user.get_full_name() or user.email.split("@")[0]
+        return "Seeded with the catalog" if is_system else ""
 
 
 class ActivityTypeCreateSerializer(StrictSerializer):
@@ -102,6 +125,10 @@ class ActivityTypeCreateSerializer(StrictSerializer):
     status = serializers.ChoiceField(
         choices=ActivityTypeStatus.choices, required=False, default=ActivityTypeStatus.ACTIVE
     )
+    check_conflict = serializers.BooleanField(required=False, default=False)
+    reopen_allowed = serializers.BooleanField(required=False, default=False)
+    invite_organiser = serializers.BooleanField(required=False, default=False)
+    invite_owner = serializers.BooleanField(required=False, default=False)
 
 
 class ActivityTypePatchSerializer(StrictSerializer):
@@ -125,6 +152,10 @@ class ActivityTypePatchSerializer(StrictSerializer):
     reminder_minutes_before = serializers.IntegerField(required=False, allow_null=True, min_value=1)
     next_action = serializers.JSONField(required=False, allow_null=True)
     status = serializers.ChoiceField(choices=ActivityTypeStatus.choices, required=False)
+    check_conflict = serializers.BooleanField(required=False)
+    reopen_allowed = serializers.BooleanField(required=False)
+    invite_organiser = serializers.BooleanField(required=False)
+    invite_owner = serializers.BooleanField(required=False)
 
 
 # ---------------------------------------------------------------------------

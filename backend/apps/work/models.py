@@ -155,6 +155,60 @@ class ActivityType(SoftDeleteBaseModel):
         choices=ActivityTypeStatus.choices,
         default=ActivityTypeStatus.ACTIVE,
     )
+    #: Two of the reference CRM's event settings, which have no equivalent
+    #: anywhere else in the catalog.
+    #:
+    #: `check_conflict` refuses a second activity of this type over the same
+    #: minutes for the same assignee. It is a property of the *kind* of work,
+    #: not a global rule: two follow-up calls can overlap on a busy morning
+    #: and nobody minds, two mock interviews with one trainer cannot happen
+    #: at all.
+    check_conflict = models.BooleanField(
+        _("check for a clash"),
+        default=False,
+        help_text=_("Refuse a second one of these at the same time for the same person."),
+    )
+    #: Whether a *completed* one can be opened again. The reference CRM ships
+    #: this off; here it is on, because reopening a completed activity is
+    #: existing behaviour that trainers and reviewers already rely on
+    #: (`apps.work.transitions`), and shipping a default that silently
+    #: withdrew it would be a regression wearing a new setting's clothes. A
+    #: type where "done" must mean done — an exam, a certificate check —
+    #: turns it off.
+    #:
+    #: Only the completed edge is governed. Reopening something *missed* or
+    #: *cancelled* is how a mistake gets undone, and that is never the thing
+    #: an institute wants to forbid.
+    reopen_allowed = models.BooleanField(
+        _("can be opened again"),
+        default=True,
+        help_text=_("Allow a completed activity of this type to be reopened."),
+    )
+    #: Who is emailed an invitation when one is scheduled. Both off by
+    #: default: a catalog row that quietly starts emailing people the day it
+    #: is created is how an institute ends up apologising for its software.
+    invite_organiser = models.BooleanField(_("invite the organiser"), default=False)
+    invite_owner = models.BooleanField(_("invite the owner"), default=False)
+    #: Who set this type up, and who touched it last. The catalog screen lists
+    #: both, and "seeded by the catalog" is a real answer to the first — those
+    #: rows have no creator and say so rather than naming whoever ran the
+    #: migration.
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activity_types_created",
+        verbose_name=_("created by"),
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activity_types_updated",
+        verbose_name=_("updated by"),
+    )
 
     objects, all_objects = soft_delete_managers(ActivityTypeQuerySet)
 
