@@ -14,8 +14,9 @@ confirm the record exists and file money against it.
 from __future__ import annotations
 
 import django_filters
+from django.core.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status as http_status
 from rest_framework.filters import OrderingFilter
 from rest_framework.generics import ListAPIView, get_object_or_404
@@ -23,15 +24,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.common.exceptions import ApplicationError, AuthorityError
-from apps.common.permissions import IsActiveUser
+from apps.common.permissions import Capability, HasCapability, IsActiveUser
 from apps.courses.models import Course
 from apps.organisation.models import AcademicYear
 from apps.students import access as students_access
 
-from . import access, services
+from . import access, reports, services
 from .models import Admission, AdmissionStatus, LineKind
 from .serializers import (
     AdmissionCancelSerializer,
+    AdmissionReportSerializer,
     AdmissionSerializer,
     AdmissionWriteSerializer,
 )
@@ -154,3 +156,69 @@ class AdmissionCancelView(APIView):
                 get_object_or_404(access.visible_admissions(request.user), pk=admission_id)
             ).data
         )
+
+
+class AdmissionReportView(APIView):
+    """One of the five admissions reports.
+
+    `/api/v1/admissions/reports/{tab}/` where `tab` is one of
+    `overall`, `discount`, `expiry`, `additional-fees`, `coursewise`.
+
+    Gated on reading fees, not on reading admissions: every tab is mostly
+    money, and somebody who may see that a student was admitted does not
+    thereby get to read what the centre took this month.
+
+    The filters are the screen's own, and each narrows an already-scoped
+    queryset — none of them can widen it.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_VIEW_ANY
+    serializer_class = AdmissionReportSerializer
+
+    @extend_schema(
+        summary="An admissions report",
+        parameters=[
+            OpenApiParameter("academic_year", str),
+            OpenApiParameter("status", str, description="active or cancelled"),
+            OpenApiParameter("course", str),
+            OpenApiParameter("batch", str),
+            OpenApiParameter("user", str, description="Who recorded the admission."),
+            OpenApiParameter("school", str, description="The student's college."),
+            OpenApiParameter("start_date", str),
+            OpenApiParameter("end_date", str),
+        ],
+        responses={200: AdmissionReportSerializer},
+        tags=TAG,
+    )
+    def get(self, request, tab):
+        if tab not in reports.BUILDERS:
+            raise ApplicationError({"tab": ["No such report."]})
+
+        rows = access.visible_admissions(request.user)
+        params = request.query_params
+        if params.get("academic_year"):
+            rows = rows.filter(academic_year_id=params["academic_year"])
+        if params.get("status"):
+            rows = rows.filter(status=params["status"])
+        if params.get("course"):
+            rows = rows.filter(lines__course_id=params["course"]).distinct()
+        if params.get("batch"):
+            rows = rows.filter(lines__enrollment__batch_id=params["batch"]).distinct()
+        if params.get("user"):
+            rows = rows.filter(created_by_id=params["user"])
+        if params.get("school"):
+            rows = rows.filter(student__college_id=params["school"])
+        if params.get("start_date"):
+            rows = rows.filter(admission_date__gte=params["start_date"])
+        if params.get("end_date"):
+            rows = rows.filter(admission_date__lte=params["end_date"])
+
+        try:
+            built = reports.BUILDERS[tab](list(rows))
+        except (ValueError, ValidationError) as exc:
+            # A malformed uuid or date in a filter is a bad request, not a
+            # 500 and not a silently unfiltered report — which would show
+            # more than was asked for.
+            raise ApplicationError({"detail": ["One of the filters is not valid."]}) from exc
+        return Response(built)

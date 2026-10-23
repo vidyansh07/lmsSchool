@@ -40,7 +40,7 @@ import { listAcademicYears, type AcademicYear } from '@/lib/academic-years';
 import { createAdmission, type AdmissionLineInput, type DiscountKind } from '@/lib/admissions-api';
 import { Capability } from '@/lib/capabilities';
 import { listCourses } from '@/lib/courses';
-import { formatDate } from '@/lib/format';
+import { formatDate, localIsoDate } from '@/lib/format';
 import type { CourseListRow } from '@/types/api';
 
 const STEPS: WizardStep[] = [
@@ -94,7 +94,7 @@ export function AdmissionDetailsForm({ studentId }: { studentId: string }) {
   const [courses, setCourses] = useState<CourseListRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [admissionDate, setAdmissionDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [admissionDate, setAdmissionDate] = useState(() => localIsoDate());
   const [year, setYear] = useState('');
   const [rows, setRows] = useState<Row[]>([blankRow('course')]);
   const [discountKind, setDiscountKind] = useState<DiscountKind>('flat');

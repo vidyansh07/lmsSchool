@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DsrQueue } from '@/app/dsr/page';
 import { ApiError } from '@/lib/api';
+import { localIsoDate } from '@/lib/format';
 import type { DSRListItem } from '@/lib/dsr';
 import type { BatchListRow, Paginated, TrainerListRow } from '@/types/api';
 
@@ -128,8 +129,11 @@ function trainerRow(overrides: Partial<TrainerListRow> = {}): TrainerListRow {
   };
 }
 
+/** The *local* date — what the screen's own date picker produces. UTC would
+ *  be yesterday for the first five and a half hours of every IST morning,
+ *  making this test true only after breakfast. */
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localIsoDate();
 }
 
 beforeEach(() => {

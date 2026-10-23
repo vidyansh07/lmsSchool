@@ -3,9 +3,20 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DateRangePicker } from '@/components/date-range-picker';
+import { localIsoDate } from '@/lib/format';
 
+/**
+ * The *local* date, which is what the picker uses (`localIsoDate`).
+ *
+ * This used to be `new Date().toISOString().slice(0, 10)` — UTC. In IST that
+ * is the previous day for the first five and a half hours of every morning,
+ * so these tests passed all afternoon and failed from midnight to half past
+ * five. A test that is only true for part of the day is worse than no test:
+ * it fails for a reason that has nothing to do with the change in front of
+ * whoever is reading it.
+ */
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localIsoDate();
 }
 
 describe('DateRangePicker', () => {

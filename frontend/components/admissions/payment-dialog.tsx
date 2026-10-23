@@ -33,7 +33,7 @@ import { Input, Select } from '@/components/ui/input';
 import { fieldErrors, unshownError } from '@/lib/api';
 import { listBanks, listPaymentCategories, listTaxGroups, type NamedRow } from '@/lib/fee-settings';
 import { recordPayment } from '@/lib/fees';
-import { formatDate, formatRupees } from '@/lib/format';
+import { formatDate, formatRupees, localIsoDate } from '@/lib/format';
 import { PAYMENT_METHODS_OFFERED, PAYMENT_METHODS_UNCLEARED } from '@/types/api';
 import { PAYMENT_METHOD_LABEL } from '@/lib/labels';
 import type { FeeInstallment, PaymentMethod } from '@/types/api';
@@ -68,7 +68,7 @@ export function PaymentDialog({
   onClose: () => void;
   onPaid: () => void;
 }) {
-  const [paidOn, setPaidOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [paidOn, setPaidOn] = useState(() => localIsoDate());
   const [method, setMethod] = useState<PaymentMethod>('cash');
   const [reference, setReference] = useState('');
   const [bank, setBank] = useState('');

@@ -35,7 +35,7 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { fieldErrors, unshownError } from '@/lib/api';
 import { cancelAdmission, type Admission } from '@/lib/admissions-api';
-import { formatRupees } from '@/lib/format';
+import { formatRupees, localIsoDate } from '@/lib/format';
 
 const SHOWN = ['reason', 'refund_amount', 'refund_on'] as const;
 
@@ -52,7 +52,7 @@ export function CancelAdmissionDialog({
 }) {
   const [reason, setReason] = useState('');
   const [wantsRefund, setWantsRefund] = useState(false);
-  const [refundOn, setRefundOn] = useState(() => new Date().toISOString().slice(0, 10));
+  const [refundOn, setRefundOn] = useState(() => localIsoDate());
   const [refundAmount, setRefundAmount] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);

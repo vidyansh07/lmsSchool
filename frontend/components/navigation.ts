@@ -243,6 +243,17 @@ const FEES_HOME: NavItem = {
 /** The placement desk. Its own group rather than another line under
  *  "Students", so the module reads as the independent thing it is — and so
  *  `accentFor` gives it the placement accent the shell already defines. */
+/** The five admissions reports (`/reports`). Named "Admission reports" and
+ *  not "Reports" because `/admin/reports` already carries that word and runs
+ *  the export catalogue — two menu entries with one name is how somebody ends
+ *  up on the wrong screen twice before learning the difference. */
+const ADMISSION_REPORTS: NavItem = {
+  href: "/reports",
+  label: "Admission reports",
+  icon: FileSpreadsheet,
+  capability: Capability.feeViewAny,
+};
+
 const PLACEMENT_GROUP: NavGroup = {
   title: "Placement",
   items: [
@@ -456,6 +467,7 @@ export const MANAGER_NAV: NavGroup[] = [
         icon: FileSpreadsheet,
         capability: Capability.reportViewAny,
       },
+      ADMISSION_REPORTS,
       { href: "/analytics", label: "Analytics", icon: TrendingUp, capability: Capability.reportViewAny },
       {
         href: "/admin/overview",
@@ -568,6 +580,7 @@ export const COUNSELLOR_NAV: NavGroup[] = [
         icon: FileSpreadsheet,
         capability: Capability.reportViewAny,
       },
+      ADMISSION_REPORTS,
       { href: "/analytics", label: "Analytics", icon: TrendingUp, capability: Capability.reportViewAny },
     ],
   },
@@ -837,6 +850,7 @@ const ADMIN_NAV: NavGroup[] = [
         icon: FileSpreadsheet,
         capability: Capability.reportViewAny,
       },
+      ADMISSION_REPORTS,
       {
         href: "/admin/completions",
         label: "Completions",

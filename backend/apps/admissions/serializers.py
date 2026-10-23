@@ -155,3 +155,17 @@ class AdmissionCancelSerializer(StrictSerializer):
     """
 
     reason = SafeCharField(max_length=300)
+
+
+class AdmissionReportSerializer(serializers.Serializer):
+    """One report's answer: a handful of figures, and the rows they came from.
+
+    Deliberately loose — `tiles` and `rows` differ per tab, and five
+    near-identical serializers that each list a dozen keys would be five
+    places to forget one. The shapes are fixed by `reports.py` and asserted
+    in `tests/test_admission_reports.py`, which is where that contract is
+    worth stating.
+    """
+
+    tiles = serializers.DictField()
+    rows = serializers.ListField(child=serializers.DictField())
