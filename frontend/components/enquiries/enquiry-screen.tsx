@@ -9,8 +9,19 @@
  */
 
 import Link from "next/link";
-import { useId, useState } from "react";
-import { ArrowLeft, ExternalLink, Plus, Send, UserPlus } from "lucide-react";
+import { useId, useRef, useState, type ReactNode } from "react";
+import {
+  ArrowLeft,
+  CalendarPlus,
+  ExternalLink,
+  Mail,
+  MessageSquarePlus,
+  Phone,
+  Plus,
+  Send,
+  Shuffle,
+  UserPlus,
+} from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
 import { FormAssignmentsTable } from "@/components/forms/form-assignments-table";
@@ -32,6 +43,8 @@ import {
 import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/layout";
+import { StageTrail, type StageTrailStep } from "@/components/ui/stage-trail";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { useApi } from "@/hooks/use-api";
 import { errorMessage, fieldErrors } from "@/lib/api";
@@ -75,59 +88,30 @@ function toLocalInput(iso: string | null): string {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
-function Facts({ enquiry }: { enquiry: EnquiryDetail }) {
-  const facts: [string, string][] = [
-    ["Mobile", enquiry.mobile],
-    ["WhatsApp", enquiry.whatsapp_number || "Same as mobile"],
-    ["Email", enquiry.email || "—"],
-    ["City", [enquiry.city, enquiry.state].filter(Boolean).join(", ") || "—"],
-    ["Course", [enquiry.course, enquiry.track].filter(Boolean).join(" · ") || "—"],
-    ["Centre", enquiry.preferred_centre || "—"],
-    ["Mode", enquiry.mode || "—"],
-    ["Batch timing", enquiry.batch_timing || "—"],
-    ["Qualification", enquiry.qualification || "—"],
-    ["Source", enquiry.source || "—"],
-    ["Campaign", [enquiry.utm_source, enquiry.utm_campaign].filter(Boolean).join(" / ") || "—"],
-    ["Lead quality", enquiry.lead_quality ? `${enquiry.lead_quality} of 5` : "—"],
-    [
-      "Owner",
-      enquiry.managed_externally
-        ? enquiry.external_owner || "In Meritto"
-        : (enquiry.owner?.name ?? "Unassigned"),
-    ],
-    ["Entered by", enquiry.created_by?.name ?? "—"],
-    ["Last contacted", enquiry.last_contacted_at ? formatDateTime(enquiry.last_contacted_at) : "—"],
-    ["Created", formatDateTime(enquiry.created_at)],
-  ];
-  return (
-    <Card>
-      <CardContent className="space-y-4 pt-5">
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
-          {facts.map(([label, value]) => (
-            <div key={label} className="min-w-0">
-              <dt className="text-2xs font-medium uppercase tracking-wide text-ink-faint">{label}</dt>
-              <dd className="truncate text-sm text-ink">{value}</dd>
-            </div>
-          ))}
-        </dl>
-        {enquiry.remarks ? (
-          <p className="whitespace-pre-line border-t border-line pt-3 text-sm text-ink-muted">
-            {enquiry.remarks}
-          </p>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
+/** The three wrappers `PipelineCard` swaps in when it is already inside a
+ *  dialog: a dialog supplies its own card, title and padding, and nesting a
+ *  second `Card` inside one draws a box in a box. */
+function PlainFrame({ children }: { children: ReactNode }) {
+  return <div className="space-y-4">{children}</div>;
+}
+function PlainHead({ className, children }: { className?: string; children: ReactNode }) {
+  return <div className={className}>{children}</div>;
+}
+function PlainBody({ className, children }: { className?: string; children: ReactNode }) {
+  return <div className={className}>{children}</div>;
 }
 
 function PipelineCard({
   enquiry,
   sources,
   onSaved,
+  plain = false,
 }: {
   enquiry: EnquiryDetail;
   sources: { value: string; label: string }[];
   onSaved: (message: string) => void;
+  /** Rendered inside the Change Stage dialog, which brings its own frame. */
+  plain?: boolean;
 }) {
   const uid = useId();
   const { user } = useAuth();
@@ -164,10 +148,14 @@ function PipelineCard({
     }
   }
 
+  const Frame = plain ? PlainFrame : Card;
+  const Head = plain ? PlainHead : CardHeader;
+  const Body = plain ? PlainBody : CardContent;
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">Pipeline</CardTitle>
+    <Frame>
+      <Head className="flex flex-row items-center justify-between space-y-0">
+        {plain ? <span /> : <CardTitle className="text-base">Pipeline</CardTitle>}
         {enquiry.can_manage && user && enquiry.owner?.id !== user.id ? (
           <Button
             type="button"
@@ -179,8 +167,8 @@ function PipelineCard({
             Assign to me
           </Button>
         ) : null}
-      </CardHeader>
-      <CardContent className="space-y-4">
+      </Head>
+      <Body className="space-y-4">
         {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field label="Stage" htmlFor={`${uid}-stage`} error={errors.stage}>
@@ -280,8 +268,8 @@ function PipelineCard({
         ) : (
           <p className="text-2xs text-ink-faint">Only its owner or a manager at its centre can change it.</p>
         )}
-      </CardContent>
-    </Card>
+      </Body>
+    </Frame>
   );
 }
 
@@ -741,12 +729,173 @@ function RegistrationLine({ enquiry }: { enquiry: EnquiryDetail }) {
   );
 }
 
+/** The forward path a lead walks. The two lost stages are not on it — a lead
+ *  that went nowhere is not 70% of the way to enrolling, and drawing it as a
+ *  part-filled trail would say exactly that. `StageTrail` takes them as
+ *  `endedLabel` instead. */
+const PIPELINE_TRAIL: StageTrailStep[] = [
+  { key: "new", label: "New" },
+  { key: "contacted", label: "Contacted" },
+  { key: "interested", label: "Interested" },
+  { key: "counselling_booked", label: "Counselling booked" },
+  { key: "demo_booked", label: "Demo booked" },
+  { key: "registered", label: "Registered" },
+];
+
+/** One "Label : value" line, the way the reference CRM lists a lead's fields.
+ *  The colon is in its own cell rather than appended to the label, so the
+ *  values line up however long the labels are. */
+function DetailRows({ rows }: { rows: [string, string][] }) {
+  return (
+    <dl className="divide-y divide-line">
+      {rows.map(([label, value]) => (
+        <div key={label} className="grid grid-cols-[minmax(9rem,14rem)_auto_1fr] gap-x-3 py-2.5">
+          <dt className="text-sm text-ink-muted">{label}</dt>
+          <span aria-hidden="true" className="text-sm text-ink-faint">
+            :
+          </span>
+          <dd className="min-w-0 break-words text-sm text-ink">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** How long ago, in whole days, for the "Lead Added On" badge. */
+function daysSince(iso: string): string {
+  const days = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
+  return `${days}d`;
+}
+
+/** The left-hand column: who this is, who owns it, and the three dates a
+ *  counsellor is actually asked about. Everything here is a summary of what
+ *  the tabs hold — the rail answers "should I be ringing this person today",
+ *  the tabs answer "what happened". */
+function LeadRail({
+  enquiry,
+  onChangeStage,
+  onAddEvent,
+  onAddNote,
+}: {
+  enquiry: EnquiryDetail;
+  onChangeStage: () => void;
+  onAddEvent: () => void;
+  onAddNote: () => void;
+}) {
+  const stageLabel = enquiry.managed_externally
+    ? enquiry.external_stage || "In Meritto"
+    : ENQUIRY_STAGE_LABEL[enquiry.stage];
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardContent className="space-y-3 pt-5">
+          <div>
+            {/* The page heading already announces the name; a second heading
+                with the same text makes a screen reader read the lead twice
+                and puts a phantom section in the outline. */}
+            <p className="text-base font-semibold uppercase tracking-wide text-ink">
+              {enquiry.full_name}
+            </p>
+            <p className="mt-0.5 text-sm text-ink-muted">
+              Lead Stage: <span className="text-ink">{stageLabel}</span>
+            </p>
+          </div>
+          <dl className="space-y-1.5 text-sm">
+            <div className="flex items-center gap-2">
+              <dt>
+                <Mail className="size-4 text-ink-faint" aria-hidden="true" />
+                <span className="sr-only">Email</span>
+              </dt>
+              <dd className="min-w-0 truncate text-ink">{enquiry.email || "Not given"}</dd>
+            </div>
+            <div className="flex items-center gap-2">
+              <dt>
+                <Phone className="size-4 text-ink-faint" aria-hidden="true" />
+                <span className="sr-only">Mobile</span>
+              </dt>
+              <dd className="text-ink tabular-nums">{enquiry.mobile}</dd>
+            </div>
+          </dl>
+          {enquiry.can_manage ? (
+            <div className="flex flex-wrap gap-2 border-t border-line pt-3">
+              <Button type="button" variant="outline" size="sm" onClick={onChangeStage}>
+                <Shuffle className="size-4" aria-hidden="true" />
+                Change Stage
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={onAddEvent}>
+                <CalendarPlus className="size-4" aria-hidden="true" />
+                Add Event
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={onAddNote}>
+                <MessageSquarePlus className="size-4" aria-hidden="true" />
+                Add Note
+              </Button>
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Assignment Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DetailRows
+            rows={[
+              [
+                "Assigned Owner",
+                enquiry.managed_externally
+                  ? enquiry.external_owner || "In Meritto"
+                  : (enquiry.owner?.name ?? "Unassigned"),
+              ],
+              ["Lead Source", enquiry.source || "Not known"],
+              ["Online or offline", LEAD_CHANNEL_LABEL[enquiry.channel]],
+              ["Lead quality", enquiry.lead_quality ? `${enquiry.lead_quality} of 5` : "Not rated"],
+            ]}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Important Dates</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DetailRows
+            rows={[
+              [
+                "Upcoming Followup",
+                enquiry.next_follow_up_at ? formatDateTime(enquiry.next_follow_up_at) : "None set",
+              ],
+              [
+                "Last Active",
+                enquiry.last_contacted_at
+                  ? formatDateTime(enquiry.last_contacted_at)
+                  : "Not contacted yet",
+              ],
+              [
+                "Lead Added On",
+                `${formatDateTime(enquiry.created_at)} (${daysSince(enquiry.created_at)})`,
+              ],
+            ]}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function EnquiryScreen({ id }: { id: string }) {
   const { user } = useAuth();
   const maySend = can(user?.capabilities, Capability.formAssign);
   const { data, error, isLoading, reload } = useApi<EnquiryDetail>(`/api/v1/enquiries/${id}/`);
   const summary = useApi<EnquirySummary>("/api/v1/enquiries/summary/");
   const [notice, setNotice] = useState<string | null>(null);
+  const [tab, setTab] = useState("details");
+  const [changingStage, setChangingStage] = useState(false);
+  const [addingEvent, setAddingEvent] = useState(false);
+  const notesRef = useRef<HTMLDivElement | null>(null);
 
   if (isLoading) return <LoadingState label="Loading enquiry…" rows={6} />;
   if (error || !data) {
@@ -758,6 +907,34 @@ export function EnquiryScreen({ id }: { id: string }) {
         onRetry={reload}
       />
     );
+  }
+
+  const lostLabel = LOST_STAGES.includes(data.stage) ? ENQUIRY_STAGE_LABEL[data.stage] : undefined;
+  const facts: [string, string][] = [
+    ["Email Address", data.email || "Not given"],
+    ["Mobile Number", data.mobile],
+    ["WhatsApp Number", data.whatsapp_number || "Same as mobile"],
+    ["Name", data.full_name],
+    ["State", data.state || "Not given"],
+    ["City", data.city || "Not given"],
+    ["Course", [data.course, data.track].filter(Boolean).join(" · ") || "Not given"],
+    ["Centre", data.preferred_centre || "Not given"],
+    ["Mode", data.mode || "Not given"],
+    ["Batch timing", data.batch_timing || "Not given"],
+    ["Qualification", data.qualification || "Not given"],
+    ["Lead Source", data.source || "Not known"],
+    ["Campaign", [data.utm_source, data.utm_campaign].filter(Boolean).join(" / ") || "Not tracked"],
+    ["Entered by", data.created_by?.name ?? "Not recorded"],
+  ];
+
+  /** Add Note is the rail's third button and the header's: both land in the
+   *  thread with the composer in view, rather than opening a second place to
+   *  write the same thing. */
+  function goToNotes() {
+    setTab("notes");
+    window.requestAnimationFrame(() => {
+      notesRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
   }
 
   return (
@@ -791,33 +968,122 @@ export function EnquiryScreen({ id }: { id: string }) {
       </PageHeader>
       {notice ? <Alert variant="success">{notice}</Alert> : null}
 
-      <Facts enquiry={data} />
-      {data.managed_externally ? (
-        <MerittoCard enquiry={data} />
-      ) : (
-        <>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
+        <LeadRail
+          enquiry={data}
+          onChangeStage={() => setChangingStage(true)}
+          onAddEvent={() => setAddingEvent(true)}
+          onAddNote={goToNotes}
+        />
+
+        <div className="min-w-0 space-y-4">
+          <StageTrail
+            steps={PIPELINE_TRAIL}
+            current={data.stage}
+            endedLabel={lostLabel}
+            label="Lead stage"
+          />
+
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList>
+              <TabsTrigger value="details">Lead Details</TabsTrigger>
+              <TabsTrigger value="timeline">Timeline</TabsTrigger>
+              <TabsTrigger value="events">Events</TabsTrigger>
+              <TabsTrigger value="notes">Notes</TabsTrigger>
+              <TabsTrigger value="forms">Forms</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="details" className="space-y-4 pt-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Lead Details</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <DetailRows rows={facts} />
+                  {data.remarks ? (
+                    <p className="whitespace-pre-line border-t border-line pt-3 text-sm text-ink-muted">
+                      {data.remarks}
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+              {data.managed_externally ? (
+                <MerittoCard enquiry={data} />
+              ) : (
+                <>
+                  <PipelineCard
+                    key={data.updated_at}
+                    enquiry={data}
+                    sources={summary.data?.sources ?? []}
+                    onSaved={(message) => {
+                      setNotice(message);
+                      reload();
+                    }}
+                  />
+                  {data.can_register || data.student ? (
+                    <Card>
+                      <CardContent className="pt-5">
+                        <RegistrationLine enquiry={data} />
+                      </CardContent>
+                    </Card>
+                  ) : null}
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent value="timeline" className="pt-4">
+              <HistoryCard enquiry={data} />
+            </TabsContent>
+
+            <TabsContent value="events" className="pt-4">
+              <ActivitiesCard enquiry={data} />
+            </TabsContent>
+
+            <TabsContent value="notes" className="pt-4">
+              <div ref={notesRef}>
+                <FollowUpThreadCard enquiry={data} onPosted={reload} />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="forms" className="pt-4">
+              <FormsCard enquiry={data} maySend={maySend} />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+
+      <Dialog open={changingStage} onOpenChange={(open) => (open ? undefined : setChangingStage(false))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Stage</DialogTitle>
+            <DialogDescription>
+              Where this lead stands, who owns it, and when it is next rung.
+            </DialogDescription>
+          </DialogHeader>
           <PipelineCard
             key={data.updated_at}
+            plain
             enquiry={data}
             sources={summary.data?.sources ?? []}
             onSaved={(message) => {
               setNotice(message);
+              setChangingStage(false);
               reload();
             }}
           />
-          {data.can_register || data.student ? (
-            <Card>
-              <CardContent className="pt-5">
-                <RegistrationLine enquiry={data} />
-              </CardContent>
-            </Card>
-          ) : null}
-          <FollowUpThreadCard enquiry={data} onPosted={reload} />
-          <ActivitiesCard enquiry={data} />
-          <FormsCard enquiry={data} maySend={maySend} />
-        </>
-      )}
-      <HistoryCard enquiry={data} />
+        </DialogContent>
+      </Dialog>
+
+      <LogActivityDialog
+        enquiry={data}
+        open={addingEvent}
+        onClose={() => setAddingEvent(false)}
+        onLogged={() => {
+          setAddingEvent(false);
+          setTab("events");
+          reload();
+        }}
+      />
     </div>
   );
 }

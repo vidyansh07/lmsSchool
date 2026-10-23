@@ -3,7 +3,7 @@
  * pipeline's loading, error, empty and populated states and its stage
  * filter; the enquiry's facts, moving its stage, and its activities.
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import EnquiriesPage from "@/app/enquiries/page";
@@ -305,6 +305,14 @@ describe("EnquiriesPage", () => {
 });
 
 describe("EnquiryScreen", () => {
+  /** The lead screen reads like the reference CRM's: a rail, a stage trail
+   *  and tabs. Only the open panel is mounted, so a test that wants the
+   *  thread or the events has to open its tab first, exactly as a counsellor
+   *  does. */
+  function openTab(name: string) {
+    fireEvent.click(screen.getByRole("tab", { name }));
+  }
+
   function mockDetail(detail: EnquiryDetail, reload = vi.fn()) {
     useApi.mockImplementation((path: string) => {
       if (path === `/api/v1/enquiries/${detail.id}/`) {
@@ -334,9 +342,16 @@ describe("EnquiryScreen", () => {
 
     expect(screen.getByRole("heading", { name: "Ravi Sharma" })).toBeInTheDocument();
     expect(screen.getByText("Wants weekend batch.")).toBeInTheDocument();
+    // The rail answers "should I be ringing this person", before any tab.
+    expect(screen.getByText("Assignment Details")).toBeInTheDocument();
+    expect(screen.getByText("Important Dates")).toBeInTheDocument();
+
+    openTab("Events");
     expect(screen.getByText("No activities yet")).toBeInTheDocument();
+    openTab("Timeline");
     expect(screen.getByText("Enquiry created")).toBeInTheDocument();
 
+    openTab("Lead Details");
     fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "interested" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
@@ -375,6 +390,7 @@ describe("EnquiryScreen", () => {
       created_at: "2026-10-04T06:00:00Z",
     });
     render(<EnquiryScreen id="e-1" />);
+    openTab("Notes");
 
     const thread = screen.getAllByRole("listitem").map((row) => row.textContent ?? "");
     const first = thread.findIndex((text) => text.includes("First call, no answer."));
@@ -399,6 +415,7 @@ describe("EnquiryScreen", () => {
       created_at: "2026-10-04T06:00:00Z",
     });
     render(<EnquiryScreen id="e-1" />);
+    openTab("Notes");
 
     fireEvent.change(screen.getByLabelText("What happened"), {
       target: { value: "Call back Monday." },
@@ -421,6 +438,7 @@ describe("EnquiryScreen", () => {
     mockDetail(enquiry());
     render(<EnquiryScreen id="e-1" />);
 
+    openTab("Notes");
     fireEvent.click(screen.getByRole("button", { name: "Add follow-up" }));
     expect(await screen.findByText("Write what was said before sending.")).toBeInTheDocument();
     expect(addEnquiryNote).not.toHaveBeenCalled();
@@ -443,9 +461,59 @@ describe("EnquiryScreen", () => {
     );
     render(<EnquiryScreen id="e-1" />);
 
+    openTab("Notes");
+
     expect(screen.getByText("Already called.")).toBeInTheDocument();
     expect(screen.queryByLabelText("What happened")).not.toBeInTheDocument();
     expect(screen.getByText("You can read this thread but not add to it.")).toBeInTheDocument();
+  });
+
+  it("shows the stage trail and the rail's three actions", () => {
+    mockDetail(enquiry({ stage: "interested" }));
+    render(<EnquiryScreen id="e-1" />);
+
+    expect(
+      screen.getByRole("list", { name: "Lead stage: now Interested" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change Stage" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add Event" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add Note" })).toBeInTheDocument();
+  });
+
+  it("draws a lost lead as stopped rather than part-way along", () => {
+    mockDetail(enquiry({ stage: "not_interested", lost_reason: "Went elsewhere" }));
+    render(<EnquiryScreen id="e-1" />);
+    expect(
+      screen.getByRole("list", { name: "Lead stage: now Not interested" }),
+    ).toBeInTheDocument();
+  });
+
+  it("changes the stage from the dialog the rail opens", async () => {
+    const reload = mockDetail(enquiry());
+    updateEnquiry.mockResolvedValue(enquiry({ stage: "contacted" }));
+    render(<EnquiryScreen id="e-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Change Stage" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Stage"), { target: { value: "contacted" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(updateEnquiry).toHaveBeenCalledWith(
+        "e-1",
+        expect.objectContaining({ stage: "contacted" }),
+      ),
+    );
+    expect(reload).toHaveBeenCalled();
+    // Saved, so the dialog is gone rather than sitting there over the answer.
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("offers no rail actions to somebody who cannot manage the lead", () => {
+    mockDetail(enquiry({ can_manage: false, owner: { id: "u-9", name: "Someone" } }));
+    render(<EnquiryScreen id="e-1" />);
+    expect(screen.queryByRole("button", { name: "Change Stage" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add Event" })).not.toBeInTheDocument();
   });
 
   it("moves the lead online when its source is changed to a web source", async () => {
