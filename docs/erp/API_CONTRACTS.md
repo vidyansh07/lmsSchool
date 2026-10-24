@@ -334,3 +334,76 @@ Audit `search.performed` (counts only). Cache: none.
 - `GET /attendance/present-now/` → `{date, online, offline, total, absent,
   sessions_today, registers_taken}` over `visible_sessions` for today, not
   cancelled; staff only.
+
+---
+
+## The reference-product pass (24 October 2026)
+
+What the ClassPro and Meritto screens needed that did not exist. Every one of
+these is covered by its own suite; the reasons live beside the code.
+
+### Courses
+- `GET /courses/?active=true|false` — "Show Active" on the catalogue screen
+  means *not archived* rather than any one status, filtered on the server so
+  a page of twenty is twenty.
+- `GET|PUT /courses/<id>/instalments/` — the course's default instalment
+  structure: `[{sequence, label, percent, due_after_days}]`. Percentages, not
+  rupees, because a plan collects the fee *less that student's discount*. PUT
+  replaces the whole structure; the shares must total exactly 100; an empty
+  list means "no default structure". Permission: reading needs to see the
+  course, writing needs to manage it. Copied into a `FeePlan` the day it is
+  created and never read back.
+- `DELETE /courses/<id>/` — permission `course.delete` (administrator). 409
+  when a batch or an enrolment exists, saying to archive instead.
+- `GET|POST /courses/<id>/price/` — unchanged, but now the *only* way a fee
+  changes: the course form no longer PATCHes `default_fee`.
+
+### Calendar Pro (activity types)
+- `ActivityType` carries `check_conflict`, `reopen_allowed` (default **on**),
+  `invite_organiser`, `invite_owner`, `created_by_name`, `updated_by_name`.
+- Check conflict refuses a second activity of that type over the same minutes
+  for the same assignee (409, naming the booking in the way). The window read
+  is a day either side; the longest event allowed is 24 hours.
+- `Activity.reminder_minutes_before` overrides its type's: null means "the
+  type's", 0 means none at all.
+- `POST /activities/` additionally accepts `duration_minutes` and
+  `reminder_minutes_before`.
+
+### Communication
+- `MessageChannel` gains `sms`. No gateway is configured, so a delivery on it
+  **fails** saying so rather than sitting queued; `UNWIRED_CHANNELS` names
+  that in one place.
+- `MessageTemplate.category: transactional|promotional`, defaulting to
+  transactional.
+- Email is sent as multipart when the template has an HTML body, with the
+  text as the alternative; HTML is sanitised by an email-specific allowlist
+  (headings, rules, images, tables; no `style`; `https://` only for `href`
+  and `src`; hex-only `bgcolor`).
+- Automation action `send_sms`, same shape as `send_whatsapp`.
+
+### Automations
+- `GET /automation-rules/?status=&search=`.
+- `GET /automation-rules/summary/` → `{total, active, draft, paused}`. Three
+  statuses, not the reference product's five: a rule here has no end of life
+  to reach.
+- Rules carry `created_by_name` / `updated_by_name`.
+
+### The institution's lists
+- `POST /academic-years/`, `PATCH /academic-years/<id>/` — `is_current` is
+  exclusive and cannot be switched *off* (make another year current instead).
+- `POST /banks/`, `PATCH /banks/<id>/`; `POST|PATCH
+  /fees/payment-categories/[<id>/]`; `POST|PATCH /fees/tax-groups/[<id>/]`.
+  At most one default each, set exclusively. Nothing deletes — `is_active`
+  retires a row, and whoever may manage a list sees the retired ones.
+  Permission: `settings.manage`. Audit: `settings.list.changed` with what
+  changed.
+
+### Batch sheet import
+- `POST /batches/import/` (multipart: `file` .xlsx, `dry_run` default
+  **true**, optional `branch`). Needs `batch.create` *and* `student.create`.
+  Returns `{batches_created, batches_matched, students_created,
+  students_matched, enrolments_created, enrolments_existing, batches,
+  problems: [{sheet, row, message}]}`. A dry run is the real run inside a
+  rolled-back transaction, so the preview is what the import would do. A
+  course is matched, never created; a student is matched by email then
+  phone; a batch by course, start date and name.
