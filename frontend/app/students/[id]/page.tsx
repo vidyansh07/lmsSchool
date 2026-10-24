@@ -680,14 +680,19 @@ export function Student360Content({ studentId }: { studentId: string }) {
       <Header data={data} onOpenRiskTab={() => setTab('risk')} />
 
       <Tabs value={tab} onValueChange={(value) => setTab(value as TabKey)}>
+        {/* Named and ordered the way the institute's own staff ask for them
+            (owner's call): the record opens on the student's details, money
+            is the next question a counsellor is asked and so sits second,
+            and "Messages" is the communication *log* it has always been. No
+            tab was added or removed to get here. */}
         <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="overview">Student Details</TabsTrigger>
+          {mayReadFees ? <TabsTrigger value="fees">Fees</TabsTrigger> : null}
+          <TabsTrigger value="enrollment">Performance</TabsTrigger>
           <TabsTrigger value="activities">Activities</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="enrollment">Enrolment</TabsTrigger>
-          {mayReadFees ? <TabsTrigger value="fees">Fees</TabsTrigger> : null}
           {can(Capability.communicationViewAny) ? (
-            <TabsTrigger value="messages">Messages</TabsTrigger>
+            <TabsTrigger value="messages">Communication Logs</TabsTrigger>
           ) : null}
           <TabsTrigger value="certificates">Certificates</TabsTrigger>
           <TabsTrigger value="risk">Risk</TabsTrigger>

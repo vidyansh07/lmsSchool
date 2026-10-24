@@ -500,7 +500,7 @@ describe('Student360Content — fees and the other records', () => {
   it('has no Fees tab for someone who cannot read fees', async () => {
     getStudent360.mockResolvedValue(student360());
     render(<Student360Content studentId="student-1" />);
-    expect(await screen.findByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Student Details' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Fees' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Account' })).toBeNull();
   });
