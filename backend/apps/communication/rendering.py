@@ -45,7 +45,6 @@ import re
 from typing import Any
 
 from apps.automation.evaluator import MISSING, get_path
-from apps.forms.validation import sanitise_richtext
 
 _VARIABLE_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
 
@@ -76,6 +75,111 @@ def _substitute(
     return _VARIABLE_RE.sub(_replace, text or "")
 
 
+# ---------------------------------------------------------------------------
+# Email HTML
+# ---------------------------------------------------------------------------
+#
+# An email body needs more than `sanitise_richtext` allows. That allowlist —
+# `p`, `b`, `a`, lists — is right for a form's rich-text answer, and it
+# silently drops every heading, image, rule and table a composed email is
+# made of: the block composer would show a heading and a button in its
+# preview, and the recipient would get neither, because the tags were
+# unwrapped on the way out. Two sanitisers for two jobs is the honest answer;
+# one permissive enough for both would be the dishonest one.
+#
+# What is allowed here is still an allowlist, and still no attributes beyond
+# the handful named below. In particular:
+#
+# * `style` is **not** allowed anywhere. Inline CSS is how marketing email is
+#   normally built, and it is also `background:url(javascript:…)`, position
+#   tricks and content hiding; the composer therefore emits presentational
+#   *attributes* (`align`, `width`, `valign`) and one fixed button rendering
+#   rather than author-supplied CSS.
+# * `href` and `src` must be `https://` — the same rule `sanitise_richtext`
+#   applies to links, extended to images, so no `javascript:` and no
+#   `http://` tracking pixel either.
+# * `on*` handlers cannot survive, because every attribute that is not on
+#   the per-tag list is dropped rather than filtered.
+
+_EMAIL_ALLOWED_TAGS: dict[str, frozenset[str]] = {
+    "p": frozenset({"align"}),
+    "br": frozenset(),
+    "b": frozenset(),
+    "strong": frozenset(),
+    "i": frozenset(),
+    "em": frozenset(),
+    "u": frozenset(),
+    "ul": frozenset(),
+    "ol": frozenset(),
+    "li": frozenset(),
+    "blockquote": frozenset(),
+    "code": frozenset(),
+    "pre": frozenset(),
+    "a": frozenset({"href"}),
+    "h1": frozenset(),
+    "h2": frozenset(),
+    "h3": frozenset(),
+    "hr": frozenset(),
+    "img": frozenset({"src", "alt", "width"}),
+    "table": frozenset({"width", "role", "bgcolor"}),
+    "thead": frozenset(),
+    "tbody": frozenset(),
+    "tr": frozenset(),
+    "td": frozenset({"width", "valign", "align", "bgcolor"}),
+    "th": frozenset({"width", "valign", "align", "bgcolor"}),
+    "div": frozenset(),
+    "span": frozenset(),
+}
+
+#: Attributes whose value must be an `https://` URL or be dropped with the
+#: whole attribute.
+_URL_ATTRIBUTES = frozenset({"href", "src"})
+
+#: `bgcolor` is how a button gets its colour without inline CSS — the old
+#: "bulletproof button" a cell and a link. Only a plain hex colour is kept;
+#: anything else (a named colour is harmless, a `url(...)` is not) is dropped
+#: with the attribute.
+_HEX_COLOUR_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
+
+_EMAIL_SCRIPT_RE = re.compile(r"(?is)<(script|style)\b.*?</\1\s*>")
+_EMAIL_TAG_RE = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)((?:\s*/)?[^>]*)>")
+_ATTR_RE = re.compile(r'([a-zA-Z-]+)\s*=\s*"([^"<>]*)"')
+
+
+def sanitise_email_html(value: str) -> str:
+    """Strip an email body down to the tags and attributes above.
+
+    Script and style blocks go with their content; any other disallowed tag
+    is unwrapped, keeping what it contained — the same shape
+    `sanitise_richtext` uses, so an unexpected tag loses its markup rather
+    than its words.
+    """
+    value = _EMAIL_SCRIPT_RE.sub("", value)
+
+    def _replace(match: re.Match[str]) -> str:
+        closing, tag, attrs = match.group(1), match.group(2).lower(), match.group(3)
+        allowed = _EMAIL_ALLOWED_TAGS.get(tag)
+        if allowed is None:
+            return ""
+        if closing:
+            return f"</{tag}>"
+        kept: list[str] = []
+        for name, attr_value in _ATTR_RE.findall(attrs):
+            name = name.lower()
+            if name not in allowed:
+                continue
+            if name in _URL_ATTRIBUTES and not attr_value.lower().startswith("https://"):
+                continue
+            if name == "bgcolor" and not _HEX_COLOUR_RE.match(attr_value.strip()):
+                continue
+            kept.append(f'{name}="{html.escape(attr_value, quote=True)}"')
+        spelled = (" " + " ".join(kept)) if kept else ""
+        void = "/" if tag in {"br", "hr", "img"} else ""
+        return f"<{tag}{spelled}{void}>"
+
+    return _EMAIL_TAG_RE.sub(_replace, value)
+
+
 def render_template(version, variables: dict[str, Any]) -> dict[str, Any]:
     """Render one `TemplateVersion` against a resolved variable context.
 
@@ -89,6 +193,6 @@ def render_template(version, variables: dict[str, Any]) -> dict[str, Any]:
     subject = _substitute(version.subject, variables, allowlist, warnings)
     text = _substitute(version.body_text, variables, allowlist, warnings)
     raw_html = _substitute(version.body_html, variables, allowlist, warnings, escape_values=True)
-    rendered_html = sanitise_richtext(raw_html)
+    rendered_html = sanitise_email_html(raw_html)
 
     return {"subject": subject, "html": rendered_html, "text": text, "warnings": warnings}

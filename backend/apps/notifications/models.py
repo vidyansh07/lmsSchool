@@ -254,6 +254,13 @@ class EmailMessage(BaseModel):
     to_email = models.EmailField(_("to"), max_length=254)
     subject = models.CharField(_("subject"), max_length=255)
     body = models.TextField(_("body"))
+    #: The same message as HTML, when there is one. Blank is the normal case
+    #: — most of this system's mail is a few lines of text — and it is sent
+    #: as an *alternative* to `body` rather than instead of it, so a client
+    #: that prefers plain text still gets the words. A composed template
+    #: without this would have reached the recipient as plain text while its
+    #: author was looking at a laid-out preview.
+    body_html = models.TextField(_("HTML body"), blank=True)
     template = models.CharField(_("template"), max_length=60, blank=True)
     #: Files to attach, as references rather than bytes: `[{"kind": "fee_receipt",
     #: "id": "<uuid>"}]`. Each kind is drawn when the message is sent, by the

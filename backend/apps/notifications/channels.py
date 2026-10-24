@@ -161,6 +161,7 @@ def send_email_message(message: EmailMessage) -> bool:
     """Attempt one delivery, recording the outcome either way."""
     from django.conf import settings
     from django.core.mail import EmailMessage as OutgoingEmail
+    from django.core.mail import EmailMultiAlternatives as MultipartEmail
     from django.core.mail import send_mail
 
     from apps.common.logging import scrub
@@ -178,7 +179,11 @@ def send_email_message(message: EmailMessage) -> bool:
     message.attempts += 1
     subject = f"{settings.EMAIL_SUBJECT_PREFIX}{message.subject}"
     try:
-        if not message.attachments:
+        # An HTML body is sent as an *alternative* to the plain text, never
+        # instead of it: a client that prefers text still gets the words, and
+        # a composed template reaches the recipient looking like its preview
+        # rather than as a wall of markup.
+        if not message.attachments and not message.body_html:
             send_mail(
                 subject=subject,
                 message=message.body,
@@ -187,12 +192,23 @@ def send_email_message(message: EmailMessage) -> bool:
                 fail_silently=False,
             )
         else:
-            outgoing = OutgoingEmail(
-                subject=subject,
-                body=message.body,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=[message.to_email],
+            outgoing = (
+                MultipartEmail(
+                    subject=subject,
+                    body=message.body,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[message.to_email],
+                )
+                if message.body_html
+                else OutgoingEmail(
+                    subject=subject,
+                    body=message.body,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[message.to_email],
+                )
             )
+            if message.body_html:
+                outgoing.attach_alternative(message.body_html, "text/html")
             # Drawn now, not when the row was queued, so a retry carries the
             # document as it stands — a receipt voided in between says VOID.
             for item in message.attachments:

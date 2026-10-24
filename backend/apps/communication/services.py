@@ -38,6 +38,7 @@ from typing import Any
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
+from django.utils.html import strip_tags
 from django.utils import timezone
 
 from apps.accounts.roles import Capability, has_capability
@@ -734,10 +735,19 @@ def _dispatch_email(delivery: Delivery, rendered: dict[str, Any] | None) -> None
         return
 
     subject = (rendered or {}).get("subject") or ""
-    body = (rendered or {}).get("text") or (rendered or {}).get("html") or ""
+    html_body = (rendered or {}).get("html") or ""
+    # The plain text is what a template's author wrote as text; falling back
+    # to the HTML for it would put markup in front of a text-only client,
+    # which is the thing the alternative exists to avoid. `strip_tags` is
+    # Django's own, over markup this app already sanitised.
+    body = (rendered or {}).get("text") or (strip_tags(html_body) if html_body else "")
     template_key = delivery.template_version.template.key if delivery.template_version_id else ""
     message = EmailMessage.objects.create(
-        to_email=delivery.address, subject=subject[:255], body=body, template=template_key[:60]
+        to_email=delivery.address,
+        subject=subject[:255],
+        body=body,
+        body_html=html_body,
+        template=template_key[:60],
     )
     delivery.email_message = message
     delivery.save(update_fields=["email_message", "updated_at"])

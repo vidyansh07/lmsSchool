@@ -34,6 +34,22 @@ describe("blocksToHtml / htmlToBlocks", () => {
     expect(blocksToHtml(blocks)).toContain("{{ student.name }}");
   });
 
+  it("emits only markup the server's email sanitiser keeps", () => {
+    const html = blocksToHtml([
+      { kind: 'heading', text: 'Welcome' },
+      { kind: 'button', text: 'Open', href: 'https://grras.example' },
+      { kind: 'spacer' },
+      { kind: 'image', src: 'https://grras.example/logo.png', alt: 'GRRAS' },
+    ]);
+
+    // `style` is refused outright on the way out (it is how content hides),
+    // so a styled button would reach the recipient unstyled. The colour
+    // rides on `bgcolor` instead.
+    expect(html).not.toContain('style=');
+    expect(html).toContain('bgcolor="#FFF3EA"');
+    expect(html).toContain('<h2>Welcome</h2>');
+  });
+
   it("says nothing about a body it did not write", () => {
     expect(htmlToBlocks("<p>Written somewhere else</p>")).toBeNull();
     expect(htmlToBlocks("<!--grras-blocks:not json-->")).toBeNull();

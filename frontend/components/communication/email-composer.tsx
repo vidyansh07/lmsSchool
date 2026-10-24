@@ -72,6 +72,10 @@ export const BLOCK_PALETTE: { kind: EmailBlockKind; label: string }[] = [
 
 const MARKER = 'grras-blocks:';
 
+/** The button's background. A hex colour, because that is the only thing the
+ *  server's `bgcolor` rule keeps. */
+const BUTTON_COLOUR = '#FFF3EA';
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -97,18 +101,24 @@ export function blockToHtml(block: EmailBlock): string {
     case 'text':
       return paragraphs(block.text ?? '');
     case 'button':
+      // The old "bulletproof button": a one-cell table with `bgcolor` and a
+      // link inside. No inline CSS, because the server's email sanitiser
+      // allows none — `style` is how content hides and how
+      // `background:url(javascript:…)` arrives — so the colour rides on a
+      // presentational attribute that survives the trip.
       return (
-        `<p><a href="${escapeHtml(block.href ?? '#')}" ` +
-        `style="display:inline-block;padding:10px 18px;border-radius:6px;` +
-        `background:#EF7220;color:#ffffff;text-decoration:none">` +
-        `${escapeHtml(block.text ?? 'Open')}</a></p>`
+        '<table role="presentation"><tr>' +
+        `<td bgcolor="${BUTTON_COLOUR}" align="center">` +
+        `<a href="${escapeHtml(block.href ?? '#')}">${escapeHtml(block.text ?? 'Open')}</a>` +
+        '</td></tr></table>'
       );
     case 'divider':
       return '<hr />';
     case 'image':
       return `<p><img src="${escapeHtml(block.src ?? '')}" alt="${escapeHtml(block.alt ?? '')}" /></p>`;
     case 'spacer':
-      return '<div style="height:24px"></div>';
+      // Two breaks rather than a styled div, for the same reason.
+      return '<p><br /><br /></p>';
     case 'columns':
       return (
         '<table width="100%" role="presentation"><tr>' +
