@@ -3,7 +3,7 @@
  * fee is collected — and what it says when part of that saves and part
  * does not.
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import NewCoursePage from "@/app/admin/courses/new/page";
@@ -117,6 +117,46 @@ describe("New Course", () => {
 
     await waitFor(() => expect(createModule).toHaveBeenCalledTimes(2));
     expect(createModule.mock.calls.map(([, body]) => body.title)).toEqual(["Ansible", "RHCE"]);
+  });
+
+  it("borrows nothing when the standard has no sibling courses", async () => {
+    listCourses.mockResolvedValue({
+      count: 0,
+      page: 1,
+      total_pages: 1,
+      page_size: 5,
+      next: null,
+      previous: null,
+      results: [],
+    });
+    await fillTheBasics();
+
+    expect(
+      await screen.findByText(/Nothing to borrow — type the subjects below/),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps a typed subject out of the pool column once it is in the course", async () => {
+    await fillTheBasics();
+    await screen.findByRole("button", { name: "RHCSA" });
+
+    const pool = within(screen.getByRole("list", { name: "Subjects used elsewhere" }));
+    fireEvent.click(pool.getByRole("button", { name: "RHCSA" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add the selected subject to this course" }),
+    );
+
+    expect(
+      within(screen.getByRole("list", { name: "Subjects in this course" })).getByRole("button", {
+        name: "RHCSA",
+      }),
+    ).toBeInTheDocument();
+    // And it is no longer offered twice.
+    expect(
+      within(screen.getByRole("list", { name: "Subjects used elsewhere" })).queryByRole("button", {
+        name: "RHCSA",
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it("refuses a structure that does not add up before creating anything", async () => {
