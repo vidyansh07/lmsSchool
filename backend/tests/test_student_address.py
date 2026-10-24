@@ -25,9 +25,7 @@ pytestmark = pytest.mark.django_db
 ME = "/api/v1/students/me/"
 
 
-def test_a_student_can_fill_in_the_part_people_navigate_by(
-    api_client_no_csrf, student_profile
-):
+def test_a_student_can_fill_in_the_part_people_navigate_by(api_client_no_csrf, student_profile):
     api_client_no_csrf.force_authenticate(user=student_profile.user)
 
     response = api_client_no_csrf.patch(
@@ -58,9 +56,7 @@ def test_staff_see_the_whole_address(api_client_no_csrf, counsellor_user, studen
     assert response.data["landmark"] == "Opposite the petrol pump"
 
 
-def test_an_address_is_searchable_by_area(
-    api_client_no_csrf, admin_user, student_profile
-):
+def test_an_address_is_searchable_by_area(api_client_no_csrf, admin_user, student_profile):
     # The reason it is its own column rather than a second address line.
     student_profile.area = "Vaishali Nagar"
     student_profile.save(update_fields=["area"])

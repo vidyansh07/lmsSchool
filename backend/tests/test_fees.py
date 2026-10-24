@@ -125,9 +125,7 @@ def test_a_discount_typed_as_a_percentage_is_worked_out_in_rupees(
 
 
 @pytest.mark.django_db
-def test_a_percentage_discount_follows_a_changed_fee_and_can_turn_flat(
-    counsellor_user, enrollment
-):
+def test_a_percentage_discount_follows_a_changed_fee_and_can_turn_flat(counsellor_user, enrollment):
     services.set_fee_plan(
         enrollment=enrollment,
         actor=counsellor_user,

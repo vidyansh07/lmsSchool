@@ -82,9 +82,7 @@ def _identified_routes() -> list[tuple[str, object]]:
 
 
 ROUTES = _identified_routes()
-GUARDED = [
-    (route, view) for route, view in ROUTES if _declared_capabilities(view) and _fill(route)
-]
+GUARDED = [(route, view) for route, view in ROUTES if _declared_capabilities(view) and _fill(route)]
 
 
 def test_the_sweep_found_the_identified_api():
@@ -138,9 +136,7 @@ def test_an_anonymous_caller_is_refused_every_guarded_identified_route(
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize(
-    "route,view", ROUTES, ids=[route for route, _ in ROUTES]
-)
+@pytest.mark.parametrize("route,view", ROUTES, ids=[route for route, _ in ROUTES])
 def test_no_identified_route_crashes_on_an_id_that_belongs_to_nobody(
     route, view, api_client_no_csrf, student
 ):

@@ -156,6 +156,7 @@ class AdminUserDetailSerializer(UserSerializer):
     allowed_role_transitions = serializers.SerializerMethodField()
     profile_type = serializers.SerializerMethodField()
     profile_id = serializers.SerializerMethodField()
+
     class Meta(UserSerializer.Meta):
         fields = (
             *UserSerializer.Meta.fields,

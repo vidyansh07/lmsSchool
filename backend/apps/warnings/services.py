@@ -68,8 +68,7 @@ EXPLANATION: dict[str, str] = {
         "agreed, so nothing is owed and nothing will ever be collected."
     ),
     "batch_no_trainer": (
-        "These classes are running or about to, with nobody assigned to teach "
-        "them."
+        "These classes are running or about to, with nobody assigned to teach them."
     ),
     "batch_seats": (
         "These classes start within three days and still have empty seats. "

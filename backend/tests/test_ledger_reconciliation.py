@@ -57,9 +57,7 @@ class TestTheIdentityHolds:
         assert money["outstanding"] == FEE
         assert money["unreconciled"] == ZERO
 
-    def test_a_part_payment_splits_between_received_and_outstanding(
-        self, plan, admin_user
-    ):
+    def test_a_part_payment_splits_between_received_and_outstanding(self, plan, admin_user):
         record_payment(plan=plan, actor=admin_user, amount="5000")
 
         money = totals(admin_user)
@@ -96,9 +94,7 @@ class TestTheIdentityHolds:
 
 
 class TestMoneyThatCameBackOrNeverWas:
-    def test_a_refund_leaves_received_holding_only_what_is_still_held(
-        self, plan, admin_user
-    ):
+    def test_a_refund_leaves_received_holding_only_what_is_still_held(self, plan, admin_user):
         payment = record_payment(
             plan=plan,
             actor=admin_user,
@@ -115,9 +111,7 @@ class TestMoneyThatCameBackOrNeverWas:
         assert money["outstanding"] == FEE
         assert money["unreconciled"] == ZERO
 
-    def test_a_refund_is_reported_but_is_not_part_of_the_identity(
-        self, plan, admin_user
-    ):
+    def test_a_refund_is_reported_but_is_not_part_of_the_identity(self, plan, admin_user):
         # It is already excluded from `received`; adding it to the identity
         # would count the same thousand rupees twice.
         payment = record_payment(
@@ -131,10 +125,7 @@ class TestMoneyThatCameBackOrNeverWas:
 
         money = totals(admin_user)
 
-        assert (
-            money["charged"]
-            == money["received"] + money["written_off"] + money["outstanding"]
-        )
+        assert money["charged"] == money["received"] + money["written_off"] + money["outstanding"]
 
     def test_a_void_is_absent_from_both_sides(self, plan, admin_user):
         # A void says the payment should never have been recorded. It was
@@ -160,9 +151,7 @@ class TestACancelledAdmissionSettlesItsMoney:
     each of the three cases that differ.
     """
 
-    def test_cancelling_with_nothing_kept_writes_the_fee_off(
-        self, plan, admin_user, enrollment
-    ):
+    def test_cancelling_with_nothing_kept_writes_the_fee_off(self, plan, admin_user, enrollment):
         cancel_admission(
             enrollment=enrollment, actor=admin_user, reason="Changed their mind, week one"
         )
@@ -174,9 +163,7 @@ class TestACancelledAdmissionSettlesItsMoney:
         assert money["outstanding"] == ZERO
         assert money["unreconciled"] == ZERO
 
-    def test_a_charge_is_still_owed_when_nothing_was_paid(
-        self, plan, admin_user, enrollment
-    ):
+    def test_a_charge_is_still_owed_when_nothing_was_paid(self, plan, admin_user, enrollment):
         cancel_admission(
             enrollment=enrollment,
             actor=admin_user,
@@ -213,9 +200,7 @@ class TestACancelledAdmissionSettlesItsMoney:
         assert money["outstanding"] == ZERO
         assert money["unreconciled"] == ZERO
 
-    def test_the_original_fee_is_still_answerable_afterwards(
-        self, plan, admin_user, enrollment
-    ):
+    def test_the_original_fee_is_still_answerable_afterwards(self, plan, admin_user, enrollment):
         # A cancellation that overwrote the fee would make "what did we
         # charge" unanswerable, and that is where every reconciliation starts.
         cancel_admission(
@@ -227,18 +212,14 @@ class TestACancelledAdmissionSettlesItsMoney:
         assert plan.payable == Decimal("3000.00")
         assert plan.written_off == Decimal("17000.00")
 
-    def test_the_enrolment_and_its_money_end_together(
-        self, plan, admin_user, enrollment
-    ):
+    def test_the_enrolment_and_its_money_end_together(self, plan, admin_user, enrollment):
         # Doing half of it is how the two came to disagree in the first place.
         cancel_admission(enrollment=enrollment, actor=admin_user, reason="Changed their mind")
 
         enrollment.refresh_from_db()
         assert enrollment.status == EnrollmentStatus.CANCELLED
 
-    def test_cancelling_stops_expecting_another_instalment(
-        self, plan, admin_user, enrollment
-    ):
+    def test_cancelling_stops_expecting_another_instalment(self, plan, admin_user, enrollment):
         # Chasing a schedule drawn up for the full fee would be wrong.
         cancel_admission(enrollment=enrollment, actor=admin_user, reason="Left")
 
@@ -274,9 +255,7 @@ class TestACancelledAdmissionSettlesItsMoney:
         with pytest.raises(ConflictError):
             cancel_admission(enrollment=enrollment, actor=admin_user, reason="Again")
 
-    def test_zero_kept_and_never_cancelled_are_different_facts(
-        self, plan, admin_user, enrollment
-    ):
+    def test_zero_kept_and_never_cancelled_are_different_facts(self, plan, admin_user, enrollment):
         # Which is why the column is nullable: a zero cannot tell them apart.
         assert plan.settled_amount is None
         assert plan.is_cancelled is False
@@ -289,17 +268,13 @@ class TestACancelledAdmissionSettlesItsMoney:
 
 
 class TestItIsScopedLikeEverythingElse:
-    def test_a_counsellor_reconciles_their_own_centre(
-        self, plan, admin_user, counsellor_user
-    ):
+    def test_a_counsellor_reconciles_their_own_centre(self, plan, admin_user, counsellor_user):
         money = totals(counsellor_user)
 
         # Same centre as the fixture, so they see it.
         assert money["charged"] == FEE
 
-    def test_another_centres_money_is_not_in_the_total(
-        self, plan, admin_user, other_branch
-    ):
+    def test_another_centres_money_is_not_in_the_total(self, plan, admin_user, other_branch):
         """A reconciliation is still somebody's data.
 
         A total that silently includes another centre is the hardest kind of
@@ -334,9 +309,7 @@ class TestItIsScopedLikeEverythingElse:
 class TestOverHttp:
     URL = "/api/v1/fees/reconciliation/"
 
-    def test_staff_who_may_see_fees_can_reconcile(
-        self, api_client_no_csrf, admin_user, plan
-    ):
+    def test_staff_who_may_see_fees_can_reconcile(self, api_client_no_csrf, admin_user, plan):
         api_client_no_csrf.force_authenticate(user=admin_user)
 
         response = api_client_no_csrf.get(self.URL)
@@ -404,9 +377,7 @@ class TestCancellingOverHttp:
     ):
         api_client_no_csrf.force_authenticate(user=trainer)
 
-        response = api_client_no_csrf.post(
-            self.url(enrollment), {"reason": "no"}, format="json"
-        )
+        response = api_client_no_csrf.post(self.url(enrollment), {"reason": "no"}, format="json")
 
         assert response.status_code in (403, 404)
         plan.refresh_from_db()

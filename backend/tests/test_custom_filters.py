@@ -104,9 +104,7 @@ class TestWhatCannotBeAsked:
 
 
 class TestFilteringOverHttp:
-    def test_contains_narrows_the_list(
-        self, api_client_no_csrf, admin_user, student_profile
-    ):
+    def test_contains_narrows_the_list(self, api_client_no_csrf, admin_user, student_profile):
         student_profile.city = "Jaipur"
         student_profile.save(update_fields=["city"])
         api_client_no_csrf.force_authenticate(user=admin_user)
@@ -153,9 +151,7 @@ class TestFilteringOverHttp:
 
 
 class TestTheFieldsEndpoint:
-    def test_it_lists_what_the_bar_may_offer(
-        self, api_client_no_csrf, admin_user
-    ):
+    def test_it_lists_what_the_bar_may_offer(self, api_client_no_csrf, admin_user):
         api_client_no_csrf.force_authenticate(user=admin_user)
 
         response = api_client_no_csrf.get("/api/v1/students/filter-fields/")
@@ -164,9 +160,7 @@ class TestTheFieldsEndpoint:
         names = {field["name"] for field in response.data["fields"]}
         assert {"city", "fee_status", "created_at"} <= names
 
-    def test_every_operator_it_offers_is_one_the_list_accepts(
-        self, api_client_no_csrf, admin_user
-    ):
+    def test_every_operator_it_offers_is_one_the_list_accepts(self, api_client_no_csrf, admin_user):
         # The failure this prevents: the server drops a field, the control
         # stays, and the list silently stops narrowing.
         api_client_no_csrf.force_authenticate(user=admin_user)
@@ -189,9 +183,7 @@ class TestTheFieldsEndpoint:
 
         assert student_profile.user.email not in str(response.data)
 
-    def test_somebody_who_cannot_see_the_list_cannot_read_it(
-        self, api_client_no_csrf, student
-    ):
+    def test_somebody_who_cannot_see_the_list_cannot_read_it(self, api_client_no_csrf, student):
         api_client_no_csrf.force_authenticate(user=student)
 
         response = api_client_no_csrf.get("/api/v1/students/filter-fields/")

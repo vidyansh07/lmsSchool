@@ -73,9 +73,7 @@ class TestDiscountAsAPercentage:
             Decimal("4000.00"),
         )
 
-    def test_a_flat_discount_still_works_and_records_no_percentage(
-        self, enrollment, admin_user
-    ):
+    def test_a_flat_discount_still_works_and_records_no_percentage(self, enrollment, admin_user):
         plan = set_fee_plan(
             enrollment=enrollment,
             actor=admin_user,
@@ -160,9 +158,7 @@ class TestTheBookingAmount:
         assert payment.is_voided is False, "an accountant must be able to tell these apart"
         assert payment.refunded_by == admin_user
 
-    def test_a_payment_not_taken_on_refundable_terms_cannot_be_refunded(
-        self, plan, admin_user
-    ):
+    def test_a_payment_not_taken_on_refundable_terms_cannot_be_refunded(self, plan, admin_user):
         payment = record_payment(
             plan=plan, actor=admin_user, amount="1000", kind=PaymentKind.REGISTRATION
         )
@@ -250,9 +246,7 @@ class TestARefundReachesEveryTotal:
         )
         refund_payment(payment=payment, actor=admin_user, reason="Decided not to join")
 
-        row = annotate_enrollment_fee(
-            Enrollment.objects.filter(pk=plan.enrollment_id)
-        ).get()
+        row = annotate_enrollment_fee(Enrollment.objects.filter(pk=plan.enrollment_id)).get()
         assert row.fee_paid == Decimal("0.00")
 
     def test_the_annotated_plan_total(self, plan, admin_user):

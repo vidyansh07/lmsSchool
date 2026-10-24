@@ -32,9 +32,7 @@ def paid_enrollment(enrollment, admin_user):
 class TestAStudentsOwnMoney:
     """Feature: the student dashboard showing payments, dues and receipts."""
 
-    def test_a_student_reads_their_own_fees(
-        self, api_client_no_csrf, paid_enrollment, enrollment
-    ):
+    def test_a_student_reads_their_own_fees(self, api_client_no_csrf, paid_enrollment, enrollment):
         api_client_no_csrf.force_authenticate(user=enrollment.student.user)
 
         response = api_client_no_csrf.get("/api/v1/fees/me/")
@@ -111,9 +109,7 @@ class TestActivitiesAsFollowUpsAndFeedback:
         assert "visible_to_student" in sql
         assert "student_visible" in sql
 
-    def test_an_enquiry_activity_can_never_reach_a_student(
-        self, api_client_no_csrf, enrollment
-    ):
+    def test_an_enquiry_activity_can_never_reach_a_student(self, api_client_no_csrf, enrollment):
         # An enquiry activity has no student on it at all, and the student
         # surface filters by student — so a counsellor's notes on a lead
         # cannot surface on anybody's dashboard.
@@ -121,9 +117,7 @@ class TestActivitiesAsFollowUpsAndFeedback:
 
         assert "student_id" in str(student_visible_activities(enrollment.student).query)
 
-    def test_a_student_cannot_read_the_staff_activity_list(
-        self, api_client_no_csrf, enrollment
-    ):
+    def test_a_student_cannot_read_the_staff_activity_list(self, api_client_no_csrf, enrollment):
         api_client_no_csrf.force_authenticate(user=enrollment.student.user)
 
         response = api_client_no_csrf.get("/api/v1/activities/")
@@ -167,9 +161,7 @@ class TestCancellingAnAdmission:
         after = {warning["kind"] for warning in warnings_for(admin_user)}
         assert "fees_overdue" not in after
 
-    def test_but_cancelling_leaves_the_fee_standing(
-        self, paid_enrollment, enrollment, admin_user
-    ):
+    def test_but_cancelling_leaves_the_fee_standing(self, paid_enrollment, enrollment, admin_user):
         """The gap the cancellation feature has to close.
 
         Cancelling the enrolment does not touch the fee plan: the student still

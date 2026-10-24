@@ -68,9 +68,7 @@ def test_the_old_fee_is_still_answerable(published_course, admin_user):
     assert price_on(published_course, today) == Decimal("25000.00")
 
 
-def test_a_fee_announced_for_next_month_does_not_change_todays_quote(
-    published_course, admin_user
-):
+def test_a_fee_announced_for_next_month_does_not_change_todays_quote(published_course, admin_user):
     record_price(course=published_course, actor=admin_user, amount=Decimal("20000.00"))
     next_month = timezone.localdate() + timedelta(days=30)
 
@@ -99,9 +97,7 @@ def test_correcting_todays_figure_edits_it_rather_than_adding_a_second(
     published_course, admin_user
 ):
     record_price(course=published_course, actor=admin_user, amount=Decimal("20000.00"))
-    record_price(
-        course=published_course, actor=admin_user, amount=Decimal("21000.00"), note="typo"
-    )
+    record_price(course=published_course, actor=admin_user, amount=Decimal("21000.00"), note="typo")
 
     assert CoursePrice.objects.filter(course=published_course).count() == 1
     published_course.refresh_from_db()
@@ -173,9 +169,7 @@ class TestThePriceEndpoint:
         assert admin_user.get_full_name() in body
         assert admin_user.email not in body
 
-    def test_a_student_cannot_change_the_fee(
-        self, api_client_no_csrf, student, published_course
-    ):
+    def test_a_student_cannot_change_the_fee(self, api_client_no_csrf, student, published_course):
         api_client_no_csrf.force_authenticate(user=student)
 
         response = api_client_no_csrf.post(

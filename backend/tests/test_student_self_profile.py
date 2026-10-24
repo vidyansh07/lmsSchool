@@ -52,9 +52,7 @@ class TestAStudentFillingInTheirOwnProfile:
         learner.refresh_from_db()
         assert learner.career_goal == "Linux system administrator"
 
-    def test_they_can_list_interests_skills_and_languages(
-        self, api_client_no_csrf, learner
-    ):
+    def test_they_can_list_interests_skills_and_languages(self, api_client_no_csrf, learner):
         sign_in(api_client_no_csrf, learner)
 
         response = api_client_no_csrf.patch(
@@ -76,9 +74,7 @@ class TestAStudentFillingInTheirOwnProfile:
         # The field exists because a batch at the wrong time empties out.
         sign_in(api_client_no_csrf, learner)
 
-        response = api_client_no_csrf.patch(
-            ME, {"preferred_class_time": "evening"}, format="json"
-        )
+        response = api_client_no_csrf.patch(ME, {"preferred_class_time": "evening"}, format="json")
 
         assert response.status_code == 200, response.data
         learner.refresh_from_db()
@@ -97,9 +93,7 @@ class TestAStudentFillingInTheirOwnProfile:
         learner.refresh_from_db()
         assert learner.open_to_placement is True
 
-    def test_what_they_wrote_comes_back_on_their_profile(
-        self, api_client_no_csrf, learner
-    ):
+    def test_what_they_wrote_comes_back_on_their_profile(self, api_client_no_csrf, learner):
         sign_in(api_client_no_csrf, learner)
         api_client_no_csrf.patch(ME, {"career_goal": "Cloud engineer"}, format="json")
 
@@ -119,9 +113,7 @@ class TestAStudentFillingInTheirOwnProfile:
 
 
 class TestTheBoundaries:
-    def test_a_student_still_cannot_change_their_fee_status(
-        self, api_client_no_csrf, learner
-    ):
+    def test_a_student_still_cannot_change_their_fee_status(self, api_client_no_csrf, learner):
         sign_in(api_client_no_csrf, learner)
 
         response = api_client_no_csrf.patch(ME, {"fee_status": "paid"}, format="json")
@@ -186,9 +178,7 @@ class TestTheBoundaries:
     def test_a_rubbish_class_time_is_refused(self, api_client_no_csrf, learner):
         sign_in(api_client_no_csrf, learner)
 
-        response = api_client_no_csrf.patch(
-            ME, {"preferred_class_time": "whenever"}, format="json"
-        )
+        response = api_client_no_csrf.patch(ME, {"preferred_class_time": "whenever"}, format="json")
 
         assert response.status_code == 400
 
