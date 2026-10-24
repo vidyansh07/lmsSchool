@@ -807,21 +807,43 @@ export function EnquiryScreen({ id }: { id: string }) {
   }
 
   const lostLabel = LOST_STAGES.includes(data.stage) ? ENQUIRY_STAGE_LABEL[data.stage] : undefined;
-  const facts: [string, string][] = [
-    ["Email Address", data.email || "Not given"],
-    ["Mobile Number", data.mobile],
-    ["WhatsApp Number", data.whatsapp_number || "Same as mobile"],
-    ["Name", data.full_name],
-    ["State", data.state || "Not given"],
-    ["City", data.city || "Not given"],
-    ["Course", [data.course, data.track].filter(Boolean).join(" · ") || "Not given"],
-    ["Centre", data.preferred_centre || "Not given"],
-    ["Mode", data.mode || "Not given"],
-    ["Batch timing", data.batch_timing || "Not given"],
-    ["Qualification", data.qualification || "Not given"],
-    ["Lead Source", data.source || "Not known"],
-    ["Campaign", [data.utm_source, data.utm_campaign].filter(Boolean).join(" / ") || "Not tracked"],
-    ["Entered by", data.created_by?.name ?? "Not recorded"],
+  /** Grouped rather than one list of fourteen. The reference CRM splits these
+   *  across sub-tabs (Lead Details, Walk In, Demo, Enrollment, Payment); the
+   *  tabs it fills from our data would be half empty, and an empty tab is
+   *  worse than a named group, so the groups are headings in one panel. */
+  const factGroups: { title: string; rows: [string, string][] }[] = [
+    {
+      title: "Contact",
+      rows: [
+        ["Name", data.full_name],
+        ["Email Address", data.email || "Not given"],
+        ["Mobile Number", data.mobile],
+        ["WhatsApp Number", data.whatsapp_number || "Same as mobile"],
+        ["City", data.city || "Not given"],
+        ["State", data.state || "Not given"],
+      ],
+    },
+    {
+      title: "What they asked about",
+      rows: [
+        ["Course", [data.course, data.track].filter(Boolean).join(" · ") || "Not given"],
+        ["Centre", data.preferred_centre || "Not given"],
+        ["Mode", data.mode || "Not given"],
+        ["Batch timing", data.batch_timing || "Not given"],
+        ["Qualification", data.qualification || "Not given"],
+      ],
+    },
+    {
+      title: "Where it came from",
+      rows: [
+        ["Lead Source", data.source || "Not known"],
+        [
+          "Campaign",
+          [data.utm_source, data.utm_campaign].filter(Boolean).join(" / ") || "Not tracked",
+        ],
+        ["Entered by", data.created_by?.name ?? "Not recorded"],
+      ],
+    },
   ];
 
   /** Add Note is the rail's third button and the header's: both land in the
@@ -895,8 +917,15 @@ export function EnquiryScreen({ id }: { id: string }) {
                 <CardHeader>
                   <CardTitle className="text-base">Lead Details</CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <DetailRows rows={facts} />
+                <CardContent className="space-y-4">
+                  {factGroups.map((group) => (
+                    <section key={group.title}>
+                      <h3 className="mb-1 text-2xs font-semibold uppercase tracking-wide text-ink-faint">
+                        {group.title}
+                      </h3>
+                      <DetailRows rows={group.rows} />
+                    </section>
+                  ))}
                   {data.remarks ? (
                     <p className="whitespace-pre-line border-t border-line pt-3 text-sm text-ink-muted">
                       {data.remarks}
