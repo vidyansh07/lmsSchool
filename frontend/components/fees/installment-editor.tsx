@@ -11,9 +11,14 @@
  * counsellor can see, so what is saved is what was on screen.
  *
  * `InstallmentTable` is the saved schedule read back, each row carrying the
- * state the server derived from the ledger: paid, pending, overdue, upcoming.
+ * state the server derived from the ledger: paid, pending, overdue, upcoming,
+ * and — when the caller passes `onOpenComments` — the size of the row's
+ * comment thread. A student's own fee screen passes neither, so the column is
+ * simply absent there rather than rendering an affordance that would 403.
  */
 import { Plus, Trash2 } from 'lucide-react';
+
+import { CommentCountButton } from '@/components/fees/comment-thread';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -272,7 +277,13 @@ export function InstallmentEditor({
   );
 }
 
-export function InstallmentTable({ installments }: { installments: FeeInstallment[] }) {
+export function InstallmentTable({
+  installments,
+  onOpenComments,
+}: {
+  installments: FeeInstallment[];
+  onOpenComments?: (installment: FeeInstallment) => void;
+}) {
   if (installments.length === 0) {
     return (
       <p className="text-sm text-ink-muted">
@@ -290,6 +301,7 @@ export function InstallmentTable({ installments }: { installments: FeeInstallmen
             <Th className="text-right">Amount</Th>
             <Th className="text-right">Paid</Th>
             <Th>Status</Th>
+            {onOpenComments ? <Th className="text-right">Comments</Th> : null}
           </tr>
         </thead>
         <tbody>
@@ -304,6 +316,15 @@ export function InstallmentTable({ installments }: { installments: FeeInstallmen
                   {INSTALLMENT_STATUS_LABEL[row.status]}
                 </Badge>
               </Td>
+              {onOpenComments ? (
+                <Td className="text-right">
+                  <CommentCountButton
+                    count={row.comment_count}
+                    label={`instalment ${row.sequence}`}
+                    onClick={() => onOpenComments(row)}
+                  />
+                </Td>
+              ) : null}
             </Tr>
           ))}
         </tbody>

@@ -407,3 +407,23 @@ these is covered by its own suite; the reasons live beside the code.
   rolled-back transaction, so the preview is what the import would do. A
   course is matched, never created; a student is matched by email then
   phone; a batch by course, start date and name.
+
+### Comments on a payment or an instalment
+- `GET|POST /fees/payments/<id>/comments/` and
+  `GET|POST /fees/instalments/<id>/comments/`. Reading needs `fee.view_any`,
+  writing `fee.manage_any`. `POST {body}` (≤1000); the response is
+  `{id, body, author, created_at}`, and a `GET` returns the thread **oldest
+  first**, because a thread reads downwards.
+- A comment hangs off exactly one payment or one instalment — the database
+  refuses both and refuses neither — and is immutable: there is no `PATCH`
+  and no `DELETE`, so the other methods on these two routes are 405.
+- `FeePayment` and each instalment row gain `comment_count`, so a table shows
+  the size of a thread without a call per row. Both are counted in one
+  grouped query per table.
+- Internal to the institute. `/fees/me/` does not read comments and neither
+  endpoint is reachable by a student, so a desk can record "says he will pay
+  after the exam, chasing is pointless" without composing it for the student.
+- Audit `fee.comment.added` records the row commented on (target, payment id
+  and receipt number, or instalment id and sequence) and the text's *length*
+  — never the text, because the audit trail is read far more widely than the
+  fee screen is.

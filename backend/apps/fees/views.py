@@ -14,6 +14,7 @@ totals are about their centre and nobody else's.
 
 from __future__ import annotations
 
+from django.db.models import Count, Prefetch
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework import status as http_status
@@ -31,12 +32,14 @@ from apps.organisation.models import Bank
 from apps.students import access as students_access
 
 from . import mail, services
-from .models import FeePayment, FeePlan, PaymentCategory, TaxGroup
+from .models import FeeInstallment, FeePayment, FeePlan, PaymentCategory, TaxGroup
 from .serializers import (
     BouncePaymentSerializer,
     CancelAdmissionSerializer,
     ClearPaymentSerializer,
     FeeCollectionsTrendPointSerializer,
+    FeeCommentCreateSerializer,
+    FeeCommentSerializer,
     FeeEmailQueuedSerializer,
     FeeEmailSerializer,
     FeeHistoryEntrySerializer,
@@ -98,9 +101,29 @@ def _may_read(user, enrollment: Enrollment) -> bool:
 def _plan_or_404(enrollment: Enrollment) -> FeePlan:
     return get_object_or_404(
         FeePlan.objects.select_related("enrollment__batch", "enrollment__course")
-        .prefetch_related("installments")
+        .prefetch_related(
+            "installments",
+            # Counted here rather than per row: the serializer falls back to
+            # counting one payment's own thread, which over a plan with
+            # twenty payments would be twenty queries.
+            Prefetch(
+                "payments",
+                queryset=FeePayment.objects.annotate(comment_count=Count("comments")),
+            ),
+        )
         .with_totals(),
         enrollment=enrollment,
+    )
+
+
+def _instalment(user, instalment_id) -> FeeInstallment:
+    """One instalment, out of the enrolments the caller may see — the same
+    narrowing `_payment` does, for the same reason."""
+    return get_object_or_404(
+        FeeInstallment.objects.filter(
+            plan__enrollment__in=batch_access.visible_enrollments(user)
+        ).select_related("plan__enrollment"),
+        pk=instalment_id,
     )
 
 
@@ -771,3 +794,78 @@ class TaxGroupDetailView(APIView):
         payload.is_valid(raise_exception=True)
         group = update_tax_group(actor=request.user, group=group, **payload.validated_data)
         return Response(TaxGroupSerializer(group).data)
+
+
+class _CommentThreadView(APIView):
+    """Read a thread, or add one message to it.
+
+    Reading is `fee.view_any`, writing is `fee.manage_any`: a manager who may
+    look at the money may read why a row is the way it is; only the people who
+    record payments add to that record. The write capability is checked again
+    in `services.add_comment`, so hiding the composer on the screen stays a
+    courtesy and never the control.
+
+    Nothing here is reachable by a student. Their own fee screen
+    (`/fees/me/`) does not read comments, and these two endpoints need a
+    staff capability, so a desk can write "says he will pay after the exam"
+    without composing it for the student to read.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.FEE_VIEW_ANY
+    serializer_class = FeeCommentSerializer
+
+    def _thread(self, target):
+        return target.comments.select_related("author").order_by("created_at")
+
+
+class FeePaymentCommentsView(_CommentThreadView):
+    @extend_schema(
+        summary="A payment's comment thread",
+        responses={200: FeeCommentSerializer(many=True)},
+        tags=FEES_TAG,
+    )
+    def get(self, request, payment_id):
+        payment = _payment(request.user, payment_id)
+        return Response(FeeCommentSerializer(self._thread(payment), many=True).data)
+
+    @extend_schema(
+        summary="Comment on a payment",
+        request=FeeCommentCreateSerializer,
+        responses={201: FeeCommentSerializer},
+        tags=FEES_TAG,
+    )
+    def post(self, request, payment_id):
+        payment = _payment(request.user, payment_id)
+        serializer = FeeCommentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        comment = services.add_comment(
+            actor=request.user, payment=payment, body=serializer.validated_data["body"]
+        )
+        return Response(FeeCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
+
+
+class FeeInstallmentCommentsView(_CommentThreadView):
+    @extend_schema(
+        summary="An instalment's comment thread",
+        responses={200: FeeCommentSerializer(many=True)},
+        tags=FEES_TAG,
+    )
+    def get(self, request, instalment_id):
+        instalment = _instalment(request.user, instalment_id)
+        return Response(FeeCommentSerializer(self._thread(instalment), many=True).data)
+
+    @extend_schema(
+        summary="Comment on an instalment",
+        request=FeeCommentCreateSerializer,
+        responses={201: FeeCommentSerializer},
+        tags=FEES_TAG,
+    )
+    def post(self, request, instalment_id):
+        instalment = _instalment(request.user, instalment_id)
+        serializer = FeeCommentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        comment = services.add_comment(
+            actor=request.user, instalment=instalment, body=serializer.validated_data["body"]
+        )
+        return Response(FeeCommentSerializer(comment).data, status=status.HTTP_201_CREATED)

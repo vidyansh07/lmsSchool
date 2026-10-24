@@ -752,6 +752,8 @@ and the overdue flag.
 | `GET` | `students/<id>/` | `fee.view_any`, or the student — totals across every course, with the plans |
 | `GET` | `me/` | the signed-in student |
 | `GET` | `overview/` | `fee.view_any` — collected today/week/month, outstanding, overdue and due-soon lists |
+| `GET`/`POST` | `payments/<id>/comments/` | read `fee.view_any`, write `fee.manage_any` — the row's comment thread, oldest first |
+| `GET`/`POST` | `instalments/<id>/comments/` | read `fee.view_any`, write `fee.manage_any` — the same for one instalment |
 
 Rules, all enforced in `apps/fees/services.py` regardless of the route in:
 
@@ -768,6 +770,18 @@ Rules, all enforced in `apps/fees/services.py` regardless of the route in:
 - the student's coarse `fee_status` is re-derived after every change.
 
 Counsellors and managers hold `fee.manage_any` outright: no approval step.
+
+A payment and an instalment each carry a **comment thread** — staff notes
+about why one row looks the way it does ("cheque with the bank since Tuesday",
+"father asked to push this to the 15th, agreed"). It is a thread rather than a
+field because a field is overwritten by whoever typed last; messages are added
+oldest-first and there is no edit and no delete. It is distinct from
+`FeePayment.note`, which is one line written at the counter and printed on the
+receipt, and from the audit log, which records what the system was told to
+change. Threads are internal: `me/` does not read them and a student cannot
+reach either endpoint, so a desk may write "chasing is pointless until the
+exam" without composing it for the student. Audit `fee.comment.added` records
+which row was commented on and how long the text was, never the text.
 
 ### Progress — `/api/v1/progress/`
 

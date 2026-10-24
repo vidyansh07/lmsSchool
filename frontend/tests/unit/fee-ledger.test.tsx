@@ -76,6 +76,7 @@ function payment(overrides: Partial<FeePayment> = {}): FeePayment {
     refunded_at: null,
     refunded_by: null,
     refund_reason: '',
+    comment_count: 0,
     ...overrides,
   };
 }
@@ -346,6 +347,7 @@ describe('FeeLedger', () => {
           paid_amount: '5000.00',
           balance: '0.00',
           status: 'paid',
+          comment_count: 0,
         },
         {
           id: 'i2',
@@ -355,6 +357,7 @@ describe('FeeLedger', () => {
           paid_amount: '0.00',
           balance: '5000.00',
           status: 'overdue',
+          comment_count: 0,
         },
         {
           id: 'i3',
@@ -364,6 +367,7 @@ describe('FeeLedger', () => {
           paid_amount: '0.00',
           balance: '5000.00',
           status: 'pending',
+          comment_count: 0,
         },
       ],
       payable: '15000.00',

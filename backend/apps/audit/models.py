@@ -121,6 +121,7 @@ class AuditAction(models.TextChoices):
     FEE_NEXT_DUE_SET = "fee.next_due.set", _("Next payment expected")
     FEE_INSTALLMENTS_SET = "fee.installments.set", _("Instalment schedule set")
     FEE_PAYMENT_RECORDED = "fee.payment.recorded", _("Payment recorded")
+    FEE_COMMENT_ADDED = "fee.comment.added", _("Comment added to a payment or instalment")
     FEE_PAYMENT_VOIDED = "fee.payment.voided", _("Payment voided")
     #: A cheque, draft or deposit the bank has now honoured. A *bounce* has no
     #: action of its own: the money was never payment, so it is voided, which

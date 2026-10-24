@@ -13,8 +13,10 @@ from .views import (
     EnrollmentFeeStatementView,
     EnrollmentFeeView,
     FeeCollectionsTrendView,
+    FeeInstallmentCommentsView,
     FeePaymentBounceView,
     FeePaymentClearView,
+    FeePaymentCommentsView,
     FeePaymentEmailReceiptView,
     FeePaymentReceiptView,
     FeePaymentRefundView,
@@ -103,5 +105,15 @@ urlpatterns = [
         "payments/<uuid:payment_id>/receipt/",
         FeePaymentReceiptView.as_view(),
         name="receipt",
+    ),
+    path(
+        "payments/<uuid:payment_id>/comments/",
+        FeePaymentCommentsView.as_view(),
+        name="payment-comments",
+    ),
+    path(
+        "instalments/<uuid:instalment_id>/comments/",
+        FeeInstallmentCommentsView.as_view(),
+        name="instalment-comments",
     ),
 ]

@@ -9,6 +9,7 @@
 
 import { apiFetch, apiMutate } from './api';
 import type {
+  FeeComment,
   FeeEmail,
   FeeEmailQueued,
   FeeHistoryEntry,
@@ -160,6 +161,42 @@ export async function voidPayment(paymentId: string, reason: string): Promise<Fe
   return apiMutate<FeePayment>(`${BASE}/payments/${paymentId}/void/`, {
     method: 'POST',
     body: { reason },
+  });
+}
+
+/**
+ * The comment thread on one payment — oldest first, because a thread reads
+ * downwards.
+ *
+ * These are staff notes about one row ("cheque with the bank since Tuesday"),
+ * not the payment's own `note`, which is written at the counter and printed on
+ * the receipt. Reading needs `fee.view_any`; a student never sees them.
+ */
+export async function listPaymentComments(paymentId: string): Promise<FeeComment[]> {
+  return apiFetch<FeeComment[]>(`${BASE}/payments/${paymentId}/comments/`);
+}
+
+/** Add one message to a payment's thread. Needs `fee.manage_any`. */
+export async function addPaymentComment(paymentId: string, body: string): Promise<FeeComment> {
+  return apiMutate<FeeComment>(`${BASE}/payments/${paymentId}/comments/`, {
+    method: 'POST',
+    body: { body },
+  });
+}
+
+/** The comment thread on one instalment — oldest first. */
+export async function listInstalmentComments(instalmentId: string): Promise<FeeComment[]> {
+  return apiFetch<FeeComment[]>(`${BASE}/instalments/${instalmentId}/comments/`);
+}
+
+/** Add one message to an instalment's thread. Needs `fee.manage_any`. */
+export async function addInstalmentComment(
+  instalmentId: string,
+  body: string,
+): Promise<FeeComment> {
+  return apiMutate<FeeComment>(`${BASE}/instalments/${instalmentId}/comments/`, {
+    method: 'POST',
+    body: { body },
   });
 }
 

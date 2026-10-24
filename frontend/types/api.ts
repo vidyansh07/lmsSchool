@@ -2025,6 +2025,25 @@ export interface FeeInstallment {
   paid_amount: string;
   balance: string;
   status: InstallmentStatus;
+  /** How many comments the row carries. */
+  comment_count: number;
+}
+
+/**
+ * One message in the thread on a payment or an instalment.
+ *
+ * Internal to the institute: a student's own fee screen never reads these, so
+ * a desk can write "chasing is pointless until the exam" without composing it
+ * for the student. Immutable — there is no edit and no delete, because a
+ * thread records what was said at the time.
+ */
+export interface FeeComment {
+  id: string;
+  body: string;
+  /** Null when the author's account has since been removed; the thread keeps
+   *  the message rather than developing a hole. */
+  author: string | null;
+  created_at: string;
 }
 
 /** One row of a schedule as the counsellor shapes it, before it is saved. */
@@ -2080,6 +2099,9 @@ export interface FeePayment {
   tax_group_name: string | null;
   /** The instalment it was taken against, when it was taken against one. */
   instalment: string | null;
+  /** How many comments the row carries, so a list can show the size of the
+   *  thread without a call per row. */
+  comment_count: number;
 }
 
 /**

@@ -544,6 +544,7 @@ function FeesTab({ studentId, studentCode }: { studentId: string; studentCode: s
       summary={fees.summary}
       enrollments={enrollments}
       mayManage={can(Capability.feeManageAny)}
+      mayReadComments={can(Capability.feeViewAny)}
       isLoading={fees.isLoading}
       error={fees.error}
       onChanged={() => {

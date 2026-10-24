@@ -113,8 +113,8 @@ function plan(overrides: Partial<FeePlan> = {}): FeePlan {
     created_at: '2026-10-23T09:00:00Z',
     updated_at: '2026-10-23T09:00:00Z',
     installments: [
-      { id: 'i1', sequence: 1, amount: '1000.00', due_on: '2026-10-23', paid_amount: '1000.00', balance: '0.00', status: 'paid' },
-      { id: 'i2', sequence: 2, amount: '7250.00', due_on: '2026-12-24', paid_amount: '0.00', balance: '7250.00', status: 'pending' },
+{ id: 'i1', sequence: 1, amount: '1000.00', due_on: '2026-10-23', paid_amount: '1000.00', balance: '0.00', status: 'paid', comment_count: 0 },
+{ id: 'i2', sequence: 2, amount: '7250.00', due_on: '2026-12-24', paid_amount: '0.00', balance: '7250.00', status: 'pending', comment_count: 0 },
     ],
     payments: [
       {
@@ -148,6 +148,7 @@ function plan(overrides: Partial<FeePlan> = {}): FeePlan {
         tax_group: null,
         tax_group_name: null,
         instalment: 'i1',
+        comment_count: 0,
       },
     ],
     ...overrides,
@@ -282,7 +283,7 @@ describe('PaymentDetails', () => {
               course_title: 'Linux',
               payments: [],
               installments: [
-                { id: 'j1', sequence: 1, amount: '5000.00', due_on: '2026-11-10', paid_amount: '0.00', balance: '5000.00', status: 'pending' },
+{ id: 'j1', sequence: 1, amount: '5000.00', due_on: '2026-11-10', paid_amount: '0.00', balance: '5000.00', status: 'pending', comment_count: 0 },
               ],
             }),
       ),

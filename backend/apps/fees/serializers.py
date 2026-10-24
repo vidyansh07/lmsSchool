@@ -13,6 +13,7 @@ from rest_framework import serializers
 from apps.common.serializers import SafeCharField, StrictSerializer
 
 from .models import (
+    COMMENT_MAX_LENGTH,
     MAX_INSTALLMENTS,
     FeePayment,
     FeePlan,
@@ -38,6 +39,10 @@ class FeePaymentSerializer(serializers.ModelSerializer):
     bank_name = serializers.CharField(source="bank.name", read_only=True, default=None)
     category_name = serializers.CharField(source="category.name", read_only=True, default=None)
     tax_group_name = serializers.CharField(source="tax_group.name", read_only=True, default=None)
+    #: So a payments list can show the size of each row's comment thread
+    #: without a call per row. Annotated by the view; a row read on its own
+    #: counts its own thread.
+    comment_count = serializers.SerializerMethodField()
 
     class Meta:
         model = FeePayment
@@ -72,6 +77,7 @@ class FeePaymentSerializer(serializers.ModelSerializer):
             "tax_group",
             "tax_group_name",
             "instalment",
+            "comment_count",
         )
         read_only_fields = fields
 
@@ -87,6 +93,10 @@ class FeePaymentSerializer(serializers.ModelSerializer):
     def get_refunded_by(self, obj: FeePayment) -> str | None:
         return obj.refunded_by.full_name or obj.refunded_by.email if obj.refunded_by else None
 
+    def get_comment_count(self, obj) -> int:
+        annotated = getattr(obj, "comment_count", None)
+        return annotated if annotated is not None else obj.comments.count()
+
 
 class FeeInstallmentSerializer(serializers.Serializer):
     """One row of a schedule, with its derived state."""
@@ -98,6 +108,28 @@ class FeeInstallmentSerializer(serializers.Serializer):
     paid_amount = serializers.DecimalField(read_only=True, **MONEY)
     balance = serializers.DecimalField(read_only=True, **MONEY)
     status = serializers.ChoiceField(choices=InstallmentStatus.choices, read_only=True)
+    comment_count = serializers.IntegerField(read_only=True, default=0)
+
+
+class FeeCommentSerializer(serializers.Serializer):
+    """One message in a payment's or an instalment's thread, as it reads back."""
+
+    id = serializers.UUIDField(read_only=True)
+    body = serializers.CharField(read_only=True)
+    author = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField(read_only=True)
+
+    def get_author(self, comment) -> str | None:
+        if comment.author is None:
+            return None
+        return comment.author.full_name or comment.author.email
+
+
+class FeeCommentCreateSerializer(StrictSerializer):
+    """Writing one. The body is the whole request: what the comment is about
+    is the row in the URL, and who wrote it is the caller."""
+
+    body = SafeCharField(max_length=COMMENT_MAX_LENGTH)
 
 
 class FeePlanSerializer(serializers.ModelSerializer):

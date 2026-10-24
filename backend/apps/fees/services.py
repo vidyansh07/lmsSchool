@@ -48,6 +48,7 @@ from apps.students.models import FeeStatus, StudentProfile
 
 from . import mail
 from .models import (
+    COMMENT_MAX_LENGTH,
     DEFAULT_INSTALLMENT_COUNT,
     DEFAULT_INSTALLMENT_GAP_DAYS,
     LIVE_PAYMENT,
@@ -56,6 +57,7 @@ from .models import (
     UNCLEARED_ON_ARRIVAL,
     ZERO,
     ClearingStatus,
+    FeeComment,
     FeeInstallment,
     FeePayment,
     FeePlan,
@@ -72,6 +74,7 @@ HUNDRED = Decimal("100")
 
 RESOURCE_PLAN = "fee_plan"
 RESOURCE_PAYMENT = "fee_payment"
+RESOURCE_COMMENT = "fee_comment"
 
 
 def _require_manage(actor: User) -> None:
@@ -1201,3 +1204,59 @@ def cancel_admission(
         },
     )
     return plan
+
+
+# ---------------------------------------------------------------------------
+# Comments on one payment or one instalment
+# ---------------------------------------------------------------------------
+def add_comment(*, actor: User, payment=None, instalment=None, body: str) -> FeeComment:
+    """Write one message into the thread on a payment or an instalment.
+
+    Writing needs `fee.manage_any` — the same authority as recording the
+    payment the comment is about. Reading needs only `fee.view_any`, which
+    the view enforces: a manager who may look at the money may read why a row
+    is the way it is, without being able to add to the record.
+
+    Exactly one target, checked here as well as by the database constraint,
+    because a caller that passed both would otherwise get an `IntegrityError`
+    at commit — a 500 about a bug in the caller instead of a 400 about the
+    request.
+
+    Nothing on the payment or the instalment changes. The comment is the only
+    row written, plus the audit entry, so a thread can never move money.
+    """
+    _require_manage(actor)
+    if (payment is None) == (instalment is None):
+        raise ApplicationError(
+            {"non_field_errors": ["A comment belongs to one payment or one instalment."]}
+        )
+
+    text = (body or "").strip()
+    if not text:
+        raise ApplicationError({"body": ["A comment needs something in it."]})
+    if len(text) > COMMENT_MAX_LENGTH:
+        raise ApplicationError({"body": [f"Keep a comment under {COMMENT_MAX_LENGTH} characters."]})
+
+    plan = payment.plan if payment is not None else instalment.plan
+    comment = FeeComment.objects.create(
+        plan=plan, payment=payment, instalment=instalment, author=actor, body=text
+    )
+    record(
+        action=AuditAction.FEE_COMMENT_ADDED,
+        actor=actor,
+        resource_type=RESOURCE_COMMENT,
+        resource_id=comment.pk,
+        context={
+            **_plan_context(plan),
+            # The target, not the text. A comment can hold whatever a desk
+            # needs to say about a family's circumstances, and the audit log
+            # is read far more widely than the fee screen is.
+            "target": "payment" if payment is not None else "instalment",
+            "payment_id": str(payment.pk) if payment is not None else None,
+            "receipt_number": payment.receipt_number if payment is not None else None,
+            "instalment_id": str(instalment.pk) if instalment is not None else None,
+            "instalment_sequence": instalment.sequence if instalment is not None else None,
+            "length": len(text),
+        },
+    )
+    return comment

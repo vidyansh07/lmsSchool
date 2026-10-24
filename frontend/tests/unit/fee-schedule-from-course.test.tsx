@@ -116,6 +116,7 @@ describe("Use the course's structure", () => {
           status: 'pending',
           paid_amount: '0.00',
           balance: '9999.00',
+          comment_count: 0,
         },
       ],
     });

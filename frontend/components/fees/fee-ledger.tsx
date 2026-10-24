@@ -43,6 +43,11 @@ import {
   type DiscountMode,
 } from '@/components/fees/discount-field';
 import {
+  CommentThreadDialog,
+  CommentCountButton,
+  type CommentTarget,
+} from '@/components/fees/comment-thread';
+import {
   InstallmentEditor,
   InstallmentTable,
   installmentsAddUp,
@@ -926,11 +931,16 @@ function PaymentsTable({
   mayManage,
   onVoided,
   onNotice,
+  onOpenComments,
 }: {
   payments: FeePayment[];
   mayManage: boolean;
   onVoided: () => void;
   onNotice: (notice: Notice) => void;
+  /** Given only when the caller may read comment threads. A student's own
+   *  fee screen passes nothing, so the column is absent there rather than
+   *  showing an affordance that would 403. */
+  onOpenComments?: (payment: FeePayment) => void;
 }) {
   const [emailingId, setEmailingId] = useState('');
   const [voidingId, setVoidingId] = useState('');
@@ -1006,6 +1016,7 @@ function PaymentsTable({
               <Th>Method</Th>
               <Th>Reference name</Th>
               <Th>Taken by</Th>
+              {onOpenComments ? <Th className="text-right">Comments</Th> : null}
               {mayManage ? <Th className="text-right">Actions</Th> : null}
             </tr>
           </thead>
@@ -1056,6 +1067,15 @@ function PaymentsTable({
                 </Td>
                 <Td>{payment.reference_name || <span className="text-ink-faint">—</span>}</Td>
                 <Td>{payment.recorded_by || 'Unknown'}</Td>
+                {onOpenComments ? (
+                  <Td className="text-right">
+                    <CommentCountButton
+                      count={payment.comment_count}
+                      label={`receipt ${payment.receipt_number}`}
+                      onClick={() => onOpenComments(payment)}
+                    />
+                  </Td>
+                ) : null}
                 {mayManage ? (
                   <Td className="text-right">
                     {payment.is_voided || payment.is_refunded ? null : voidingId ===
@@ -1297,10 +1317,17 @@ function CancelAdmissionDialog({
 export function FeePlanCard({
   plan,
   mayManage,
+  mayReadComments = false,
   onChanged,
 }: {
   plan: FeePlan;
   mayManage: boolean;
+  /** Whether the person looking holds `fee.view_any`. Comment threads are
+   *  internal to the institute: a desk writes "chasing is pointless until the
+   *  exam" in one, so a student looking at their own fees never sees the
+   *  column at all. Writing is `mayManage`, the authority that recorded the
+   *  payment. */
+  mayReadComments?: boolean;
   onChanged: () => void;
 }) {
   const [dialog, setDialog] = useState<
@@ -1312,6 +1339,8 @@ export function FeePlanCard({
   const [emailsVersion, setEmailsVersion] = useState(0);
   const [notice, setNoticeState] = useState<Notice>(null);
   const [sendingStatement, setSendingStatement] = useState(false);
+  // Which row's thread is open, and what to call it in the dialog.
+  const [thread, setThread] = useState<{ target: CommentTarget; label: string } | null>(null);
   const payable = Number(plan.payable);
   const paid = Number(plan.paid);
   const percent = payable > 0 ? Math.min(100, Math.round((paid / payable) * 100)) : 100;
@@ -1541,7 +1570,18 @@ export function FeePlanCard({
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-muted">
             Instalments
           </p>
-          <InstallmentTable installments={plan.installments} />
+          <InstallmentTable
+            installments={plan.installments}
+            onOpenComments={
+              mayReadComments
+                ? (row) =>
+                    setThread({
+                      target: { kind: 'instalment', id: row.id },
+                      label: `instalment ${row.sequence}, due ${formatDate(row.due_on)}`,
+                    })
+                : undefined
+            }
+          />
         </div>
       ) : null}
 
@@ -1554,6 +1594,15 @@ export function FeePlanCard({
           mayManage={mayManage}
           onVoided={onChanged}
           onNotice={setNotice}
+          onOpenComments={
+            mayReadComments
+              ? (payment) =>
+                  setThread({
+                    target: { kind: 'payment', id: payment.id },
+                    label: `receipt ${payment.receipt_number}`,
+                  })
+              : undefined
+          }
         />
       </div>
 
@@ -1638,6 +1687,20 @@ export function FeePlanCard({
           />
         </>
       ) : null}
+
+      {mayReadComments ? (
+        <CommentThreadDialog
+          open={thread !== null}
+          target={thread?.target ?? null}
+          title={thread ? `Comments on ${thread.label}` : 'Comments'}
+          description="What the desk has said about this row. Kept inside the institute — the student never sees it."
+          canWrite={mayManage}
+          onClose={() => setThread(null)}
+          // Refetch the plan so the count beside the row moves with the
+          // thread, rather than going stale until the next visit.
+          onAdded={onChanged}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1688,6 +1751,7 @@ export function FeeLedger({
   summary,
   enrollments,
   mayManage,
+  mayReadComments = false,
   isLoading,
   error,
   onChanged,
@@ -1701,6 +1765,9 @@ export function FeeLedger({
   /** The student's enrolments, so the ones without a fee can be listed. */
   enrollments: Enrollment[] | null;
   mayManage: boolean;
+  /** Passed through to each card: whether the person holds `fee.view_any` and
+   *  may therefore read the internal comment threads. */
+  mayReadComments?: boolean;
   isLoading: boolean;
   error: { message: string; requestId?: string } | null;
   onChanged: () => void;
@@ -1748,7 +1815,13 @@ export function FeeLedger({
               />
             ) : null}
             {summary.plans.map((plan) => (
-              <FeePlanCard key={plan.id} plan={plan} mayManage={mayManage} onChanged={onChanged} />
+              <FeePlanCard
+                key={plan.id}
+                plan={plan}
+                mayManage={mayManage}
+                mayReadComments={mayReadComments}
+                onChanged={onChanged}
+              />
             ))}
             {unplanned.map((entry) => (
               <UnplannedEnrollment

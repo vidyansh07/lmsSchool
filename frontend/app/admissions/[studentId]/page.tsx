@@ -435,6 +435,7 @@ export function StudentDetail({ studentId }: { studentId: string }) {
         summary={fees.summary}
         enrollments={enrollments}
         mayManage={can(Capability.feeManageAny)}
+        mayReadComments={can(Capability.feeViewAny)}
         isLoading={fees.isLoading}
         error={fees.error}
         onChanged={() => {

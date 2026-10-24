@@ -688,6 +688,7 @@ describe('FeesPanel', () => {
     tax_group: null,
     tax_group_name: null,
     instalment: null,
+      comment_count: 0,
       ...overrides,
     };
   }

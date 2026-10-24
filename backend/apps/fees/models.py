@@ -642,6 +642,16 @@ def installment_rows(plan: FeePlan, installments=None, *, today=None) -> list[di
     """
     today = today or timezone.localdate()
     rows = list(installments if installments is not None else plan.installments.all())
+    # How many comments each row carries, so a schedule screen can show the
+    # thread's size without a call per row. One grouped query for the whole
+    # schedule, and `0` for a row nobody has written on.
+    comment_counts: dict = {}
+    if rows:
+        comment_counts = dict(
+            FeeComment.objects.filter(instalment__in=[item.pk for item in rows])
+            .values_list("instalment_id")
+            .annotate(total=models.Count("id"))
+        )
     remaining = plan.paid
     result: list[dict] = []
     pending_taken = False
@@ -666,6 +676,110 @@ def installment_rows(plan: FeePlan, installments=None, *, today=None) -> list[di
                 "paid_amount": covered,
                 "balance": item.amount - covered,
                 "status": state,
+                "comment_count": comment_counts.get(item.pk, 0),
             }
         )
     return result
+
+
+#: A comment on a payment or an instalment. Long enough for the sentence a
+#: desk actually writes ("father asked to push this to the 15th, agreed"),
+#: short enough that nobody pastes a statement into it.
+COMMENT_MAX_LENGTH = 1000
+
+
+class FeeComment(BaseModel):
+    """One message in the thread hanging off a single payment or a single
+    instalment.
+
+    The money rows already carry two kinds of writing, and this is neither:
+
+    * `FeePayment.note` is one line *about the payment itself*, written at the
+      counter as part of recording it, and printed on the receipt. It answers
+      "what was this?", once.
+    * the audit log behind the History card records what the system was told
+      to change — void, clear, bounce, refund — never what a person wants the
+      next person to know.
+
+    A thread answers the third question, the one a desk asks every day of a
+    row that is not settled: why is this one like this? "Cheque with the
+    bank since Tuesday." "Father asked to push this to the 15th, agreed."
+    "Do not chase, brother is paying for both." That is a conversation
+    between colleagues about one row, so it is a thread rather than a field:
+    a field would be overwritten by whoever typed last, and the sentence that
+    explained the arrangement would be gone.
+
+    Internal to the institute. A student's own fee screen never reads these,
+    which is why reading one needs `fee.view_any` rather than ownership of
+    the enrolment: a desk must be able to write "says he will pay after the
+    exam, chasing is pointless" without composing it for the student to read.
+
+    Immutable once written, like `EnquiryNote` and for the same reason: a
+    thread is a record of what was said at the time, so there is no edit and
+    no delete. The author is kept with `SET_NULL` so the thread does not
+    develop holes when somebody leaves.
+
+    `plan` is denormalised alongside the target. Both targets already reach it
+    (`payment.plan`, `instalment.plan`), but every screen that wants comments
+    wants *this enrolment's* comments, and holding the plan directly makes
+    that one indexed query instead of a union of two joins.
+    """
+
+    plan = models.ForeignKey(
+        FeePlan, on_delete=models.CASCADE, related_name="comments", verbose_name=_("fee plan")
+    )
+    payment = models.ForeignKey(
+        FeePayment,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="comments",
+        verbose_name=_("payment"),
+    )
+    instalment = models.ForeignKey(
+        FeeInstallment,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="comments",
+        verbose_name=_("instalment"),
+    )
+    author = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name=_("author"),
+    )
+    body = models.TextField(
+        _("comment"), max_length=COMMENT_MAX_LENGTH, validators=[validate_no_control_characters]
+    )
+
+    class Meta:
+        verbose_name = _("fee comment")
+        verbose_name_plural = _("fee comments")
+        # Oldest first: a thread reads downwards. This is why it does not
+        # inherit `BaseModel.Meta`, which puts newest first for lists.
+        ordering = ("created_at",)
+        indexes = [
+            models.Index(fields=["plan", "created_at"], name="feecomment_plan_created_idx"),
+        ]
+        constraints = [
+            # Exactly one target. A comment against both rows would appear
+            # twice and belong to neither thread; a comment against neither
+            # would be unreachable from any screen.
+            models.CheckConstraint(
+                condition=(
+                    Q(payment__isnull=False, instalment__isnull=True)
+                    | Q(payment__isnull=True, instalment__isnull=False)
+                ),
+                name="feecomment_one_target",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        target = (
+            f"payment {self.payment_id}" if self.payment_id else f"instalment {self.instalment_id}"
+        )
+        return f"Comment on {target}"
