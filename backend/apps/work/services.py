@@ -220,7 +220,6 @@ def _clean_prefill(form_version, prefill: dict | None) -> dict:
     }
 
 
-@transaction.atomic
 def _refuse_a_clash(activity_type: ActivityType, assignee, planned_at) -> None:
     """A type with `check_conflict` on may not be double-booked on one person.
 
@@ -257,6 +256,7 @@ def _refuse_a_clash(activity_type: ActivityType, assignee, planned_at) -> None:
             )
 
 
+@transaction.atomic
 def create_activity(
     *,
     actor,

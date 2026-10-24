@@ -599,6 +599,9 @@ SPECTACULAR_SETTINGS = {
         # (`Permission.category` and `AssessmentCategory`/`NotificationCategory`
         # already have their own overrides above).
         "ActivityCategoryEnum": "apps.work.models.ActivityCategory.choices",
+        # The fifth choice set on a field named `category`: what kind of
+        # message a template is, in the sense the telecom regulator means.
+        "TemplateCategoryEnum": "apps.communication.models.TemplateCategory.choices",
         # ERP Phase 12: `PerformanceReview.status` is the second choice set on
         # a field named literally `status` with no other context to
         # disambiguate it (unlike `BatchStatus`/`EnrollmentStatus`/etc, whose
