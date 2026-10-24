@@ -70,6 +70,7 @@ number/decimal/rating compare as numbers, an unanswered field is `null`. A
 | send_notification | to (`student` / `trainer` / `counsellor` / `manager` / `assignee` / role slug), kind (a NotificationKind), title, body (variables `{{student.name}}` etc. from the context) | communication.send | in-app, email by preference |
 | send_email | to (as above or address), template (published key) | communication.send | through `Delivery`, channel email |
 | send_whatsapp | to, template (published key with provider id) | communication.send | requires an approved template and a configured provider; otherwise the run is `skipped` with reason |
+| send_sms | to, template (published SMS key) | communication.send | the `Delivery` is created and **fails** with "No SMS gateway is configured" until a DLT-registered sender is connected; a missing template or recipient is `skipped` with reason |
 | create_review | review_type, reviewer (`manager` / user id), due_in_days | review.manage_any | creates a draft `PerformanceReview` |
 | flag_risk | level (`warning` / `critical`), reason | review.manage_any | writes a manual `RiskState` override with expiry (policy `risk.manual_flag_days`) |
 

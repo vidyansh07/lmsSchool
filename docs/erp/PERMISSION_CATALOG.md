@@ -48,6 +48,7 @@ Categories: **People**, **Academic**, **Operations**, **Configuration**,
 | course.update_any | Academic | all, assigned | ✓ | ✓ | ✓ | ✓ | |
 | course.publish_any | Academic | all | ✓ | ✓ | ✓ | ✓ | |
 | course.assign_authors | Academic | all | ✓ | ✓ | ✓ | ✓ | |
+| course.delete | Academic | all | ✓ | ✓ | | | archiving is every manager's; destroying a catalogue entry is not |
 | batch.view_any | Academic | all, branch, assigned | ✓ | ✓ | ✓ | ✓ | |
 | batch.create | Academic | all, branch | ✓ | ✓ | ✓ | ✓ | |
 | batch.update_any | Academic | all, branch, assigned | ✓ | ✓ | ✓ | ✓ | |

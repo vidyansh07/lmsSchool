@@ -3,7 +3,17 @@
 Every event that talks to a person, on which channel, with which template,
 to whom, whether it needs approval, and how delivery is tracked. Channels:
 **in_app** (the `Notification` row, always), **email** (outbox → SMTP),
-**whatsapp** (provider; only when configured and the template is approved).
+**whatsapp** (provider; only when configured and the template is approved),
+**sms** (template, category and matrix row only — GRRAS has no
+DLT-registered sender wired up, so a delivery on this channel *fails* with
+that said in as many words rather than sitting queued; `UNWIRED_CHANNELS`
+names it in one place and the screens read that).
+
+Each template also carries a **category** — transactional or promotional, in
+the sense the telecom regulator and WhatsApp both mean: promotional needs
+consent and respects quiet hours, transactional (a receipt, a cancellation)
+may always go. Transactional is the default, because mislabelling a
+promotional message as transactional is the mistake worth preventing.
 Preferences: the four existing categories on `NotificationPreference` decide
 email; WhatsApp needs an explicit opt-in flag (`whatsapp_opt_in`, new,
 default false — regulation, not preference).

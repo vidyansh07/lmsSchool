@@ -10,6 +10,28 @@ a low score feeds the activity-risk rule (ADR-11). "Next action" is the seeded
 Role names are role slugs; `trainer` includes managers who hold a teaching
 profile (D-130).
 
+Four more columns live on every type and are not tabulated here because the
+seeded rows all take their defaults:
+
+* **check_conflict** (default off) — refuses a second activity of this type
+  over the same minutes for the same assignee. Per type, because two
+  follow-up calls overlapping on a busy morning is normal and two mock
+  interviews with one trainer at four o'clock is a mistake. A type with no
+  default duration is treated as taking a minute, so the setting still means
+  something.
+* **reopen_allowed** (default **on**) — whether a *completed* one may be
+  opened again. The reference CRM ships this off; here it is on, because
+  reopening is behaviour trainers and reviewers already rely on, and a
+  default that withdrew it would be a regression wearing a new setting's
+  clothes. Reopening something missed or cancelled is never governed by it.
+* **invite_organiser** / **invite_owner** (default off) — recorded, and
+  nothing is emailed from them yet; the Add Event drawer says so rather than
+  implying an invitation went out.
+
+An individual activity may also carry its own `reminder_minutes_before`,
+overriding its type's: null means "whatever the type says", and 0 means no
+reminder for this one, which a type-level default cannot express.
+
 | Slug | Name | Category | Form | Creators | Assignees | Student sees | Default duration | Review | Performance | Risk | Next action |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | mock-interview | Mock Interview | interview | mock-interview | manager, trainer | trainer | yes (score + feedback) | 30 min | no | 1.0 | score < threshold | score < 6 → `communication-practice`, assign same trainer, notify manager |
