@@ -38,8 +38,8 @@ from typing import Any
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
-from django.utils.html import strip_tags
 from django.utils import timezone
+from django.utils.html import strip_tags
 
 from apps.accounts.roles import Capability, has_capability
 from apps.audit.services import AuditAction, record
