@@ -3546,6 +3546,9 @@ export interface AutomationRule {
   is_system: boolean;
   created_by: string | null;
   updated_by: string | null;
+  /** Names, never addresses. A seeded rule says it was seeded. */
+  created_by_name: string;
+  updated_by_name: string;
   created_at: string;
   updated_at: string;
 }

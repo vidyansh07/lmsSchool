@@ -65,6 +65,8 @@ const RULE: AutomationRuleDetail = {
   actions: [],
   created_by: null,
   updated_by: null,
+  created_by_name: "Rajat Goyal",
+  updated_by_name: "Rajat Goyal",
   created_at: "2026-09-01T00:00:00Z",
   updated_at: "2026-09-01T00:00:00Z",
 };

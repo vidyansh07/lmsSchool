@@ -49,6 +49,8 @@ function rule(overrides: Partial<AutomationRule> = {}): AutomationRule {
     is_system: true,
     created_by: null,
     updated_by: null,
+    created_by_name: "Rajat Goyal",
+    updated_by_name: "Rajat Goyal",
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-10T10:00:00Z",
     ...overrides,
@@ -67,6 +69,31 @@ function page(results: AutomationRule[]): Paginated<AutomationRule> {
   };
 }
 
+/** The list and the status cards are two calls; the cards are counted on the
+ *  server, so the summary is its own fixture rather than the page's length. */
+function mockApi(
+  list: Paginated<AutomationRule> | null,
+  counts: { total: number; active: number; draft: number; paused: number } | null = {
+    total: 2,
+    active: 1,
+    draft: 1,
+    paused: 0,
+  },
+  extra: { error?: { message: string; requestId?: string } | null; isLoading?: boolean } = {},
+) {
+  useApi.mockImplementation((path: string) => {
+    if (path.includes("summary")) {
+      return { data: counts, error: null, isLoading: false, reload: vi.fn() };
+    }
+    return {
+      data: list,
+      error: extra.error ?? null,
+      isLoading: extra.isLoading ?? false,
+      reload: vi.fn(),
+    };
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   auth.capabilities = ["automation.manage"];
@@ -74,16 +101,16 @@ beforeEach(() => {
 
 describe("AutomationRulesPage", () => {
   it("shows a loading state", () => {
-    useApi.mockReturnValue({ data: null, error: null, isLoading: true, reload: vi.fn() });
+    mockApi(null, null, { isLoading: true });
     render(<AutomationRulesPage />);
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
   it("shows an empty state with a New rule action", () => {
-    useApi.mockReturnValue({ data: page([]), error: null, isLoading: false, reload: vi.fn() });
+    mockApi(page([]));
     render(<AutomationRulesPage />);
-    expect(screen.getByText("No automation rules yet")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /new rule/i }).length).toBeGreaterThan(0);
+    expect(screen.getByText("No automations yet")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /create automation/i }).length).toBeGreaterThan(0);
   });
 
   it("shows an error state with retry", () => {
@@ -120,25 +147,56 @@ describe("AutomationRulesPage", () => {
         is_system: false,
       }),
     ]);
-    useApi.mockReturnValue({ data, error: null, isLoading: false, reload: vi.fn() });
+    mockApi(data);
     render(<AutomationRulesPage />);
     expect(
       screen.getByRole("link", { name: "Communication practice after a weak mock" }),
     ).toHaveAttribute("href", "/admin/automation/rule-1");
+    // The reference product's own columns.
+    expect(screen.getByRole("columnheader", { name: "Automation Name" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Module" })).toBeInTheDocument();
+    expect(screen.getAllByText("Rajat Goyal").length).toBeGreaterThan(0);
     expect(screen.getByText("Activity completed")).toBeInTheDocument();
+    expect(screen.getByText("Total Automation — 2")).toBeInTheDocument();
     expect(screen.getByText("Attendance crossed a threshold")).toBeInTheDocument();
-    expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(screen.getByText("Draft")).toBeInTheDocument();
-    expect(screen.getByText("v2")).toBeInTheDocument();
-    expect(screen.getByText("Seeded")).toBeInTheDocument();
+    // "Active" and "Draft" appear twice now: once as a status card, once as
+    // a row's badge.
+    expect(screen.getAllByText("Active")).toHaveLength(2);
+    expect(screen.getAllByText("Draft")).toHaveLength(2);
+    expect(screen.getByText(/v2/)).toBeInTheDocument();
+    expect(screen.getByText(/seeded/)).toBeInTheDocument();
+  });
+
+  it("asks the server for one status when a card is pressed, and lets go again", () => {
+    const paths: string[] = [];
+    useApi.mockImplementation((path: string) => {
+      paths.push(path);
+      if (path.includes("summary")) {
+        return {
+          data: { total: 3, active: 1, draft: 1, paused: 1 },
+          error: null,
+          isLoading: false,
+          reload: vi.fn(),
+        };
+      }
+      return { data: page([rule()]), error: null, isLoading: false, reload: vi.fn() };
+    });
+    render(<AutomationRulesPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Paused: 1" }));
+    expect(paths.some((path) => path.includes("status=paused"))).toBe(true);
+
+    // Pressing it again clears the filter rather than leaving no way back.
+    fireEvent.click(screen.getByRole("button", { name: "Paused: 1" }));
+    expect(paths.at(-1)).not.toContain("status=");
   });
 
   it("creates a new rule and navigates to its detail page", async () => {
-    useApi.mockReturnValue({ data: page([]), error: null, isLoading: false, reload: vi.fn() });
+    mockApi(page([]));
     createAutomationRule.mockResolvedValue(rule({ id: "rule-new", status: "draft" }));
     render(<AutomationRulesPage />);
 
-    const [newRuleButton] = screen.getAllByRole("button", { name: /new rule/i });
+    const [newRuleButton] = screen.getAllByRole("button", { name: /create automation/i });
     fireEvent.click(newRuleButton!);
     fireEvent.change(screen.getByLabelText("Name", { exact: false }), {
       target: { value: "Project overdue nudge" },

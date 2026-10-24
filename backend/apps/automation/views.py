@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid as uuid_lib
 
 from django.http import Http404
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status as http_status
 from rest_framework.generics import ListAPIView, ListCreateAPIView, get_object_or_404
 from rest_framework.response import Response
@@ -23,10 +23,11 @@ from apps.common.permissions import HasCapability
 from apps.organisation.models import Branch
 
 from . import services
-from .models import AutomationRule, AutomationRun
+from .models import AutomationRule, AutomationRuleStatus, AutomationRun
 from .serializers import (
     AutomationRuleCreateSerializer,
     AutomationRuleSerializer,
+    AutomationRuleSummarySerializer,
     AutomationRuleWriteSerializer,
     AutomationRunSerializer,
     DeleteReasonSerializer,
@@ -35,6 +36,41 @@ from .serializers import (
 )
 
 TAG = ["Automation"]
+
+
+class AutomationRuleSummaryView(APIView):
+    """How many rules sit in each status.
+
+    The reference product shows five cards — active, draft, paused,
+    completed, stopped. Only three of them exist here, and deliberately: a
+    rule in this system has no end of life to reach. It reacts to a trigger
+    until somebody pauses it. Inventing "completed" and "stopped" so the row
+    of cards looked the same would be five cards, two of which always read
+    zero.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.AUTOMATION_MANAGE
+    serializer_class = AutomationRuleSummarySerializer
+
+    @extend_schema(
+        summary="How many automation rules are in each status",
+        responses={200: AutomationRuleSummarySerializer},
+        tags=TAG,
+    )
+    def get(self, request):
+        counts = {
+            status_value: AutomationRule.objects.filter(status=status_value).count()
+            for status_value in AutomationRuleStatus.values
+        }
+        return Response(
+            {
+                "total": sum(counts.values()),
+                "active": counts[AutomationRuleStatus.ACTIVE],
+                "draft": counts[AutomationRuleStatus.DRAFT],
+                "paused": counts[AutomationRuleStatus.PAUSED],
+            }
+        )
 
 
 def _rule_or_404(pk: str) -> AutomationRule:
@@ -65,10 +101,23 @@ class AutomationRuleListCreateView(ListCreateAPIView):
         # rule whose author has since lost a permission one of its own
         # actions needs, before the list is served.
         services.sync_rule_authors()
-        return AutomationRule.objects.with_related().order_by("name")
+        rules = AutomationRule.objects.with_related().order_by("name")
+        # The status cards above the list are links into it, so the list has
+        # to be able to answer "just the paused ones".
+        wanted = self.request.query_params.get("status")
+        if wanted in AutomationRuleStatus.values:
+            rules = rules.filter(status=wanted)
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            rules = rules.filter(name__icontains=search)
+        return rules
 
     @extend_schema(
         summary="List automation rules",
+        parameters=[
+            OpenApiParameter("status", str, description="draft, active or paused."),
+            OpenApiParameter("search", str, description="Matches the rule's name."),
+        ],
         responses={200: AutomationRuleSerializer(many=True)},
         tags=TAG,
     )

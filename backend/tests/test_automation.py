@@ -938,3 +938,62 @@ class TestListCreateViewOverHTTP:
         response = api_client_no_csrf.get("/api/v1/automation-rules/")
         assert response.status_code == 200, response.data
         assert response.data["count"] >= 1
+
+
+@pytest.mark.django_db
+def test_the_status_cards_count_every_rule_not_just_the_page(api_client_no_csrf, admin_user):
+    """Counted on the server. A count worked out from twenty visible rows is
+    wrong the moment there are twenty-one."""
+    from apps.automation.models import AutomationRule, AutomationRuleStatus
+
+    api_client_no_csrf.force_login(admin_user)
+    before = api_client_no_csrf.get("/api/v1/automation-rules/summary/").json()
+
+    rule = services.create_rule(
+        actor=admin_user,
+        name="Counted",
+        trigger="ENQUIRY_STAGE_CHANGED",
+    )
+    AutomationRule.objects.filter(pk=rule.pk).update(status=AutomationRuleStatus.PAUSED)
+
+    after = api_client_no_csrf.get("/api/v1/automation-rules/summary/").json()
+    assert after["paused"] == before["paused"] + 1
+    assert after["total"] == before["total"] + 1
+    # Three statuses, not the reference product's five: a rule here has no
+    # end of life to reach.
+    assert set(after) == {"total", "active", "draft", "paused"}
+
+
+@pytest.mark.django_db
+def test_the_list_can_be_narrowed_to_one_status_and_a_name(api_client_no_csrf, admin_user):
+    from apps.automation.models import AutomationRule, AutomationRuleStatus
+
+    paused = services.create_rule(
+        actor=admin_user, name="Lead allocation", trigger="ENQUIRY_STAGE_CHANGED"
+    )
+    AutomationRule.objects.filter(pk=paused.pk).update(status=AutomationRuleStatus.PAUSED)
+    services.create_rule(actor=admin_user, name="Fee chaser", trigger="ENQUIRY_STAGE_CHANGED")
+    api_client_no_csrf.force_login(admin_user)
+
+    only_paused = api_client_no_csrf.get("/api/v1/automation-rules/?status=paused").json()
+    names = [row["name"] for row in only_paused["results"]]
+    assert "Lead allocation" in names
+    assert "Fee chaser" not in names
+    assert {row["status"] for row in only_paused["results"]} == {"paused"}
+
+    by_name = api_client_no_csrf.get("/api/v1/automation-rules/?search=chaser").json()
+    assert [row["name"] for row in by_name["results"]] == ["Fee chaser"]
+
+    # An unknown status is ignored rather than returning nothing, so a stale
+    # bookmark still shows the list.
+    everything = api_client_no_csrf.get("/api/v1/automation-rules/?status=nonsense").json()
+    assert everything["count"] >= 2
+
+
+@pytest.mark.django_db
+def test_a_rule_says_who_wrote_it(api_client_no_csrf, admin_user):
+    services.create_rule(actor=admin_user, name="Named", trigger="ENQUIRY_STAGE_CHANGED")
+    api_client_no_csrf.force_login(admin_user)
+
+    rows = api_client_no_csrf.get("/api/v1/automation-rules/?search=Named").json()["results"]
+    assert rows[0]["created_by_name"] == admin_user.get_full_name()

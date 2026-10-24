@@ -9,6 +9,7 @@ value is actually allowed right now".
 
 from __future__ import annotations
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
@@ -20,6 +21,8 @@ class AutomationRuleSerializer(StrictModelSerializer):
     branch = serializers.UUIDField(source="branch_id", read_only=True, allow_null=True)
     created_by = serializers.UUIDField(source="created_by_id", read_only=True, allow_null=True)
     updated_by = serializers.UUIDField(source="updated_by_id", read_only=True, allow_null=True)
+    created_by_name = serializers.SerializerMethodField()
+    updated_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = AutomationRule
@@ -36,10 +39,42 @@ class AutomationRuleSerializer(StrictModelSerializer):
             "is_system",
             "created_by",
             "updated_by",
+            "created_by_name",
+            "updated_by_name",
             "created_at",
             "updated_at",
         )
         read_only_fields = fields
+
+    @extend_schema_field(serializers.CharField())
+    def get_created_by_name(self, rule: AutomationRule) -> str:
+        return self._who(rule.created_by, rule.is_system)
+
+    @extend_schema_field(serializers.CharField())
+    def get_updated_by_name(self, rule: AutomationRule) -> str:
+        return self._who(rule.updated_by, rule.is_system)
+
+    @staticmethod
+    def _who(user, is_system: bool) -> str:
+        """The name, never the address. A seeded rule says it was seeded
+        rather than naming whoever ran the migration."""
+        if user is not None:
+            return user.get_full_name() or user.email.split("@")[0]
+        return "Seeded with the catalog" if is_system else ""
+
+
+class AutomationRuleSummarySerializer(serializers.Serializer):
+    """How many rules sit in each status, for the cards above the list.
+
+    Counted on the server rather than from the page in front of the person:
+    a count worked out from twenty visible rows is wrong the moment there
+    are twenty-one.
+    """
+
+    total = serializers.IntegerField(read_only=True)
+    active = serializers.IntegerField(read_only=True)
+    draft = serializers.IntegerField(read_only=True)
+    paused = serializers.IntegerField(read_only=True)
 
 
 class AutomationRuleWriteSerializer(StrictSerializer):
