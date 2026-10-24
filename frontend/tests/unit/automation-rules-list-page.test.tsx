@@ -2,7 +2,7 @@
  * Automation rules list (`/admin/automation`): loading, empty, error, denied
  * and success states, plus creating a new rule.
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import AutomationRulesPage from "@/app/admin/automation/page";
@@ -191,20 +191,30 @@ describe("AutomationRulesPage", () => {
     expect(paths.at(-1)).not.toContain("status=");
   });
 
-  it("creates a new rule and navigates to its detail page", async () => {
+  it("walks the four steps and creates the rule as a draft", async () => {
     mockApi(page([]));
     createAutomationRule.mockResolvedValue(rule({ id: "rule-new", status: "draft" }));
     render(<AutomationRulesPage />);
 
-    const [newRuleButton] = screen.getAllByRole("button", { name: /create automation/i });
-    fireEvent.click(newRuleButton!);
-    fireEvent.change(screen.getByLabelText("Name", { exact: false }), {
+    fireEvent.click(screen.getAllByRole("button", { name: /create automation/i })[0]!);
+
+    // Category narrows nineteen triggers to the handful that are about this
+    // kind of record.
+    fireEvent.click(screen.getByRole("button", { name: /^Student/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Project overdue/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    // Conditions may be skipped; the review step says what that means.
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByText(/runs for every single student/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", { name: /Automation name/ }), {
       target: { value: "Project overdue nudge" },
     });
-    fireEvent.change(screen.getByLabelText("Trigger", { exact: false }), {
-      target: { value: "PROJECT_OVERDUE" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /create rule/i }));
+    // The page's own button says the same thing, so this is the dialog's.
+    fireEvent.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Create Automation" }),
+    );
 
     await waitFor(() =>
       expect(createAutomationRule).toHaveBeenCalledWith({
@@ -213,5 +223,15 @@ describe("AutomationRulesPage", () => {
       }),
     );
     expect(push).toHaveBeenCalledWith("/admin/automation/rule-new");
+  });
+
+  it("will not go on from a step that has not been answered", () => {
+    mockApi(page([]));
+    render(<AutomationRulesPage />);
+    fireEvent.click(screen.getAllByRole("button", { name: /create automation/i })[0]!);
+
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /^Fee/ }));
+    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled();
   });
 });

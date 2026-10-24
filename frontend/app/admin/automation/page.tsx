@@ -15,136 +15,27 @@ import { useState } from "react";
 import { History, Pencil, Plus } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
+import { CreateAutomationWizard } from "@/components/automation/create-automation-wizard";
 import { ListToolbar } from "@/components/list-toolbar";
 import { RowActions } from "@/components/row-actions";
 import { Pagination } from "@/components/pagination";
 import { RequireAuth } from "@/components/require-auth";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
-import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Field } from "@/components/ui/field";
-import { Input, Select } from "@/components/ui/input";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
 import { useApi } from "@/hooks/use-api";
-import { fieldErrors } from "@/lib/api";
-import { createAutomationRule } from "@/lib/automation";
 import { Capability, can } from "@/lib/capabilities";
 import {
   AUTOMATION_RULE_STATUS_LABEL,
   AUTOMATION_RULE_STATUS_VARIANT,
   AUTOMATION_RECORD_LABEL,
-  AUTOMATION_RECORD_TRIGGERS,
   AUTOMATION_TRIGGER_LABEL,
-  AUTOMATION_TRIGGER_OPTIONS,
   automationRecordOf,
-  type AutomationRecord,
 } from "@/lib/labels";
 import { formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { AutomationRule, AutomationTrigger, Paginated } from "@/types/api";
-
-function NewRuleDialog({
-  open,
-  onClose,
-  onCreated,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: (id: string) => void;
-}) {
-  const [name, setName] = useState("");
-  const [trigger, setTrigger] = useState<AutomationTrigger>(AUTOMATION_TRIGGER_OPTIONS[0]!.value);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-
-  function reset() {
-    setName("");
-    setTrigger(AUTOMATION_TRIGGER_OPTIONS[0]!.value);
-    setErrors({});
-  }
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    setSaving(true);
-    setErrors({});
-    try {
-      const created = await createAutomationRule({ name: name.trim(), trigger });
-      reset();
-      onCreated(created.id);
-    } catch (cause) {
-      setErrors(fieldErrors(cause));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) {
-          reset();
-          onClose();
-        }
-      }}
-    >
-      <DialogContent>
-        <form className="space-y-4" onSubmit={(event) => void submit(event)} noValidate>
-          <DialogHeader>
-            <DialogTitle>New automation rule</DialogTitle>
-            <DialogDescription>
-              Starts as a draft with no conditions or actions. The trigger locks which
-              condition paths you can pick on the next screen, so choose it now.
-            </DialogDescription>
-          </DialogHeader>
-          {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
-          <Field label="Name" htmlFor="rule-name" error={errors.name} required>
-            <Input
-              id="rule-name"
-              autoFocus
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </Field>
-          <Field label="Trigger" htmlFor="rule-trigger-new" error={errors.trigger} required>
-            <Select
-              id="rule-trigger-new"
-              value={trigger}
-              onChange={(event) => setTrigger(event.target.value as AutomationTrigger)}
-            >
-              {(Object.keys(AUTOMATION_RECORD_TRIGGERS) as AutomationRecord[]).map((record) => (
-                <optgroup key={record} label={AUTOMATION_RECORD_LABEL[record]}>
-                  {AUTOMATION_RECORD_TRIGGERS[record].map((value) => (
-                    <option key={value} value={value}>
-                      {AUTOMATION_TRIGGER_LABEL[value]}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </Select>
-          </Field>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={saving || !name.trim()}>
-              {saving ? "Creating…" : "Create rule"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
+import type { AutomationRule, Paginated } from "@/types/api";
 
 /** The status cards above the list, and what each one filters to.
  *
@@ -357,7 +248,7 @@ function AutomationRulesList() {
         />
       ) : null}
 
-      <NewRuleDialog
+      <CreateAutomationWizard
         open={creating}
         onClose={() => setCreating(false)}
         onCreated={(id) => {
