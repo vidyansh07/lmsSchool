@@ -65,6 +65,10 @@ export function ChangeFeesDialog({
   const [effectiveFrom, setEffectiveFrom] = useState(localIsoDate());
   const [note, setNote] = useState('');
   const [rows, setRows] = useState<CourseFeeInstalmentInput[]>([]);
+  /** Whether this course had a structure when the dialog opened. A course
+   *  with none, left with none, is not written to at all — an empty PUT
+   *  would record a change that nobody made. */
+  const [hadStructure, setHadStructure] = useState(false);
   const [history, setHistory] = useState<CoursePrice[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -76,6 +80,7 @@ export function ChangeFeesDialog({
       .then(([prices, instalments]) => {
         if (cancelled) return;
         setHistory(prices);
+        setHadStructure(instalments.length > 0);
         setRows(
           instalments.map((row) => ({
             label: row.label,
@@ -115,10 +120,9 @@ export function ChangeFeesDialog({
         effective_from: effectiveFrom,
         note: note.trim(),
       });
-      // The structure is only written when it was touched or already existed;
-      // a course with no structure and no rows typed stays that way rather
-      // than having an empty PUT recorded against it.
-      await setCourseInstalments(course.id, rows);
+      if (rows.length > 0 || hadStructure) {
+        await setCourseInstalments(course.id, rows);
+      }
       onSaved(`${course.title} now costs ${formatRupees(amount)} from ${formatDate(effectiveFrom)}.`);
     } catch (cause) {
       setErrors(fieldErrors(cause));

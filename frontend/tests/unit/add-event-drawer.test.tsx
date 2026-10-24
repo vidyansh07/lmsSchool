@@ -138,6 +138,26 @@ describe("AddEventDrawer", () => {
     expect(createActivity).not.toHaveBeenCalled();
   });
 
+  it("sends the event type's own reminder when the select was never touched", async () => {
+    useApi.mockReturnValue({
+      data: { results: [type({ reminder_minutes_before: 60 })] },
+      error: null,
+      isLoading: false,
+      reload: vi.fn(),
+    });
+    renderDrawer();
+
+    // What it shows is what it sends; those disagreeing is how a trainer is
+    // reminded at the wrong time.
+    expect(screen.getByLabelText(/^When/)).toHaveValue("60");
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await waitFor(() =>
+      expect(createActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ reminder_minutes_before: 60 }),
+      ),
+    );
+  });
+
   it("sends zero when the reminder is switched off", async () => {
     renderDrawer();
     fireEvent.click(screen.getByRole("switch", { name: "Reminder" }));

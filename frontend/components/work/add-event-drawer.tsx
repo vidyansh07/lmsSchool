@@ -118,6 +118,7 @@ export function AddEventDrawer({
   const [toTouched, setToTouched] = useState(false);
   const [reminderOn, setReminderOn] = useState(true);
   const [reminder, setReminder] = useState(5);
+  const [reminderTouched, setReminderTouched] = useState(false);
   const [owner, setOwner] = useState('');
   const [answers, setAnswers] = useState<FormValues>({});
   const [description, setDescription] = useState('');
@@ -137,7 +138,12 @@ export function AddEventDrawer({
     ? plusMinutes(from, chosen.default_duration_minutes)
     : from;
   const shownTo = toTouched ? to : suggestedTo;
+  // Until the select is touched it shows — and must therefore *send* — the
+  // event type's own reminder. Showing "10 minutes before" and posting five
+  // because the state had not caught up is the kind of disagreement nobody
+  // finds until a trainer is reminded at the wrong time.
   const suggestedReminder = chosen?.reminder_minutes_before ?? 5;
+  const shownReminder = reminderTouched ? reminder : suggestedReminder;
 
   // Opening the drawer again is a fresh event, not the last one's leftovers.
   // Reset during render against a key rather than from an effect — the same
@@ -149,6 +155,7 @@ export function AddEventDrawer({
   if (openedFor !== resetKey) {
     setTitleTouched(false);
     setToTouched(false);
+    setReminderTouched(false);
     setAnswers({});
     setDescription('');
     setErrors({});
@@ -187,7 +194,7 @@ export function AddEventDrawer({
         due_at: end.toISOString(),
         duration_minutes: Math.max(0, Math.round((end.getTime() - start.getTime()) / 60_000)),
         // 0 is "no reminder for this one", which the type's default cannot say.
-        reminder_minutes_before: reminderOn ? reminder : 0,
+        reminder_minutes_before: reminderOn ? shownReminder : 0,
         form_prefill: Object.keys(answers).length > 0 ? answers : undefined,
       });
       onCreated();
@@ -290,8 +297,11 @@ export function AddEventDrawer({
                 <Field label="When" htmlFor={`${uid}-reminder`} error={errors.reminder_minutes_before}>
                   <Select
                     id={`${uid}-reminder`}
-                    value={String(reminder || suggestedReminder)}
-                    onChange={(event) => setReminder(Number(event.target.value))}
+                    value={String(shownReminder)}
+                    onChange={(event) => {
+                      setReminderTouched(true);
+                      setReminder(Number(event.target.value));
+                    }}
                   >
                     {REMINDERS.map((minutes) => (
                       <option key={minutes} value={minutes}>
