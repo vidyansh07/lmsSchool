@@ -25,6 +25,7 @@ import type {
   Paginated,
   Peer,
   TemplatePreviewResult,
+  TemplateCategory,
   TemplateVersion,
   UpcomingItem,
 } from '@/types/api';
@@ -140,6 +141,8 @@ export interface CreateTemplatePayload {
   name: string;
   channel: CommunicationChannel;
   kind: string;
+  /** Transactional unless said otherwise — the one that may always go. */
+  category?: TemplateCategory;
   language?: string;
 }
 

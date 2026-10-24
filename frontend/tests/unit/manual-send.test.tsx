@@ -31,6 +31,7 @@ function templatePage(): Paginated<MessageTemplate> {
       name: 'Batch assigned',
       channel: 'email',
       kind: 'batch.assigned',
+      category: 'transactional',
       language: 'en',
       status: 'published',
       current_version: {

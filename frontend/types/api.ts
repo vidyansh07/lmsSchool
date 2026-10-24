@@ -3596,7 +3596,17 @@ export interface AutomationRunRow {
 // allowlist (D-051); there is no expression language anywhere in this shape.
 // ---------------------------------------------------------------------------
 
-export type CommunicationChannel = "email" | "whatsapp" | "in_app";
+export type CommunicationChannel = "email" | "whatsapp" | "in_app" | "sms";
+
+/** Channels nothing can actually send on yet — `UNWIRED_CHANNELS` on the
+ *  server. A template, a category and a matrix row exist; a gateway does
+ *  not, and a delivery on one fails saying so. */
+export const UNWIRED_CHANNELS: CommunicationChannel[] = ["sms"];
+
+/** What kind of message this is in the sense the telecom regulator and
+ *  WhatsApp both mean: promotional needs consent, transactional may always
+ *  go. */
+export type TemplateCategory = "transactional" | "promotional";
 export type TemplateStatus = "draft" | "approved" | "published";
 
 /** A version is immutable once published (`DATA_MODEL.md` §7) — editing after
@@ -3640,6 +3650,7 @@ export interface MessageTemplate {
   name: string;
   channel: CommunicationChannel;
   kind: string;
+  category: TemplateCategory;
   language: string;
   status: TemplateStatus;
   current_version: TemplateVersion | null;

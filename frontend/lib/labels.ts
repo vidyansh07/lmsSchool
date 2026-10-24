@@ -28,6 +28,7 @@ import type {
   AutomationRuleStatus,
   AutomationTrigger,
   CommunicationChannel,
+  TemplateCategory,
   DeliveryState,
   MatrixCell,
   MfaMethodName,
@@ -838,8 +839,14 @@ export const REVIEW_STATUS_OPTIONS: { value: ReviewStatus; label: string }[] = (
 
 export const COMMUNICATION_CHANNEL_LABEL: Record<CommunicationChannel, string> = {
   email: "Email",
-  whatsapp: "WhatsApp",
-  in_app: "In-app",
+  whatsapp: "WhatsApp Business",
+  in_app: "Notification",
+  sms: "SMS",
+};
+
+export const TEMPLATE_CATEGORY_LABEL: Record<TemplateCategory, string> = {
+  transactional: "Transactional",
+  promotional: "Promotional",
 };
 
 export const COMMUNICATION_CHANNEL_OPTIONS: { value: CommunicationChannel; label: string }[] = (

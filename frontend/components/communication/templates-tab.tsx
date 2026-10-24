@@ -11,7 +11,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Bell, Mail, MessageCircle, MessageSquare, Plus } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-provider';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
@@ -28,8 +28,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApi } from '@/hooks/use-api';
 import { fieldErrors } from '@/lib/api';
 import { Capability, can } from '@/lib/capabilities';
@@ -37,33 +44,55 @@ import { createTemplate } from '@/lib/communication';
 import {
   COMMUNICATION_CHANNEL_LABEL,
   COMMUNICATION_CHANNEL_OPTIONS,
+  TEMPLATE_CATEGORY_LABEL,
   TEMPLATE_STATUS_LABEL,
   TEMPLATE_STATUS_VARIANT,
 } from '@/lib/labels';
 import { formatDateTime } from '@/lib/format';
-import type { CommunicationChannel, MessageTemplate, Paginated } from '@/types/api';
+import {
+  UNWIRED_CHANNELS,
+  type CommunicationChannel,
+  type MessageTemplate,
+  type Paginated,
+  type TemplateCategory,
+} from '@/types/api';
 
 function NewTemplateDialog({
   open,
+  startChannel,
   onClose,
   onCreated,
 }: {
   open: boolean;
+  /** Which channel the Create Template menu was opened on. */
+  startChannel: CommunicationChannel;
   onClose: () => void;
   onCreated: (key: string) => void;
 }) {
   const [key, setKey] = useState('');
   const [name, setName] = useState('');
-  const [channel, setChannel] = useState<CommunicationChannel>('email');
+  const [channel, setChannel] = useState<CommunicationChannel>(startChannel);
   const [kind, setKind] = useState('');
+  const [category, setCategory] = useState<TemplateCategory>('transactional');
+
+  // The menu picks the channel; opening it again on a different one starts
+  // there. Reset by key during render rather than from an effect, the
+  // convention the activity-types form already uses.
+  const resetKey = `${open}#${startChannel}`;
+  const [openedFor, setOpenedFor] = useState(resetKey);
+  if (openedFor !== resetKey) {
+    setChannel(startChannel);
+    setOpenedFor(resetKey);
+  }
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   function reset() {
     setKey('');
     setName('');
-    setChannel('email');
+    setChannel(startChannel);
     setKind('');
+    setCategory('transactional');
     setErrors({});
   }
 
@@ -77,6 +106,7 @@ function NewTemplateDialog({
         name: name.trim(),
         channel,
         kind: kind.trim(),
+        category,
       });
       reset();
       onCreated(created.key);
@@ -132,6 +162,32 @@ function NewTemplateDialog({
             </Select>
           </Field>
           <Field
+            label="Category"
+            htmlFor="template-category"
+            error={errors.category}
+            required
+            hint="Promotional messages need consent and respect quiet hours; transactional ones — a receipt, a cancellation — may always go."
+          >
+            <Select
+              id="template-category"
+              value={category}
+              onChange={(event) => setCategory(event.target.value as TemplateCategory)}
+            >
+              {(Object.keys(TEMPLATE_CATEGORY_LABEL) as TemplateCategory[]).map((value) => (
+                <option key={value} value={value}>
+                  {TEMPLATE_CATEGORY_LABEL[value]}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {UNWIRED_CHANNELS.includes(channel) ? (
+            <Alert variant="warning">
+              {COMMUNICATION_CHANNEL_LABEL[channel]} has no gateway connected yet. The template
+              and its approvals are real; a send on this channel is recorded and fails saying so,
+              rather than looking delivered.
+            </Alert>
+          ) : null}
+          <Field
             label="Kind"
             htmlFor="template-kind"
             error={errors.kind}
@@ -154,17 +210,40 @@ function NewTemplateDialog({
   );
 }
 
+/** View All / Active / InActive / Draft, and what each one means here.
+ *
+ *  The reference product's four shelves map onto this system's three
+ *  template statuses: *Active* is a published template (the one actually in
+ *  use), *InActive* is one approved but never published — ready, not live —
+ *  and *Draft* is still being written. */
+const SHELVES = [
+  { key: 'all', label: 'View All', status: '' },
+  { key: 'active', label: 'Active', status: 'published' },
+  { key: 'inactive', label: 'InActive', status: 'approved' },
+  { key: 'draft', label: 'Draft', status: 'draft' },
+] as const;
+
+const CHANNEL_ICON: Record<CommunicationChannel, typeof Mail> = {
+  email: Mail,
+  whatsapp: MessageCircle,
+  sms: MessageSquare,
+  in_app: Bell,
+};
+
 export function TemplatesTab() {
   const router = useRouter();
   const { user } = useAuth();
   const mayManage = can(user?.capabilities, Capability.templateManage);
   const [page, setPage] = useState(1);
+  const [shelf, setShelf] = useState<string>('all');
   const { data, error, isLoading, reload } = useApi<Paginated<MessageTemplate>>(
     `/api/v1/templates/?page=${page}`,
   );
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState<CommunicationChannel | null>(null);
 
-  const rows = data?.results ?? [];
+  const all = data?.results ?? [];
+  const wanted = SHELVES.find((item) => item.key === shelf)?.status ?? '';
+  const rows = wanted ? all.filter((row) => row.status === wanted) : all;
 
   if (isLoading) return <LoadingState label="Loading templates…" rows={6} />;
   if (error) {
@@ -180,26 +259,58 @@ export function TemplatesTab() {
 
   const columns: DataTableColumn<MessageTemplate>[] = [
     {
-      key: 'key',
-      header: 'Key',
+      key: 'name',
+      header: 'Template Name',
       sticky: 'start',
+      render: (row) => {
+        const Icon = CHANNEL_ICON[row.channel];
+        return (
+          <span className="flex items-center gap-2">
+            <Icon className="size-4 shrink-0 text-ink-muted" aria-hidden="true" />
+            <span className="min-w-0">
+              <Link
+                href={`/admin/communication/templates/${row.key}`}
+                className="font-medium underline-offset-2 hover:underline"
+              >
+                {row.name}
+              </Link>
+              <span className="block font-mono text-2xs text-ink-muted">{row.key}</span>
+            </span>
+          </span>
+        );
+      },
+    },
+    {
+      key: 'subject',
+      header: 'Subject Line',
+      render: (row) => row.current_version?.subject || row.draft_version?.subject || '—',
+    },
+    {
+      key: 'channel',
+      header: 'Campaign Type',
       render: (row) => (
-        <Link
-          href={`/admin/communication/templates/${row.key}`}
-          className="font-mono text-xs font-medium underline-offset-2 hover:underline"
-        >
-          {row.key}
-        </Link>
+        <span className="flex flex-wrap items-center gap-1.5">
+          <Badge>{COMMUNICATION_CHANNEL_LABEL[row.channel]}</Badge>
+          {UNWIRED_CHANNELS.includes(row.channel) ? (
+            <Badge variant="warning">No gateway</Badge>
+          ) : null}
+        </span>
       ),
     },
-    { key: 'name', header: 'Name', render: (row) => row.name },
-    { key: 'channel', header: 'Channel', render: (row) => COMMUNICATION_CHANNEL_LABEL[row.channel] },
+    { key: 'kind', header: 'Applicable For', render: (row) => row.kind },
     {
       key: 'status',
       header: 'Status',
       render: (row) => (
-        <Badge variant={TEMPLATE_STATUS_VARIANT[row.status]}>{TEMPLATE_STATUS_LABEL[row.status]}</Badge>
+        <Badge variant={TEMPLATE_STATUS_VARIANT[row.status]}>
+          {TEMPLATE_STATUS_LABEL[row.status]}
+        </Badge>
       ),
+    },
+    {
+      key: 'category',
+      header: 'Category',
+      render: (row) => TEMPLATE_CATEGORY_LABEL[row.category],
     },
     {
       key: 'current_version',
@@ -220,28 +331,56 @@ export function TemplatesTab() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <p className="text-sm text-ink-muted">
+        <p className="max-w-prose text-sm text-ink-muted">
           A template with a published version overrides the code fallback for that key and
           channel. Everything here is rendered by substituting an explicit variable allowlist —
           never evaluated as code.
         </p>
         {mayManage ? (
-          <Button type="button" onClick={() => setCreating(true)}>
-            <Plus className="size-4" aria-hidden="true" />
-            New template
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button">
+                <Plus className="size-4" aria-hidden="true" />
+                Create Template
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {COMMUNICATION_CHANNEL_OPTIONS.map((option) => (
+                <DropdownMenuItem
+                  key={option.value}
+                  onSelect={() => setCreating(option.value)}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : null}
       </div>
 
+      <Tabs value={shelf} onValueChange={setShelf}>
+        <TabsList>
+          {SHELVES.map((item) => (
+            <TabsTrigger key={item.key} value={item.key}>
+              {item.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
       {rows.length === 0 ? (
         <EmptyState
-          title="No templates yet"
-          description="Create the first one to override a code fallback for a channel."
+          title={all.length === 0 ? 'No templates yet' : 'Nothing on this shelf'}
+          description={
+            all.length === 0
+              ? 'Create the first one to override a code fallback for a channel.'
+              : 'Every template is on another shelf.'
+          }
           action={
-            mayManage ? (
-              <Button type="button" onClick={() => setCreating(true)}>
+            mayManage && all.length === 0 ? (
+              <Button type="button" onClick={() => setCreating('email')}>
                 <Plus className="size-4" aria-hidden="true" />
-                New template
+                Create Template
               </Button>
             ) : undefined
           }
@@ -267,10 +406,11 @@ export function TemplatesTab() {
       ) : null}
 
       <NewTemplateDialog
-        open={creating}
-        onClose={() => setCreating(false)}
+        open={creating !== null}
+        startChannel={creating ?? 'email'}
+        onClose={() => setCreating(null)}
         onCreated={(key) => {
-          setCreating(false);
+          setCreating(null);
           router.push(`/admin/communication/templates/${key}`);
         }}
       />

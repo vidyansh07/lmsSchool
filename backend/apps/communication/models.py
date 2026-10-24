@@ -47,6 +47,32 @@ class MessageChannel(models.TextChoices):
     EMAIL = "email", _("Email")
     WHATSAPP = "whatsapp", _("WhatsApp")
     IN_APP = "in_app", _("In-app")
+    #: SMS has a template, a category and a place in the matrix, and no
+    #: provider: GRRAS has no DLT-registered sender wired up here yet. A
+    #: delivery on this channel therefore *fails* with that said in as many
+    #: words rather than sitting in `queued` looking like it is on its way —
+    #: "nothing was sent" is the one thing a delivery log must never be vague
+    #: about. Wiring a gateway is one function in `providers.py`.
+    SMS = "sms", _("SMS")
+
+
+#: Channels nothing can actually send on yet. Kept as data rather than an
+#: `if` in the dispatcher so the screens can say so too.
+UNWIRED_CHANNELS = frozenset({MessageChannel.SMS})
+
+
+class TemplateCategory(models.TextChoices):
+    """What kind of message this is, in the sense the telecom regulator and
+    WhatsApp both mean.
+
+    Not decoration: a promotional message may only go to somebody who opted
+    in and inside allowed hours, while a transactional one — a receipt, a
+    class cancellation — may always go. Recorded per template because that is
+    where the approval lives, and read when a send is resolved.
+    """
+
+    TRANSACTIONAL = "transactional", _("Transactional")
+    PROMOTIONAL = "promotional", _("Promotional")
 
 
 class TemplateStatus(models.TextChoices):
@@ -86,6 +112,13 @@ class MessageTemplate(SoftDeleteBaseModel):
     #: the in-app channel dispatches straight through
     #: `apps.notifications.services.notify`, which requires one.
     kind = models.CharField(_("kind"), max_length=60)
+    category = models.CharField(
+        _("category"),
+        max_length=20,
+        choices=TemplateCategory.choices,
+        default=TemplateCategory.TRANSACTIONAL,
+        help_text=_("Transactional messages may always go; promotional ones need consent."),
+    )
     language = models.CharField(_("language"), max_length=8, default="en")
     status = models.CharField(
         _("status"), max_length=10, choices=TemplateStatus.choices, default=TemplateStatus.DRAFT

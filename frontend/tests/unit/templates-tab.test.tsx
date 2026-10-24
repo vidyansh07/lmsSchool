@@ -4,7 +4,7 @@
  * renders real data, the page request still goes through the same
  * `useApi`-backed path, and the density toggle persists.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,6 +33,7 @@ function templateRow(overrides: Partial<MessageTemplate> = {}): MessageTemplate 
     name: 'Batch assigned',
     channel: 'email',
     kind: 'batch.assigned',
+    category: 'transactional',
     language: 'en',
     status: 'published',
     current_version: {
@@ -90,7 +91,41 @@ describe('TemplatesTab', () => {
     mockUseApi(page([]));
     render(<TemplatesTab />);
     expect(screen.getByText('No templates yet')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /new template/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /create template/i }).length).toBeGreaterThan(0);
+  });
+
+  it('shelves templates by what the reference product calls them', async () => {
+    mockUseApi(
+      page([
+        templateRow(),
+        templateRow({ key: 'fee_due', name: 'Fee due', status: 'draft' }),
+      ]),
+    );
+    render(<TemplatesTab />);
+    await waitFor(() => expect(screen.getByText('Batch assigned')).toBeInTheDocument());
+
+    // Active is a *published* template: the one actually in use.
+    fireEvent.click(screen.getByRole('tab', { name: 'Active' }));
+    expect(screen.getByText('Batch assigned')).toBeInTheDocument();
+    expect(screen.queryByText('Fee due')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Draft' }));
+    expect(screen.getByText('Fee due')).toBeInTheDocument();
+    expect(screen.queryByText('Batch assigned')).not.toBeInTheDocument();
+  });
+
+  it('starts a template on the channel the menu was opened on, and says SMS cannot send', async () => {
+    mockUseApi(page([templateRow()]));
+    render(<TemplatesTab />);
+    await waitFor(() => expect(screen.getByText('Batch assigned')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Create Template/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'SMS' }));
+
+    const dialog = within(screen.getByRole('dialog'));
+    expect(dialog.getByLabelText(/Channel/)).toHaveValue('sms');
+    // Honest about the gap rather than letting a template imply a send.
+    expect(dialog.getByText(/has no gateway connected yet/)).toBeInTheDocument();
   });
 
   it('persists the density toggle across a re-render', async () => {

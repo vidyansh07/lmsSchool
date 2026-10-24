@@ -7,7 +7,13 @@ from rest_framework import serializers
 
 from apps.common.serializers import SafeCharField, StrictModelSerializer, StrictSerializer
 
-from .models import Delivery, MessageChannel, MessageTemplate, TemplateVersion
+from .models import (
+    Delivery,
+    MessageChannel,
+    MessageTemplate,
+    TemplateCategory,
+    TemplateVersion,
+)
 
 
 class TemplateVersionSerializer(StrictModelSerializer):
@@ -43,6 +49,7 @@ class MessageTemplateSerializer(StrictModelSerializer):
             "name",
             "channel",
             "kind",
+            "category",
             "language",
             "status",
             "current_version",
@@ -63,6 +70,9 @@ class TemplateCreateSerializer(StrictSerializer):
     name = SafeCharField(max_length=200)
     channel = serializers.ChoiceField(choices=MessageChannel.choices)
     kind = SafeCharField(max_length=60)
+    category = serializers.ChoiceField(
+        choices=TemplateCategory.choices, required=False, default=TemplateCategory.TRANSACTIONAL
+    )
     language = SafeCharField(max_length=8, required=False)
 
 

@@ -52,6 +52,7 @@ from .models import (
     DeliveryState,
     MessageChannel,
     MessageTemplate,
+    TemplateCategory,
     TemplateStatus,
     TemplateVersion,
 )
@@ -113,7 +114,14 @@ def _store_error(exc: Exception) -> str:
 
 
 def create_template(
-    *, actor, key: str, name: str, channel: str, kind: str, language: str = "en"
+    *,
+    actor,
+    key: str,
+    name: str,
+    channel: str,
+    kind: str,
+    language: str = "en",
+    category: str = TemplateCategory.TRANSACTIONAL,
 ) -> MessageTemplate:
     _require(actor, Capability.TEMPLATE_MANAGE)
     if channel not in MessageChannel.values:
@@ -133,6 +141,7 @@ def create_template(
             name=name,
             channel=channel,
             kind=kind,
+            category=category or TemplateCategory.TRANSACTIONAL,
             language=language or "en",
             created_by=actor if getattr(actor, "pk", None) else None,
         )
@@ -420,6 +429,10 @@ def _address_for(channel: str, user) -> str | None:
         return user.phone if user.whatsapp_opt_in and user.phone else None
     if channel == MessageChannel.IN_APP:
         return ""
+    if channel == MessageChannel.SMS:
+        # Resolved so the delivery log shows who it *would* have gone to; the
+        # dispatcher is what refuses, with the reason.
+        return user.phone or None
     return None
 
 
@@ -695,6 +708,8 @@ def dispatch_delivery(delivery: Delivery) -> None:
             _dispatch_whatsapp(delivery, rendered)
         elif delivery.channel == MessageChannel.IN_APP:
             _dispatch_in_app(delivery, rendered)
+        elif delivery.channel == MessageChannel.SMS:
+            _dispatch_sms(delivery)
         else:
             delivery.state = DeliveryState.FAILED
             delivery.error = f"Unknown channel: {delivery.channel!r}"
@@ -731,6 +746,22 @@ def _dispatch_email(delivery: Delivery, rendered: dict[str, Any] | None) -> None
     message.refresh_from_db(fields=["last_error"])
     delivery.state = DeliveryState.SENT if ok else DeliveryState.FAILED
     delivery.error = "" if ok else message.last_error
+    delivery.save(update_fields=["state", "error", "updated_at"])
+
+
+def _dispatch_sms(delivery: Delivery) -> None:
+    """No SMS gateway is wired up, so this fails and says exactly that.
+
+    The alternative — leaving the delivery queued, or marking it sent — is
+    how an institute comes to believe a reminder went out. A failed delivery
+    with a plain reason is honest, retryable the day a gateway exists, and
+    shows up in the delivery log where somebody will see it.
+    """
+    delivery.state = DeliveryState.FAILED
+    delivery.error = (
+        "No SMS gateway is configured, so nothing was sent. The message and its recipient are "
+        "recorded; connect a DLT-registered sender to deliver it."
+    )[:ERROR_MAX]
     delivery.save(update_fields=["state", "error", "updated_at"])
 
 

@@ -75,6 +75,7 @@ function template(overrides: Partial<MessageTemplate> = {}): MessageTemplate {
     name: 'Batch assigned',
     channel: 'email',
     kind: 'batch.assigned',
+    category: 'transactional',
     language: 'en',
     status: 'draft',
     current_version: null,
