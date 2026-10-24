@@ -294,6 +294,8 @@ class ActivityListCreateView(ListAPIView):
             enquiry=enquiry,
             summary=data.get("summary") or "",
             form_prefill=data.get("form_prefill") or {},
+            duration_minutes=data.get("duration_minutes"),
+            reminder_minutes_before=data.get("reminder_minutes_before"),
         )
         detail = get_object_or_404(access.visible_activities(request.user), pk=activity.pk)
         return Response(

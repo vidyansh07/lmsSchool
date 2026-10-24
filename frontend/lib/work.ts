@@ -148,6 +148,11 @@ export interface CreateActivityPayload {
   /** Unique per creator for 24h — a retry with the same key returns the
    *  original 201 body instead of creating a duplicate. */
   client_key?: string;
+  /** How long this one runs for. Left out, the type's default is used. */
+  duration_minutes?: number;
+  /** This one event's reminder. Left out, the type's applies; 0 asks for
+   *  none at all. */
+  reminder_minutes_before?: number;
 }
 
 export async function createActivity(

@@ -28,6 +28,7 @@ import { FormAssignmentsTable } from "@/components/forms/form-assignments-table"
 import { SendFormDialog } from "@/components/forms/send-form-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { ActivityDrawer } from "@/components/work/activity-drawer";
+import { AddEventDrawer } from "@/components/work/add-event-drawer";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,7 +37,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -64,7 +64,6 @@ import {
   ENQUIRY_STAGES,
   LEAD_CHANNEL_LABEL,
 } from "@/lib/labels";
-import { createActivity, type ActivityTypeListResponse } from "@/lib/work";
 import type {
   Activity,
   EnquiryDetail,
@@ -273,108 +272,6 @@ function PipelineCard({
   );
 }
 
-function LogActivityDialog({
-  enquiry,
-  open,
-  onClose,
-  onLogged,
-}: {
-  enquiry: EnquiryDetail;
-  open: boolean;
-  onClose: () => void;
-  onLogged: () => void;
-}) {
-  const uid = useId();
-  const { user } = useAuth();
-  const { data } = useApi<ActivityTypeListResponse>("/api/v1/activity-types/");
-  const types = (data?.results ?? []).filter(
-    (type) => type.subject === "enquiry" && type.status === "active",
-  );
-  const [type, setType] = useState("");
-  const [title, setTitle] = useState("");
-  const [summary, setSummary] = useState("");
-  const [dueAt, setDueAt] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const chosen = type || types[0]?.slug || "";
-
-  async function submit() {
-    if (!chosen) return;
-    setSaving(true);
-    setErrors({});
-    try {
-      await createActivity({
-        enquiry: enquiry.id,
-        activity_type: chosen,
-        title: title.trim() || undefined,
-        summary: summary.trim(),
-        assigned_to: user?.id,
-        due_at: dueAt ? new Date(dueAt).toISOString() : undefined,
-      });
-      setTitle("");
-      setSummary("");
-      setDueAt("");
-      onLogged();
-    } catch (cause) {
-      setErrors(fieldErrors(cause));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New activity for {enquiry.full_name}</DialogTitle>
-          <DialogDescription>
-            Assigned to you. Completing a counselling call with its form moves the enquiry&rsquo;s stage.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          {errors.__all__ ? <Alert variant="error">{errors.__all__}</Alert> : null}
-          <Field label="Activity" htmlFor={`${uid}-type`} error={errors.activity_type}>
-            <Select id={`${uid}-type`} value={chosen} onChange={(event) => setType(event.target.value)}>
-              {types.map((option) => (
-                <option key={option.slug} value={option.slug}>
-                  {option.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Title" htmlFor={`${uid}-title`} hint="Defaults to the activity's name.">
-            <Input id={`${uid}-title`} value={title} onChange={(event) => setTitle(event.target.value)} />
-          </Field>
-          <Field label="Notes" htmlFor={`${uid}-summary`} error={errors.summary}>
-            <Textarea
-              id={`${uid}-summary`}
-              rows={3}
-              value={summary}
-              onChange={(event) => setSummary(event.target.value)}
-            />
-          </Field>
-          <Field label="Due" htmlFor={`${uid}-due`} error={errors.due_at}>
-            <Input
-              id={`${uid}-due`}
-              type="datetime-local"
-              value={dueAt}
-              onChange={(event) => setDueAt(event.target.value)}
-            />
-          </Field>
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="button" disabled={saving || !chosen} onClick={() => void submit()}>
-            {saving ? "Creating…" : "Create activity"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 /**
  * The enquiry's follow-up thread: what was said on each call, oldest at the
  * top, with a box to add the next one.
@@ -511,7 +408,7 @@ function ActivitiesCard({ enquiry }: { enquiry: EnquiryDetail }) {
         <CardTitle className="text-base">Activities</CardTitle>
         <Button type="button" variant="outline" size="sm" onClick={() => setLogging(true)}>
           <Plus className="size-4" aria-hidden="true" />
-          New activity
+          Add Event
         </Button>
       </CardHeader>
       <CardContent>
@@ -564,11 +461,11 @@ function ActivitiesCard({ enquiry }: { enquiry: EnquiryDetail }) {
           </TableWrapper>
         )}
       </CardContent>
-      <LogActivityDialog
-        enquiry={enquiry}
+      <AddEventDrawer
         open={logging}
+        subject={{ kind: "enquiry", id: enquiry.id, name: enquiry.full_name }}
         onClose={() => setLogging(false)}
-        onLogged={() => {
+        onCreated={() => {
           setLogging(false);
           reload();
         }}
@@ -1074,11 +971,11 @@ export function EnquiryScreen({ id }: { id: string }) {
         </DialogContent>
       </Dialog>
 
-      <LogActivityDialog
-        enquiry={data}
+      <AddEventDrawer
         open={addingEvent}
+        subject={{ kind: "enquiry", id: data.id, name: data.full_name }}
         onClose={() => setAddingEvent(false)}
-        onLogged={() => {
+        onCreated={() => {
           setAddingEvent(false);
           setTab("events");
           reload();

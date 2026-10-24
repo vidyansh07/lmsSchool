@@ -182,6 +182,16 @@ class ActivityCreateSerializer(StrictSerializer):
     )
     student_visible = serializers.BooleanField(required=False, allow_null=True, default=None)
     client_key = SafeCharField(max_length=100, required=False, allow_null=True, default=None)
+    #: How long this one runs for. Left out, the type's default duration is
+    #: used, which is what the Add Event drawer prefills the To time from.
+    duration_minutes = serializers.IntegerField(
+        required=False, allow_null=True, default=None, min_value=0, max_value=60 * 24
+    )
+    #: This one event's reminder. Left out, the type's applies; 0 asks for
+    #: none at all.
+    reminder_minutes_before = serializers.IntegerField(
+        required=False, allow_null=True, default=None, min_value=0, max_value=60 * 24 * 7
+    )
 
 
 class ActivityPatchSerializer(StrictSerializer):
@@ -356,6 +366,8 @@ class ActivityDetailSerializer(ActivityListSerializer):
         max_digits=5, decimal_places=2, read_only=True, allow_null=True
     )
     duration_minutes = serializers.IntegerField(read_only=True, allow_null=True)
+    #: Null means the event type's reminder applies; 0 means none at all.
+    reminder_minutes_before = serializers.IntegerField(read_only=True, allow_null=True)
     student_visible = serializers.BooleanField(read_only=True)
     started_at = serializers.DateTimeField(read_only=True, allow_null=True)
     reviewed_at = serializers.DateTimeField(read_only=True, allow_null=True)

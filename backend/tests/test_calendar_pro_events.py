@@ -339,3 +339,76 @@ def test_a_seeded_event_says_it_was_seeded_rather_than_naming_a_migration(
     rows = _client(admin_user).get("/api/v1/activity-types/").json()["results"]
     row = next(item for item in rows if item["slug"] == seeded.slug)
     assert row["created_by_name"] == "Seeded with the catalog"
+
+
+# ---------------------------------------------------------------------------
+# The reminder the Add Event drawer sets
+# ---------------------------------------------------------------------------
+
+
+def test_an_event_can_carry_its_own_reminder(
+    admin_user, student_profile, trainer_profile, enrollment
+):
+    """The drawer offers "5 minutes before" per event. Null falls back to the
+    type's; 0 is this one event saying "no reminder", which a type-level
+    default cannot say on its behalf."""
+    from apps.notifications.models import Notification, NotificationKind
+
+    kind = _make_type(reminder_minutes_before=60)
+    soon = timezone.now() + timedelta(minutes=5)
+
+    own = services.create_activity(
+        actor=admin_user,
+        student=student_profile,
+        activity_type=kind,
+        enrollment=enrollment,
+        assigned_to=trainer_profile.user,
+        planned_at=soon,
+        due_at=soon,
+        reminder_minutes_before=5,
+        title="Reminds in five",
+    )
+    Activity.objects.filter(pk=own.pk).update(status=ActivityStatus.ASSIGNED)
+
+    silent = services.create_activity(
+        actor=admin_user,
+        student=student_profile,
+        activity_type=kind,
+        enrollment=enrollment,
+        assigned_to=trainer_profile.user,
+        planned_at=soon,
+        due_at=soon,
+        reminder_minutes_before=0,
+        title="Reminds never",
+    )
+    Activity.objects.filter(pk=silent.pk).update(status=ActivityStatus.ASSIGNED)
+
+    assert services.send_activity_reminders() == 1
+    reminded = Notification.objects.filter(
+        recipient=trainer_profile.user, kind=NotificationKind.ACTIVITY_REMINDER
+    )
+    assert [note.title for note in reminded] == ["Reminder: Reminds in five"]
+
+
+def test_an_event_takes_its_types_duration_unless_told_otherwise(
+    admin_user, student_profile, trainer_profile, enrollment
+):
+    kind = _make_type(default_duration_minutes=45)
+    default = services.create_activity(
+        actor=admin_user,
+        student=student_profile,
+        activity_type=kind,
+        enrollment=enrollment,
+        assigned_to=trainer_profile.user,
+    )
+    assert default.duration_minutes == 45
+
+    longer = services.create_activity(
+        actor=admin_user,
+        student=student_profile,
+        activity_type=kind,
+        enrollment=enrollment,
+        assigned_to=trainer_profile.user,
+        duration_minutes=90,
+    )
+    assert longer.duration_minutes == 90

@@ -25,6 +25,7 @@ from hashlib import sha256
 from typing import Any
 
 from django.db import IntegrityError, connection, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.accounts.roles import UserRole
@@ -269,6 +270,8 @@ def create_activity(
     priority: str | None = None,
     student_visible: bool | None = None,
     client_key: str | None = None,
+    duration_minutes: int | None = None,
+    reminder_minutes_before: int | None = None,
     enquiry=None,
     summary: str = "",
     form_prefill: dict | None = None,
@@ -376,6 +379,12 @@ def create_activity(
         form_version=form_version,
         student_visible=resolved_visible,
         client_key=client_key or "",
+        duration_minutes=(
+            duration_minutes
+            if duration_minutes is not None
+            else activity_type.default_duration_minutes
+        ),
+        reminder_minutes_before=reminder_minutes_before,
         summary=(summary or "")[:4000],
         form_prefill=_clean_prefill(form_version, form_prefill),
     )
@@ -904,18 +913,34 @@ def send_activity_reminders() -> int:
     of the same beat tick — or a slightly late one — never double-sends."""
     now = timezone.now()
     window = timedelta(minutes=REMINDER_WINDOW_MINUTES)
-    candidates = Activity.objects.filter(
-        status__in=[ActivityStatus.ASSIGNED, ActivityStatus.PLANNED],
-        reminder_sent_at__isnull=True,
-        activity_type__reminder_minutes_before__isnull=False,
-        assigned_to__isnull=False,
-    ).select_related("activity_type", "assigned_to")
+    candidates = (
+        Activity.objects.filter(
+            status__in=[ActivityStatus.ASSIGNED, ActivityStatus.PLANNED],
+            reminder_sent_at__isnull=True,
+            assigned_to__isnull=False,
+        )
+        .filter(
+            # Either this event asked for its own reminder, or its type has one.
+            Q(reminder_minutes_before__isnull=False)
+            | Q(activity_type__reminder_minutes_before__isnull=False)
+        )
+        .select_related("activity_type", "assigned_to")
+    )
     sent = 0
     for activity in candidates:
         anchor = activity.due_at or activity.planned_at
         if anchor is None:
             continue
-        remind_at = anchor - timedelta(minutes=activity.activity_type.reminder_minutes_before)
+        minutes = (
+            activity.reminder_minutes_before
+            if activity.reminder_minutes_before is not None
+            else activity.activity_type.reminder_minutes_before
+        )
+        # 0 is this one event saying "no reminder", which a type-level default
+        # cannot say on its behalf.
+        if not minutes:
+            continue
+        remind_at = anchor - timedelta(minutes=minutes)
         if remind_at > now or remind_at < now - window:
             continue
         notify(

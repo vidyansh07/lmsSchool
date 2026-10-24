@@ -383,6 +383,15 @@ class Activity(SoftDeleteBaseModel):
     #: a re-run of the same beat tick — or one running slightly late — does
     #: not send the same reminder twice.
     reminder_sent_at = models.DateTimeField(_("reminder sent at"), null=True, blank=True)
+    #: This one event's reminder, when it differs from its type's. Null means
+    #: "whatever the type says", which is the usual case; 0 means this one
+    #: wants no reminder at all, which a type-level default cannot express.
+    reminder_minutes_before = models.PositiveIntegerField(
+        _("reminder (minutes before)"),
+        null=True,
+        blank=True,
+        help_text=_("Overrides the event type's reminder. 0 means no reminder for this one."),
+    )
     duration_minutes = models.PositiveIntegerField(_("duration (minutes)"), null=True, blank=True)
     form_version = models.ForeignKey(
         "forms.FormVersion",
