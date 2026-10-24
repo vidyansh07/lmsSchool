@@ -412,3 +412,28 @@ def test_an_event_takes_its_types_duration_unless_told_otherwise(
         duration_minutes=90,
     )
     assert longer.duration_minutes == 90
+
+
+def test_a_booking_a_week_away_is_not_a_clash(
+    admin_user, student_profile, trainer_profile, enrollment
+):
+    """The window is a day either side, which is what bounds the query: the
+    longest event this system allows is capped at 24 hours."""
+    kind = _make_type(check_conflict=True)
+    services.create_activity(
+        actor=admin_user,
+        student=student_profile,
+        activity_type=kind,
+        enrollment=enrollment,
+        assigned_to=trainer_profile.user,
+        planned_at=_at(16),
+    )
+    services.create_activity(
+        actor=admin_user,
+        student=student_profile,
+        activity_type=kind,
+        enrollment=enrollment,
+        assigned_to=trainer_profile.user,
+        planned_at=_at(16) + timedelta(days=7),
+    )
+    assert Activity.objects.filter(activity_type=kind).count() == 2

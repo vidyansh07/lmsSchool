@@ -27,6 +27,7 @@ const overview: FeesOverview = {
     cancelled_at: null,
     cancellation_reason: '',
       enrollment_id: 'enrol-1',
+      course_id: 'course-1',
       enrollment_code: 'GRS-E-00001',
       enrollment_status: 'active',
       course_title: 'Linux Essentials',

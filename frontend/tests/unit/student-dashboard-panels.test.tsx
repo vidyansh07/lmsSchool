@@ -695,6 +695,7 @@ describe('FeesPanel', () => {
   function plan(overrides: Partial<FeePlan> = {}): FeePlan {
     return {
       id: 'plan-1',
+      course_id: 'course-1',
       gross_payable: '20000.00',
       written_off: '0.00',
       refund_due: '0.00',

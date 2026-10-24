@@ -104,6 +104,10 @@ class FeePlanSerializer(serializers.ModelSerializer):
     enrollment_id = serializers.UUIDField(source="enrollment.pk", read_only=True)
     enrollment_code = serializers.CharField(source="enrollment.code", read_only=True)
     course_title = serializers.CharField(source="enrollment.course.title", read_only=True)
+    #: So the schedule screen can offer this course's own default instalment
+    #: structure (`/courses/{id}/instalments/`) instead of making a
+    #: counsellor retype it.
+    course_id = serializers.UUIDField(source="enrollment.course_id", read_only=True)
     batch_code = serializers.CharField(source="enrollment.batch.code", read_only=True)
     batch_name = serializers.CharField(source="enrollment.batch.name", read_only=True)
     enrollment_status = serializers.CharField(source="enrollment.status", read_only=True)
@@ -131,6 +135,7 @@ class FeePlanSerializer(serializers.ModelSerializer):
             "enrollment_code",
             "enrollment_status",
             "course_title",
+            "course_id",
             "batch_code",
             "batch_name",
             "agreed_amount",

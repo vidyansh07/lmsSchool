@@ -64,6 +64,7 @@ import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Table, TableWrapper, Td, Th, Tr } from '@/components/ui/table';
 import { ApiError, errorMessage, fieldErrors, isUncertainOutcome, unshownError } from '@/lib/api';
+import { listCourseInstalments } from '@/lib/course-fees';
 import { ENROLLMENT_STATUS_LABEL, ENROLLMENT_STATUS_VARIANT } from '@/lib/batch-labels';
 import {
   emailReceipt,
@@ -78,7 +79,7 @@ import {
   refundPayment,
   voidPayment,
 } from '@/lib/fees';
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/format';
+import { formatCurrency, formatDate, formatDateTime, localIsoDate } from '@/lib/format';
 import {
   FEE_PLAN_STATUS_LABEL,
   FEE_PLAN_STATUS_VARIANT,
@@ -634,7 +635,47 @@ function InstallmentsForm({ onOpenChange, plan, onSaved }: PlanDialogProps) {
   );
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [applying, setApplying] = useState(false);
   const addsUp = installmentsAddUp(rows, payable);
+
+  /**
+   * The course's own default structure, in this student's rupees.
+   *
+   * The course keeps percentages, so the shares are worked out against what
+   * *this* student has to pay — fee less their discount — with the leftover
+   * paisa on the first instalment, which is exactly what the server does
+   * when it applies the structure itself. Nothing is saved until Save
+   * schedule: this fills the rows in, so a counsellor can still move a date
+   * the student asked about.
+   */
+  async function applyCourseStructure() {
+    setApplying(true);
+    setError('');
+    try {
+      const structure = await listCourseInstalments(plan.course_id);
+      if (structure.length === 0) {
+        setError('This course has no default instalment structure yet.');
+        return;
+      }
+      const start = new Date();
+      const amounts = structure.map((row) =>
+        Math.floor((payable * Number(row.percent)) / 100 * 100) / 100,
+      );
+      const leftover = Math.round((payable - amounts.reduce((sum, value) => sum + value, 0)) * 100) / 100;
+      amounts[0] = Math.round((amounts[0]! + leftover) * 100) / 100;
+      setRows(
+        structure.map((row, index) => {
+          const due = new Date(start);
+          due.setDate(due.getDate() + row.due_after_days);
+          return { amount: amounts[index]!.toFixed(2), due_on: localIsoDate(due) };
+        }),
+      );
+    } catch (cause) {
+      setError(errorMessage(cause, "Could not read the course's structure."));
+    } finally {
+      setApplying(false);
+    }
+  }
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -669,6 +710,15 @@ function InstallmentsForm({ onOpenChange, plan, onSaved }: PlanDialogProps) {
         received={Number(plan.paid)}
       />
       <DialogFooter>
+        <Button
+          type="button"
+          variant="outline"
+          className="mr-auto"
+          disabled={saving || applying}
+          onClick={() => void applyCourseStructure()}
+        >
+          {applying ? 'Reading…' : "Use the course's structure"}
+        </Button>
         <Button type="button" variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>
           Cancel
         </Button>

@@ -238,7 +238,13 @@ def _refuse_a_clash(activity_type: ActivityType, assignee, planned_at) -> None:
         Activity.objects.filter(
             activity_type=activity_type,
             assigned_to=assignee,
-            planned_at__isnull=False,
+            # A booking can only clash with one that starts within a day
+            # either side of it: the longest event this system allows is
+            # bounded by `duration_minutes`' own ceiling of 24 hours. Without
+            # this the check reads every activity of its type ever assigned
+            # to that person, which grows without limit.
+            planned_at__gte=planned_at - timedelta(days=1),
+            planned_at__lte=planned_at + timedelta(days=1),
         )
         .exclude(status__in=(ActivityStatus.CANCELLED, ActivityStatus.MISSED))
         .only("planned_at", "duration_minutes", "title")

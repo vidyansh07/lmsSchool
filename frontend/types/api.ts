@@ -2106,6 +2106,8 @@ export interface FeePlan {
   enrollment_code: string;
   enrollment_status: EnrollmentStatus;
   course_title: string;
+  /** So the schedule screen can offer the course's own default structure. */
+  course_id: string;
   batch_code: string;
   batch_name: string;
   agreed_amount: string;
