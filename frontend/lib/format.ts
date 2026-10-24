@@ -158,6 +158,14 @@ export function formatDateTime(value: unknown, label: FallbackLabel = NOT_AVAILA
   });
 }
 
+/** The time of day on its own — for the far end of a span whose near end
+ *  already carried the date ("6:50 pm – 6:55 pm"). */
+export function formatTime(value: unknown, label: FallbackLabel = NOT_AVAILABLE): string {
+  const date = toValidDate(value);
+  if (!date) return label;
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
 /**
  * "2 hours ago" / "in 3 days" / "now", via `Intl.RelativeTimeFormat` so
  * pluralisation and locale are handled by the platform rather than by hand.

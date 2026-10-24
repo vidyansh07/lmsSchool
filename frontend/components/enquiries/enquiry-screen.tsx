@@ -55,7 +55,7 @@ import {
   updateEnquiry,
   type EnquiryChanges,
 } from "@/lib/enquiries";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatTime } from "@/lib/format";
 import {
   ACTIVITY_STATUS_LABEL,
   ACTIVITY_STATUS_VARIANT,
@@ -394,6 +394,20 @@ function FollowUpThreadCard({
   );
 }
 
+/** "23 Oct 2026, 6:50 pm – 6:55 pm" when an event has both ends, the one it
+ *  has otherwise, and a dash when it is unscheduled. A booking is a span, and
+ *  reading its start without its end is how two of them end up overlapping. */
+function eventWhen(activity: Activity): string {
+  const start = activity.planned_at;
+  const end = activity.due_at;
+  if (!start) return end ? formatDateTime(end) : "—";
+  if (!end) return formatDateTime(start);
+  const sameDay = new Date(start).toDateString() === new Date(end).toDateString();
+  return sameDay
+    ? `${formatDateTime(start)} – ${formatTime(end)}`
+    : `${formatDateTime(start)} – ${formatDateTime(end)}`;
+}
+
 function ActivitiesCard({ enquiry }: { enquiry: EnquiryDetail }) {
   const { data, error, isLoading, reload } = useApi<Paginated<Activity>>(
     `/api/v1/activities/?enquiry=${enquiry.id}&ordering=-created_at`,
@@ -426,9 +440,9 @@ function ActivitiesCard({ enquiry }: { enquiry: EnquiryDetail }) {
             <Table>
               <thead>
                 <tr>
-                  <Th>Activity</Th>
-                  <Th>Assigned to</Th>
-                  <Th>Due</Th>
+                  <Th>Event</Th>
+                  <Th>Owner</Th>
+                  <Th>When</Th>
                   <Th>Status</Th>
                 </tr>
               </thead>
@@ -446,9 +460,7 @@ function ActivitiesCard({ enquiry }: { enquiry: EnquiryDetail }) {
                       <span className="block text-2xs text-ink-faint">{row.type.name}</span>
                     </Td>
                     <Td>{row.assigned_to?.name ?? "—"}</Td>
-                    <Td className="whitespace-nowrap tabular-nums">
-                      {row.due_at ? formatDateTime(row.due_at) : "—"}
-                    </Td>
+                    <Td className="whitespace-nowrap tabular-nums">{eventWhen(row)}</Td>
                     <Td>
                       <Badge variant={ACTIVITY_STATUS_VARIANT[row.status]}>
                         {ACTIVITY_STATUS_LABEL[row.status]}
