@@ -7,6 +7,7 @@ from .views import (
     BatchListCreateView,
     BatchRosterView,
     BatchSchedulesView,
+    BatchSheetImportView,
     BatchStatusView,
     BatchTimetableSetupView,
     BatchTrainerView,
@@ -15,6 +16,8 @@ from .views import (
 
 batch_patterns = [
     path("", BatchListCreateView.as_view(), name="list"),
+    # Before the identifier route, which would otherwise swallow it.
+    path("import/", BatchSheetImportView.as_view(), name="import"),
     path("<uuid:batch_id>/", BatchDetailView.as_view(), name="detail"),
     path("<uuid:batch_id>/status/", BatchStatusView.as_view(), name="status"),
     path("<uuid:batch_id>/trainer/", BatchTrainerView.as_view(), name="trainer"),

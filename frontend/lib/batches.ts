@@ -305,3 +305,39 @@ export async function setUpBatchTimetable(
     body: payload,
   });
 }
+
+/** What an import did, or would do. Every row is accounted for: the counts
+ *  plus the problems add up to the rows in the file. */
+export interface BatchSheetImportResult {
+  batches_created: number;
+  batches_matched: number;
+  students_created: number;
+  students_matched: number;
+  enrolments_created: number;
+  enrolments_existing: number;
+  batches: string[];
+  problems: { sheet: string; row: number | null; message: string }[];
+}
+
+/**
+ * Import a batch sheet — the spreadsheet a centre already keeps, with a
+ * banner per batch and its roster underneath.
+ *
+ * `dryRun` defaults to true, and the preview it returns is produced by the
+ * same code the real import runs, inside a transaction that is then rolled
+ * back. A preview running different code would eventually disagree with the
+ * import, and the disagreement would be found by whoever trusted it.
+ */
+export async function importBatchSheet(
+  file: File,
+  { dryRun = true, branch }: { dryRun?: boolean; branch?: string } = {},
+): Promise<BatchSheetImportResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('dry_run', String(dryRun));
+  if (branch) formData.append('branch', branch);
+  return apiMutate<BatchSheetImportResult>('/api/v1/batches/import/', {
+    method: 'POST',
+    formData,
+  });
+}

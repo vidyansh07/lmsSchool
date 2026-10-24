@@ -18,6 +18,7 @@ from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_sche
 from rest_framework import status as http_status
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListCreateAPIView, get_object_or_404
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -34,6 +35,8 @@ from .serializers import (
     BatchListSerializer,
     BatchScheduleSerializer,
     BatchScheduleWriteSerializer,
+    BatchSheetImportResultSerializer,
+    BatchSheetImportSerializer,
     BatchStatusSerializer,
     BatchWriteSerializer,
     SetUpTimetableSerializer,
@@ -401,3 +404,58 @@ class ScheduleDetailView(APIView):
             return _forbidden(request, "You do not have permission to manage this timetable.")
         services.delete_schedule(schedule=schedule, actor=request.user)
         return Response(status=http_status.HTTP_204_NO_CONTENT)
+
+
+class BatchSheetImportView(APIView):
+    """Import a GRRAS batch sheet: the spreadsheet a centre already keeps.
+
+    One upload holds several batches — a banner with the course and the class
+    time, the trainer, the starting date, then the roster — and this turns
+    each into a batch with its students enrolled.
+
+    `dry_run` is how the screen previews it, and it is the *same* code inside
+    a transaction that is then rolled back: a preview running different code
+    from the import would eventually disagree with it, and the disagreement
+    would be found by whoever trusted the preview.
+
+    Needs both rights it uses — adding batches and adding students — because
+    that is what it does, and holding one of the two is not permission for
+    the other.
+    """
+
+    permission_classes = (IsActiveUser,)
+    parser_classes = (MultiPartParser, FormParser)
+    serializer_class = BatchSheetImportResultSerializer
+
+    @extend_schema(
+        summary="Import a batch sheet",
+        request=BatchSheetImportSerializer,
+        responses={200: BatchSheetImportResultSerializer},
+        tags=["Batches"],
+    )
+    def post(self, request):
+        from apps.batches.importing import import_batch_sheet
+        from apps.batches.sheets import read_batch_sheet
+
+        payload = BatchSheetImportSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        uploaded = payload.validated_data["file"]
+        branch = resolve_submitted_branch(request, payload.validated_data.get("branch"))
+
+        try:
+            sheet = read_batch_sheet(uploaded)
+        except Exception:  # openpyxl raises a zoo of its own for a bad file
+            # Nothing of the file is echoed back: a spreadsheet's contents are
+            # the institute's own data, and a parser's message can carry a cell.
+            return Response(
+                {"detail": "This file could not be read as a spreadsheet (.xlsx)."},
+                status=http_status.HTTP_400_BAD_REQUEST,
+            )
+
+        report = import_batch_sheet(
+            actor=request.user,
+            sheet=sheet,
+            dry_run=payload.validated_data.get("dry_run", True),
+            branch=branch,
+        )
+        return Response(report.as_dict())

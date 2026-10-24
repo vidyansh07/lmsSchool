@@ -226,3 +226,46 @@ class SetUpTimetableSerializer(StrictSerializer):
     autoplan = serializers.BooleanField(
         default=True, help_text="Put the course's published lessons on those classes, in order."
     )
+
+
+class BatchSheetImportSerializer(StrictSerializer):
+    """The upload itself.
+
+    `dry_run` defaults to **true**: the screen previews before it writes, and
+    an import that ran by default on a mis-clicked file would be the wrong
+    default to pick.
+    """
+
+    file = serializers.FileField()
+    dry_run = serializers.BooleanField(required=False, default=True)
+    branch = serializers.UUIDField(required=False, allow_null=True)
+
+    def validate_file(self, uploaded):
+        name = (getattr(uploaded, "name", "") or "").lower()
+        if not name.endswith((".xlsx", ".xlsm")):
+            raise serializers.ValidationError("Upload the batch sheet as .xlsx.")
+        # 10 MB: a roster of a few hundred is tens of kilobytes, and the
+        # parser reads the whole file.
+        if getattr(uploaded, "size", 0) > 10 * 1024 * 1024:
+            raise serializers.ValidationError("That file is larger than 10 MB.")
+        return uploaded
+
+
+class ImportProblemSerializer(serializers.Serializer):
+    sheet = serializers.CharField(read_only=True)
+    row = serializers.IntegerField(read_only=True, allow_null=True)
+    message = serializers.CharField(read_only=True)
+
+
+class BatchSheetImportResultSerializer(serializers.Serializer):
+    """What the import did, or would do. Every row is accounted for: the
+    counts plus the problems add up to the rows in the file."""
+
+    batches_created = serializers.IntegerField(read_only=True)
+    batches_matched = serializers.IntegerField(read_only=True)
+    students_created = serializers.IntegerField(read_only=True)
+    students_matched = serializers.IntegerField(read_only=True)
+    enrolments_created = serializers.IntegerField(read_only=True)
+    enrolments_existing = serializers.IntegerField(read_only=True)
+    batches = serializers.ListField(child=serializers.CharField(), read_only=True)
+    problems = ImportProblemSerializer(many=True, read_only=True)

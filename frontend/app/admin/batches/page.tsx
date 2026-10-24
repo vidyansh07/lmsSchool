@@ -3,13 +3,17 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+import { useState } from 'react';
+
 import { useAuth } from '@/components/auth-provider';
+import { ImportSheetDialog } from '@/components/batches/import-sheet-dialog';
+import { Alert } from '@/components/ui/alert';
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ExportMenu } from '@/components/export-menu';
 import { exportFiltersFrom } from '@/lib/reporting';
 import { SavedViews } from '@/components/saved-views';
 import { ActiveFilters } from '@/components/active-filters';
-import { CalendarDays, Eye, Pencil, Users } from 'lucide-react';
+import { CalendarDays, Eye, Pencil, Upload, Users } from 'lucide-react';
 
 import { labelFor } from '@/lib/labels';
 import { ListToolbar } from '@/components/list-toolbar';
@@ -42,6 +46,8 @@ function BatchList() {
   const { can } = useAuth();
   const list = useList<BatchListRow>(listBatches, { page_size: 20 }, { urlKeys: ['status'] });
   const [showCreate, setShowCreate] = useCreateParam(can(Capability.batchCreate));
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported] = useState<string | null>(null);
   const router = useRouter();
 
   const isAdmin = can(Capability.batchViewAny);
@@ -149,11 +155,31 @@ function BatchList() {
             count={list.data?.count ?? null}
             size="md"
           />
+          {can(Capability.batchCreate) && can(Capability.studentCreate) ? (
+            // Both rights, because that is what the import uses: it opens
+            // batches *and* adds students.
+            <Button variant="outline" onClick={() => setImporting(true)}>
+              <Upload className="size-4" aria-hidden="true" />
+              Import Students
+            </Button>
+          ) : null}
           {can(Capability.batchCreate) ? (
             <Button onClick={() => setShowCreate(true)}>New batch</Button>
           ) : null}
         </div>
       </div>
+
+      {imported ? <Alert variant="success">{imported}</Alert> : null}
+
+      <ImportSheetDialog
+        open={importing}
+        onClose={() => setImporting(false)}
+        onImported={(summary) => {
+          setImporting(false);
+          setImported(summary);
+          list.reload();
+        }}
+      />
 
       {showCreate ? (
         <CreateBatchDialog
