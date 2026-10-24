@@ -702,7 +702,7 @@ export function Student360Content({ studentId }: { studentId: string }) {
           <OverviewTab data={data} />
         </TabsContent>
         <TabsContent value="activities">
-          <StudentActivitiesTab studentId={studentId} />
+          <StudentActivitiesTab studentId={studentId} studentName={name} />
         </TabsContent>
         <TabsContent value="timeline">
           <StudentTimeline studentId={studentId} />

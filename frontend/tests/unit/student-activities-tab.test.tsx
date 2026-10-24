@@ -21,6 +21,9 @@ vi.mock('@/lib/work', async () => {
 // The drawer has its own dedicated tests (`activity-drawer.test.tsx`); here
 // it would only add unrelated fetches to mock.
 vi.mock('@/components/work/activity-drawer', () => ({ ActivityDrawer: () => null }));
+// Same for the Add Event drawer, which has its own suite and would pull in
+// the activity-type catalog and the auth provider for no benefit here.
+vi.mock('@/components/work/add-event-drawer', () => ({ AddEventDrawer: () => null }));
 
 function row(overrides: Partial<Activity> = {}): Activity {
   return {

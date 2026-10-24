@@ -21,9 +21,11 @@
  * student's own record).
  */
 import { useEffect, useState } from 'react';
+import { CalendarPlus } from 'lucide-react';
 
 import { DataTable, type DataTableColumn } from '@/components/data-table';
 import { ActivityDrawer } from '@/components/work/activity-drawer';
+import { AddEventDrawer } from '@/components/work/add-event-drawer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -66,9 +68,18 @@ interface ListState {
   isLoading: boolean;
 }
 
-export function StudentActivitiesTab({ studentId }: { studentId: string }) {
+export function StudentActivitiesTab({
+  studentId,
+  studentName = '',
+}: {
+  studentId: string;
+  /** For the Add Event drawer's subject line, which reads
+   *  "Mock Interview: Asha Rao" the way the reference CRM writes it. */
+  studentName?: string;
+}) {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
   const [types, setTypes] = useState<ActivityType[]>([]);
 
   useEffect(() => {
@@ -168,6 +179,12 @@ export function StudentActivitiesTab({ studentId }: { studentId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-2">
+        {/* Booking an event belongs where the events are listed, not only on
+            the lead screen: a mock interview is arranged for a student. */}
+        <Button type="button" className="mr-auto" onClick={() => setAdding(true)}>
+          <CalendarPlus className="size-4" aria-hidden="true" />
+          Add Event
+        </Button>
         <Select
           aria-label="Status"
           value={filters.status}
@@ -226,6 +243,16 @@ export function StudentActivitiesTab({ studentId }: { studentId: string }) {
         caption="Activities"
         densityStorageKey="grras.student-activities-density"
       />
+      <AddEventDrawer
+        open={adding}
+        subject={{ kind: 'student', id: studentId, name: studentName }}
+        onClose={() => setAdding(false)}
+        onCreated={() => {
+          setAdding(false);
+          reload();
+        }}
+      />
+
       {state.data ? (
         <Pagination
           page={state.data.page}
