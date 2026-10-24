@@ -34,6 +34,7 @@ import { ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmailComposer } from '@/components/communication/email-composer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input, Textarea } from '@/components/ui/input';
@@ -295,22 +296,40 @@ export function TemplateBuilder({ templateKey }: { templateKey: string }) {
                 }}
               />
             </Field>
-            <Field
-              label="Body (HTML)"
-              htmlFor="template-body-html"
-              hint="Plain text with {{ variable }} placeholders — never evaluated as code, only substituted from the allowlist below."
-            >
-              <Textarea
-                id="template-body-html"
-                rows={8}
-                disabled={!mayManage}
-                value={bodyHtml}
-                onChange={(event) => {
-                  setBodyHtml(event.target.value);
-                  setDirty(true);
-                }}
-              />
-            </Field>
+            {template.channel === 'email' ? (
+              // Email is the one channel with a layout worth composing. The
+              // others are a line of text with tokens in it, and a block
+              // editor over them would be ceremony.
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Compose Email</p>
+                <EmailComposer
+                  html={bodyHtml}
+                  variables={variables}
+                  disabled={!mayManage}
+                  onChange={(next) => {
+                    setBodyHtml(next);
+                    setDirty(true);
+                  }}
+                />
+              </div>
+            ) : (
+              <Field
+                label="Body (HTML)"
+                htmlFor="template-body-html"
+                hint="Plain text with {{ variable }} placeholders — never evaluated as code, only substituted from the allowlist below."
+              >
+                <Textarea
+                  id="template-body-html"
+                  rows={8}
+                  disabled={!mayManage}
+                  value={bodyHtml}
+                  onChange={(event) => {
+                    setBodyHtml(event.target.value);
+                    setDirty(true);
+                  }}
+                />
+              </Field>
+            )}
             <Field label="Body (plain text)" htmlFor="template-body-text">
               <Textarea
                 id="template-body-text"
