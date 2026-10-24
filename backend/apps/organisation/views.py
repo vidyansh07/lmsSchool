@@ -10,20 +10,26 @@ from __future__ import annotations
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework import status as http_status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListAPIView, ListCreateAPIView, get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.roles import has_capability
 from apps.common.pagination import DefaultPagination
 from apps.common.permissions import Capability, HasCapability, IsActiveUser
 
 from . import access, services
 from .models import Branch
 from .serializers import (
+    AcademicYearPatchSerializer,
     AcademicYearSerializer,
+    AcademicYearWriteSerializer,
     AddCollegeSerializer,
+    BankPatchSerializer,
     BankSerializer,
+    BankWriteSerializer,
     BranchSerializer,
     BranchWriteSerializer,
     CollegeSerializer,
@@ -184,6 +190,49 @@ class AcademicYearListView(ListAPIView):
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
 
+    @extend_schema(
+        summary="Add an academic year",
+        request=AcademicYearWriteSerializer,
+        responses={201: AcademicYearSerializer},
+        tags=["Organisation"],
+    )
+    def post(self, request, *args, **kwargs):
+        from .settings_lists import create_academic_year
+
+        payload = AcademicYearWriteSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        year = create_academic_year(actor=request.user, **payload.validated_data)
+        return Response(AcademicYearSerializer(year).data, status=status.HTTP_201_CREATED)
+
+
+class AcademicYearDetailView(APIView):
+    """Change one year, including making it the current one.
+
+    Managing the list is the institution's own settings work
+    (`settings.manage`), not platform configuration: an administrator at a
+    centre opens the year, not an operator of the software.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.SETTINGS_MANAGE
+    serializer_class = AcademicYearSerializer
+
+    @extend_schema(
+        summary="Change an academic year",
+        request=AcademicYearPatchSerializer,
+        responses={200: AcademicYearSerializer},
+        tags=["Organisation"],
+    )
+    def patch(self, request, year_id):
+        from .models import AcademicYear
+        from .settings_lists import update_academic_year
+
+        year = get_object_or_404(AcademicYear.objects.all(), pk=year_id)
+        payload = AcademicYearPatchSerializer(data=request.data, partial=True)
+        payload.is_valid(raise_exception=True)
+        year = update_academic_year(actor=request.user, year=year, **payload.validated_data)
+        return Response(AcademicYearSerializer(year).data)
+
 
 class BankListView(ListAPIView):
     """The banks a cheque or a transfer came through.
@@ -201,8 +250,53 @@ class BankListView(ListAPIView):
     def get_queryset(self):
         from .models import Bank
 
+        if has_capability(self.request.user, Capability.SETTINGS_MANAGE):
+            return Bank.objects.all()
         return Bank.objects.active()
 
     @extend_schema(summary="Banks", tags=["Organisation"])
     def get(self, request, *args, **kwargs):
+        # Everything, not just the active ones, for somebody who may manage
+        # the list: a screen that hides the row it is meant to reactivate is
+        # a screen with a missing bank.
+        if has_capability(request.user, Capability.SETTINGS_MANAGE):
+            self.all_banks = True
         return super().get(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Add a bank",
+        request=BankWriteSerializer,
+        responses={201: BankSerializer},
+        tags=["Organisation"],
+    )
+    def post(self, request, *args, **kwargs):
+        from .settings_lists import create_bank
+
+        if not has_capability(request.user, Capability.SETTINGS_MANAGE):
+            raise PermissionDenied("You do not have permission to change the institution's lists.")
+        payload = BankWriteSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        bank = create_bank(actor=request.user, **payload.validated_data)
+        return Response(BankSerializer(bank).data, status=status.HTTP_201_CREATED)
+
+
+class BankDetailView(APIView):
+    permission_classes = (HasCapability,)
+    required_capability = Capability.SETTINGS_MANAGE
+    serializer_class = BankSerializer
+
+    @extend_schema(
+        summary="Change a bank",
+        request=BankPatchSerializer,
+        responses={200: BankSerializer},
+        tags=["Organisation"],
+    )
+    def patch(self, request, bank_id):
+        from .models import Bank
+        from .settings_lists import update_bank
+
+        bank = get_object_or_404(Bank.objects.all(), pk=bank_id)
+        payload = BankPatchSerializer(data=request.data, partial=True)
+        payload.is_valid(raise_exception=True)
+        bank = update_bank(actor=request.user, bank=bank, **payload.validated_data)
+        return Response(BankSerializer(bank).data)

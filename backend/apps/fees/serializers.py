@@ -393,3 +393,19 @@ class TaxGroupSerializer(serializers.ModelSerializer):
         model = TaxGroup
         fields = ("id", "name", "is_default", "is_active")
         read_only_fields = fields
+
+
+class NamedListWriteSerializer(StrictSerializer):
+    """Adding a payment category or a tax group: both are a name, a default
+    flag and an active flag, and keeping them one serializer keeps them one
+    screen's worth of rules."""
+
+    name = SafeCharField(max_length=60)
+    is_default = serializers.BooleanField(required=False, default=False)
+    is_active = serializers.BooleanField(required=False, default=True)
+
+
+class NamedListPatchSerializer(StrictSerializer):
+    name = SafeCharField(max_length=60, required=False)
+    is_default = serializers.BooleanField(required=False)
+    is_active = serializers.BooleanField(required=False)

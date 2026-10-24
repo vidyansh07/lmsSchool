@@ -211,6 +211,9 @@ class AuditAction(models.TextChoices):
 
     # --- Institution settings
     SYSTEM_SETTINGS_UPDATED = "settings.updated", _("Institution settings changed")
+    #: One of the institution's own lists — academic years, banks, payment
+    #: categories, tax groups — created or changed from the settings screen.
+    SETTINGS_LIST_CHANGED = "settings.list.changed", _("A settings list changed")
 
     # --- Projects
     PROJECT_CREATED = "project.created", _("Project created")

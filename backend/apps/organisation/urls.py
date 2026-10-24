@@ -22,8 +22,10 @@ college_urlpatterns = [
 #: colleges for the same reason: they are not places the institute runs.
 academic_year_urlpatterns = [
     path("", views.AcademicYearListView.as_view(), name="list"),
+    path("<uuid:year_id>/", views.AcademicYearDetailView.as_view(), name="detail"),
 ]
 
 bank_urlpatterns = [
     path("", views.BankListView.as_view(), name="list"),
+    path("<uuid:bank_id>/", views.BankDetailView.as_view(), name="detail"),
 ]

@@ -76,8 +76,41 @@ class AcademicYearWriteSerializer(StrictSerializer):
     is_closed = serializers.BooleanField(required=False, default=False)
 
 
+class AcademicYearPatchSerializer(StrictSerializer):
+    """Changing one, including which year is current.
+
+    `is_current` *is* here, unlike on the create form, because moving it is
+    the common act on this screen — a switch per row — and the service makes
+    it exclusive in the same transaction. Setting it to false is refused
+    rather than leaving the institute with no current year: the way to move
+    it is to set it on another year."""
+
+    name = SafeCharField(max_length=20, required=False)
+    starts_on = serializers.DateField(required=False, allow_null=True)
+    ends_on = serializers.DateField(required=False, allow_null=True)
+    is_closed = serializers.BooleanField(required=False)
+    is_current = serializers.BooleanField(required=False)
+
+    def validate_is_current(self, value: bool) -> bool:
+        if value is False:
+            raise serializers.ValidationError(
+                "Make another year current instead; the institute always has one."
+            )
+        return value
+
+
 class BankSerializer(serializers.ModelSerializer):
     class Meta:
         model = Bank
         fields = ("id", "name", "is_active")
         read_only_fields = fields
+
+
+class BankWriteSerializer(StrictSerializer):
+    name = SafeCharField(max_length=120)
+    is_active = serializers.BooleanField(required=False, default=True)
+
+
+class BankPatchSerializer(StrictSerializer):
+    name = SafeCharField(max_length=120, required=False)
+    is_active = serializers.BooleanField(required=False)

@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework import status as http_status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -43,6 +45,8 @@ from .serializers import (
     FeePlanSerializer,
     FeesOverviewSerializer,
     LedgerReconciliationSerializer,
+    NamedListPatchSerializer,
+    NamedListWriteSerializer,
     PaymentCategorySerializer,
     RecordPaymentSerializer,
     RefundPaymentSerializer,
@@ -642,6 +646,12 @@ class FeePaymentEmailReceiptView(APIView):
         return Response(FeeEmailQueuedSerializer(message).data, status=status.HTTP_202_ACCEPTED)
 
 
+def _require_settings(user) -> None:
+    """Reading these lists comes with reading fees; changing them does not."""
+    if not has_capability(user, Capability.SETTINGS_MANAGE):
+        raise PermissionDenied("You do not have permission to change the institution's lists.")
+
+
 class PaymentCategoryListView(ListAPIView):
     """What a payment can be *for* — Fees, Registration, an exam fee.
 
@@ -656,11 +666,56 @@ class PaymentCategoryListView(ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
+        # Whoever may manage the list sees the inactive rows too; a screen
+        # that hides the row it is meant to reactivate is a screen with a
+        # missing category.
+        if has_capability(self.request.user, Capability.SETTINGS_MANAGE):
+            return PaymentCategory.objects.all()
         return PaymentCategory.objects.active()
 
     @extend_schema(summary="Payment categories", tags=FEES_TAG)
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Add a payment category",
+        request=NamedListWriteSerializer,
+        responses={201: PaymentCategorySerializer},
+        tags=FEES_TAG,
+    )
+    def post(self, request, *args, **kwargs):
+        from .settings_lists import create_payment_category
+
+        _require_settings(request.user)
+        payload = NamedListWriteSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        category = create_payment_category(actor=request.user, **payload.validated_data)
+        return Response(
+            PaymentCategorySerializer(category).data, status=http_status.HTTP_201_CREATED
+        )
+
+
+class PaymentCategoryDetailView(APIView):
+    permission_classes = (HasCapability,)
+    required_capability = Capability.SETTINGS_MANAGE
+    serializer_class = PaymentCategorySerializer
+
+    @extend_schema(
+        summary="Change a payment category",
+        request=NamedListPatchSerializer,
+        responses={200: PaymentCategorySerializer},
+        tags=FEES_TAG,
+    )
+    def patch(self, request, category_id):
+        from .settings_lists import update_payment_category
+
+        category = get_object_or_404(PaymentCategory.objects.all(), pk=category_id)
+        payload = NamedListPatchSerializer(data=request.data, partial=True)
+        payload.is_valid(raise_exception=True)
+        category = update_payment_category(
+            actor=request.user, category=category, **payload.validated_data
+        )
+        return Response(PaymentCategorySerializer(category).data)
 
 
 class TaxGroupListView(ListAPIView):
@@ -673,8 +728,46 @@ class TaxGroupListView(ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
+        if has_capability(self.request.user, Capability.SETTINGS_MANAGE):
+            return TaxGroup.objects.all()
         return TaxGroup.objects.active()
 
     @extend_schema(summary="Tax groups", tags=FEES_TAG)
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Add a tax group",
+        request=NamedListWriteSerializer,
+        responses={201: TaxGroupSerializer},
+        tags=FEES_TAG,
+    )
+    def post(self, request, *args, **kwargs):
+        from .settings_lists import create_tax_group
+
+        _require_settings(request.user)
+        payload = NamedListWriteSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        group = create_tax_group(actor=request.user, **payload.validated_data)
+        return Response(TaxGroupSerializer(group).data, status=http_status.HTTP_201_CREATED)
+
+
+class TaxGroupDetailView(APIView):
+    permission_classes = (HasCapability,)
+    required_capability = Capability.SETTINGS_MANAGE
+    serializer_class = TaxGroupSerializer
+
+    @extend_schema(
+        summary="Change a tax group",
+        request=NamedListPatchSerializer,
+        responses={200: TaxGroupSerializer},
+        tags=FEES_TAG,
+    )
+    def patch(self, request, group_id):
+        from .settings_lists import update_tax_group
+
+        group = get_object_or_404(TaxGroup.objects.all(), pk=group_id)
+        payload = NamedListPatchSerializer(data=request.data, partial=True)
+        payload.is_valid(raise_exception=True)
+        group = update_tax_group(actor=request.user, group=group, **payload.validated_data)
+        return Response(TaxGroupSerializer(group).data)

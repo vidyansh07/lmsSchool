@@ -22,8 +22,10 @@ from .views import (
     FeesOverviewView,
     LedgerReconciliationView,
     MyFeesView,
+    PaymentCategoryDetailView,
     PaymentCategoryListView,
     StudentFeesView,
+    TaxGroupDetailView,
     TaxGroupListView,
 )
 
@@ -33,7 +35,13 @@ urlpatterns = [
     path("me/", MyFeesView.as_view(), name="me"),
     path("overview/", FeesOverviewView.as_view(), name="overview"),
     path("payment-categories/", PaymentCategoryListView.as_view(), name="payment-categories"),
+    path(
+        "payment-categories/<uuid:category_id>/",
+        PaymentCategoryDetailView.as_view(),
+        name="payment-category-detail",
+    ),
     path("tax-groups/", TaxGroupListView.as_view(), name="tax-groups"),
+    path("tax-groups/<uuid:group_id>/", TaxGroupDetailView.as_view(), name="tax-group-detail"),
     path("reconciliation/", LedgerReconciliationView.as_view(), name="reconciliation"),
     path("collections-trend/", FeeCollectionsTrendView.as_view(), name="collections-trend"),
     path("students/<uuid:student_id>/", StudentFeesView.as_view(), name="student"),

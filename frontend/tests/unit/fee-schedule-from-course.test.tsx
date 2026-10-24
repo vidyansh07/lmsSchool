@@ -55,7 +55,7 @@ function plan(overrides: Partial<FeePlan> = {}): FeePlan {
     payable: '9999.00',
     paid: '0.00',
     balance: '9999.00',
-    status: 'pending',
+    status: 'unpaid',
     next_due_amount: null,
     next_due_on: null,
     is_overdue: false,
@@ -115,6 +115,7 @@ describe("Use the course's structure", () => {
           due_on: '2026-11-01',
           status: 'pending',
           paid_amount: '0.00',
+          balance: '9999.00',
         },
       ],
     });

@@ -7,7 +7,7 @@
  * most one default, which is what the dialog opens with.
  */
 
-import { apiFetch } from './api';
+import { apiFetch, apiMutate } from './api';
 
 export interface NamedRow {
   id: string;
@@ -27,4 +27,45 @@ export function listPaymentCategories(): Promise<NamedRow[]> {
 
 export function listTaxGroups(): Promise<NamedRow[]> {
   return apiFetch<NamedRow[]>('/api/v1/fees/tax-groups/');
+}
+
+/** What the settings screen sends for any of these three lists. A bank has
+ *  no default; the serializer ignores the flag it does not have. */
+export interface NamedRowInput {
+  name: string;
+  is_default?: boolean;
+  is_active?: boolean;
+}
+
+export function createBank(payload: NamedRowInput): Promise<NamedRow> {
+  return apiMutate<NamedRow>('/api/v1/banks/', { method: 'POST', body: payload });
+}
+
+export function updateBank(id: string, payload: Partial<NamedRowInput>): Promise<NamedRow> {
+  return apiMutate<NamedRow>(`/api/v1/banks/${id}/`, { method: 'PATCH', body: payload });
+}
+
+export function createPaymentCategory(payload: NamedRowInput): Promise<NamedRow> {
+  return apiMutate<NamedRow>('/api/v1/fees/payment-categories/', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function updatePaymentCategory(
+  id: string,
+  payload: Partial<NamedRowInput>,
+): Promise<NamedRow> {
+  return apiMutate<NamedRow>(`/api/v1/fees/payment-categories/${id}/`, {
+    method: 'PATCH',
+    body: payload,
+  });
+}
+
+export function createTaxGroup(payload: NamedRowInput): Promise<NamedRow> {
+  return apiMutate<NamedRow>('/api/v1/fees/tax-groups/', { method: 'POST', body: payload });
+}
+
+export function updateTaxGroup(id: string, payload: Partial<NamedRowInput>): Promise<NamedRow> {
+  return apiMutate<NamedRow>(`/api/v1/fees/tax-groups/${id}/`, { method: 'PATCH', body: payload });
 }

@@ -2,14 +2,31 @@
 
 import { useEffect, useId, useState } from 'react';
 
+import { useAuth } from '@/components/auth-provider';
 import { RequireAuth } from '@/components/require-auth';
+import { AcademicYearsCard } from '@/components/settings/academic-years-card';
+import { NamedListCard } from '@/components/settings/named-list-card';
 import { ErrorState, LoadingState } from '@/components/states';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input, Select } from '@/components/ui/input';
-import { ApiError, fieldErrors } from '@/lib/api';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { listAcademicYears, type AcademicYear } from '@/lib/academic-years';
+import { ApiError, errorMessage, fieldErrors } from '@/lib/api';
+import {
+  createBank,
+  createPaymentCategory,
+  createTaxGroup,
+  listBanks,
+  listPaymentCategories,
+  listTaxGroups,
+  updateBank,
+  updatePaymentCategory,
+  updateTaxGroup,
+  type NamedRow,
+} from '@/lib/fee-settings';
 import { Capability } from '@/lib/capabilities';
 import { formatDateTime, UNKNOWN } from '@/lib/format';
 import {
@@ -346,10 +363,103 @@ function InstitutionSettings() {
   );
 }
 
+/**
+ * The institution's own lists, beside its settings — the reference product's
+ * Organization screen keeps Academic Year, Payment Categories, Bank and Tax
+ * in exactly this company, and they are the same job: the handful of names
+ * every other screen picks from.
+ *
+ * One fetch each, reloaded together: these are short lists, read once, and
+ * four small arrays are cheaper than the bookkeeping to refresh one.
+ */
+function InstitutionLists() {
+  const { can } = useAuth();
+  const mayManage = can(Capability.settingsManage);
+  const [attempt, setAttempt] = useState(0);
+  const [lists, setLists] = useState<{
+    years: AcademicYear[];
+    banks: NamedRow[];
+    categories: NamedRow[];
+    taxes: NamedRow[];
+  } | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      listAcademicYears(),
+      listBanks(),
+      listPaymentCategories(),
+      listTaxGroups(),
+    ])
+      .then(([years, banks, categories, taxes]) => {
+        if (!cancelled) setLists({ years, banks, categories, taxes });
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setFailure(errorMessage(cause, 'Could not load the settings lists.'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
+
+  const reload = () => setAttempt((value) => value + 1);
+
+  if (failure) return <Alert variant="error">{failure}</Alert>;
+  if (!lists) return <LoadingState label="Loading the lists…" rows={4} />;
+
+  return (
+    <div className="space-y-6">
+      <AcademicYearsCard years={lists.years} canManage={mayManage} onChanged={reload} />
+      <NamedListCard
+        title="Payment Categories"
+        description="What a payment is for — Fees, Registration, an exam fee. The default is what the payment dialog opens with."
+        rows={lists.categories}
+        defaultLabel="Default"
+        canManage={mayManage}
+        onCreate={createPaymentCategory}
+        onUpdate={updatePaymentCategory}
+        onChanged={reload}
+      />
+      <NamedListCard
+        title="Bank"
+        description="The banks a cheque, draft or transfer came through. A list rather than free text, because HDFC spelled three ways is three rows on the day somebody reconciles a statement."
+        rows={lists.banks}
+        defaultLabel={null}
+        canManage={mayManage}
+        onCreate={createBank}
+        onUpdate={updateBank}
+        onChanged={reload}
+      />
+      <NamedListCard
+        title="Tax"
+        description="The named taxes a payment can be taken under. Recorded, never computed — naming one says which tax it was taken under, and the amount is whatever was actually collected."
+        rows={lists.taxes}
+        defaultLabel="Default"
+        canManage={mayManage}
+        onCreate={createTaxGroup}
+        onUpdate={updateTaxGroup}
+        onChanged={reload}
+      />
+    </div>
+  );
+}
+
 export default function InstitutionSettingsPage() {
   return (
     <RequireAuth capability={Capability.settingsManage}>
-      <InstitutionSettings />
+      <Tabs defaultValue="organisation">
+        <TabsList>
+          <TabsTrigger value="organisation">Organization</TabsTrigger>
+          <TabsTrigger value="lists">Academic Year, Payments, Bank, Tax</TabsTrigger>
+        </TabsList>
+        <TabsContent value="organisation" className="pt-4">
+          <InstitutionSettings />
+        </TabsContent>
+        <TabsContent value="lists" className="pt-4">
+          <InstitutionLists />
+        </TabsContent>
+      </Tabs>
     </RequireAuth>
   );
 }
