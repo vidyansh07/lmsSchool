@@ -9,6 +9,8 @@ import { Field } from '@/components/ui/field';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
 import { fieldErrors } from '@/lib/api';
+import { ChangeFeesDialog } from '@/components/courses/change-fees-dialog';
+import { formatRupees } from '@/lib/format';
 import { listCategories, updateCourse } from '@/lib/courses';
 import { DIFFICULTY_OPTIONS, VISIBILITY_OPTIONS } from '@/lib/course-labels';
 import type { Category, CourseDetail } from '@/types/api';
@@ -18,6 +20,13 @@ import type { Category, CourseDetail } from '@/types/api';
  *
  * Status is absent on purpose — it has its own panel, its own endpoint and its
  * own rules. The API rejects it here, naming the field.
+ *
+ * The fee is absent for a related reason, and this one was a real bug rather
+ * than a design: this form PATCHed `default_fee` among ten other fields,
+ * writing no history row, while Change Fees records a dated price *and*
+ * moves the figure. Two ways to change a fee, one of which leaves nothing to
+ * account for, is exactly what `CoursePrice` exists to prevent — so the fee
+ * is shown here and changed there.
  */
 export function CourseSettingsForm({
   course,
@@ -36,9 +45,9 @@ export function CourseSettingsForm({
   const [duration, setDuration] = useState(
     course.estimated_duration_minutes ? String(course.estimated_duration_minutes) : '',
   );
-  const [defaultFee, setDefaultFee] = useState(course.default_fee ?? '');
   const [objectives, setObjectives] = useState(course.learning_objectives.join('\n'));
   const [prerequisites, setPrerequisites] = useState(course.prerequisites.join('\n'));
+  const [fees, setFees] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -49,7 +58,6 @@ export function CourseSettingsForm({
     difficulty !== course.difficulty ||
     visibility !== course.visibility ||
     duration !== (course.estimated_duration_minutes ? String(course.estimated_duration_minutes) : '') ||
-    defaultFee !== (course.default_fee ?? '') ||
     objectives !== course.learning_objectives.join('\n') ||
     prerequisites !== course.prerequisites.join('\n');
   // A refresh or a closed tab asks first while the details are unsaved.
@@ -86,7 +94,6 @@ export function CourseSettingsForm({
         difficulty,
         visibility,
         estimated_duration_minutes: duration === '' ? null : Number(duration),
-        default_fee: defaultFee.trim() === '' ? null : defaultFee.trim(),
         learning_objectives: objectives
           .split('\n')
           .map((line) => line.trim())
@@ -167,22 +174,19 @@ export function CourseSettingsForm({
                 onChange={(event) => setDuration(event.target.value)}
               />
             </Field>
-            <Field
-              label="Usual fee (₹)"
-              htmlFor="edit-fee"
-              error={errors.default_fee}
-              hint="Prefilled at registration; the counsellor agrees the real figure per student."
-            >
-              <Input
-                id="edit-fee"
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="1"
-                value={defaultFee}
-                onChange={(event) => setDefaultFee(event.target.value)}
-              />
-            </Field>
+            <div>
+              <p className="mb-1.5 block text-sm font-medium">Course Fees</p>
+              <div className="flex items-center justify-between gap-3 rounded-control border border-line px-3 py-2">
+                <span className="tabular-nums">{formatRupees(course.default_fee)}</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => setFees(true)}>
+                  Change Fees
+                </Button>
+              </div>
+              <p className="mt-1.5 text-xs text-ink-muted">
+                Changed with a date and a reason, kept as history. Students already enrolled keep
+                the fee they were quoted.
+              </p>
+            </div>
           </div>
 
           <Field
@@ -237,6 +241,16 @@ export function CourseSettingsForm({
             {isSaving ? 'Saving…' : 'Save details'}
           </Button>
         </form>
+
+        <ChangeFeesDialog
+          course={course}
+          open={fees}
+          onClose={() => setFees(false)}
+          onSaved={() => {
+            setFees(false);
+            void onSaved();
+          }}
+        />
       </CardContent>
     </Card>
   );

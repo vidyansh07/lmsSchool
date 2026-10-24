@@ -5,11 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import {
-  coverageOf,
-  installmentsAddUp,
-  type InstallmentInput,
-} from '@/components/fees/installment-editor';
+import { coverageOf, installmentsAddUp } from '@/components/fees/installment-editor';
+import type { InstallmentInput } from '@/types/api';
 
 describe('installmentsAddUp', () => {
   it('is true for no schedule at all, which means ad hoc', () => {
