@@ -26,6 +26,12 @@ const securityHeaders = [
  */
 
 const nextConfig: NextConfig = {
+  /**
+   * Set by `next upgrade --agent=security`: it records that this app takes
+   * security patch releases of Next.js, so the toolchain can tell a deliberate
+   * pinned version from one that has simply been left behind.
+   */
+  experimental: { agentUpgrade: 'security' },
   output: 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
