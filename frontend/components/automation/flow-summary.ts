@@ -125,6 +125,13 @@ export function describeAction(action: AutomationAction, lookups: SummaryLookups
     case "send_email":
     case "send_whatsapp":
       return `${strategyLabel(action.params.to)} · template ${action.params.template || "…"}`;
+    case "send_sms":
+      // Said here, where the rule is being read, rather than only in the
+      // delivery log after the fact.
+      return (
+        `${strategyLabel(action.params.to)} · template ${action.params.template || "…"}` +
+        " · recorded, no gateway yet"
+      );
     case "create_review":
       return `Reviewer: ${strategyLabel(action.params.reviewer)}`;
     case "flag_risk":

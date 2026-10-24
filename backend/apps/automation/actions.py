@@ -334,6 +334,52 @@ def send_whatsapp(
     return {"delivery_id": str(deliveries[0].pk), "template": key}
 
 
+def send_sms(
+    *, rule, run, rctx: RunContext, context: dict[str, Any], params: dict[str, Any], depth: int = 0
+) -> dict[str, Any]:
+    """Send through a published, SMS-channel `MessageTemplate`.
+
+    The same shape as `send_whatsapp`, and the same honesty about where it
+    stops: a missing template or an unresolvable recipient is a *skipped*
+    action with the reason recorded on the run, while a recipient with no
+    phone number is skipped too. What is different is the end — there is no
+    SMS gateway configured, so the `Delivery` this creates will fail with
+    that said plainly (`apps.communication.services._dispatch_sms`).
+
+    That is deliberate rather than a gap papered over: the run log shows the
+    rule did what it was asked, the delivery log shows nothing was sent, and
+    the day a DLT-registered sender is connected these deliveries are
+    retryable. The alternative — refusing to offer the action at all — hides
+    the fact that the institute's own automations want SMS.
+    """
+    from apps.communication.models import MessageChannel
+    from apps.communication.services import create_deliveries, resolve_published_template
+
+    key = params.get("template")
+    version = resolve_published_template(key=key, channel=MessageChannel.SMS)
+    if version is None:
+        return {"skipped": True, "reason": f"No published SMS template for key {key!r}."}
+
+    recipient = resolve_user(params.get("to"), rctx=rctx)
+    if recipient is None:
+        return {
+            "skipped": True,
+            "reason": f"Could not resolve a recipient for 'to': {params.get('to')!r}.",
+        }
+
+    deliveries = create_deliveries(
+        channel=MessageChannel.SMS,
+        template_version=version,
+        recipients=[recipient],
+        base_variables=context,
+        related_object=rctx.activity or rctx.enrollment,
+        requested_by=_system_actor(rule),
+    )
+    if not deliveries:
+        return {"skipped": True, "reason": "The recipient has no phone number on file."}
+    return {"delivery_id": str(deliveries[0].pk), "template": key}
+
+
 def create_review(
     *, rule, run, rctx: RunContext, context: dict[str, Any], params: dict[str, Any], depth: int = 0
 ) -> dict[str, Any]:
@@ -528,6 +574,7 @@ ACTIONS = {
     "send_notification": send_notification,
     "send_email": send_email,
     "send_whatsapp": send_whatsapp,
+    "send_sms": send_sms,
     "create_review": create_review,
     "flag_risk": flag_risk,
     "send_webhook": send_webhook,

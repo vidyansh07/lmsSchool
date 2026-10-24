@@ -50,6 +50,7 @@ import type {
   SendEmailActionParams,
   SendNotificationActionParams,
   SendWebhookActionParams,
+  SendSmsActionParams,
   SendWhatsappActionParams,
   UpdateEnquiryActionParams,
   Webhook,
@@ -148,6 +149,8 @@ export function blankActionFor(type: AutomationActionType): AutomationAction {
       return { type: "send_email", params: { to: "manager", template: "" } };
     case "send_whatsapp":
       return { type: "send_whatsapp", params: { to: "manager", template: "" } };
+    case "send_sms":
+      return { type: "send_sms", params: { to: "manager", template: "" } };
     case "create_review":
       return {
         type: "create_review",
@@ -662,8 +665,8 @@ function SendTemplateFields({
   disabled,
   toOtherLabel,
 }: {
-  params: SendEmailActionParams | SendWhatsappActionParams;
-  onChange: (next: SendEmailActionParams | SendWhatsappActionParams) => void;
+  params: SendEmailActionParams | SendWhatsappActionParams | SendSmsActionParams;
+  onChange: (next: SendEmailActionParams | SendWhatsappActionParams | SendSmsActionParams) => void;
   disabled: boolean;
   toOtherLabel: string;
 }) {
@@ -913,6 +916,15 @@ export function ActionRow({
           toOtherLabel="Other (user ID or phone)"
           onChange={(params) =>
             onChange({ type: "send_whatsapp", params: params as SendWhatsappActionParams })
+          }
+        />
+      ) : action.type === "send_sms" ? (
+        <SendTemplateFields
+          params={action.params}
+          disabled={disabled}
+          toOtherLabel="Other (user ID or phone)"
+          onChange={(params) =>
+            onChange({ type: "send_sms", params: params as SendSmsActionParams })
           }
         />
       ) : action.type === "create_review" ? (

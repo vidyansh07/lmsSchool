@@ -781,6 +781,7 @@ export const AUTOMATION_ACTION_TYPE_LABEL: Record<AutomationActionType, string> 
   send_notification: "Send a notification",
   send_email: "Send an email",
   send_whatsapp: "Send a WhatsApp message",
+  send_sms: "Send an SMS",
   create_review: "Open a performance review",
   flag_risk: "Flag risk",
   send_webhook: "Send to a webhook",

@@ -53,6 +53,7 @@ ACTION_PERMISSIONS: dict[str, str] = {
     "update_enquiry": Capability.ENQUIRY_MANAGE,
     "send_notification": Capability.COMMUNICATION_SEND,
     "send_email": Capability.COMMUNICATION_SEND,
+    "send_sms": Capability.COMMUNICATION_SEND,
     "send_whatsapp": Capability.COMMUNICATION_SEND,
     "create_review": Capability.REVIEW_MANAGE_ANY,
     # `PERFORMANCE_VIEW_ANY` is read-only ("view any student's or trainer's

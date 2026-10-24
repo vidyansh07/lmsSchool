@@ -3435,6 +3435,8 @@ export type AutomationActionType =
   | "send_notification"
   | "send_email"
   | "send_whatsapp"
+  /** Recorded and queued; nothing is sent until a gateway is connected. */
+  | "send_sms"
   | "create_review"
   | "flag_risk"
   | "send_webhook";
@@ -3495,6 +3497,13 @@ export interface SendWhatsappActionParams {
   template: string;
 }
 
+/** Same shape as WhatsApp's: who, and which published SMS template. The
+ *  delivery it creates fails until a gateway is connected, and says so. */
+export interface SendSmsActionParams {
+  to: string;
+  template: string;
+}
+
 export interface CreateReviewActionParams {
   review_type?: string;
   reviewer: string;
@@ -3520,6 +3529,7 @@ export type AutomationAction =
   | { type: "send_notification"; params: SendNotificationActionParams }
   | { type: "send_email"; params: SendEmailActionParams }
   | { type: "send_whatsapp"; params: SendWhatsappActionParams }
+  | { type: "send_sms"; params: SendSmsActionParams }
   | { type: "create_review"; params: CreateReviewActionParams }
   | { type: "flag_risk"; params: FlagRiskActionParams }
   | { type: "send_webhook"; params: SendWebhookActionParams };

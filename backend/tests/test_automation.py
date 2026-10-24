@@ -997,3 +997,71 @@ def test_a_rule_says_who_wrote_it(api_client_no_csrf, admin_user):
 
     rows = api_client_no_csrf.get("/api/v1/automation-rules/?search=Named").json()["results"]
     assert rows[0]["created_by_name"] == admin_user.get_full_name()
+
+
+@pytest.mark.django_db
+def test_an_sms_action_records_the_message_and_says_nothing_was_sent(admin_user, student_profile):
+    """The institute's automations want SMS, and GRRAS has no gateway. The
+    action runs, the delivery exists, and the delivery says plainly that
+    nothing went out — rather than the action being absent and the gap
+    invisible."""
+    from apps.communication import services as comms
+    from apps.communication.models import Delivery, DeliveryState, MessageChannel
+
+    template = comms.create_template(
+        actor=admin_user,
+        key="sms.welcome",
+        name="Welcome (SMS)",
+        channel=MessageChannel.SMS,
+        kind="student.welcome",
+    )
+    version = template.versions.get(number=1)
+    version = comms.update_draft_version(
+        actor=admin_user, version=version, body_text="Welcome to GRRAS", variables=[]
+    )
+    version = comms.approve_version(actor=admin_user, version=version)
+    comms.publish_version(actor=admin_user, version=version)
+
+    student_profile.user.phone = "+919876543210"
+    student_profile.user.save(update_fields=["phone"])
+
+    from apps.automation.actions import ACTIONS, RunContext
+
+    rule = services.create_rule(
+        actor=admin_user, name="Welcome by SMS", trigger="ENQUIRY_STAGE_CHANGED"
+    )
+    outcome = ACTIONS["send_sms"](
+        rule=rule,
+        run=None,
+        rctx=RunContext(student=student_profile),
+        context={},
+        params={"template": "sms.welcome", "to": "student"},
+    )
+    assert "delivery_id" in outcome, outcome
+
+    delivery = Delivery.objects.get(pk=outcome["delivery_id"])
+    assert delivery.channel == MessageChannel.SMS
+    comms.dispatch_delivery(delivery)
+    delivery.refresh_from_db()
+    assert delivery.state == DeliveryState.FAILED
+    assert "No SMS gateway is configured" in delivery.error
+
+
+@pytest.mark.django_db
+def test_an_sms_action_without_a_published_template_is_skipped_with_the_reason(
+    admin_user, student_profile
+):
+    from apps.automation.actions import ACTIONS, RunContext
+
+    rule = services.create_rule(
+        actor=admin_user, name="Nothing to send", trigger="ENQUIRY_STAGE_CHANGED"
+    )
+    outcome = ACTIONS["send_sms"](
+        rule=rule,
+        run=None,
+        rctx=RunContext(student=student_profile),
+        context={},
+        params={"template": "sms.nothing", "to": "student"},
+    )
+    assert outcome["skipped"] is True
+    assert "No published SMS template" in outcome["reason"]

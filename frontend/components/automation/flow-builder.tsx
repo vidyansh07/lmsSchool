@@ -33,6 +33,7 @@ import {
   ListTodo,
   Mail,
   MessageCircle,
+  MessageSquare,
   Trash2,
   UserCog,
   X,
@@ -76,17 +77,49 @@ export type FlowSelection =
   | { kind: "action"; index: number }
   | null;
 
-const ACTION_BLOCKS: { type: AutomationActionType; icon: LucideIcon; hint: string }[] = [
-  { type: "create_activity", icon: ListTodo, hint: "A call, demo class or other task, with its content" },
-  { type: "update_enquiry", icon: UserCog, hint: "Stage, owner, follow-up date" },
-  { type: "assign_form", icon: ClipboardList, hint: "Someone fills in a form" },
-  { type: "send_notification", icon: Bell, hint: "An in-app notice, emailed by preference" },
-  { type: "send_whatsapp", icon: MessageCircle, hint: "A WhatsApp template" },
-  { type: "send_email", icon: Mail, hint: "An email template" },
-  { type: "create_review", icon: ClipboardCheck, hint: "A draft performance review" },
-  { type: "flag_risk", icon: AlertTriangle, hint: "Mark a student at risk" },
-  { type: "send_webhook", icon: Link2, hint: "Push it to Meritto or another system" },
+interface ActionBlock {
+  type: AutomationActionType;
+  icon: LucideIcon;
+  hint: string;
+}
+
+/** The palette, grouped the way the reference product's node menu groups it:
+ *  what this says to somebody, what it changes about the record, and what
+ *  work it creates. Nine actions in one undifferentiated column is a list to
+ *  read; three short groups is a choice to make. */
+const ACTION_GROUPS: { label: string; blocks: ActionBlock[] }[] = [
+  {
+    label: "Communication",
+    blocks: [
+      { type: "send_email", icon: Mail, hint: "An email template" },
+      { type: "send_sms", icon: MessageSquare, hint: "An SMS template — recorded, not yet sent" },
+      { type: "send_whatsapp", icon: MessageCircle, hint: "A WhatsApp template" },
+      { type: "send_notification", icon: Bell, hint: "An in-app notice, emailed by preference" },
+    ],
+  },
+  {
+    label: "Data flow",
+    blocks: [
+      { type: "update_enquiry", icon: UserCog, hint: "Stage, owner, follow-up date" },
+      { type: "flag_risk", icon: AlertTriangle, hint: "Mark a student at risk" },
+      { type: "send_webhook", icon: Link2, hint: "Push it to Meritto or another system" },
+    ],
+  },
+  {
+    label: "Work",
+    blocks: [
+      {
+        type: "create_activity",
+        icon: ListTodo,
+        hint: "A call, demo class or other task, with its content",
+      },
+      { type: "assign_form", icon: ClipboardList, hint: "Someone fills in a form" },
+      { type: "create_review", icon: ClipboardCheck, hint: "A draft performance review" },
+    ],
+  },
 ];
+
+const ACTION_BLOCKS: ActionBlock[] = ACTION_GROUPS.flatMap((group) => group.blocks);
 
 const ACTION_ICON: Record<AutomationActionType, LucideIcon> = Object.fromEntries(
   ACTION_BLOCKS.map((block) => [block.type, block.icon]),
@@ -495,21 +528,25 @@ export function FlowBuilder({
             onAdd={() => addCondition()}
           />
         </div>
-        <div className="space-y-1.5">
-          <p className="px-1 text-2xs font-bold uppercase tracking-wider text-ink-muted">Do</p>
-          {ACTION_BLOCKS.map((block) => (
-            <PaletteBlock
-              key={block.type}
-              icon={block.icon}
-              label={AUTOMATION_ACTION_TYPE_LABEL[block.type]}
-              hint={block.hint}
-              section="action"
-              payload={{ source: "palette", actionType: block.type }}
-              disabled={disabled}
-              onAdd={() => addAction(block.type)}
-            />
-          ))}
-        </div>
+        {ACTION_GROUPS.map((group) => (
+          <div key={group.label} className="space-y-1.5">
+            <p className="px-1 text-2xs font-bold uppercase tracking-wider text-ink-muted">
+              {group.label}
+            </p>
+            {group.blocks.map((block) => (
+              <PaletteBlock
+                key={block.type}
+                icon={block.icon}
+                label={AUTOMATION_ACTION_TYPE_LABEL[block.type]}
+                hint={block.hint}
+                section="action"
+                payload={{ source: "palette", actionType: block.type }}
+                disabled={disabled}
+                onAdd={() => addAction(block.type)}
+              />
+            ))}
+          </div>
+        ))}
         <div className="space-y-1.5">
           <p className="px-1 text-2xs font-bold uppercase tracking-wider text-ink-muted">
             Coming next
