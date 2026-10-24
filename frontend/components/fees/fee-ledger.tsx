@@ -661,7 +661,13 @@ function InstallmentsForm({ onOpenChange, plan, onSaved }: PlanDialogProps) {
           count against the earliest instalments first.
         </DialogDescription>
       </DialogHeader>
-      <InstallmentEditor payable={payable} rows={rows} onChange={setRows} error={error} />
+      <InstallmentEditor
+        payable={payable}
+        rows={rows}
+        onChange={setRows}
+        error={error}
+        received={Number(plan.paid)}
+      />
       <DialogFooter>
         <Button type="button" variant="ghost" disabled={saving} onClick={() => onOpenChange(false)}>
           Cancel

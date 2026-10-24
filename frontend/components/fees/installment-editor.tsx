@@ -47,6 +47,9 @@ export interface InstallmentEditorProps {
   onChange: (rows: InstallmentInput[]) => void;
   /** Shown when the server refused the schedule. */
   error?: string;
+  /** What has already been received against this plan, so the rows can say
+   *  which of them that money already covers. */
+  received?: number;
   /** A compact variant for the wizard, where the table sits inside a form. */
   idPrefix?: string;
 }
@@ -58,17 +61,53 @@ export function installmentsAddUp(rows: InstallmentInput[], payable: number): bo
   return Math.round(installmentsTotal(rows) * 100) === Math.round(payable * 100);
 }
 
+/**
+ * What the schedule being typed would mean for a student who has already
+ * paid something: the ledger covers instalments in order with whatever has
+ * been received, so the first rows are already settled and one is partly so.
+ *
+ * Shown while editing rather than discovered after saving — the reference
+ * product calls this an instalments preview, and it is the difference
+ * between "four instalments of 5,000" and "the first two are already paid".
+ */
+export function coverageOf(
+  rows: InstallmentInput[],
+  received: number,
+): ('paid' | 'part' | 'pending')[] {
+  let left = received;
+  return rows.map((row) => {
+    const amount = Number(row.amount) || 0;
+    if (left >= amount && amount > 0) {
+      left -= amount;
+      return 'paid';
+    }
+    if (left > 0) {
+      left = 0;
+      return 'part';
+    }
+    return 'pending';
+  });
+}
+
+const COVERAGE_LABEL: Record<'paid' | 'part' | 'pending', string> = {
+  paid: 'Already paid',
+  part: 'Partly paid',
+  pending: 'Pending',
+};
+
 export function InstallmentEditor({
   payable,
   rows,
   onChange,
   error,
+  received = 0,
   idPrefix = 'inst',
 }: InstallmentEditorProps) {
   const enabled = rows.length > 0;
   const total = installmentsTotal(rows);
   const difference = Math.round((payable - total) * 100) / 100;
   const addsUp = installmentsAddUp(rows, payable);
+  const coverage = coverageOf(rows, received);
 
   function regenerate(count: number) {
     const start = rows[0]?.due_on ? new Date(`${rows[0].due_on}T00:00:00`) : new Date();
@@ -138,6 +177,7 @@ export function InstallmentEditor({
                   <Th className="w-10">#</Th>
                   <Th>Due on</Th>
                   <Th className="text-right">Amount (₹)</Th>
+                  {received > 0 ? <Th>Covered by what is paid</Th> : null}
                   <Th className="w-12">
                     <span className="sr-only">Remove</span>
                   </Th>
@@ -167,6 +207,21 @@ export function InstallmentEditor({
                         onChange={(event) => update(index, { amount: event.target.value })}
                       />
                     </Td>
+                    {received > 0 ? (
+                      <Td>
+                        <Badge
+                          variant={
+                            coverage[index] === 'paid'
+                              ? 'success'
+                              : coverage[index] === 'part'
+                                ? 'warning'
+                                : 'neutral'
+                          }
+                        >
+                          {COVERAGE_LABEL[coverage[index] ?? 'pending']}
+                        </Badge>
+                      </Td>
+                    ) : null}
                     <Td className="text-right">
                       <Button
                         type="button"
