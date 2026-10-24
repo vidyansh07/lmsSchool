@@ -8,10 +8,12 @@
  * here the way a form definition has one, so a dialog is enough.
  */
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Eye, ListChecks, Pencil, Plus } from "lucide-react";
 
 import { useAuth } from "@/components/auth-provider";
+import { RowActions } from "@/components/row-actions";
 import { RequireAuth } from "@/components/require-auth";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { Alert } from "@/components/ui/alert";
@@ -30,9 +32,11 @@ import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableWrapper, Td, Th } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useApi } from "@/hooks/use-api";
-import { fieldErrors } from "@/lib/api";
+import { errorMessage, fieldErrors } from "@/lib/api";
 import { Capability, can } from "@/lib/capabilities";
+import { formatDateTime } from "@/lib/format";
 import {
   ACTIVITY_CATEGORY_LABEL,
   ACTIVITY_CATEGORY_OPTIONS,
@@ -81,6 +85,12 @@ function blankInput(): ActivityTypeInput {
     risk_effect: "none",
     reminder_minutes_before: null,
     status: "active",
+    check_conflict: false,
+    // On unless turned off, matching the server's default: reopening a
+    // completed activity is behaviour trainers already rely on.
+    reopen_allowed: true,
+    invite_organiser: false,
+    invite_owner: false,
   };
 }
 
@@ -94,15 +104,20 @@ function toInput(type: ActivityType): ActivityTypeInput {
     allowed_assignee_roles: type.allowed_assignee_roles,
     visible_to_student: type.visible_to_student,
     default_duration_minutes: type.default_duration_minutes,
-    // `ActivityType.form` reads back as `{id, slug}`; every write takes the
-    // bare id (`ActivityTypeCreateSerializer`/`...PatchSerializer`'s `form`
-    // is a `UUIDField`).
-    form: type.form?.id ?? null,
+    // The API sends the pinned form's slug and takes the same slug back, so
+    // this is a pass-through. It used to read `type.form?.id`, against a
+    // declaration that said `{id, slug}` — on a string that is `undefined`,
+    // so every edit of a type with a form quietly unpinned it.
+    form: type.form,
     requires_review: type.requires_review,
     performance_weight: type.performance_weight,
     risk_effect: type.risk_effect,
     reminder_minutes_before: type.reminder_minutes_before,
     status: type.status,
+    check_conflict: type.check_conflict,
+    reopen_allowed: type.reopen_allowed,
+    invite_organiser: type.invite_organiser,
+    invite_owner: type.invite_owner,
   };
 }
 
@@ -175,7 +190,7 @@ function ActivityTypeDialog({
 }: {
   open: boolean;
   editing: ActivityType | null;
-  formOptions: { id: string; name: string }[];
+  formOptions: { slug: string; name: string }[];
   onClose: () => void;
   onSaved: (type: ActivityType) => void;
 }) {
@@ -440,7 +455,7 @@ function ActivityTypeDialog({
                 >
                   <option value="">No form</option>
                   {formOptions.map((form) => (
-                    <option key={form.id} value={form.id}>
+                    <option key={form.slug} value={form.slug}>
                       {form.name}
                     </option>
                   ))}
@@ -460,6 +475,81 @@ function ActivityTypeDialog({
                     setInput((current) => ({ ...current, requires_review: checked }))
                   }
                 />
+              </div>
+            </div>
+          </details>
+
+          <details
+            className="space-y-4 rounded-card border border-line p-3"
+            open={isEdit || Boolean(errors.check_conflict || errors.reopen_allowed)}
+          >
+            <summary className="cursor-pointer select-none text-sm font-medium hover:text-ink">
+              Booking and invitations
+            </summary>
+            <div className="space-y-4 pt-3">
+              <div className="flex items-center justify-between rounded-md border border-line p-3">
+                <div>
+                  <p className="text-sm font-medium">Check conflict</p>
+                  <p className="text-xs text-ink-muted">
+                    Refuse a second one of these at the same time for the same person. Two
+                    follow-up calls at once is a busy morning; two mock interviews with one
+                    trainer is a mistake.
+                  </p>
+                </div>
+                <Switch
+                  aria-label="Check conflict"
+                  checked={input.check_conflict}
+                  onCheckedChange={(checked) =>
+                    setInput((current) => ({ ...current, check_conflict: checked }))
+                  }
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-md border border-line p-3">
+                <div>
+                  <p className="text-sm font-medium">Open completed event</p>
+                  <p className="text-xs text-ink-muted">
+                    Allow a completed one to be opened again. Turn it off where done must mean
+                    done. Reopening something missed or cancelled stays available either way.
+                  </p>
+                </div>
+                <Switch
+                  aria-label="Open completed event"
+                  checked={input.reopen_allowed}
+                  onCheckedChange={(checked) =>
+                    setInput((current) => ({ ...current, reopen_allowed: checked }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-3 rounded-md border border-line p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium">Send invite to organiser</p>
+                  <Switch
+                    aria-label="Send invite to organiser"
+                    checked={input.invite_organiser}
+                    onCheckedChange={(checked) =>
+                      setInput((current) => ({ ...current, invite_organiser: checked }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium">Send invite to owner</p>
+                  <Switch
+                    aria-label="Send invite to owner"
+                    checked={input.invite_owner}
+                    onCheckedChange={(checked) =>
+                      setInput((current) => ({ ...current, invite_owner: checked }))
+                    }
+                  />
+                </div>
+                {input.invite_organiser || input.invite_owner ? (
+                  <Alert variant="warning">
+                    Recorded, not sent. Calendar invitations are not wired to a mail calendar
+                    yet, so nothing leaves the system — the setting is kept so it takes effect
+                    the day they are.
+                  </Alert>
+                ) : null}
               </div>
             </div>
           </details>
@@ -560,15 +650,15 @@ function ActivityTypesList() {
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ActivityType | null>(null);
+  const [tab, setTab] = useState("events");
+  const [toggling, setToggling] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
 
   const formOptions = useMemo(
     () =>
       (formsData?.results ?? [])
-        .filter(
-          (form): form is typeof form & { id: string } =>
-            form.entity === "activity" && Boolean(form.id),
-        )
-        .map((form) => ({ id: form.id, name: form.name })),
+        .filter((form) => form.entity === "activity" && Boolean(form.slug))
+        .map((form) => ({ slug: form.slug, name: form.name })),
     [formsData],
   );
 
@@ -584,110 +674,214 @@ function ActivityTypesList() {
     setDialogOpen(true);
   }
 
+  /** The row's own switch, the way the reference CRM's Calendar Pro list
+   *  works: an event is turned off where it stands, without opening it. The
+   *  row shows the new state only once the server has agreed to it. */
+  async function toggleStatus(type: ActivityType, active: boolean) {
+    setToggling(type.slug);
+    setFailure(null);
+    try {
+      await updateActivityType(type.slug, { status: active ? "active" : "disabled" });
+      reload();
+    } catch (cause) {
+      setFailure(errorMessage(cause));
+    } finally {
+      setToggling(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Activity types</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Calendar Pro</h1>
           <p className="text-sm text-ink-muted">
-            The catalog behind every piece of staff work — interviews, mentoring,
-            reviews, placement calls and the rest — with who may create and be
-            assigned each, its pinned form, and how it feeds performance and risk.
+            Every kind of event and piece of staff work — follow-ups, centre visits, technical
+            talks with a trainer, mock interviews, reviews — with who may create and be assigned
+            each, the fields it asks for, and how it feeds performance and risk.
           </p>
         </div>
         {mayManage ? (
           <Button type="button" onClick={openCreate}>
             <Plus className="size-4" aria-hidden="true" />
-            New type
+            New Event
           </Button>
         ) : null}
       </div>
 
-      {isLoading ? (
-        <LoadingState label="Loading activity types…" rows={6} />
-      ) : error ? (
-        <ErrorState
-          title="Could not load activity types"
-          message={error.message}
-          requestId={error.requestId || undefined}
-          onRetry={reload}
-        />
-      ) : rows.length === 0 ? (
-        <EmptyState
-          title="No activity types yet"
-          description="Create the first type to start assigning work."
-          action={
-            mayManage ? (
-              <Button type="button" onClick={openCreate}>
-                <Plus className="size-4" aria-hidden="true" />
-                New type
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <TableWrapper>
-          <Table>
-            <thead>
-              <tr>
-                <Th>Type</Th>
-                <Th>Category</Th>
-                <Th>Form</Th>
-                <Th>Review</Th>
-                <Th>Weight</Th>
-                <Th>Status</Th>
-                <Th>
-                  <span className="sr-only">Actions</span>
-                </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.slug} className="hover:bg-sunken/40">
-                  <Td>
-                    <p className="font-medium">{row.name}</p>
-                    <p className="text-xs text-ink-muted">
-                      {row.slug}
-                      {row.is_system ? " · seeded" : ""}
-                    </p>
-                  </Td>
-                  <Td>
-                    <Badge>
-                      {ACTIVITY_CATEGORY_LABEL[row.category]}
-                    </Badge>
-                  </Td>
-                  <Td>
-                    {row.form ? (
-                      row.form.slug
-                    ) : (
-                      <span className="text-ink-muted">None</span>
-                    )}
-                  </Td>
-                  <Td>{row.requires_review ? "Yes" : "No"}</Td>
-                  <Td>{row.performance_weight}</Td>
-                  <Td>
-                    <Badge variant={ACTIVITY_TYPE_STATUS_VARIANT[row.status]}>
-                      {ACTIVITY_TYPE_STATUS_LABEL[row.status]}
-                    </Badge>
-                  </Td>
-                  <Td className="text-right">
-                    {mayManage ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openEdit(row)}
-                      >
-                        Edit
-                      </Button>
-                    ) : null}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </TableWrapper>
-      )}
+      {failure ? <Alert variant="error">{failure}</Alert> : null}
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="events">Events</TabsTrigger>
+          <TabsTrigger value="fields">Fields</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="events" className="pt-4">
+          {isLoading ? (
+            <LoadingState label="Loading events…" rows={6} />
+          ) : error ? (
+            <ErrorState
+              title="Could not load events"
+              message={error.message}
+              requestId={error.requestId || undefined}
+              onRetry={reload}
+            />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              title="No events yet"
+              description="Create the first one to start booking and assigning work."
+              action={
+                mayManage ? (
+                  <Button type="button" onClick={openCreate}>
+                    <Plus className="size-4" aria-hidden="true" />
+                    New Event
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <TableWrapper>
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Event Name</Th>
+                    <Th>Created By</Th>
+                    <Th>Created On</Th>
+                    <Th>Updated By</Th>
+                    <Th>Updated On</Th>
+                    <Th>Status</Th>
+                    <Th>
+                      <span className="sr-only">Action</span>
+                    </Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.slug} className="hover:bg-sunken/40">
+                      <Td>
+                        <p className="font-medium">{row.name}</p>
+                        <p className="text-xs text-ink-muted">
+                          {ACTIVITY_CATEGORY_LABEL[row.category]}
+                          {row.form ? ` · ${row.form}` : " · no fields"}
+                          {row.check_conflict ? " · checks for a clash" : ""}
+                        </p>
+                      </Td>
+                      <Td>{row.created_by_name || "—"}</Td>
+                      <Td className="whitespace-nowrap tabular-nums">
+                        {formatDateTime(row.created_at)}
+                      </Td>
+                      <Td>{row.updated_by_name || "—"}</Td>
+                      <Td className="whitespace-nowrap tabular-nums">
+                        {formatDateTime(row.updated_at)}
+                      </Td>
+                      <Td>
+                        {mayManage ? (
+                          <Switch
+                            aria-label={`${row.name} is active`}
+                            checked={row.status === "active"}
+                            disabled={toggling === row.slug}
+                            onCheckedChange={(checked) => void toggleStatus(row, checked)}
+                          />
+                        ) : (
+                          <Badge variant={ACTIVITY_TYPE_STATUS_VARIANT[row.status]}>
+                            {ACTIVITY_TYPE_STATUS_LABEL[row.status]}
+                          </Badge>
+                        )}
+                      </Td>
+                      <Td>
+                        <RowActions
+                          subject={row.name}
+                          actions={[
+                            {
+                              label: "Edit Event",
+                              icon: Pencil,
+                              capability: Capability.activityTypeManage,
+                              onSelect: () => openEdit(row),
+                            },
+                            {
+                              label: "Manage Fields",
+                              icon: ListChecks,
+                              capability: Capability.formManage,
+                              href: row.form ? `/admin/forms/${row.form}` : "/admin/forms",
+                              disabledReason: row.form
+                                ? undefined
+                                : "This event asks for no fields yet. Pin a form to it first.",
+                            },
+                            {
+                              label: "View Activities",
+                              icon: Eye,
+                              href: `/activities?type=${encodeURIComponent(row.slug)}`,
+                            },
+                          ]}
+                        />
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </TableWrapper>
+          )}
+        </TabsContent>
+
+        <TabsContent value="fields" className="space-y-4 pt-4">
+          <p className="text-sm text-ink-muted">
+            The field sets events ask for. Each is a form, built and published in the form
+            builder; an event pins one, and every activity of that event asks exactly those
+            questions.
+          </p>
+          {formOptions.length === 0 ? (
+            <EmptyState
+              title="No event fields yet"
+              description="Build a field set in the form builder, then pin it to an event."
+              action={
+                <Button asChild variant="outline">
+                  <Link href="/admin/forms">Open the form builder</Link>
+                </Button>
+              }
+            />
+          ) : (
+            <TableWrapper>
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Field set</Th>
+                    <Th>Used by</Th>
+                    <Th>
+                      <span className="sr-only">Action</span>
+                    </Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {formOptions.map((form) => {
+                    const users = rows.filter((row) => row.form === form.slug);
+                    return (
+                      <tr key={form.slug} className="hover:bg-sunken/40">
+                        <Td>
+                          <p className="font-medium">{form.name}</p>
+                          <p className="text-xs text-ink-muted">{form.slug}</p>
+                        </Td>
+                        <Td>
+                          {users.length === 0 ? (
+                            <span className="text-ink-muted">No event yet</span>
+                          ) : (
+                            users.map((row) => row.name).join(", ")
+                          )}
+                        </Td>
+                        <Td className="text-right">
+                          <Button asChild size="sm" variant="outline">
+                            <Link href={`/admin/forms/${form.slug}`}>Manage Fields</Link>
+                          </Button>
+                        </Td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </TableWrapper>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <ActivityTypeDialog
         open={dialogOpen}

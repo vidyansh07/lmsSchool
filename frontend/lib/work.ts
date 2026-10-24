@@ -50,6 +50,10 @@ export interface ActivityTypeInput {
   risk_effect: "none" | "score_below_threshold";
   reminder_minutes_before: number | null;
   status: "active" | "disabled";
+  check_conflict: boolean;
+  reopen_allowed: boolean;
+  invite_organiser: boolean;
+  invite_owner: boolean;
 }
 
 export async function createActivityType(

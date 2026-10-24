@@ -51,6 +51,12 @@ function type(overrides: Partial<ActivityType> = {}): ActivityType {
     next_action: null,
     is_system: true,
     status: "active",
+    check_conflict: false,
+    reopen_allowed: true,
+    invite_organiser: false,
+    invite_owner: false,
+    created_by_name: "Rajat Goyal",
+    updated_by_name: "Rajat Goyal",
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
     ...overrides,
@@ -74,7 +80,7 @@ describe("ActivityTypesPage — progressive disclosure (Phase R7 Target 3)", () 
   it("starts a new type's non-essential sections collapsed", () => {
     mockUseApi([]);
     render(<ActivityTypesPage />);
-    fireEvent.click(screen.getAllByRole("button", { name: "New type" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "New Event" })[0]!);
 
     // The core fields stay unconditionally visible.
     expect(screen.getByRole("textbox", { name: "Name" })).toBeVisible();
@@ -88,7 +94,7 @@ describe("ActivityTypesPage — progressive disclosure (Phase R7 Target 3)", () 
   it("opens a section by clicking its summary", () => {
     mockUseApi([]);
     render(<ActivityTypesPage />);
-    fireEvent.click(screen.getAllByRole("button", { name: "New type" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "New Event" })[0]!);
 
     fireEvent.click(screen.getByText("Who can do this, and who sees it"));
     expect(screen.getByText("Who may create it")).toBeVisible();
@@ -97,7 +103,7 @@ describe("ActivityTypesPage — progressive disclosure (Phase R7 Target 3)", () 
   it("starts every section open when editing an existing type", () => {
     mockUseApi([type()]);
     render(<ActivityTypesPage />);
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: /Edit Event/ }));
 
     expect(screen.getByText("Who may create it")).toBeVisible();
     expect(screen.getByLabelText("Default duration (minutes)")).toBeVisible();
@@ -114,7 +120,7 @@ describe("ActivityTypesPage — progressive disclosure (Phase R7 Target 3)", () 
       }),
     );
     render(<ActivityTypesPage />);
-    fireEvent.click(screen.getAllByRole("button", { name: "New type" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "New Event" })[0]!);
 
     // Collapsed before submitting.
     expect(screen.getByLabelText("Default duration (minutes)")).not.toBeVisible();

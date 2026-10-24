@@ -2912,10 +2912,15 @@ export interface ActivityType {
   allowed_assignee_roles: UserRole[];
   visible_to_student: boolean;
   default_duration_minutes: number | null;
-  /** The pinned `FormDefinition`, or null for no form. Read-only shape —
-   *  writing this type takes `form` as a bare id (a `FormDefinitionSummary
-   *  .id`), see `lib/work.ts`'s `ActivityTypeInput`. */
-  form: { id: string; slug: string } | null;
+  /** The pinned `FormDefinition`'s **slug**, or null for no form.
+   *
+   *  A string, not an object: `ActivityTypeSerializer.get_form` returns
+   *  `form.slug`, and the write serializers take that same slug back, so a
+   *  round trip needs no id lookup. This was declared as `{id, slug}` and the
+   *  test fixture agreed with the declaration rather than with the API, which
+   *  is how `toInput`'s `form: type.form?.id ?? null` came to send `null` and
+   *  silently unpin a type's form on every edit. */
+  form: string | null;
   requires_review: boolean;
   /** decimal(4,2) as the API's decimal string; `"0.00"` = no effect. */
   performance_weight: string;
@@ -2924,6 +2929,15 @@ export interface ActivityType {
   next_action: ActivityNextAction | null;
   is_system: boolean;
   status: ActivityTypeStatus;
+  /** Refuse a second one of these over the same minutes for one person. */
+  check_conflict: boolean;
+  /** Whether a *completed* one may be opened again. On unless turned off. */
+  reopen_allowed: boolean;
+  invite_organiser: boolean;
+  invite_owner: boolean;
+  /** Names, never addresses. A seeded row says it was seeded. */
+  created_by_name: string;
+  updated_by_name: string;
   created_at: string;
   updated_at: string;
 }

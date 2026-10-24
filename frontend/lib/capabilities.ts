@@ -28,6 +28,7 @@ export const Capability = {
   courseUpdateAny: "course.update_any",
   coursePublishAny: "course.publish_any",
   courseAssignAuthors: "course.assign_authors",
+  courseDelete: "course.delete",
   batchViewAny: "batch.view_any",
   batchCreate: "batch.create",
   batchUpdateAny: "batch.update_any",

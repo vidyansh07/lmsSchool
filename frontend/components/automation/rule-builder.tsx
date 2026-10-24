@@ -130,7 +130,7 @@ export function RuleBuilder({ id }: { id: string }) {
       slug: type.slug,
       name: type.name,
       subject: type.subject ?? "student",
-      form: type.form?.slug ?? null,
+      form: type.form,
     }));
   const record = automationRecordOf(trigger);
   // Enquiry stages are a fixed list: offer them as the value to compare to.
@@ -160,8 +160,8 @@ export function RuleBuilder({ id }: { id: string }) {
       : undefined;
   const activityForm =
     typeof namedActivityType === "string"
-      ? ((activityTypeData?.results ?? []).find((type) => type.slug === namedActivityType)?.form
-          ?.slug ?? null)
+      ? ((activityTypeData?.results ?? []).find((type) => type.slug === namedActivityType)?.form ??
+        null)
       : null;
   const formSlug = isFormTrigger ? pickedForm || null : activityForm;
   const formFields = usePublishedFields(formSlug);

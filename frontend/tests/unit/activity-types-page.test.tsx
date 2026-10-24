@@ -13,9 +13,10 @@ const useApi = vi.hoisted(() => vi.fn());
 vi.mock("@/hooks/use-api", () => ({ useApi }));
 
 const createActivityType = vi.hoisted(() => vi.fn());
+const updateActivityType = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/work", async () => {
   const actual = await vi.importActual<typeof import("@/lib/work")>("@/lib/work");
-  return { ...actual, createActivityType };
+  return { ...actual, createActivityType, updateActivityType };
 });
 
 vi.mock("@/components/auth-provider", () => ({
@@ -39,7 +40,7 @@ function type(overrides: Partial<ActivityType> = {}): ActivityType {
     allowed_assignee_roles: ["trainer"],
     visible_to_student: true,
     default_duration_minutes: 30,
-    form: { id: "form-1", slug: "mock-interview" },
+    form: "mock-interview",
     requires_review: false,
     performance_weight: "1.00",
     risk_effect: "score_below_threshold",
@@ -47,17 +48,39 @@ function type(overrides: Partial<ActivityType> = {}): ActivityType {
     next_action: null,
     is_system: true,
     status: "active",
+    check_conflict: false,
+    reopen_allowed: true,
+    invite_organiser: false,
+    invite_owner: false,
+    created_by_name: "Rajat Goyal",
+    updated_by_name: "Rajat Goyal",
     created_at: "2026-09-01T00:00:00Z",
     updated_at: "2026-09-01T00:00:00Z",
     ...overrides,
   };
 }
 
+/** The field sets an event can pin, as `/forms/` sends them. */
+const FORMS = {
+  results: [
+    {
+      id: "form-1",
+      slug: "mock-interview",
+      name: "Mock interview form",
+      entity: "activity",
+      status: "active",
+    },
+  ],
+};
+
 function mockUseApi(rows: ActivityType[]) {
   const reload = vi.fn();
   useApi.mockImplementation((path: string) => {
     if (path === "/api/v1/activity-types/") {
       return { data: { results: rows }, error: null, isLoading: false, reload };
+    }
+    if (path === "/api/v1/forms/") {
+      return { data: FORMS, error: null, isLoading: false, reload: vi.fn() };
     }
     return { data: { results: [] }, error: null, isLoading: false, reload: vi.fn() };
   });
@@ -77,14 +100,68 @@ describe("ActivityTypesPage", () => {
     render(<ActivityTypesPage />);
     expect(screen.getByText("Mock Interview")).toBeInTheDocument();
     expect(screen.getByText("Career Guidance")).toBeInTheDocument();
-    expect(screen.getByText("Counselling")).toBeInTheDocument();
-    expect(screen.getAllByText("Active")).toHaveLength(2);
+    // Calendar Pro's own columns, and a row that says who touched it.
+    expect(screen.getByRole("columnheader", { name: "Event Name" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Updated By" })).toBeInTheDocument();
+    expect(screen.getAllByText("Rajat Goyal").length).toBeGreaterThan(0);
+    // The status is the row's own switch, not a read-only badge.
+    expect(screen.getByRole("switch", { name: "Mock Interview is active" })).toBeChecked();
+  });
+
+  it("turns an event off from its own row", async () => {
+    const reload = mockUseApi([type()]);
+    updateActivityType.mockResolvedValue(type({ status: "disabled" }));
+    render(<ActivityTypesPage />);
+
+    fireEvent.click(screen.getByRole("switch", { name: "Mock Interview is active" }));
+    await waitFor(() =>
+      expect(updateActivityType).toHaveBeenCalledWith("mock-interview", { status: "disabled" }),
+    );
+    await waitFor(() => expect(reload).toHaveBeenCalled());
+  });
+
+  it("says why an event was not turned off rather than flipping the switch anyway", async () => {
+    mockUseApi([type()]);
+    updateActivityType.mockRejectedValue(new ApiError(403, "forbidden", "Not allowed", "req-2"));
+    render(<ActivityTypesPage />);
+
+    fireEvent.click(screen.getByRole("switch", { name: "Mock Interview is active" }));
+    expect(await screen.findByText("Not allowed")).toBeInTheDocument();
+    // The row still reads from the server's answer, which has not changed.
+    expect(screen.getByRole("switch", { name: "Mock Interview is active" })).toBeChecked();
+  });
+
+  it("keeps a type's pinned fields when nothing else about it changed", async () => {
+    // The regression: `form` reads back as a slug and used to be read as
+    // `form.id`, so opening a type and saving it unpinned its fields.
+    mockUseApi([type()]);
+    updateActivityType.mockResolvedValue(type());
+    render(<ActivityTypesPage />);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Edit Event/ })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(updateActivityType).toHaveBeenCalledWith(
+        "mock-interview",
+        expect.objectContaining({ form: "mock-interview" }),
+      ),
+    );
+  });
+
+  it("lists the field sets and who uses them under Fields", () => {
+    mockUseApi([type()]);
+    render(<ActivityTypesPage />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Fields" }));
+    expect(screen.getByText("Mock interview form")).toBeInTheDocument();
+    expect(screen.getByText("Mock Interview")).toBeInTheDocument();
   });
 
   it("shows the loading state", () => {
     useApi.mockReturnValue({ data: null, error: null, isLoading: true, reload: vi.fn() });
     render(<ActivityTypesPage />);
-    expect(screen.getByText(/Loading activity types/)).toBeInTheDocument();
+    expect(screen.getByText(/Loading events/)).toBeInTheDocument();
   });
 
   it("shows the error state", () => {
@@ -95,13 +172,13 @@ describe("ActivityTypesPage", () => {
       reload: vi.fn(),
     });
     render(<ActivityTypesPage />);
-    expect(screen.getByText("Could not load activity types")).toBeInTheDocument();
+    expect(screen.getByText("Could not load events")).toBeInTheDocument();
   });
 
   it("shows the empty state", () => {
     mockUseApi([]);
     render(<ActivityTypesPage />);
-    expect(screen.getByText("No activity types yet")).toBeInTheDocument();
+    expect(screen.getByText("No events yet")).toBeInTheDocument();
   });
 
   it("creates a new type and reloads the list", async () => {
@@ -109,7 +186,7 @@ describe("ActivityTypesPage", () => {
     createActivityType.mockResolvedValue(type({ slug: "doubt-session", name: "Doubt Session" }));
     render(<ActivityTypesPage />);
 
-    fireEvent.click(screen.getAllByRole("button", { name: "New type" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "New Event" })[0]!);
     // Not `getByLabelText`: this field is required, and `Field` renders the
     // `*` as an `aria-hidden` sibling span, which testing-library's label
     // matcher includes in the label's plain text ("Name*") while the real
@@ -133,7 +210,7 @@ describe("ActivityTypeDialog — Phase R7 Target 3", () => {
   it("uses the app-wide sm:grid-cols-2 convention for the Duration/Reminder and Weight/Risk pairs, not a bare grid-cols-2", () => {
     mockUseApi([]);
     const { container } = render(<ActivityTypesPage />);
-    fireEvent.click(screen.getAllByRole("button", { name: "New type" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "New Event" })[0]!);
 
     // Both pairs collapse to one column below `sm:`, same as every other
     // multi-column field grid in the app (e.g. `create-student-dialog.tsx`).
@@ -148,7 +225,7 @@ describe("ActivityTypeDialog — Phase R7 Target 3", () => {
   it("groups the two role-checkbox groups under one shared heading — the one real grouping the form implies", () => {
     mockUseApi([]);
     render(<ActivityTypesPage />);
-    fireEvent.click(screen.getAllByRole("button", { name: "New type" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "New Event" })[0]!);
 
     const rolesGroup = screen.getByText("Roles").closest("fieldset");
     expect(rolesGroup).not.toBeNull();
@@ -166,7 +243,7 @@ describe("ActivityTypeDialog — Phase R7 Target 3", () => {
       }),
     );
     render(<ActivityTypesPage />);
-    fireEvent.click(screen.getAllByRole("button", { name: "New type" })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: "New Event" })[0]!);
 
     fireEvent.change(screen.getByRole("textbox", { name: "Name" }), {
       target: { value: "Doubt Session" },
