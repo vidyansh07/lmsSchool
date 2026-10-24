@@ -499,3 +499,31 @@ def test_list_payload_carries_counts_without_lesson_bodies(
     assert row["module_count"] == 1
     assert row["lesson_count"] == 2
     assert "text_content" not in str(row)
+
+
+@pytest.mark.django_db
+def test_the_catalogue_can_hide_archived_courses(
+    api_client_no_csrf, admin_user, published_course, draft_course
+):
+    """ "Show Active" on the catalogue screen means "not archived" rather than
+    any one status: a course being written and a course on sale are both live
+    work. Filtered on the server, so a page of twelve is twelve."""
+    from apps.courses import services
+    from apps.courses.models import PublishStatus
+
+    services.set_course_status(
+        course=published_course,
+        target=PublishStatus.ARCHIVED,
+        actor=admin_user,
+        may_publish=True,
+    )
+    api_client_no_csrf.force_login(admin_user)
+
+    active = api_client_no_csrf.get("/api/v1/courses/?active=true").json()
+    assert {row["id"] for row in active["results"]} == {str(draft_course.pk)}
+
+    archived = api_client_no_csrf.get("/api/v1/courses/?active=false").json()
+    assert {row["id"] for row in archived["results"]} == {str(published_course.pk)}
+
+    everything = api_client_no_csrf.get("/api/v1/courses/").json()
+    assert everything["count"] == 2

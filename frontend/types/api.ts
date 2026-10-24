@@ -443,6 +443,37 @@ export interface CourseDetail extends CourseListRow {
   /** Rendering hints from the server. The server still re-checks every call. */
   can_manage: boolean;
   can_publish: boolean;
+  /** The course's default instalment structure, in order. */
+  fee_instalments: CourseFeeInstalment[];
+}
+
+/** One line of a course's fee history: what it became, from when, and why. */
+export interface CoursePrice {
+  id: string;
+  /** decimal(10,2) as the API's decimal string. */
+  amount: string;
+  effective_from: string;
+  note: string;
+  /** A name, never an address. */
+  recorded_by_name: string;
+  created_at: string;
+}
+
+/**
+ * One instalment of a course's default structure.
+ *
+ * A **percentage** of what the student has to pay, not rupees: the money a
+ * plan collects is the fee less that student's discount, so a template in
+ * rupees would be wrong for every discounted admission.
+ */
+export interface CourseFeeInstalment {
+  id: string;
+  sequence: number;
+  label: string;
+  /** decimal(5,2) as a string; the rows add up to exactly 100. */
+  percent: string;
+  /** Days after the fee is agreed. 0 is the day of admission. */
+  due_after_days: number;
 }
 
 export interface CourseAssignment {

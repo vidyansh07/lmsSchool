@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grras LMS · Current project status</title>
+  <style>
+    :root {
+      --canvas: #f8fafc;
+      --surface: #ffffff;
+      --sunken: #f1f5f9;
+      --line: #e2e8f0;
+      --line-strong: #cbd5e1;
+      --rail: #2a1b12;
+      --rail-fg: #e7e5e4;
+      --rail-active: #fdba74;
+      --ink: #0f172a;
+      --muted: #4e5e76;
+      --faint: #5c6b80;
+      --action: #c2410b;
+      --action-hover: #9a3412;
+      --action-fg: #ffffff;
+      --selected: #fff3ea;
+      --selected-fg: #9a3412;
+      --brand: #ef7220;
+      --success: #047857;
+      --success-wash: #ecfdf5;
+      --warning: #b45307;
+      --warning-wash: #fffbeb;
+      --danger: #b91c1c;
+      --danger-wash: #fef2f2;
+      --info: #0469a1;
+      --info-wash: #f0f9ff;
+      --radius-control: 8px;
+      --radius-card: 12px;
+      --radius-panel: 16px;
+      --shadow-panel: 0 10px 32px rgba(15, 23, 42, .07);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    button, input { font: inherit; }
+    a { color: inherit; }
+    code {
+      border-radius: 5px;
+      background: var(--sunken);
+      padding: .12rem .35rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .88em;
+      overflow-wrap: anywhere;
+    }
+    h1, h2, h3, .metric strong {
+      margin: 0;
+      font-family: Sora, Inter, ui-sans-serif, system-ui, sans-serif;
+      letter-spacing: -.025em;
+    }
+    p { margin: 0; }
+    .layout {
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr);
+      min-height: 100dvh;
+    }
+    .rail {
+      position: sticky;
+      top: 0;
+      height: 100dvh;
+      overflow-y: auto;
+      background: var(--rail);
+      color: var(--rail-fg);
+      padding: 24px 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 8px 30px;
+    }
+    .brand-mark {
+      display: grid;
+      width: 38px;
+      height: 38px;
+      flex: 0 0 38px;
+      place-items: center;
+      border-radius: 12px;
+      background: var(--brand);
+      color: white;
+      font-weight: 800;
+      font-size: 17px;
+    }
+    .brand-name { font-weight: 800; font-size: 16px; line-height: 1.1; }
+    .brand-sub { color: rgba(231,229,228,.62); font-size: 11px; letter-spacing: .13em; text-transform: uppercase; }
+    .rail-label {
+      margin: 22px 10px 8px;
+      color: rgba(231,229,228,.5);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .rail a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 38px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      color: rgba(231,229,228,.78);
+      text-decoration: none;
+      transition: background 150ms ease, color 150ms ease;
+    }
+    .rail a:hover, .rail a:focus-visible { background: rgba(255,255,255,.07); color: var(--rail-fg); outline: 2px solid var(--rail-active); outline-offset: 2px; }
+    .rail a:first-of-type { background: rgba(255,255,255,.08); color: var(--rail-active); font-weight: 700; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: 0 0 7px; }
+    .main { min-width: 0; padding: 32px clamp(20px, 4vw, 60px) 72px; }
+    .content { width: min(1220px, 100%); margin: 0 auto; min-width: 0; }
+    .eyebrow { color: var(--action); font-size: 11px; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(260px, .7fr); gap: 28px; align-items: end; margin-bottom: 24px; }
+    .hero h1 { margin-top: 7px; max-width: 760px; font-size: clamp(30px, 4vw, 48px); line-height: 1.05; }
+    .hero p { margin-top: 14px; max-width: 720px; color: var(--muted); font-size: 16px; }
+    .stamp {
+      justify-self: end;
+      width: 100%;
+      max-width: 360px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      padding: 16px;
+    }
+    .stamp b { display: block; margin-bottom: 4px; }
+    .stamp span { display: block; color: var(--muted); }
+    .status-banner {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+      border: 1px solid #fed7aa;
+      border-radius: var(--radius-card);
+      background: var(--selected);
+      padding: 16px;
+      color: var(--selected-fg);
+    }
+    .status-banner .badge { margin-top: 2px; background: var(--action); color: white; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      white-space: nowrap;
+    }
+    .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .8; }
+    .badge.success { color: var(--success); background: var(--success-wash); }
+    .badge.warning { color: var(--warning); background: var(--warning-wash); }
+    .badge.danger { color: var(--danger); background: var(--danger-wash); }
+    .badge.info { color: var(--info); background: var(--info-wash); }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin: 22px 0 10px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-panel);
+      background: var(--surface);
+      box-shadow: var(--shadow-panel);
+    }
+    .metric { min-width: 0; padding: 19px; }
+    .metric + .metric { border-left: 1px solid var(--line); }
+    .metric strong { display: block; font-size: 28px; font-variant-numeric: tabular-nums; }
+    .metric span { display: block; margin-top: 2px; color: var(--muted); }
+    .section { padding-top: 50px; min-width: 0; }
+    .section-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+    .section h2 { font-size: 24px; }
+    .section-lede { max-width: 760px; color: var(--muted); }
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .card { min-width: 0; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); padding: 18px; }
+    .card h3 { font-size: 17px; }
+    .card p { margin-top: 8px; color: var(--muted); }
+    .card ul, .card ol { margin: 12px 0 0; padding-left: 20px; }
+    .card li + li { margin-top: 5px; }
+    .role-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .role-icon { display: grid; width: 34px; height: 34px; flex: 0 0 34px; place-items: center; border-radius: 10px; background: var(--sunken); color: var(--action); font-weight: 900; }
+    .role-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .boundary { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; color: var(--ink); }
+    .boundary b { color: var(--action); }
+    .table-wrap { width: 100%; min-width: 0; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; }
+    th { background: var(--sunken); color: var(--faint); font-size: 11px; letter-spacing: .055em; text-transform: uppercase; text-align: left; }
+    th, td { padding: 12px 15px; vertical-align: top; border-bottom: 1px solid var(--line); }
+    tr:last-child td { border-bottom: 0; }
+    td { color: var(--muted); }
+    td:first-child { color: var(--ink); font-weight: 700; }
+    .figure {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-panel);
+      background: var(--surface);
+      padding: 18px;
+      box-shadow: var(--shadow-panel);
+    }
+    .figure figcaption { margin-bottom: 14px; }
+    .figure figcaption b { display: block; font-family: Sora, Inter, sans-serif; font-size: 17px; }
+    .figure figcaption span { color: var(--muted); }
+    svg { display: block; width: 100%; height: auto; }
+    .compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .compare .card { position: relative; overflow: hidden; }
+    .compare .card.recommended { border-color: #fdba74; box-shadow: 0 0 0 3px rgba(253,186,116,.18); }
+    .ribbon { position: absolute; top: 14px; right: 14px; color: var(--action); font-size: 10px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+    .label-pair { display: grid; grid-template-columns: minmax(0, .85fr) 24px minmax(0, 1.15fr); gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .label-pair:last-child { border-bottom: 0; }
+    .label-old { color: var(--muted); text-decoration: line-through; text-decoration-color: #cbd5e1; }
+    .label-arrow { color: var(--faint); text-align: center; }
+    .label-new { font-weight: 750; }
+    .timeline { display: grid; gap: 0; }
+    .step { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 14px; min-width: 0; }
+    .step-marker { display: flex; flex-direction: column; align-items: center; }
+    .step-num { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: var(--action); color: white; font-weight: 850; }
+    .step-line { width: 1px; flex: 1; min-height: 32px; background: var(--line-strong); }
+    .step:last-child .step-line { display: none; }
+    .step-copy { padding: 3px 0 22px; min-width: 0; }
+    .step-copy b { display: block; font-size: 15px; }
+    .step-copy span { display: block; margin-top: 3px; color: var(--muted); }
+    .blockers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .blocker { min-width: 0; border-left: 3px solid var(--warning); border-radius: 0 var(--radius-card) var(--radius-card) 0; background: var(--surface); padding: 14px 15px; }
+    .blocker b { display: block; }
+    .blocker span { display: block; margin-top: 4px; color: var(--muted); }
+    .decision {
+      display: grid;
+      grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr);
+      gap: 20px;
+      border: 1px solid #fdba74;
+      border-radius: var(--radius-panel);
+      background: linear-gradient(135deg, #fff7ed 0%, #ffffff 60%);
+      padding: 22px;
+      box-shadow: var(--shadow-panel);
+    }
+    .decision h2 { font-size: 24px; }
+    .decision-copy p { margin-top: 10px; color: var(--muted); }
+    .choice-list { display: grid; gap: 10px; }
+    .choice {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 11px;
+      align-items: start;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-card);
+      background: var(--surface);
+      padding: 13px;
+      cursor: pointer;
+    }
+    .choice:has(input:checked) { border-color: var(--action); box-shadow: 0 0 0 3px rgba(194,65,11,.1); }
+    .choice input { margin-top: 4px; accent-color: var(--action); }
+    .choice b { display: block; }
+    .choice span { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; }
+    .decision-actions { display: flex; align-items: center; gap: 12px; margin-top: 13px; flex-wrap: wrap; }
+    .button {
+      min-height: 40px;
+      border: 0;
+      border-radius: var(--radius-control);
+      background: var(--action);
+      color: var(--action-fg);
+      padding: 9px 14px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .button:hover { background: var(--action-hover); }
+    .button:focus-visible, input:focus-visible { outline: 3px solid #fdba74; outline-offset: 2px; }
+    .queued { color: var(--success); font-weight: 700; }
+    .fineprint { margin-top: 18px; color: var(--faint); font-size: 12px; }
+    .footer { margin-top: 48px; border-top: 1px solid var(--line); padding-top: 18px; color: var(--muted); }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .rail { position: static; height: auto; display: flex; align-items: center; gap: 6px; overflow-x: auto; padding: 12px 16px; }
+      .brand { margin: 0 14px 0 0; }
+      .brand-sub, .rail-label { display: none; }
+      .rail a { flex: 0 0 auto; white-space: nowrap; }
+      .main { padding-top: 24px; }
+      .hero { grid-template-columns: 1fr; align-items: start; }
+      .stamp { justify-self: start; max-width: none; }
+      .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metric:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
+      .metric:nth-child(4) { border-top: 1px solid var(--line); }
+      .blockers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .decision { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 680px) {
+      .brand-name { display: none; }
+      .hero h1 { font-size: 32px; }
+      .status-banner { grid-template-columns: 1fr; }
+      .cards, .compare { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: 1fr; }
+      .metric + .metric { border-left: 0; border-top: 1px solid var(--line); }
+      .section { padding-top: 38px; }
+      .section-head { align-items: start; flex-direction: column; }
+      .blockers { grid-template-columns: 1fr; }
+      .label-pair { grid-template-columns: 1fr; gap: 3px; }
+      .label-arrow { display: none; }
+      .label-old::before { content: "Current: "; text-decoration: none; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+      .label-new::before { content: "Prefer: "; color: var(--action); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="rail" aria-label="Report sections">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">G</span>
+        <span><span class="brand-name">Grras</span><span class="brand-sub">LMS status</span></span>
+      </div>
+      <p class="rail-label">Project</p>
+      <a href="#status"><span class="dot"></span>Status</a>
+      <a href="#boundaries"><span class="dot"></span>Role boundaries</a>
+      <a href="#flows"><span class="dot"></span>Role flows</a>
+      <p class="rail-label">Design</p>
+      <a href="#navigation"><span class="dot"></span>Sidebar names</a>
+      <a href="#models"><span class="dot"></span>Model reuse</a>
+      <a href="#plan"><span class="dot"></span>Implementation</a>
+      <a href="#decision"><span class="dot"></span>Decision</a>
+    </aside>
+
+    <main class="main">
+      <div class="content">
+        <header class="hero" id="status">
+          <div>
+            <div class="eyebrow">Current project status · 12 October 2026</div>
+            <h1>A mature ERP/LMS with one unresolved role boundary.</h1>
+            <p>The platform is broadly built and tested. The immediate product question is whether counsellors and managers should remain near-equals, or whether the server should enforce the job split the sidebar implies.</p>
+          </div>
+          <div class="stamp">
+            <b>Audited baseline</b>
+            <span>Local <code>main</code> · <code>cd00122</code></span>
+            <span>96 pages · 41 Django apps · 156 migrations</span>
+            <span>Remote feature work shown separately</span>
+          </div>
+        </header>
+
+        <div class="status-banner">
+          <span class="badge">Decision first</span>
+          <div><b>Do not change permissions through the sidebar.</b> The backend capability and object-scope rules must change first. Navigation is only a presentation of authority, never its source.</div>
+        </div>
+
+        <section class="metrics" aria-label="Project metrics">
+          <div class="metric"><strong>41</strong><span>Django apps</span></div>
+          <div class="metric"><strong>96</strong><span>Frontend routes</span></div>
+          <div class="metric"><strong>1,318</strong><span>Frontend tests passing now</span></div>
+          <div class="metric"><strong>3,515</strong><span>Backend tests collected</span></div>
+        </section>
+        <p class="fineprint">Frontend lint and typecheck also pass. The latest documented full backend run is 3,451 passed / 4 skipped; a fresh execution needs PostgreSQL, which was not running during this audit.</p>
+
+        <section class="section" id="boundaries">
+          <div class="section-head">
+            <div><div class="eyebrow">Authority</div><h2>What the roles can do today</h2></div>
+            <p class="section-lede">The hierarchy is secure, but the middle two roles overlap more than their names suggest.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Role</th><th>Reach</th><th>Boundary enforced today</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>Trainer</td><td>Assigned records only</td><td>Courses, batches, classes, students and work come from assignment; no institution-wide management</td><td><span class="badge success">Clear</span></td></tr>
+                <tr><td>Counsellor</td><td>62 capabilities · own centre</td><td>Cannot create/edit trainers, manage trainer requirements or view policy settings; otherwise nearly the manager set</td><td><span class="badge warning">Broad</span></td></tr>
+                <tr><td>Manager</td><td>66 capabilities · own centre</td><td>Adds trainer create/edit, trainer requirements and policy view; no account, role or system configuration</td><td><span class="badge warning">Overlaps</span></td></tr>
+                <tr><td>Administrator</td><td>91 capabilities · all centres</td><td>Accounts, roles, configuration, recovery and support; no platform config, permission lock or purge</td><td><span class="badge success">Clear</span></td></tr>
+                <tr><td>Superadmin</td><td>All 94 capabilities</td><td>Only role with platform configuration, permission locking and permanent purge</td><td><span class="badge success">Clear</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section">
+          <figure class="figure">
+            <figcaption><b>Where the intended hand-off should be</b><span>Admissions brings the student in; teaching delivers; management checks quality; administration governs the platform.</span></figcaption>
+            <svg viewBox="0 0 1040 300" role="img" aria-labelledby="flow-title flow-desc">
+              <title id="flow-title">Recommended role hand-off</title>
+              <desc id="flow-desc">Counsellor hands an enrolled student to a trainer. The manager oversees teaching quality. The administrator governs all stages.</desc>
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c2410b"/></marker>
+              </defs>
+              <rect id="counsellor-node" x="35" y="78" width="210" height="105" rx="16" fill="#fff3ea" stroke="#fdba74"/>
+              <title>Counsellor owns admissions, fees and follow-ups</title>
+              <text x="58" y="112" font-size="19" font-weight="750" fill="#0f172a">Counsellor</text>
+              <text x="58" y="139" font-size="13" fill="#4e5e76">Register · enrol · fees</text>
+              <text x="58" y="161" font-size="13" fill="#4e5e76">follow-up · transfer</text>
+              <path id="admission-handoff" d="M245 131 H332" stroke="#c2410b" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
+              <title>Enrolled student is handed to teaching</title>
+              <text x="260" y="116" font-size="11" font-weight="700" fill="#9a3412">ENROLLED</text>
+              <rect id="trainer-node" x="345" y="78" width="210" height="105" rx="16" fill="#ffffff" stroke="#cbd5e1"/>
+              <title>Trainer owns assigned teaching</title>
+              <text x="368" y="112" font-size="19" font-weight="750" fill="#0f172a">Trainer</text>
+              <text x="368" y="139" font-size="13" fill="#4e5e76">Class · attendance · DSR</text>
+              <text x="368" y="161" font-size="13" fill="#4e5e76">work · marks · feedback</text>
+              <path id="delivery-review" d="M555 131 H642" stroke="#c2410b" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
+              <title>Teaching outcomes flow to manager oversight</title>
+              <text x="570" y="116" font-size="11" font-weight="700" fill="#9a3412">REVIEW</text>
+              <rect id="manager-node" x="655" y="78" width="210" height="105" rx="16" fill="#ffffff" stroke="#cbd5e1"/>
+              <title>Manager owns academic operations</title>
+              <text x="678" y="112" font-size="19" font-weight="750" fill="#0f172a">Manager</text>
+              <text x="678" y="139" font-size="13" fill="#4e5e76">Trainers · batches · risk</text>
+              <text x="678" y="161" font-size="13" fill="#4e5e76">reports · reviews · action</text>
+              <rect id="admin-region" x="18" y="32" width="920" height="202" rx="24" fill="none" stroke="#0469a1" stroke-width="2" stroke-dasharray="8 7"/>
+              <title>Administrator governs and supports the whole process</title>
+              <text x="44" y="59" font-size="12" font-weight="800" fill="#0469a1">ADMINISTRATOR · CONFIGURATION, SUPPORT AND CROSS-CENTRE GOVERNANCE</text>
+              <rect id="superadmin-node" x="898" y="91" width="126" height="80" rx="14" fill="#2a1b12"/>
+              <title>Superadmin holds the three platform and irreversible controls</title>
+              <text x="916" y="123" font-size="15" font-weight="750" fill="#e7e5e4">Superadmin</text>
+              <text x="916" y="147" font-size="11" fill="#fdba74">lock · config · purge</text>
+              <path id="platform-edge" d="M938 184 V218" stroke="#2a1b12" stroke-width="2" fill="none"/>
+              <text x="43" y="270" font-size="12" fill="#5c6b80">Dashed region = administrator may inspect and support every stage; it does not make administration the daily owner.</text>
+            </svg>
+          </figure>
+        </section>
+
+        <section class="section" id="flows">
+          <div class="section-head">
+            <div><div class="eyebrow">Daily work</div><h2>Four flows, in plain language</h2></div>
+            <p class="section-lede">Each role gets a starting point, a short path, and one sentence saying where to stop.</p>
+          </div>
+          <div class="cards">
+            <article class="card">
+              <div class="role-top"><div class="role-title"><span class="role-icon">C</span><h3>Counsellor · bring a student in</h3></div><span class="badge info">Admissions</span></div>
+              <ol><li>Open <b>Admissions dashboard</b>.</li><li>Check duplicates and register the person.</li><li>Select course and batch; record fee and first payment.</li><li>Plan follow-ups or transfer the enrolment.</li><li>Hand the enrolled student to teaching.</li></ol>
+              <p class="boundary"><b>Stop at:</b> academic delivery and assessment decisions.</p>
+            </article>
+            <article class="card">
+              <div class="role-top"><div class="role-title"><span class="role-icon">M</span><h3>Manager · run academic operations</h3></div><span class="badge info">Operations</span></div>
+              <ol><li>Open <b>Manager overview</b>.</li><li>Check risk, overdue work and pending reports.</li><li>Review batches, trainers and Student 360.</li><li>Approve or return work and assign follow-up action.</li><li>Resolve operational warnings.</li></ol>
+              <p class="boundary"><b>Stop at:</b> accounts, roles and system configuration.</p>
+            </article>
+            <article class="card">
+              <div class="role-top"><div class="role-title"><span class="role-icon">T</span><h3>Trainer · deliver assigned learning</h3></div><span class="badge info">Teaching</span></div>
+              <ol><li>Open <b>Today's class</b>.</li><li>Take attendance and record the class report.</li><li>Plan or complete student activities.</li><li>Set and grade assigned academic work.</li><li>Use <b>My work</b> for the queue.</li></ol>
+              <p class="boundary"><b>Stop at:</b> any student, batch or course not assigned to this trainer.</p>
+            </article>
+            <article class="card">
+              <div class="role-top"><div class="role-title"><span class="role-icon">A</span><h3>Administrator · govern the system</h3></div><span class="badge info">Administration</span></div>
+              <ol><li>Open <b>Overview</b> and <b>Activity review</b>.</li><li>Manage users, roles, scopes and centres.</li><li>Configure policy, forms, automation and communication.</li><li>Manage approvals, exports and recovery.</li><li>Intervene in operations only when support is needed.</li></ol>
+              <p class="boundary"><b>Stop at:</b> permission lock, platform config and permanent purge unless superadmin.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="navigation">
+          <div class="section-head">
+            <div><div class="eyebrow">Navigation</div><h2>Prefer familiar nouns over internal language</h2></div>
+            <p class="section-lede">Keep the route namespaces. Simplify the words people scan every day.</p>
+          </div>
+          <div class="compare">
+            <article class="card">
+              <h3>Current vocabulary</h3>
+              <p>Technically accurate, but several labels depend on context or describe who owns the work instead of what the work is.</p>
+              <div style="margin-top:14px">
+                <div class="label-pair"><span class="label-old">Review</span><span class="label-arrow">→</span><span class="label-new">Performance</span></div>
+                <div class="label-pair"><span class="label-old">Manager's work</span><span class="label-arrow">→</span><span class="label-new">Academic operations</span></div>
+                <div class="label-pair"><span class="label-old">Counsellor's work</span><span class="label-arrow">→</span><span class="label-new">Admissions</span></div>
+                <div class="label-pair"><span class="label-old">Authoring</span><span class="label-arrow">→</span><span class="label-new">Courses</span></div>
+              </div>
+            </article>
+            <article class="card recommended">
+              <span class="ribbon">Recommended</span>
+              <h3>Plain job language</h3>
+              <p>A person should predict the destination before clicking. Actions begin with verbs; destinations are familiar domain nouns.</p>
+              <div style="margin-top:14px">
+                <div class="label-pair"><span class="label-old">Outcomes</span><span class="label-arrow">→</span><span class="label-new">Results and reports</span></div>
+                <div class="label-pair"><span class="label-old">Everyday</span><span class="label-arrow">→</span><span class="label-new">Updates</span></div>
+                <div class="label-pair"><span class="label-old">Today</span><span class="label-arrow">→</span><span class="label-new">Today's class</span></div>
+                <div class="label-pair"><span class="label-old">Classes today</span><span class="label-arrow">→</span><span class="label-new">Today's classes</span></div>
+              </div>
+            </article>
+          </div>
+          <div class="table-wrap" style="margin-top:16px">
+            <table>
+              <thead><tr><th>Namespace</th><th>Meaning</th><th>Decision</th></tr></thead>
+              <tbody>
+                <tr><td><code>/admissions/*</code></td><td>Counsellor workflow</td><td>Keep</td></tr>
+                <tr><td><code>/manage/*</code></td><td>Manager workflow</td><td>Keep</td></tr>
+                <tr><td><code>/teaching/*</code></td><td>Trainer workflow</td><td>Keep</td></tr>
+                <tr><td><code>/admin/*</code></td><td>Configuration and governance</td><td>Keep</td></tr>
+                <tr><td><code>/my-*</code></td><td>Student-owned information</td><td>Keep</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section" id="models">
+          <div class="section-head">
+            <div><div class="eyebrow">Domain model</div><h2>Extend the models already in place</h2></div>
+            <p class="section-lede">The next implementation does not need new manager or counsellor profile tables.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Need</th><th>Reuse</th><th>Avoid</th></tr></thead>
+              <tbody>
+                <tr><td>Identity and access</td><td><code>User</code>, dynamic <code>Role</code>, <code>Capability</code>, <code>ScopeGrant</code></td><td>ManagerProfile / CounsellorProfile</td></tr>
+                <tr><td>Prospect</td><td><code>Enquiry</code> from the active branch, after review</td><td>A second temporary-student table</td></tr>
+                <tr><td>Registered student</td><td><code>StudentProfile</code> + <code>Enrollment</code></td><td>Admissions-only student copy</td></tr>
+                <tr><td>Follow-up</td><td><code>Activity</code> + versioned <code>FormResponse</code></td><td>A model for every follow-up type</td></tr>
+                <tr><td>Teaching</td><td><code>Batch</code>, <code>ClassSession</code>, <code>AttendanceRecord</code>, <code>DSR</code></td><td>Parallel class tracking</td></tr>
+                <tr><td>Governance</td><td><code>AuditLog</code>, <code>Policy</code>, <code>AutomationRule</code>, <code>Delivery</code>, <code>ExportJob</code></td><td>Untracked admin actions</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section" id="plan">
+          <div class="section-head">
+            <div><div class="eyebrow">Development order</div><h2>Secure the boundary, then change the interface</h2></div>
+            <p class="section-lede">This sequence keeps the app usable at every step and prevents a hidden-link change from masquerading as authorization.</p>
+          </div>
+          <div class="card">
+            <div class="timeline">
+              <div class="step"><div class="step-marker"><span class="step-num">1</span><span class="step-line"></span></div><div class="step-copy"><b>Agree the manager/counsellor policy</b><span>Choose shared coverage, job-owned writes, or strict separation.</span></div></div>
+              <div class="step"><div class="step-marker"><span class="step-num">2</span><span class="step-line"></span></div><div class="step-copy"><b>Change server authorization first</b><span>Capability matrix, object access, centre scope, audit and refusal tests.</span></div></div>
+              <div class="step"><div class="step-marker"><span class="step-num">3</span><span class="step-line"></span></div><div class="step-copy"><b>Simplify sidebar names</b><span>Plain labels, no duplicate destinations, same mobile and keyboard behavior.</span></div></div>
+              <div class="step"><div class="step-marker"><span class="step-num">4</span><span class="step-line"></span></div><div class="step-copy"><b>Integrate the active feature branch</b><span>Enquiries, forms, class reporting and counsellor improvements through a reviewed product PR.</span></div></div>
+              <div class="step"><div class="step-marker"><span class="step-num">5</span><span class="step-line"></span></div><div class="step-copy"><b>Verify all roles</b><span>Backend role matrix, frontend suite and six-role browser crawl on seeded data.</span></div></div>
+              <div class="step"><div class="step-marker"><span class="step-num">6</span><span class="step-line"></span></div><div class="step-copy"><b>Close release infrastructure</b><span>CI, TLS, SMTP, Redis, object storage, database roles and recovery drills.</span></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head"><div><div class="eyebrow">Release readiness</div><h2>What still blocks production</h2></div></div>
+          <div class="blockers">
+            <div class="blocker"><b>CI cannot start jobs</b><span>Main and the active branch are red with no job log.</span></div>
+            <div class="blocker"><b>Public infrastructure</b><span>Trusted TLS/domain, SMTP, managed Redis and object storage remain.</span></div>
+            <div class="blocker"><b>Database governance</b><span>Least-privilege roles and supervised restore drills remain.</span></div>
+            <div class="blocker"><b>Security policy</b><span>MFA exists but no role is required to enrol; malware scanner is not configured.</span></div>
+            <div class="blocker"><b>Browser verification</b><span>The newest Playwright journeys have not run against a live stack.</span></div>
+            <div class="blocker"><b>Student activity page</b><span>The student-facing “My activities” route is still absent on main.</span></div>
+          </div>
+        </section>
+
+        <section class="section" id="decision">
+          <div class="decision" data-lavish-question="role-boundary">
+            <div class="decision-copy">
+              <div class="eyebrow">One decision before implementation</div>
+              <h2>How separate should counsellor and manager access be?</h2>
+              <p>The current code implements shared coverage. The recommended choice gives each job its own write authority while preserving manager oversight reads.</p>
+              <p>Queue one answer, then use Lavish’s <b>Send to Agent</b> control. I can use it to update the capability matrix, navigation, tests and documentation in the next implementation pass.</p>
+            </div>
+            <form id="boundary-form">
+              <div class="choice-list">
+                <label class="choice"><input type="radio" name="boundary" value="job-owned" checked><span><b>Job-owned writes (recommended)</b><span>Counsellor writes admissions/fees/follow-ups; manager writes academic operations and can read admissions for oversight.</span></span></label>
+                <label class="choice"><input type="radio" name="boundary" value="shared"><span><b>Keep shared coverage</b><span>Manager and counsellor keep near-equal backend access; only dashboards and sidebar order differ.</span></span></label>
+                <label class="choice"><input type="radio" name="boundary" value="strict"><span><b>Strict separation</b><span>Each role can neither write nor read the other role’s operational area except through explicit reports.</span></span></label>
+              </div>
+              <div class="decision-actions"><button class="button" type="submit">Queue this decision</button><span class="queued" id="queued-status" role="status" aria-live="polite"></span></div>
+            </form>
+          </div>
+        </section>
+
+        <footer class="footer">
+          Source: live repository inspection of <code>backend/apps/accounts/roles.py</code>, <code>frontend/components/navigation.ts</code>, route files, current docs, local frontend checks and GitHub branch/run state. Visual design follows the repository’s own light Grras design system: warm rail, semantic colour, hairline cards and Sora/Inter-style typography.
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    document.getElementById('boundary-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      const value = new FormData(event.currentTarget).get('boundary');
+      const descriptions = {
+        'job-owned': 'Implement job-owned writes: counsellor owns admissions, fees, follow-ups and transfers; manager owns academic operations and retains oversight reads.',
+        'shared': 'Keep the current shared manager/counsellor capability coverage and limit changes to clearer dashboards, sidebar order and labels.',
+        'strict': 'Implement strict manager/counsellor separation, including read access, with explicit cross-role reports only.'
+      };
+      const message = descriptions[value];
+      if (!message) return;
+      if (window.lavish && typeof window.lavish.queuePrompt === 'function') {
+        window.lavish.queuePrompt(message, {
+          tag: 'role-boundary',
+          text: 'Role boundary: ' + value,
+          element: event.currentTarget,
+          queueKey: 'role-boundary',
+          data: { question: 'role-boundary', answer: value }
+        });
+        document.getElementById('queued-status').textContent = 'Queued — send when ready.';
+      } else {
+        document.getElementById('queued-status').textContent = 'Selected: ' + value;
+      }
+    });
+  </script>
+</body>
+</html>

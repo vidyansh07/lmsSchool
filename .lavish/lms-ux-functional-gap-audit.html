@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <title>GRRAS LMS — UX & Functional Gap Audit</title>
+  <style>
+    :root {
+      --canvas: #f8fafc;
+      --surface: #ffffff;
+      --surface-soft: #f1f5f9;
+      --surface-warm: #fff7ed;
+      --ink: #172033;
+      --muted: #64748b;
+      --border: #dce3ea;
+      --border-strong: #cbd5e1;
+      --rail: #2a1b12;
+      --rail-soft: #433027;
+      --action: #c2410c;
+      --action-strong: #9a3412;
+      --accent: #ea580c;
+      --danger: #b91c1c;
+      --danger-soft: #fef2f2;
+      --warn: #b45309;
+      --warn-soft: #fffbeb;
+      --success: #166534;
+      --success-soft: #f0fdf4;
+      --info: #1d4ed8;
+      --info-soft: #eff6ff;
+      --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 12px 32px rgba(15, 23, 42, .06);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    button, input, select { font: inherit; }
+    a { color: inherit; }
+    .shell { display: grid; grid-template-columns: 245px minmax(0, 1fr); min-height: 100vh; }
+    .rail {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      background: var(--rail);
+      color: #fff7ed;
+      padding: 24px 18px;
+      overflow-y: auto;
+    }
+    .brand { display: flex; gap: 11px; align-items: center; margin-bottom: 28px; }
+    .brand-mark {
+      display: grid; place-items: center; width: 38px; height: 38px;
+      border-radius: 10px; background: var(--accent); font-weight: 900; box-shadow: 0 8px 20px rgba(234,88,12,.25);
+    }
+    .brand strong { display: block; font-size: 14px; letter-spacing: .02em; }
+    .brand span { display: block; color: #d6c5b9; font-size: 11px; }
+    .rail-label { color: #aa9486; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; margin: 22px 10px 8px; }
+    .rail a { display: flex; align-items: center; gap: 9px; border-radius: 8px; padding: 8px 10px; color: #e8ddd6; text-decoration: none; font-size: 13px; }
+    .rail a:hover, .rail a:focus-visible { background: var(--rail-soft); outline: none; }
+    .rail a.active { background: #fff7ed; color: var(--rail); font-weight: 800; }
+    .rail .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .7; flex: 0 0 auto; }
+
+    main { min-width: 0; }
+    .topbar {
+      position: sticky; top: 0; z-index: 10; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      min-height: 58px; padding: 10px clamp(18px, 4vw, 52px); background: rgba(248,250,252,.92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border);
+    }
+    .topbar p { margin: 0; color: var(--muted); font-size: 12px; }
+    .status-pill { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #fed7aa; background: #fff7ed; color: #9a3412; border-radius: 999px; padding: 6px 10px; font-size: 11px; font-weight: 800; white-space: nowrap; }
+    .status-pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+    .content { width: min(1440px, 100%); margin: 0 auto; padding: 32px clamp(18px, 4vw, 52px) 72px; }
+
+    .eyebrow { color: var(--action); font-size: 11px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+    h1, h2, h3 { margin-top: 0; line-height: 1.15; letter-spacing: -.025em; }
+    h1 { max-width: 880px; margin-bottom: 14px; font-size: clamp(34px, 5vw, 62px); }
+    h2 { font-size: clamp(24px, 3vw, 34px); margin-bottom: 8px; }
+    h3 { font-size: 17px; margin-bottom: 7px; }
+    p { margin-top: 0; }
+    .lede { max-width: 870px; color: #475569; font-size: clamp(16px, 2vw, 19px); }
+    .hero { padding: 28px 0 22px; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+    .chip { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 6px 10px; color: #475569; font-size: 12px; font-weight: 700; }
+    .chip strong { color: var(--ink); }
+
+    .notice { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 13px; padding: 16px; border: 1px solid #bfdbfe; background: var(--info-soft); border-radius: var(--radius); margin: 18px 0 28px; }
+    .notice-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #dbeafe; color: var(--info); font-weight: 900; }
+    .notice p { margin: 2px 0 0; color: #334155; font-size: 13px; }
+
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin: 18px 0 38px; }
+    .metric { min-width: 0; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 17px; box-shadow: 0 1px 2px rgba(15,23,42,.03); }
+    .metric .number { display: block; font-size: 30px; font-weight: 900; letter-spacing: -.04em; }
+    .metric .label { color: var(--muted); font-size: 12px; }
+    .metric.critical { border-color: #fecaca; background: linear-gradient(145deg,#fff,#fff7f7); }
+    .metric.critical .number { color: var(--danger); }
+
+    section { scroll-margin-top: 78px; margin-top: 54px; }
+    .section-head { display: flex; justify-content: space-between; gap: 20px; align-items: end; margin-bottom: 18px; }
+    .section-head p { max-width: 760px; color: var(--muted); margin-bottom: 0; }
+    .card { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .card-body { padding: 20px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
+    .stack { display: grid; gap: 14px; }
+    .severity { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 8px; font-size: 10px; line-height: 1.4; font-weight: 900; letter-spacing: .06em; white-space: nowrap; }
+    .severity.p0 { color: #991b1b; background: #fee2e2; border: 1px solid #fecaca; }
+    .severity.p1 { color: #9a3412; background: #ffedd5; border: 1px solid #fed7aa; }
+    .severity.p2 { color: #1e40af; background: #dbeafe; border: 1px solid #bfdbfe; }
+    .badge { display: inline-flex; align-items: center; border-radius: 5px; padding: 3px 7px; background: var(--surface-soft); color: #475569; font-size: 10px; font-weight: 800; }
+    .verified { color: var(--success); background: var(--success-soft); }
+    .decision { color: #7c3aed; background: #f5f3ff; }
+    .delivery { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 4px 8px; font-size: 10px; line-height: 1.3; font-weight: 900; white-space: nowrap; }
+    .delivery::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .delivery.fixed { color: var(--success); background: var(--success-soft); border: 1px solid #bbf7d0; }
+    .delivery.partial { color: var(--warn); background: var(--warn-soft); border: 1px solid #fde68a; }
+    .delivery.open { color: var(--danger); background: var(--danger-soft); border: 1px solid #fecaca; }
+    .status-note { display: block; margin-top: 5px; color: var(--muted); font-size: 11px; }
+    .status-note strong { color: var(--ink); }
+
+    .diagnosis { overflow: hidden; }
+    .diagnosis header { padding: 16px 18px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+    .diagnosis header p { color: var(--muted); font-size: 13px; margin: 3px 0 0; }
+    .diagnosis .body { padding: 18px; }
+    .comparison-grid { display: grid; grid-template-columns: minmax(0,1fr) 44px minmax(0,1fr); align-items: stretch; gap: 10px; }
+    .state { border: 1px solid var(--border); border-radius: 11px; padding: 15px; min-width: 0; }
+    .state.current { background: var(--danger-soft); border-color: #fecaca; }
+    .state.target { background: var(--success-soft); border-color: #bbf7d0; }
+    .state .state-label { font-size: 10px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+    .state ul { margin: 9px 0 0; padding-left: 18px; font-size: 13px; }
+    .state li + li { margin-top: 6px; }
+    .arrow { display: grid; place-items: center; color: var(--action); font-size: 24px; font-weight: 900; }
+    code, .path { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: .92em; overflow-wrap: anywhere; }
+
+    .diagram { padding: 18px; border-top: 1px solid var(--border); background: #fcfdff; }
+    .diagram svg { display: block; width: 100%; height: auto; color: var(--ink); }
+    .diagram-caption { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+
+    .recommendation { border-left: 4px solid var(--action); background: var(--surface-warm); padding: 14px 16px; margin-top: 14px; border-radius: 0 10px 10px 0; }
+    .recommendation strong { display: block; margin-bottom: 3px; }
+    .recommendation p { color: #6b3b22; margin: 0; font-size: 13px; }
+
+    .mock-shell { display: grid; grid-template-columns: 155px minmax(0,1fr); min-height: 410px; overflow: hidden; }
+    .mock-rail { background: var(--rail); padding: 16px 12px; color: #d9cbc2; font-size: 10px; }
+    .mock-logo { font-weight: 900; color: white; font-size: 13px; margin-bottom: 20px; }
+    .mock-link { padding: 7px 8px; border-radius: 6px; margin-bottom: 4px; }
+    .mock-link.on { color: var(--rail); background: #fff7ed; font-weight: 900; }
+    .mock-main { min-width: 0; background: #f8fafc; padding: 22px; }
+    .mock-titlebar { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+    .mock-titlebar h3 { font-size: 19px; margin: 0 0 3px; }
+    .mock-titlebar p { color: var(--muted); font-size: 10px; margin: 0; }
+    .button { border: 1px solid var(--action-strong); background: var(--action); color: white; border-radius: 7px; padding: 7px 10px; font-size: 10px; font-weight: 800; white-space: nowrap; }
+    .mock-tabs { display: flex; gap: 16px; margin-top: 18px; border-bottom: 1px solid var(--border); font-size: 10px; font-weight: 800; }
+    .mock-tab { padding: 8px 0; }
+    .mock-tab.on { color: var(--action); border-bottom: 2px solid var(--action); }
+    .mock-filters { display: grid; grid-template-columns: 1fr .65fr .65fr; gap: 7px; margin: 12px 0; }
+    .fake-input { min-width: 0; border: 1px solid var(--border); background: white; border-radius: 6px; padding: 8px; color: var(--muted); font-size: 9px; }
+    .fake-table { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: white; }
+    .fake-row { display: grid; grid-template-columns: 1.25fr .8fr .65fr .5fr; min-width: 0; border-top: 1px solid var(--border); padding: 9px 10px; gap: 8px; align-items: center; font-size: 9px; }
+    .fake-row:first-child { border-top: 0; background: var(--surface-soft); color: var(--muted); font-weight: 900; text-transform: uppercase; letter-spacing: .04em; }
+    .fake-row > * { min-width: 0; overflow-wrap: anywhere; }
+    .tiny-status { width: fit-content; border-radius: 999px; background: var(--success-soft); color: var(--success); padding: 2px 6px; font-weight: 800; }
+
+    .principles { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 10px; }
+    .principle { padding: 15px; border: 1px solid var(--border); background: var(--surface); border-radius: 12px; }
+    .principle .num { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--surface-warm); color: var(--action); font-size: 11px; font-weight: 900; margin-bottom: 11px; }
+    .principle strong { display: block; font-size: 13px; }
+    .principle p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+
+    .toolbar { display: grid; grid-template-columns: minmax(220px,1fr) auto minmax(120px,auto) minmax(130px,auto); gap: 10px; align-items: center; padding: 14px; border-bottom: 1px solid var(--border); }
+    .search, .select { width: 100%; min-width: 0; border: 1px solid var(--border-strong); background: white; border-radius: 8px; color: var(--ink); padding: 9px 11px; font-size: 12px; }
+    .segmented { display: flex; flex-wrap: wrap; gap: 5px; }
+    .filter-button { border: 1px solid var(--border); background: white; color: #475569; border-radius: 7px; padding: 7px 9px; font-size: 11px; font-weight: 800; cursor: pointer; }
+    .filter-button:hover, .filter-button:focus-visible { border-color: var(--action); outline: none; }
+    .filter-button.active { background: var(--rail); border-color: var(--rail); color: white; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); padding: 12px 13px; }
+    th { position: sticky; top: 58px; z-index: 2; background: var(--surface-soft); color: #475569; font-size: 10px; letter-spacing: .07em; text-transform: uppercase; }
+    td { font-size: 12px; }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #fbfdff; }
+    .finding-id { color: var(--muted); font-family: ui-monospace, monospace; white-space: nowrap; }
+    .finding-title { display: block; font-weight: 850; margin-bottom: 3px; }
+    .evidence { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+    .impact { color: #334155; }
+    .table-summary { padding: 10px 14px; color: var(--muted); font-size: 11px; border-top: 1px solid var(--border); background: #fcfdff; }
+
+    .matrix-card { overflow: hidden; }
+    .matrix-card table { min-width: 760px; }
+    .mark { font-weight: 900; white-space: nowrap; }
+    .mark.bad { color: var(--danger); }
+    .mark.partial { color: var(--warn); }
+    .mark.good { color: var(--success); }
+    .mark.question { color: #7c3aed; }
+
+    .role-matrix { display: grid; grid-template-columns: 165px repeat(5,minmax(88px,1fr)); overflow-x: auto; }
+    .role-matrix > div { min-width: 0; padding: 11px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); font-size: 11px; }
+    .role-matrix .head { background: var(--surface-soft); color: #475569; font-weight: 900; }
+    .role-matrix .row-head { background: #fcfdff; font-weight: 850; }
+    .role-matrix .allow { color: var(--success); background: #f7fef9; }
+    .role-matrix .block { color: var(--danger); background: #fffafa; }
+    .role-matrix .wizard { color: var(--warn); background: #fffdfa; }
+    .role-matrix .teach { color: var(--info); background: #f8fbff; }
+
+    .acceptance { counter-reset: criteria; display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
+    .acceptance li { position: relative; padding: 12px 14px 12px 45px; border: 1px solid var(--border); border-radius: 10px; background: white; font-size: 12px; }
+    .acceptance li::before { counter-increment: criteria; content: counter(criteria); position: absolute; left: 13px; top: 11px; display: grid; place-items: center; width: 21px; height: 21px; border-radius: 6px; background: var(--rail); color: white; font-size: 10px; font-weight: 900; }
+
+    .timeline { display: grid; gap: 0; }
+    .phase { display: grid; grid-template-columns: 92px 28px minmax(0,1fr); gap: 11px; min-width: 0; }
+    .phase-label { color: var(--action); font-size: 11px; font-weight: 900; padding-top: 12px; }
+    .phase-line { position: relative; display: flex; justify-content: center; }
+    .phase-line::before { content: ""; position: absolute; top: 0; bottom: 0; width: 2px; background: var(--border); }
+    .phase:first-child .phase-line::before { top: 20px; }
+    .phase:last-child .phase-line::before { bottom: calc(100% - 20px); }
+    .phase-dot { position: relative; z-index: 1; width: 12px; height: 12px; border: 3px solid var(--surface); border-radius: 50%; background: var(--action); margin-top: 16px; box-shadow: 0 0 0 1px var(--action); }
+    .phase-content { padding: 10px 0 22px; min-width: 0; }
+    .phase-content p { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+    .phase-content ul { margin: 8px 0 0; padding-left: 17px; font-size: 12px; }
+
+    .decision-card { padding: 18px; border-top: 3px solid #8b5cf6; }
+    .decision-card p, .decision-card li { color: #475569; font-size: 12px; }
+    .decision-card ul { margin: 8px 0 0; padding-left: 18px; }
+    .decision-card.recommended { border-top-color: var(--action); }
+
+    .source-list { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 18px; margin: 0; padding: 0; list-style: none; }
+    .source-list li { padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 11px; color: #475569; overflow-wrap: anywhere; }
+    footer { margin-top: 48px; border-top: 1px solid var(--border); padding-top: 18px; color: var(--muted); font-size: 11px; }
+
+    @media (max-width: 1050px) {
+      .shell { grid-template-columns: 1fr; }
+      .rail { position: static; height: auto; display: flex; align-items: center; gap: 8px; padding: 10px 16px; overflow-x: auto; }
+      .brand { margin: 0 14px 0 0; flex: 0 0 auto; }
+      .brand span, .rail-label { display: none; }
+      .rail a { white-space: nowrap; flex: 0 0 auto; }
+      .topbar { top: 58px; }
+      th { top: 116px; }
+      .metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .principles { grid-template-columns: repeat(3,minmax(0,1fr)); }
+    }
+    @media (max-width: 760px) {
+      .content { padding-top: 20px; }
+      .topbar { position: static; }
+      .topbar p { display: none; }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .comparison-grid { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); min-height: 30px; }
+      .toolbar { grid-template-columns: 1fr; }
+      .principles { grid-template-columns: 1fr 1fr; }
+      .mock-shell { grid-template-columns: 1fr; }
+      .mock-rail { display: flex; gap: 5px; overflow-x: auto; }
+      .mock-logo { margin: 0 10px 0 0; white-space: nowrap; }
+      .mock-link { white-space: nowrap; }
+      .source-list { grid-template-columns: 1fr; }
+      .phase { grid-template-columns: 68px 22px minmax(0,1fr); }
+      th { position: static; }
+    }
+    @media (max-width: 480px) {
+      .metrics { grid-template-columns: 1fr; }
+      .principles { grid-template-columns: 1fr; }
+      .fake-row { grid-template-columns: 1.2fr .8fr .6fr; }
+      .fake-row > :nth-child(3) { display: none; }
+      .mock-filters { grid-template-columns: 1fr; }
+    }
+    @media print {
+      .rail, .topbar, .toolbar { display: none; }
+      .shell { display: block; }
+      .content { max-width: none; padding: 20px; }
+      section { break-inside: avoid; }
+      .card { box-shadow: none; }
+      tr[hidden] { display: table-row; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail" aria-label="Audit sections">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">G</div>
+        <div><strong>GRRAS LMS</strong><span>Experience audit</span></div>
+      </div>
+      <div class="rail-label">Review</div>
+      <a class="active" href="#summary"><span class="dot"></span>Executive summary</a>
+      <a href="#diagnosis"><span class="dot"></span>Fixed foundations</a>
+      <a href="#pattern"><span class="dot"></span>Target pattern</a>
+      <a href="#findings"><span class="dot"></span>Gap register</a>
+      <a href="#personas"><span class="dot"></span>Persona coverage</a>
+      <a href="#entities"><span class="dot"></span>Entity coverage</a>
+      <a href="#edge-cases"><span class="dot"></span>Edge cases</a>
+      <a href="#plan"><span class="dot"></span>Phased plan</a>
+      <a href="#decisions"><span class="dot"></span>Decisions needed</a>
+      <a href="#evidence"><span class="dot"></span>Evidence</a>
+    </aside>
+
+    <main>
+      <div class="topbar">
+        <p>Implementation status backed by source review and automated verification</p>
+        <span class="status-pill">Updated · 15 Oct 2026 · third loop</span>
+      </div>
+
+      <div class="content">
+        <header class="hero" id="summary">
+          <div class="eyebrow">UX + functional requirements audit</div>
+          <h1>27 of 28 findings fixed; bulk actions and role sidebars delivered in the third loop.</h1>
+          <p class="lede">Trainer onboarding is now discoverable and atomic, role changes are governed, and stale profiles no longer grant access. This page now separates completed work from partial improvements and untouched audit findings.</p>
+          <div class="hero-meta">
+            <span class="chip"><strong>101</strong> frontend page routes inspected structurally</span>
+            <span class="chip"><strong>6</strong> active personas mapped</span>
+            <span class="chip"><strong>28</strong> prioritized findings</span>
+            <span class="chip"><strong>Core</strong> implementation landed and documented</span>
+          </div>
+        </header>
+
+        <div class="notice" role="note">
+          <div class="notice-icon" aria-hidden="true">i</div>
+          <div>
+            <strong>Implementation and verification boundary</strong>
+            <p>After the third loop (branch <code>feat/ux-gap-loop-3</code>, 17 commits, not yet merged or deployed; loops 1 and 2 are on <code>main</code> and on staging): frontend 175 files / 1,586 tests pass, as do ESLint, TypeScript and the production build. The <strong>full backend suite passes in one uninterrupted run: 3,858 passed, 4 skipped, 0 failed</strong> — run between 23:06 and 23:23, the evening window in which three showcase-seed tests used to fail; those clock bugs were fixed. Bulk actions and role sidebars were also checked live in a browser as counsellor, administrator, manager and trainer. No migrations.</p>
+            <p><strong>Found and fixed beyond this audit:</strong> admins could change their own sign-in email silently; role changes now need a fresh step-up; a <code>custom_role</code> left out of a request was being stripped; leftover trainer profiles could take classes, and slot substitutes were not checked across centres; sessions, scope grants (including granting to yourself) and photo moderation ignored the authority ladder; a demoted superadmin could end up with no centre. On the UX side: errors that were silently dropped, including fee dialogs that failed without a message (and a timed-out payment could be entered twice); every role landing on a placeholder page; expired sessions leaving a broken Retry; enrolment withdrawal in one click; notification links that 404'd; unmarked students saved as absent; one-click exam submission; charts showing "nothing waiting" when they had actually failed to load; IST dates off by one; and silent errors in the registration wizard. Details are in <code>docs/uiux/UX_HARDENING_2026-10-15.md</code> ("Follow-up loop") and D-143.</p>
+          </div>
+        </div>
+
+        <div class="metrics" aria-label="Audit summary">
+          <div class="metric"><span class="number" style="color:var(--success)">27</span><span class="label">Fixed: the P0s, every daily-flow gap and bulk actions, across three loops</span></div>
+          <div class="metric"><span class="number" style="color:var(--warn)">1</span><span class="label">Partially fixed: a real screen-reader pass</span></div>
+          <div class="metric"><span class="number">0</span><span class="label">Not fixed</span></div>
+          <div class="metric"><span class="number">2</span><span class="label">Release gates: uninterrupted backend run and live browser walkthrough</span></div>
+        </div>
+
+        <section id="diagnosis">
+          <div class="section-head">
+            <div><div class="eyebrow">Implemented foundations</div><h2>The two reported structural problems are now contained</h2></div>
+            <p>The implementation changed navigation, API contracts, service-layer rules and access helpers together so the interface cannot recreate the original inconsistencies.</p>
+          </div>
+
+          <div class="grid-2">
+            <article class="card diagnosis">
+              <header>
+                <div><span class="severity p0">P0</span><h3 style="margin-top:9px">Managers can now find and add trainers</h3><p>The manager-facing directory is canonical and exposes onboarding when the capability is present.</p></div>
+                <span class="delivery fixed">Fixed</span>
+              </header>
+              <div class="body">
+                <div class="comparison-grid">
+                  <div class="state current">
+                    <span class="state-label">Before</span>
+                    <ul>
+                      <li>Manager has <code>trainer.create</code>.</li>
+                      <li>Manager nav opens <code>/manage/trainers</code>.</li>
+                      <li>That page only supports review/search.</li>
+                      <li>“Add trainer” lives on <code>/admin/trainers</code>, which is absent from manager nav.</li>
+                    </ul>
+                  </div>
+                  <div class="arrow" aria-hidden="true">→</div>
+                  <div class="state target">
+                    <span class="state-label">Now implemented</span>
+                    <ul>
+                      <li><code>/manage/trainers</code> is the canonical Trainer Directory.</li>
+                      <li>“Add trainer” appears when <code>trainer.create</code> is present.</li>
+                      <li><code>/admin/trainers</code> redirects, preserving old bookmarks.</li>
+                      <li>Account and trainer profile are created atomically.</li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="recommendation"><strong>Delivered</strong><p>The manager hub now owns onboarding, filters, export, row navigation and availability controls. The duplicate admin route redirects to it. Richer unified profile editing, invitation status and centre filtering remain separate partial findings below.</p></div>
+              </div>
+              <div class="diagram">
+                <svg viewBox="0 0 760 190" role="img" aria-labelledby="trainer-flow-title trainer-flow-desc">
+                  <title id="trainer-flow-title">Current and proposed trainer onboarding paths</title>
+                  <desc id="trainer-flow-desc">The current manager path ends at a review-only page while administrators reach a separate creation screen. The target path routes both through one capability-aware trainer hub.</desc>
+                  <defs><marker id="arrowA" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/></marker></defs>
+                  <g id="current-trainer-path"><title>Current trainer creation path</title>
+                    <text x="8" y="22" font-size="12" font-weight="800" fill="#b91c1c">CURRENT</text>
+                    <rect x="8" y="38" width="116" height="46" rx="9" fill="#fff" stroke="#cbd5e1"/><text x="66" y="66" text-anchor="middle" font-size="12">Manager</text>
+                    <path d="M124 61 H174" stroke="#b91c1c" stroke-width="2" marker-end="url(#arrowA)"/>
+                    <rect x="180" y="38" width="152" height="46" rx="9" fill="#fef2f2" stroke="#fecaca"/><text x="256" y="58" text-anchor="middle" font-size="11">Trainer review</text><text x="256" y="73" text-anchor="middle" font-size="10" fill="#64748b">no create action</text>
+                    <path d="M332 61 H382" stroke="#b91c1c" stroke-width="2" stroke-dasharray="5 4"/>
+                    <circle cx="397" cy="61" r="15" fill="#fee2e2" stroke="#ef4444"/><text x="397" y="66" text-anchor="middle" font-weight="900" fill="#b91c1c">×</text>
+                    <rect x="488" y="38" width="116" height="46" rx="9" fill="#fff" stroke="#cbd5e1"/><text x="546" y="66" text-anchor="middle" font-size="12">Admin</text>
+                    <path d="M604 61 H640" stroke="#166534" stroke-width="2" marker-end="url(#arrowA)"/>
+                    <rect x="646" y="38" width="105" height="46" rx="9" fill="#f0fdf4" stroke="#bbf7d0"/><text x="698" y="58" text-anchor="middle" font-size="10">Trainers</text><text x="698" y="73" text-anchor="middle" font-size="10" fill="#166534">Add trainer</text>
+                  </g>
+                  <g id="target-trainer-path"><title>Target trainer creation path</title>
+                    <text x="8" y="124" font-size="12" font-weight="800" fill="#166534">TARGET</text>
+                    <rect x="8" y="140" width="150" height="42" rx="9" fill="#fff" stroke="#cbd5e1"/><text x="83" y="165" text-anchor="middle" font-size="11">Admin or manager</text>
+                    <path d="M158 161 H225" stroke="#166534" stroke-width="2" marker-end="url(#arrowA)"/>
+                    <rect x="232" y="132" width="214" height="58" rx="10" fill="#fff7ed" stroke="#fdba74"/><text x="339" y="155" text-anchor="middle" font-size="12" font-weight="800">Trainer hub</text><text x="339" y="174" text-anchor="middle" font-size="10" fill="#64748b">Directory · Reviews · Workload</text>
+                    <path d="M446 161 H513" stroke="#166534" stroke-width="2" marker-end="url(#arrowA)"/>
+                    <rect x="520" y="140" width="231" height="42" rx="9" fill="#f0fdf4" stroke="#86efac"/><text x="635" y="157" text-anchor="middle" font-size="11" font-weight="800">Atomic onboarding</text><text x="635" y="173" text-anchor="middle" font-size="10" fill="#64748b">account + profile + invitation</text>
+                  </g>
+                </svg>
+                <p class="diagram-caption">The target path shown here is now the implemented core: managers and administrators share one capability-aware trainer hub.</p>
+              </div>
+            </article>
+
+            <article class="card diagnosis">
+              <header>
+                <div><span class="severity p0">P0</span><h3 style="margin-top:9px">Unsafe persona changes are now blocked</h3><p>Authorization changes are separated from profile editing, and domain identity cannot be silently contradicted.</p></div>
+                <span class="delivery fixed">Fixed</span>
+              </header>
+              <div class="body">
+                <div class="comparison-grid">
+                  <div class="state current">
+                    <span class="state-label">Before</span>
+                    <ul>
+                      <li>A normal select sends a generic user PATCH.</li>
+                      <li>The backend changes <code>User.role</code> and revokes sessions.</li>
+                      <li>No student/trainer profile migration occurs.</li>
+                      <li>An old student profile may still be selected as <code>profile_id</code> or used in access helpers.</li>
+                    </ul>
+                  </div>
+                  <div class="arrow" aria-hidden="true">→</div>
+                  <div class="state target">
+                    <span class="state-label">Now implemented</span>
+                    <ul>
+                      <li>Role-changing uses a dedicated governed endpoint and dialog.</li>
+                      <li>The server supplies allowed transitions for the target.</li>
+                      <li>Student/trainer conversions return 409 until a safe workflow exists.</li>
+                      <li>Reason, audit and session revocation are enforced by the service.</li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="recommendation"><strong>Delivered policy</strong><p>Authorized staff-to-staff transitions are allowed with confirmation and a required reason. Student/trainer conversions are blocked. Teaching managers retain their trainer profile and cannot leave the manager role until active or upcoming batches are reassigned.</p></div>
+              </div>
+              <div class="diagram">
+                <svg viewBox="0 0 760 230" role="img" aria-labelledby="role-flow-title role-flow-desc">
+                  <title id="role-flow-title">Safe role transition gate</title>
+                  <desc id="role-flow-desc">A requested role change is classified. Same-family staff changes can proceed with a preview, student and trainer conversions require a wizard, and a manager who teaches receives a teaching profile without changing role.</desc>
+                  <defs><marker id="arrowB" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/></marker></defs>
+                  <g id="role-request"><title>Role change request</title><rect x="12" y="89" width="144" height="52" rx="10" fill="#fff7ed" stroke="#fdba74"/><text x="84" y="111" text-anchor="middle" font-size="11" font-weight="800">Requested change</text><text x="84" y="129" text-anchor="middle" font-size="10">actor + target + role</text></g>
+                  <path d="M156 115 H220" stroke="currentColor" stroke-width="2" marker-end="url(#arrowB)"/>
+                  <g id="transition-classifier"><title>Transition classifier</title><polygon points="230,115 318,61 406,115 318,169" fill="#fff" stroke="#94a3b8"/><text x="318" y="111" text-anchor="middle" font-size="11" font-weight="800">Transition</text><text x="318" y="127" text-anchor="middle" font-size="10">type?</text></g>
+                  <path d="M365 86 C430 42 453 37 492 37" fill="none" stroke="#166534" stroke-width="2" marker-end="url(#arrowB)"/>
+                  <text x="416" y="45" font-size="9" fill="#166534">staff ↔ staff</text>
+                  <g id="staff-change"><title>Staff role change</title><rect x="500" y="12" width="245" height="52" rx="10" fill="#f0fdf4" stroke="#86efac"/><text x="622" y="33" text-anchor="middle" font-size="11" font-weight="800">Impact preview + confirmation</text><text x="622" y="50" text-anchor="middle" font-size="9">reason · grants · session revocation · audit</text></g>
+                  <path d="M406 115 H492" stroke="#b45309" stroke-width="2" marker-end="url(#arrowB)"/>
+                  <text x="420" y="106" font-size="9" fill="#b45309">student/trainer</text>
+                  <g id="persona-conversion"><title>Persona conversion wizard</title><rect x="500" y="88" width="245" height="54" rx="10" fill="#fffbeb" stroke="#fcd34d"/><text x="622" y="109" text-anchor="middle" font-size="11" font-weight="800">Conversion wizard or block</text><text x="622" y="126" text-anchor="middle" font-size="9">preserve history · reconcile one profile</text></g>
+                  <path d="M365 145 C430 189 453 193 492 193" fill="none" stroke="#1d4ed8" stroke-width="2" marker-end="url(#arrowB)"/>
+                  <text x="407" y="195" font-size="9" fill="#1d4ed8">manager teaches</text>
+                  <g id="teaching-profile"><title>Teaching profile attachment</title><rect x="500" y="166" width="245" height="52" rx="10" fill="#eff6ff" stroke="#93c5fd"/><text x="622" y="187" text-anchor="middle" font-size="11" font-weight="800">Keep role; attach teaching profile</text><text x="622" y="204" text-anchor="middle" font-size="9">no authority loss · explicit “also teaches” state</text></g>
+                </svg>
+                <p class="diagram-caption">This gate is now enforced in the service layer. A future conversion wizard remains optional product work; the unsafe generic path is closed.</p>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="pattern">
+          <div class="section-head">
+            <div><div class="eyebrow">Implemented core + remaining direction</div><h2>One canonical trainer hub</h2></div>
+            <p>The directory, filters, onboarding and row navigation are implemented. The Reviews due and Workload tabs in this concept remain future consolidation work.</p>
+          </div>
+          <div class="grid-2">
+            <article class="card mock-shell" aria-label="Proposed trainer hub mockup">
+              <div class="mock-rail">
+                <div class="mock-logo">GRRAS LMS</div>
+                <div class="mock-link">Dashboard</div><div class="mock-link">Activities</div><div class="mock-link on">Trainers</div><div class="mock-link">Batches</div><div class="mock-link">Class reports</div>
+              </div>
+              <div class="mock-main">
+                <div class="mock-titlebar">
+                  <div><h3>Trainers</h3><p>People, readiness, workload and review in one place.</p></div>
+                  <div class="button">+ Add trainer</div>
+                </div>
+                <div class="mock-tabs"><div class="mock-tab on">Directory</div><div class="mock-tab">Reviews due · 4</div><div class="mock-tab">Workload</div></div>
+                <div class="mock-filters"><div class="fake-input">⌕ Name, trainer ID, email or skill</div><div class="fake-input">Centre · All</div><div class="fake-input">Availability · All</div></div>
+                <div class="fake-table">
+                  <div class="fake-row"><span>Trainer</span><span>Skills</span><span>Workload</span><span>Status</span></div>
+                  <div class="fake-row"><strong>Aarav Mehta<br><small>TR-0018 · Jaipur</small></strong><span>Linux · AWS</span><span>3 batches</span><span class="tiny-status">Ready</span></div>
+                  <div class="fake-row"><strong>Nisha Rao<br><small>TR-0024 · Pune</small></strong><span>Python · Data</span><span>2 batches</span><span class="tiny-status">Ready</span></div>
+                  <div class="fake-row"><strong>Mohit Singh<br><small>TR-0031 · Jaipur</small></strong><span>Networking</span><span>Invitation sent</span><span style="color:#b45309;font-weight:800">Pending</span></div>
+                </div>
+              </div>
+            </article>
+            <article class="card card-body">
+              <h3>Functional contract for every high-volume page</h3>
+              <p style="color:var(--muted);font-size:13px">A “feature-rich” screen is not one with more controls. It lets a user find, understand, act, recover and repeat with confidence.</p>
+              <div class="principles" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-top:18px">
+                <div class="principle"><div class="num">1</div><strong>Find</strong><p>Search, meaningful filters, saved views, URL state, sort and pagination.</p></div>
+                <div class="principle"><div class="num">2</div><strong>Understand</strong><p>Identity, scope, status, provenance, counts and a clear canonical record.</p></div>
+                <div class="principle"><div class="num">3</div><strong>Act</strong><p>One primary action, capability-aware secondary actions, validation and visible busy state.</p></div>
+                <div class="principle"><div class="num">4</div><strong>Recover</strong><p>Retry, request ID, preserved input, unsaved-change guard and reversible choices.</p></div>
+                <div class="principle" style="grid-column:1/-1"><div class="num">5</div><strong>Trust</strong><p>Impact preview, confirmation proportional to risk, exact export parity, audit history and no role/profile contradictions.</p></div>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="findings">
+          <div class="section-head">
+            <div><div class="eyebrow">Prioritized gap register</div><h2>28 findings, filterable by status, urgency and persona</h2></div>
+            <p>P0 means fix before broader rollout. P1 blocks reliable daily work or creates material confusion. P2 improves consistency, speed or discoverability after core flows are safe.</p>
+          </div>
+          <div class="card">
+            <div class="toolbar">
+              <input id="finding-search" class="search" type="search" placeholder="Search findings, evidence or requirement…" aria-label="Search findings" />
+              <div class="segmented" aria-label="Filter by priority">
+                <button class="filter-button active" type="button" data-severity="all">All</button>
+                <button class="filter-button" type="button" data-severity="p0">P0</button>
+                <button class="filter-button" type="button" data-severity="p1">P1</button>
+                <button class="filter-button" type="button" data-severity="p2">P2</button>
+              </div>
+              <select id="status-filter" class="select" aria-label="Filter by delivery status">
+                <option value="all">All statuses</option><option value="fixed">Fixed</option><option value="partial">Partially fixed</option><option value="open">Not fixed</option>
+              </select>
+              <select id="persona-filter" class="select" aria-label="Filter by persona">
+                <option value="all">All personas</option><option value="admin">Admin</option><option value="manager">Manager</option><option value="counsellor">Counsellor</option><option value="trainer">Trainer</option><option value="student">Student</option><option value="cross-role">Cross-role</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table id="findings-table">
+                <thead><tr><th style="width:72px">ID</th><th style="width:70px">Priority</th><th style="width:110px">Type</th><th style="width:115px">Delivery status</th><th>Original gap and evidence</th><th>What changed / what remains</th></tr></thead>
+                <tbody>
+                  <tr data-severity="p0" data-status="fixed" data-persona="admin manager student trainer cross-role"><td class="finding-id">UX-01</td><td><span class="severity p0">P0</span></td><td><span class="badge verified">Verified defect</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Role PATCH did not reconcile domain profiles</span><span class="evidence">The ordinary account form previously changed authorization role without safely converting domain identity.</span></td><td class="impact"><strong>Fixed:</strong> account PATCH is contact-only; a dedicated transition service requires a reason, audits the change, revokes sessions, and blocks student/trainer persona conversion with 409.</td></tr>
+                  <tr data-severity="p0" data-status="fixed" data-persona="admin student trainer cross-role"><td class="finding-id">UX-02</td><td><span class="severity p0">P0</span></td><td><span class="badge verified">Verified defect</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Stale profile could influence identity and access</span><span class="evidence">A legacy student or trainer profile could previously remain discoverable after the account role changed.</span></td><td class="impact"><strong>Fixed:</strong> serializers and access helpers require the matching current role. Teaching managers are the explicit exception; stale profiles no longer join trainer announcement audiences.</td></tr>
+                  <tr data-severity="p0" data-status="fixed" data-persona="manager admin"><td class="finding-id">UX-03</td><td><span class="severity p0">P0</span></td><td><span class="badge verified">Verified defect</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Manager’s trainer-create capability had no discoverable entry point</span><span class="evidence">Managers were routed to a review-only screen while the create action lived on a separate admin page.</span></td><td class="impact"><strong>Fixed:</strong> `/manage/trainers` is canonical and shows “Add trainer” whenever <code>trainer.create</code> is held. The old admin URL redirects there.</td></tr>
+                  <tr data-severity="p0" data-status="fixed" data-persona="admin cross-role"><td class="finding-id">UX-04</td><td><span class="severity p0">P0</span></td><td><span class="badge verified">Verified defect</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Role selector offered invalid roles and retained stale custom role</span><span class="evidence">The old UI rendered a hard-coded list and submitted role data with ordinary account edits.</span></td><td class="impact"><strong>Fixed:</strong> the server returns allowed transitions; the UI uses only that list. Custom-role kind is validated, stale custom roles are cleared, and the consequence dialog requires a reason.</td></tr>
+
+                  <tr data-severity="p1" data-status="fixed" data-persona="admin cross-role"><td class="finding-id">UX-05</td><td><span class="severity p1">P1</span></td><td><span class="badge">Requirement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">User Accounts has no “Create account” path</span><span class="evidence">The page remains primarily a read/manage list.</span></td><td class="impact"><strong>Fixed:</strong> User Accounts has “Add staff account” for administrator, manager, counsellor (and superadmin for a superadmin), offered by grant containment, with links to Trainer onboarding and Admissions for the other personas; the new account opens on success.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="admin manager trainer"><td class="finding-id">UX-06</td><td><span class="severity p1">P1</span></td><td><span class="badge">Requirement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">No canonical trainer record or profile editor</span><span class="evidence">The list and review destination were split, and contact/account editing remained separate.</span></td><td class="impact"><strong>Fixed:</strong> the trainer's page carries a profile card — title, skills as tags, experience, expertise and availability, editable with <code>trainer.update_any</code> (ladder-checked) — beside the existing workload, work and review tabs; account and audit history are one click away on the account page.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="admin manager student trainer"><td class="finding-id">UX-07</td><td><span class="severity p1">P1</span></td><td><span class="badge">Requirement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Account, student and trainer records did not cross-link reliably</span><span class="evidence">The generic user record did not expose its related domain profile.</span></td><td class="impact"><strong>Fixed:</strong> the account links to Student 360 or the trainer profile, and Student 360, the admissions record and the trainer page each link back to the account.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="admin manager cross-role"><td class="finding-id">UX-08</td><td><span class="severity p1">P1</span></td><td><span class="badge verified">Verified defect</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Most list state is not in the URL</span><span class="evidence"><code>useList</code> still keeps most query state in local React state.</span></td><td class="impact"><strong>Fixed:</strong> search, sort, page and filters live in the address bar (read through <code>useSearchParams</code>) on users, students, batches, courses, admissions, both manager hubs and the class-report queue, date range included.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="admin manager counsellor cross-role"><td class="finding-id">UX-09</td><td><span class="severity p1">P1</span></td><td><span class="badge">Requirement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Backend filters are richer than the list UI</span><span class="evidence">Many people-list filters still exist only in the API.</span></td><td class="impact"><strong>Fixed:</strong> chips under each main list name every active filter and search, each removable, with Clear all; centre filters for people who see every centre; trainer experience filter.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="admin manager counsellor cross-role"><td class="finding-id">UX-10</td><td><span class="severity p1">P1</span></td><td><span class="badge verified">Verified defect</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Exports can disagree with the rows on screen</span><span class="evidence">The trainer hub has an export action, but its active skill/availability query is not yet passed as the export scope.</span></td><td class="impact"><strong>Fixed:</strong> trainers, students, enrolments and batches export the rows on screen (each list's own FilterSet and search, applied directly and on queued exports). A course-filtered admissions export used to be refused because it sent a slug; that is fixed too.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="admin manager counsellor cross-role"><td class="finding-id">UX-11</td><td><span class="severity p1">P1</span></td><td><span class="badge">Requirement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Saved filters exist only on Activities</span><span class="evidence">No new saved-view surface was added to people, batches, admissions or operational queues.</span></td><td class="impact"><strong>Fixed:</strong> server-backed saved views (per user, per screen) on eight lists, with apply, save, rename and remove.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="admin manager counsellor cross-role"><td class="finding-id">UX-12</td><td><span class="severity p1">P1</span></td><td><span class="badge">Decision</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Bulk-selection infrastructure has no product-backed operations</span><span class="evidence">The owner named the operations (ClassPro/Meritto style); loop 3 delivered them.</span></td><td class="impact"><strong>Delivered:</strong> row checkboxes and a selection bar on accounts, students, admissions, the trainers hub and enquiries; "select all N matching" works with every action; export selected (selection token), resend invitations, move to a centre, assign an enquiry owner, move enrolments to another batch (now a real transfer, not enrol-and-cancel). Each row goes through the single-row rules and the result lists every skip with its reason; unknown filters are refused; over 500 rows is said before confirming. Plus a sidebar per role (manager, counsellor, trainer) and module tabs on every page.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="cross-role"><td class="finding-id">UX-13</td><td><span class="severity p1">P1</span></td><td><span class="badge verified">Verified defect</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Unsaved-change protection was almost entirely absent</span><span class="evidence">High-risk people forms could previously be dismissed without a warning.</span></td><td class="impact"><strong>Fixed:</strong> the trainer, staff, account and registration forms, course details, the lesson editor, the form builder and the flow builder all guard unsaved work.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="admin manager cross-role"><td class="finding-id">UX-14</td><td><span class="severity p1">P1</span></td><td><span class="badge">Requirement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">High-impact mutations lacked proportional confirmation</span><span class="evidence">Several identity, status and scope changes were presented like ordinary edits.</span></td><td class="impact"><strong>Fixed:</strong> role changes need a reason and a fresh step-up; deactivation, centre moves, enrolment withdraw/suspend, weekly-slot removal and exam submission each confirm with their consequence, and withdraw/deactivate record a reason.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="student"><td class="finding-id">UX-15</td><td><span class="severity p1">P1</span></td><td><span class="badge verified">Known gap</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Student “My activities” has no frontend route</span><span class="evidence">The documented journey still has no dedicated student navigation surface.</span></td><td class="impact"><strong>Fixed:</strong> <code>/my-activities</code> lists what was shared with the student (own endpoint, read-only sheet showing only student-visible answers) and is in the student navigation; notification links forward there.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="student trainer manager counsellor admin"><td class="finding-id">UX-16</td><td><span class="severity p1">P1</span></td><td><span class="badge">Requirement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Student 360 is not yet a true single-point record</span><span class="evidence">Progress, attendance, assessment, fees, communications, documents and certificates remain distributed.</span></td><td class="impact"><strong>Fixed:</strong> Student 360 now carries fees, messages (sent and delivered), and certificates with verification links, beside overview, activities, timeline, enrolment and risk; it links to the admissions record and the account. No document model exists, so there is no documents tab.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="admin manager"><td class="finding-id">UX-17</td><td><span class="severity p1">P1</span></td><td><span class="badge verified">Verified defect</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Scope grants require a raw Batch UUID</span><span class="evidence">User administration still exposes an opaque identifier input.</span></td><td class="impact"><strong>Fixed:</strong> a batch is granted by searching its code or name inside the caller's visible batches; granted batches are hidden from the results.</td></tr>
+                  <tr data-severity="p1" data-status="fixed" data-persona="admin manager"><td class="finding-id">UX-18</td><td><span class="severity p1">P1</span></td><td><span class="badge verified">Verified defect</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Some failures are rendered as legitimate empty state</span><span class="evidence">Scope-grant loading still converts a failure into an empty list.</span></td><td class="impact"><strong>Fixed:</strong> a failed read is an error with request ID and Try again, keeping rows already shown; revoke failures are reported. Charts and dashboard sections do the same instead of showing an empty state.</td></tr>
+
+                  <tr data-severity="p2" data-status="fixed" data-persona="admin manager trainer"><td class="finding-id">UX-19</td><td><span class="severity p2">P2</span></td><td><span class="badge">Enhancement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Trainer onboarding was incomplete and unstructured</span><span class="evidence">The old form omitted phone and was detached from the manager's trainer workflow.</span></td><td class="impact"><strong>Fixed:</strong> skills are entered as tags; the trainer page shows whether the invitation was accepted and can resend it; availability is edited there; an address that already has an account explains whose it is and offers the next step.</td></tr>
+                  <tr data-severity="p2" data-status="fixed" data-persona="admin manager"><td class="finding-id">UX-20</td><td><span class="severity p2">P2</span></td><td><span class="badge">Enhancement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">“CreateTrainerDialog” was an inline card that shifted the table</span><span class="evidence">The old component was inserted into page flow despite its dialog name.</span></td><td class="impact"><strong>Fixed:</strong> onboarding now uses a real scroll-safe dialog, disables actions while saving, warns before discarding dirty input, resets correctly and returns to the same directory.</td></tr>
+                  <tr data-severity="p2" data-status="fixed" data-persona="admin manager counsellor cross-role"><td class="finding-id">UX-21</td><td><span class="severity p2">P2</span></td><td><span class="badge">Enhancement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Row activation and next action are inconsistent</span><span class="evidence">People tables still do not all follow one row/action contract.</span></td><td class="impact"><strong>Fixed:</strong> a control inside a row never also opens the row (checked once in <code>DataTable</code>), and the students and admissions rows open from anywhere like the other lists.</td></tr>
+                  <tr data-severity="p2" data-status="fixed" data-persona="admin manager trainer"><td class="finding-id">UX-22</td><td><span class="severity p2">P2</span></td><td><span class="badge">Enhancement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Inline mutations lacked row-level busy and recovery behavior</span><span class="evidence">The trainer availability action could be repeated without a durable operation state.</span></td><td class="impact"><strong>Fixed:</strong> inline changes are row-disabled while saving, report failures, and announce success (fee status, availability).</td></tr>
+                  <tr data-severity="p2" data-status="fixed" data-persona="admin manager cross-role"><td class="finding-id">UX-23</td><td><span class="severity p2">P2</span></td><td><span class="badge">Enhancement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Branch context is missing from key people lists</span><span class="evidence">User Accounts still lacks the audited branch filter/column behavior.</span></td><td class="impact"><strong>Fixed:</strong> a Centre column for everyone, a centre filter for those who see every centre, and “Every account at &lt;centre&gt;” for bounded viewers.</td></tr>
+                  <tr data-severity="p2" data-status="fixed" data-persona="manager trainer"><td class="finding-id">UX-24</td><td><span class="severity p2">P2</span></td><td><span class="badge">Requirement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">A manager’s “also teaches” state was invisible and unsafe to remove</span><span class="evidence">The backend supported a teaching profile but account identity did not expose it consistently.</span></td><td class="impact"><strong>Fixed:</strong> an “Also teaches” badge, “Open teaching profile” link and a note on the role card; the trainer directory marks “Manager · also teaches”.</td></tr>
+                  <tr data-severity="p2" data-status="fixed" data-persona="cross-role"><td class="finding-id">UX-25</td><td><span class="severity p2">P2</span></td><td><span class="badge">Enhancement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Command palette navigates but lacks quick actions</span><span class="evidence">No capability-aware create commands were added.</span></td><td class="impact"><strong>Fixed:</strong> the palette has capability-aware quick actions (register a student, add a trainer or staff account, open a batch), matched on plain words, that open the dialog directly.</td></tr>
+                  <tr data-severity="p2" data-status="fixed" data-persona="admin manager"><td class="finding-id">UX-26</td><td><span class="severity p2">P2</span></td><td><span class="badge verified">Verified defect</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Centre-move form can clear inputs after a failed request</span><span class="evidence">This mutation wrapper and form were outside the implementation slice.</span></td><td class="impact"><strong>Fixed:</strong> the move is confirmed first and the form clears only after success; a refusal keeps the centre and reason for retry.</td></tr>
+                  <tr data-severity="p2" data-status="fixed" data-persona="admin"><td class="finding-id">UX-27</td><td><span class="severity p2">P2</span></td><td><span class="badge">Enhancement</span></td><td><span class="delivery fixed">Fixed</span></td><td><span class="finding-title">Deactivation reason exists in backend but is absent from account UX</span><span class="evidence">The governed role-change dialog does not alter the separate activation control.</span></td><td class="impact"><strong>Fixed:</strong> deactivation opens a dialog explaining sign-out everywhere, requires a reason and sends it to the audited endpoint; activation stays one click.</td></tr>
+                  <tr data-severity="p2" data-status="partial" data-persona="cross-role"><td class="finding-id">UX-28</td><td><span class="severity p2">P2</span></td><td><span class="badge">Validation</span></td><td><span class="delivery partial">Partial</span></td><td><span class="finding-title">Responsive, keyboard and six-role walkthroughs are not yet evidenced</span><span class="evidence">Automated component coverage is green, but the connected Chrome bridge failed to initialize.</span></td><td class="impact"><strong>Delivered:</strong> axe-core checks with zero violations, plus a live keyboard pass (focus rings, focus traps, Escape returning focus, first-field focus, row keys, the unsaved-changes prompt) whose three findings were fixed. <span class="status-note"><strong>Still open:</strong> a pass with a real screen reader.</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="table-summary" aria-live="polite"><span id="visible-count">28</span> of 28 findings shown · 27 fixed · 1 partially fixed · 0 not fixed</div>
+          </div>
+        </section>
+
+        <section id="personas">
+          <div class="section-head">
+            <div><div class="eyebrow">Functional requirements by persona</div><h2>What each actor must be able to accomplish</h2></div>
+            <p>This is the product completeness lens: a screen is only useful when the persona can finish the real-world job and recover from expected exceptions.</p>
+          </div>
+          <div class="card matrix-card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Persona</th><th>Core jobs</th><th>Strong current surfaces</th><th>Highest gaps</th><th>Definition of useful</th></tr></thead>
+                <tbody>
+                  <tr><td><strong>Superadmin</strong></td><td>Govern organization, roles, policy, audit, recovery and cross-centre access.</td><td><span class="mark good">●</span> Governed role transitions, hierarchy guards and broad governance surfaces.</td><td>Django-admin break-glass hardening; canonical people records; live role walkthrough.</td><td>Every privilege change is previewed, attributable, reversible where possible and internally consistent.</td></tr>
+                  <tr><td><strong>Admin</strong></td><td>Create staff, manage accounts, admissions, people, courses, batches and reports.</td><td><span class="mark good">●</span> Safe role transition, trainer onboarding and rich domain management.</td><td>Generic staff-create entry; unified trainer profile editing; filter/export parity.</td><td>Can onboard and support any persona from one obvious starting point without making an incomplete identity.</td></tr>
+                  <tr><td><strong>Manager</strong></td><td>Run daily academic operations, onboard trainers, manage delivery, review performance and cover staffing.</td><td><span class="mark good">●</span> Canonical trainer hub with onboarding, filters, readiness controls and review navigation.</td><td>Richer trainer profile tabs; invitation state; explicit “also teaches” state; export parity.</td><td>Can find a trainer, understand readiness/workload, add or update them, assign work and see follow-through.</td></tr>
+                  <tr><td><strong>Counsellor</strong></td><td>Handle enquiries, admissions, fees, follow-ups, student care and branch queues.</td><td><span class="mark partial">◐</span> Most manager capabilities plus admissions/fees workflows.</td><td>Role boundary still product-ambiguous; student communication/care view fragmented; saved operational queues.</td><td>Owns a clear student-care workspace without trainer-governance actions or duplicate manager navigation.</td></tr>
+                  <tr><td><strong>Trainer</strong></td><td>See today’s work, teach assigned batches, mark attendance, submit DSR, assign/grade work and support students.</td><td><span class="mark good">●</span> Teaching workspace, work, attendance and assigned-record scope.</td><td>Canonical profile/workload context; multi-source student context; clear dual-role manager behavior.</td><td>Can complete a teaching day from one queue and open the relevant student/batch context without searching across modules.</td></tr>
+                  <tr><td><strong>Student</strong></td><td>Learn, submit, track progress/attendance/results/fees, communicate and obtain certificates.</td><td><span class="mark partial">◐</span> Learning, submissions, own fees and focused academic views; unsafe role conversion is blocked.</td><td>No My activities page; 360 remains staff-oriented and incomplete as a single point.</td><td>One “My learning” home explains what to do next, what changed, what is due and who to contact.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="entities">
+          <div class="section-head">
+            <div><div class="eyebrow">Entity and workflow coverage</div><h2>Where single-point views and operational controls are needed</h2></div>
+            <p>“Single point display” should be a composed read model with deep links to specialist actions—not a second copy of every form.</p>
+          </div>
+          <div class="card matrix-card">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Entity / workflow</th><th>Primary users</th><th>Find &amp; filter requirements</th><th>Single-point display</th><th>Mutation / edge-case requirements</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td><strong>User account</strong></td><td>Admin</td><td>Name/email/ID, role, active, centre, verification, joined date.</td><td>Identity, governed role, custom role, centre, sessions, related domain profile, audit.</td><td>Safe role transition is delivered; staff invite, deactivation reason, centre picker and scope-grant picker remain.</td><td><span class="mark partial">◐ Core fixed</span></td></tr>
+                  <tr><td><strong>Trainer</strong></td><td>Admin, manager</td><td>Name/ID/email, skill and availability delivered; experience, centre and review-due filters remain.</td><td>Directory and review navigation are canonical; full profile/account/audit tabs remain.</td><td>Atomic onboarding is delivered; duplicate-account recovery, invitation retry and explicit “also teaches” UI remain.</td><td><span class="mark partial">◐ Core fixed</span></td></tr>
+                  <tr><td><strong>Student</strong></td><td>All scoped staff, student</td><td>Name/ID/contact, centre, course/batch, fee, risk, institution, city, owner, awaiting enrolment.</td><td>Profile, enrolment, progress, attendance, work, fees, activities, timeline, risk, communications, documents/certificates.</td><td>Duplicate detection, transfer, withdrawal, fee exception, consent, archival, conversion.</td><td><span class="mark partial">◐ P1</span></td></tr>
+                  <tr><td><strong>Admission / enrolment</strong></td><td>Admin, counsellor, manager</td><td>Stage, owner, centre, course, source, due follow-up, duplicate risk.</td><td>Applicant context, quote/fees, documents, communication, timeline and conversion state.</td><td>Resume drafts, duplicate merge decision, payment race, transfer, cancellation, back navigation.</td><td><span class="mark partial">◐ P1</span></td></tr>
+                  <tr><td><strong>Course / curriculum</strong></td><td>Admin, manager, authors</td><td>Status, owner, category, skill, updated date, assigned author.</td><td>Structure, readiness, authors, batches, outcomes and publication history.</td><td>Draft guard, publish impact, versioning, archived dependencies, copy/clone.</td><td><span class="mark partial">◐ Validate</span></td></tr>
+                  <tr><td><strong>Batch / schedule</strong></td><td>Admin, manager, trainer</td><td>Centre, course, trainer, status, dates, capacity, attention state.</td><td>Roster, schedule, trainers, attendance, DSR, progress, work and fees summary.</td><td>Conflict detection, substitute trainer, transfer, capacity, cancel/reschedule notice.</td><td><span class="mark partial">◐ P1</span></td></tr>
+                  <tr><td><strong>Teaching session / DSR</strong></td><td>Trainer, manager</td><td>Date, batch, trainer, missing/late/review state.</td><td>Plan, attendance, delivery evidence, exceptions, review and follow-up.</td><td>Offline/late submission, correction after sign-off, substitute ownership, attachments.</td><td><span class="mark good">● Strong</span></td></tr>
+                  <tr><td><strong>Work &amp; assessment</strong></td><td>Trainer, student, manager</td><td>Type, batch/student, due/status, overdue, ungraded, risk.</td><td>Brief, submission, rubric/result, feedback, attempts and activity history.</td><td>Late work, resubmission, file failure, grading conflict, absent/exempt states.</td><td><span class="mark partial">◐ Consolidate</span></td></tr>
+                  <tr><td><strong>Fees</strong></td><td>Counsellor, admin, manager, student</td><td>Balance, due date, overdue, course/batch, centre, payer/student.</td><td>Quote, discount, payments, balance, due plan, void history and receipt trail.</td><td>Duplicate payment, overpayment, void reason, failed gateway, transfer/refund policy.</td><td><span class="mark good">● Strong</span></td></tr>
+                  <tr><td><strong>Activities / timeline / risk</strong></td><td>All scoped roles</td><td>Owner, type, status, due, student, batch, priority, saved views.</td><td>Unified chronology with provenance and deep link to source record.</td><td>Visibility rules, cancellation, stale automation, acknowledgement, student-visible flag.</td><td><span class="mark partial">◐ P1</span></td></tr>
+                  <tr><td><strong>Communication</strong></td><td>All</td><td>Recipient/audience, channel, delivery status, date, template, related entity.</td><td>Conversation/delivery history in student/trainer context.</td><td>Consent/preferences, failed/retry, duplicate send, wrong audience, template version.</td><td><span class="mark partial">◐ Validate</span></td></tr>
+                  <tr><td><strong>Reports / exports</strong></td><td>Admin, manager</td><td>Same normalized filters as current view, saved presets, date/scope.</td><td>Job status, row scope, generated time, expiry, requester and error.</td><td>Large jobs, stale filters, authorization at request and download, cancellation.</td><td><span class="mark bad">● P1 parity</span></td></tr>
+                  <tr><td><strong>Audit / recovery / automation</strong></td><td>Superadmin, admin</td><td>Actor, action, entity, result, date, centre, request/correlation ID.</td><td>Cause → action → downstream result with safe redaction.</td><td>Replay/idempotency, restore dependencies, permission drift, partial failure.</td><td><span class="mark good">● Strong base</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <section id="edge-cases">
+          <div class="section-head">
+            <div><div class="eyebrow">Critical edge-case specification</div><h2>Trainer onboarding and role transitions</h2></div>
+            <p>The safety-critical cases now have automated coverage. Each criterion below says whether it is delivered, partial or still open.</p>
+          </div>
+
+          <div class="grid-2">
+            <article class="card card-body">
+              <h3>Trainer onboarding acceptance criteria</h3>
+              <ol class="acceptance">
+                <li><span class="delivery fixed">Fixed</span> An Admin or Manager with <code>trainer.create</code> sees “Add trainer” from the canonical list; a Counsellor does not.</li>
+                <li><span class="delivery partial">Partial</span> User and trainer profile creation is atomic. Invitation delivery status/recovery is not yet surfaced.</li>
+                <li><span class="delivery open">Not fixed</span> Existing-active-account recovery still needs an attach/convert/already-a-trainer explanation.</li>
+                <li><span class="delivery open">Not fixed</span> Existing-inactive-account reactivation versus cancellation is not an onboarding choice yet.</li>
+                <li><span class="delivery fixed">Fixed</span> Centre choices and server writes remain bounded by actor scope.</li>
+                <li><span class="delivery partial">Partial</span> The submit button prevents a local duplicate; server-side idempotency for timeout retries is still open.</li>
+                <li><span class="delivery fixed">Fixed</span> Validation preserves input, Cancel/close guards dirty work, and success reloads the same directory.</li>
+                <li><span class="delivery open">Not fixed</span> Invitation status, resend and mail-failure distinction are not present in the hub.</li>
+                <li><span class="delivery partial">Partial</span> Phone and experience are captured and bounded; skills remain comma-separated rather than structured tags.</li>
+                <li><span class="delivery partial">Partial</span> Teaching managers retain authority and profile access; an explicit “Also teaches” badge is still open.</li>
+              </ol>
+            </article>
+
+            <article class="card card-body">
+              <h3>Role transition rules</h3>
+              <div class="role-matrix" role="table" aria-label="Role transition rules">
+                <div class="head">From \ To</div><div class="head">Admin</div><div class="head">Manager</div><div class="head">Counsellor</div><div class="head">Trainer</div><div class="head">Student</div>
+                <div class="row-head">Admin</div><div class="allow">Custom role</div><div class="allow">Confirm · authority</div><div class="allow">Confirm · authority</div><div class="block">Blocked conversion</div><div class="block">Blocked conversion</div>
+                <div class="row-head">Manager</div><div class="allow">Confirm · authority</div><div class="allow">Custom role</div><div class="allow">Confirm · authority</div><div class="teach">Blocked; attach profile</div><div class="block">Blocked conversion</div>
+                <div class="row-head">Counsellor</div><div class="allow">Confirm · authority</div><div class="allow">Confirm · authority</div><div class="allow">Custom role</div><div class="block">Blocked conversion</div><div class="block">Blocked conversion</div>
+                <div class="row-head">Trainer</div><div class="block">Blocked conversion</div><div class="block">Blocked conversion</div><div class="block">Blocked conversion</div><div class="allow">Custom role</div><div class="block">Blocked conversion</div>
+                <div class="row-head">Student</div><div class="block">Blocked conversion</div><div class="block">Blocked conversion</div><div class="block">Blocked conversion</div><div class="block">Blocked conversion</div><div class="allow">No-op</div>
+              </div>
+              <div class="recommendation"><strong>Implemented and remaining</strong><p>Implemented: server-approved options, from/to preview, required reason, audit, session revocation, self-change refusal, last-superadmin protection and teaching-assignment guard. Still open: full capability-diff preview, optimistic concurrency for ordinary admin edits, and any deliberate persona-conversion wizard.</p></div>
+            </article>
+          </div>
+
+          <div class="grid-3" style="margin-top:14px">
+            <article class="card card-body"><span class="severity p0">Identity</span><h3 style="margin-top:10px">Profile invariants</h3><p style="font-size:12px;color:var(--muted)">A user must never report <code>profile_type=trainer</code> with a student profile ID. An archived legacy profile may retain history but cannot silently grant current access.</p></article>
+            <article class="card card-body"><span class="severity p1">Concurrency</span><h3 style="margin-top:10px">Stale edits</h3><p style="font-size:12px;color:var(--muted)">Account and role forms need version/updated-at checks. On conflict, show what changed and let the operator reload—not a generic save failure.</p></article>
+            <article class="card card-body"><span class="severity p1">Recovery</span><h3 style="margin-top:10px">Partial side effects</h3><p style="font-size:12px;color:var(--muted)">Invitation/email failures, audit writes and session revocation need explicit outcomes. The UI must distinguish “record created; email failed” from “creation failed.”</p></article>
+          </div>
+        </section>
+
+        <section id="plan">
+          <div class="section-head">
+            <div><div class="eyebrow">Implementation sequence</div><h2>Fix integrity first, then discoverability, then breadth</h2></div>
+            <p>This sequencing avoids polishing workflows whose underlying identity contract is still unsafe. It is intentionally not a commitment to implement all 28 findings.</p>
+          </div>
+          <div class="card card-body">
+            <div class="timeline">
+              <div class="phase"><div class="phase-label">Gate 0</div><div class="phase-line"><span class="phase-dot"></span></div><div class="phase-content"><strong><span class="delivery partial">Partial</span> Product decisions</strong><p>The transition policy and canonical trainer destination are adopted. Manager/counsellor specialization remains open.</p></div></div>
+              <div class="phase"><div class="phase-label">Phase 1</div><div class="phase-line"><span class="phase-dot"></span></div><div class="phase-content"><strong><span class="delivery fixed">Complete</span> P0 identity and authorization hardening</strong><p>Unsafe persona PATCH is closed, profile resolution is role-aware, and backend/frontend regression coverage is present.</p></div></div>
+              <div class="phase"><div class="phase-label">Phase 2</div><div class="phase-line"><span class="phase-dot"></span></div><div class="phase-content"><strong><span class="delivery partial">Core complete</span> Trainer onboarding and canonical hub</strong><p>Directory ownership, atomic creation, filters and availability actions are delivered. Duplicate-account, reactivation and invitation recovery remain.</p></div></div>
+              <div class="phase"><div class="phase-label">Phase 3</div><div class="phase-line"><span class="phase-dot"></span></div><div class="phase-content"><strong><span class="delivery open">Open</span> List reliability and operator productivity</strong><p>Trainer filters moved forward, but URL-backed state, export parity, saved views, error fidelity and approved bulk actions remain.</p></div></div>
+              <div class="phase"><div class="phase-label">Phase 4</div><div class="phase-line"><span class="phase-dot"></span></div><div class="phase-content"><strong><span class="delivery partial">Early progress</span> Canonical Student and Trainer records</strong><p>User Accounts now links to related profiles. Student 360 completion, My activities and full trainer profile tabs remain.</p></div></div>
+              <div class="phase"><div class="phase-label">Gate 5</div><div class="phase-line"><span class="phase-dot"></span></div><div class="phase-content"><strong><span class="delivery open">Open</span> Live validation and rollout</strong><p>Run the uninterrupted backend suite plus responsive, keyboard, screen-reader and six-role live journeys before release sign-off.</p></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="decisions">
+          <div class="section-head">
+            <div><div class="eyebrow">Owner decisions</div><h2>Three choices that should not be guessed in code</h2></div>
+            <p>The audit has a recommendation for each, but these change product behavior or governance and should be explicitly accepted.</p>
+          </div>
+          <div class="grid-3">
+            <article class="card decision-card recommended"><span class="delivery fixed">Adopted</span><h3 style="margin-top:11px">Can one person hold multiple personas?</h3><p><strong>Implemented:</strong> one primary authorization role; an optional teaching profile for Manager; direct student/trainer persona conversion is blocked.</p><ul><li>Prevents accidental privilege loss.</li><li>Preserves history without treating stale profiles as current.</li><li>Allows a manager to teach without becoming a trainer-role account.</li></ul></article>
+            <article class="card decision-card recommended"><span class="delivery partial">Partially adopted</span><h3 style="margin-top:11px">Where is the canonical people record?</h3><p><strong>Implemented for discovery:</strong> the trainer hub is canonical and account pages link to domain profiles.</p><ul><li>The duplicate trainer route redirects.</li><li>Trainer rows open the review record.</li><li>Full profile/account/audit tabs remain open.</li></ul></article>
+            <article class="card decision-card"><span class="delivery open">Decision open</span><h3 style="margin-top:11px">Manager versus Counsellor</h3><p><strong>Still recommended:</strong> explicitly specialize navigation and saved queues even if many backend capabilities remain shared.</p><ul><li>Manager: staffing, delivery, review, academic operations.</li><li>Counsellor: pipeline, fees, follow-up, communication, student care.</li><li>Document any intentional overlap as policy.</li></ul></article>
+          </div>
+        </section>
+
+        <section id="evidence">
+          <div class="section-head">
+            <div><div class="eyebrow">Implementation evidence</div><h2>Primary anchors for the updated status</h2></div>
+            <p>Paths are repository-relative. The detailed change record is in <code>docs/uiux/UX_HARDENING_2026-10-15.md</code>.</p>
+          </div>
+          <div class="card card-body">
+            <ul class="source-list">
+              <li><code>frontend/app/manage/trainers/page.tsx</code> — canonical hub, filters, availability and Add trainer</li>
+              <li><code>frontend/app/admin/trainers/page.tsx</code> — legacy route redirect</li>
+              <li><code>frontend/app/admin/trainers/create-trainer-dialog.tsx</code> — modal onboarding and dirty guard</li>
+              <li><code>frontend/components/navigation.ts</code> — one trainer destination</li>
+              <li><code>frontend/app/admin/users/[userId]/page.tsx</code> — governed role card, confirmation and profile links</li>
+              <li><code>frontend/lib/people.ts</code> — contact-only update and dedicated role-transition client</li>
+              <li><code>backend/apps/accounts/roles.py</code> — staff family and server-approved transitions</li>
+              <li><code>backend/apps/accounts/services.py</code> — transition guards, audit and session revocation</li>
+              <li><code>backend/apps/accounts/serializers.py</code> — generic-create guard and role-aware profile identity</li>
+              <li><code>backend/apps/accounts/user_views.py</code> — dedicated transition endpoint</li>
+              <li><code>backend/apps/batches/access.py</code> — shared role-aware profile helpers</li>
+              <li><code>backend/apps/announcements/services.py</code> — stale trainer profile excluded from teaching audiences</li>
+              <li><code>backend/tests/test_role_profile_consistency.py</code> — stale and teaching-manager invariants</li>
+              <li><code>backend/tests/test_user_admin.py</code> — governed transition and session-revocation coverage</li>
+              <li><code>backend/tests/test_trainers_api.py</code> — manager atomic trainer onboarding</li>
+              <li><code>frontend/tests/unit/create-trainer-dialog.test.tsx</code> — onboarding dialog behavior</li>
+              <li><code>frontend/tests/unit/admin-user-role-transition.test.tsx</code> — role preview, reason and error behavior</li>
+              <li><code>frontend/tests/unit/manage-trainers-hub.test.tsx</code> — canonical hub actions and filters</li>
+            </ul>
+          </div>
+        </section>
+
+        <footer>
+          GRRAS LMS UX &amp; Functional Gap Audit · Updated 15 October 2026 · Design source: the repository’s <code>docs/uiux/DESIGN_SYSTEM.md</code> and current LMS visual tokens. Status is based on the working-tree implementation and automated checks; “Fixed” does not replace the outstanding live release walkthrough.
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const rows = [...document.querySelectorAll('#findings-table tbody tr')];
+      const buttons = [...document.querySelectorAll('.filter-button[data-severity]')];
+      const search = document.querySelector('#finding-search');
+      const status = document.querySelector('#status-filter');
+      const persona = document.querySelector('#persona-filter');
+      const count = document.querySelector('#visible-count');
+      let severity = 'all';
+
+      function applyFilters() {
+        const term = search.value.trim().toLowerCase();
+        const selectedStatus = status.value;
+        const selectedPersona = persona.value;
+        let visible = 0;
+        rows.forEach((row) => {
+          const severityMatch = severity === 'all' || row.dataset.severity === severity;
+          const statusMatch = selectedStatus === 'all' || row.dataset.status === selectedStatus;
+          const personaMatch = selectedPersona === 'all' || (row.dataset.persona || '').split(' ').includes(selectedPersona);
+          const searchMatch = term === '' || row.textContent.toLowerCase().includes(term);
+          row.hidden = !(severityMatch && statusMatch && personaMatch && searchMatch);
+          if (!row.hidden) visible += 1;
+        });
+        count.textContent = String(visible);
+      }
+
+      buttons.forEach((button) => button.addEventListener('click', () => {
+        severity = button.dataset.severity;
+        buttons.forEach((item) => item.classList.toggle('active', item === button));
+        applyFilters();
+      }));
+      search.addEventListener('input', applyFilters);
+      status.addEventListener('change', applyFilters);
+      persona.addEventListener('change', applyFilters);
+    })();
+  </script>
+</body>
+</html>

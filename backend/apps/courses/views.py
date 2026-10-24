@@ -194,10 +194,23 @@ class CourseFilterSet(django_filters.FilterSet):
     difficulty = django_filters.CharFilter(field_name="difficulty", lookup_expr="exact")
     status = django_filters.CharFilter(field_name="status", lookup_expr="exact")
     visibility = django_filters.CharFilter(field_name="visibility", lookup_expr="exact")
+    #: "Show Active" on the catalogue screen, which means "not archived"
+    #: rather than any one status: a course being written and a course on
+    #: sale are both live work. Done as a filter rather than by the client
+    #: dropping archived rows after the fact, which would quietly make a page
+    #: of twelve show nine.
+    active = django_filters.BooleanFilter(method="filter_active")
 
     class Meta:
         model = Course
-        fields = ("category", "difficulty", "status", "visibility")
+        fields = ("category", "difficulty", "status", "visibility", "active")
+
+    def filter_active(self, queryset, name, value):
+        if value is None:
+            return queryset
+        if value:
+            return queryset.exclude(status=PublishStatus.ARCHIVED)
+        return queryset.filter(status=PublishStatus.ARCHIVED)
 
 
 def _annotated(queryset):
@@ -238,6 +251,7 @@ class CourseListCreateView(ListCreateAPIView):
             OpenApiParameter("search", str, description="Matches title, code and description."),
             OpenApiParameter("category", str, description="Category slug."),
             OpenApiParameter("mine", bool, description="Only courses assigned to me."),
+            OpenApiParameter("active", bool, description="True hides archived courses."),
         ],
         tags=COURSES_TAG,
     )
