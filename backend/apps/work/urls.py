@@ -33,6 +33,7 @@ activity_patterns = [
     ),
     path("<uuid:activity_id>/complete/", views.ActivityCompleteView.as_view(), name="complete"),
     path("<uuid:activity_id>/review/", views.ActivityReviewView.as_view(), name="review"),
+    path("<uuid:activity_id>/release/", views.ActivityReleaseView.as_view(), name="release"),
 ]
 
 student_activity_urlpatterns = [

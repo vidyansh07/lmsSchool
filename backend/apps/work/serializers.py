@@ -51,6 +51,7 @@ class ActivityTypeSerializer(serializers.Serializer):
     allowed_creator_roles = serializers.ListField(read_only=True)
     allowed_assignee_roles = serializers.ListField(read_only=True)
     visible_to_student = serializers.BooleanField(read_only=True)
+    release_required = serializers.BooleanField(read_only=True)
     default_duration_minutes = serializers.IntegerField(read_only=True, allow_null=True)
     form = serializers.SerializerMethodField()
     requires_review = serializers.BooleanField(read_only=True)
@@ -104,6 +105,7 @@ class ActivityTypeCreateSerializer(StrictSerializer):
         child=serializers.CharField(), required=False, default=list
     )
     visible_to_student = serializers.BooleanField(required=False, default=False)
+    release_required = serializers.BooleanField(required=False, default=False)
     default_duration_minutes = serializers.IntegerField(
         required=False, allow_null=True, default=None, min_value=1
     )
@@ -140,6 +142,7 @@ class ActivityTypePatchSerializer(StrictSerializer):
     allowed_creator_roles = serializers.ListField(child=serializers.CharField(), required=False)
     allowed_assignee_roles = serializers.ListField(child=serializers.CharField(), required=False)
     visible_to_student = serializers.BooleanField(required=False)
+    release_required = serializers.BooleanField(required=False)
     default_duration_minutes = serializers.IntegerField(
         required=False, allow_null=True, min_value=1
     )
@@ -220,6 +223,17 @@ class ActivityCompleteSerializer(StrictSerializer):
     completed_at = serializers.DateTimeField(required=False, allow_null=True, default=None)
 
 
+class ActivityReleaseSerializer(StrictSerializer):
+    """Publish a held-back result, or take it back.
+
+    One field, defaulting to publishing, because that is what the button on
+    the screen does. Taking a result back is the rarer, deliberate case and
+    has to say so explicitly.
+    """
+
+    released = serializers.BooleanField(required=False, default=True)
+
+
 class ActivityReviewSerializer(StrictSerializer):
     decision = serializers.ChoiceField(choices=("approved", "requires_action"))
     note = SafeCharField(required=False, allow_blank=True, default="")
@@ -255,6 +269,10 @@ def _type_summary(activity_type: ActivityType) -> dict:
         "name": activity_type.name,
         "category": activity_type.category,
         "subject": activity_type.subject,
+        # So a screen can tell a held-back result apart from an ordinary one
+        # without fetching the whole catalogue: it decides whether to offer
+        # a Release control at all.
+        "release_required": activity_type.release_required,
     }
 
 

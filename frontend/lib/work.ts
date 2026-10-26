@@ -238,6 +238,23 @@ export async function reviewActivity(
   });
 }
 
+/** `POST /activities/{id}/release/` — give the student the result, on a type
+ *  that holds it back (`release_required`).
+ *
+ *  Allowed for the person who ran it *or* anybody with `activity.review` —
+ *  deliberately not the `review` rule, which refuses the performer. Passing
+ *  `released: false` takes it back, which hides the row again but cannot
+ *  unring the bell: the student may already have read it. */
+export async function releaseActivity(
+  id: string,
+  released = true,
+): Promise<ActivityDetail> {
+  return apiMutate<ActivityDetail>(`/api/v1/activities/${id}/release/`, {
+    method: "POST",
+    body: { released },
+  });
+}
+
 /** `DELETE /activities/{id}/` — soft delete; `activity.delete`. Answers
  *  `200` with the (now-deleted) detail, not `204`. */
 export async function deleteActivity(

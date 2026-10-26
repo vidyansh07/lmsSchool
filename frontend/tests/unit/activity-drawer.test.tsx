@@ -18,6 +18,7 @@ const getActivity = vi.hoisted(() => vi.fn());
 const transitionActivity = vi.hoisted(() => vi.fn());
 const completeActivity = vi.hoisted(() => vi.fn());
 const reviewActivity = vi.hoisted(() => vi.fn());
+const releaseActivity = vi.hoisted(() => vi.fn());
 const deleteActivity = vi.hoisted(() => vi.fn());
 const updateActivity = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/work", async () => {
@@ -28,6 +29,7 @@ vi.mock("@/lib/work", async () => {
     transitionActivity,
     completeActivity,
     reviewActivity,
+    releaseActivity,
     deleteActivity,
     updateActivity,
   };
@@ -241,5 +243,82 @@ describe("ActivityDrawer — Phase R9 (responsive grids)", () => {
       (el) => el.classList.contains("grid-cols-2") && !el.classList.contains("sm:grid-cols-2"),
     );
     expect(bareTwoColumnGrids).toHaveLength(0);
+  });
+
+  // -----------------------------------------------------------------------
+  // Releasing a held-back result
+  // -----------------------------------------------------------------------
+
+  const held = (overrides: Partial<ActivityDetail> = {}) =>
+    detail({
+      status: "completed",
+      student_visible: false,
+      type: {
+        id: "t1",
+        slug: "mock-interview",
+        name: "Mock Interview",
+        category: "interview",
+        release_required: true,
+      },
+      ...overrides,
+    });
+
+  it("offers the trainer who ran it a way to release the result", async () => {
+    useAuth.mockReturnValue({
+      user: { id: "trainer-1", role: "trainer", capabilities: [] },
+      isLoading: false,
+      can: () => false,
+    });
+    getActivity.mockResolvedValue(held());
+    releaseActivity.mockResolvedValue(held({ student_visible: true }));
+    render(<ActivityDrawer activityId="act-1" onOpenChange={vi.fn()} onChanged={vi.fn()} />);
+
+    expect(await screen.findByText(/Held back/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Release to the student" }));
+
+    await waitFor(() => expect(releaseActivity).toHaveBeenCalledWith("act-1", true));
+  });
+
+  it("lets it be taken back once released, and says what that does not undo", async () => {
+    useAuth.mockReturnValue({
+      user: { id: "trainer-1", role: "trainer", capabilities: [] },
+      isLoading: false,
+      can: () => false,
+    });
+    getActivity.mockResolvedValue(held({ student_visible: true }));
+    releaseActivity.mockResolvedValue(held({ student_visible: false }));
+    render(<ActivityDrawer activityId="act-1" onOpenChange={vi.fn()} onChanged={vi.fn()} />);
+
+    expect(await screen.findByText(/may already have read it/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Take it back" }));
+
+    await waitFor(() => expect(releaseActivity).toHaveBeenCalledWith("act-1", false));
+  });
+
+  it("offers nothing to somebody who neither ran it nor may review", async () => {
+    useAuth.mockReturnValue({
+      user: { id: "someone-else", role: "trainer", capabilities: [] },
+      isLoading: false,
+      can: () => false,
+    });
+    getActivity.mockResolvedValue(held());
+    render(<ActivityDrawer activityId="act-1" onOpenChange={vi.fn()} onChanged={vi.fn()} />);
+
+    await screen.findByText("Mock interview with Asha");
+    expect(screen.queryByRole("button", { name: "Release to the student" })).not.toBeInTheDocument();
+  });
+
+  it("says nothing about releasing on a type that does not hold results back", async () => {
+    useAuth.mockReturnValue({
+      user: { id: "trainer-1", role: "trainer", capabilities: [] },
+      isLoading: false,
+      can: () => false,
+    });
+    getActivity.mockResolvedValue(detail({ status: "completed" }));
+    render(<ActivityDrawer activityId="act-1" onOpenChange={vi.fn()} onChanged={vi.fn()} />);
+
+    await screen.findByText("Mock interview with Asha");
+    expect(screen.queryByText(/Held back/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Release to the student" })).not.toBeInTheDocument();
   });
 });

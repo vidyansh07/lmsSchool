@@ -144,6 +144,7 @@ from apps.work.services import (
     create_activity_type,
     delete_activity,
     mark_overdue_and_missed,
+    release_activity,
     review_activity,
     transition_activity,
     update_activity_type,
@@ -1523,6 +1524,14 @@ def _create(
         duration_minutes=kind.default_duration_minutes,
         completed_at=completed_at,
     )
+    # An interview whose result is held back is written privately and then
+    # published by the person who ran it. In a showcase every completed one is
+    # work that finished days ago, so the realistic state is released: a demo
+    # where the student can never see a single mock-interview score would be
+    # showing the gate rather than the product.
+    if activity.activity_type.release_required:
+        release_activity(actor=completer, activity=activity)
+
     if target in (APPROVED, REQUIRES_ACTION):
         reviewer = _actor(ctx, spec.reviewer, batch)
         review_activity(

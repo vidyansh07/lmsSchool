@@ -42,6 +42,7 @@ from .serializers import (
     ActivityDetailSerializer,
     ActivityListSerializer,
     ActivityPatchSerializer,
+    ActivityReleaseSerializer,
     ActivityReviewSerializer,
     ActivityTransitionSerializer,
     ActivityTypeCreateSerializer,
@@ -472,6 +473,35 @@ class ActivityReviewView(APIView):
             activity=activity,
             decision=serializer.validated_data["decision"],
             note=serializer.validated_data.get("note", ""),
+        )
+        return Response(ActivityDetailSerializer(activity, context={"as_student": False}).data)
+
+
+class ActivityReleaseView(APIView):
+    """Give the student their result, when the type holds it back.
+
+    Authority is `access.can_release` — the person who did the work, or
+    anybody with `activity.review` at that centre — checked in the service,
+    not here, so the button being hidden on the screen stays a courtesy.
+    """
+
+    permission_classes = (IsActiveUser,)
+    serializer_class = ActivityReleaseSerializer
+
+    @extend_schema(
+        summary="Release a held-back result to the student",
+        request=ActivityReleaseSerializer,
+        responses={200: ActivityDetailSerializer},
+        tags=TAG,
+    )
+    def post(self, request, activity_id):
+        activity = _staff_activity_or_404(request.user, activity_id)
+        serializer = ActivityReleaseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        services.release_activity(
+            actor=request.user,
+            activity=activity,
+            released=serializer.validated_data["released"],
         )
         return Response(ActivityDetailSerializer(activity, context={"as_student": False}).data)
 

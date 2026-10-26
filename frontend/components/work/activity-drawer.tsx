@@ -51,6 +51,7 @@ import {
   deleteActivity,
   getActivity,
   legalTransitions,
+  releaseActivity,
   reviewActivity,
   transitionActivity,
   updateActivity,
@@ -229,6 +230,8 @@ export function ActivityDrawer({
   const [reviewNote, setReviewNote] = useState("");
   const [reviewing, setReviewing] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [releasing, setReleasing] = useState(false);
+  const [releaseError, setReleaseError] = useState<string | null>(null);
 
   // --- Delete ---------------------------------------------------------------
   const [deleteReason, setDeleteReason] = useState("");
@@ -350,6 +353,26 @@ export function ActivityDrawer({
     }
   }
 
+  async function submitRelease(released: boolean) {
+    if (!detail) return;
+    setReleasing(true);
+    setReleaseError(null);
+    try {
+      await releaseActivity(detail.id, released);
+      await reload();
+      setNotice(
+        released
+          ? "The student can now see this result."
+          : "Taken back. The student can no longer see it.",
+      );
+      onChanged?.();
+    } catch (cause) {
+      setReleaseError(errorMessage(cause, "Could not change who can see this result."));
+    } finally {
+      setReleasing(false);
+    }
+  }
+
   const isSelf =
     Boolean(user) &&
     Boolean(detail) &&
@@ -360,6 +383,20 @@ export function ActivityDrawer({
     detail!.status === "under_review" &&
     can(user?.capabilities, Capability.activityReview) &&
     !isSelf;
+
+  // Releasing is deliberately *not* the review rule. `can_review` refuses the
+  // performer, because reviewing your own work is the thing it guards
+  // against; releasing your own work is the normal case — the trainer who ran
+  // the interview is the one who knows whether the feedback is finished, and
+  // is the one standing in front of the student. Anybody with
+  // `activity.review` may also release, because `performed_by` is nullable
+  // and a trainer who leaves would otherwise strand the result as pending.
+  const holdsResultBack = Boolean(detail?.type?.release_required);
+  const canRelease =
+    Boolean(detail) &&
+    holdsResultBack &&
+    Boolean(detail!.student) &&
+    (isSelf || can(user?.capabilities, Capability.activityReview));
 
   const isAssignee = Boolean(user) && Boolean(detail) && user!.id === detail!.assigned_to?.id;
   const isCreator = Boolean(user) && Boolean(detail) && user!.id === detail!.created_by?.id;
@@ -697,6 +734,49 @@ export function ActivityDrawer({
                   <FieldRenderer fields={detail.form.fields} values={detail.form_values} readOnly />
                 ) : (
                   <p className="text-sm text-ink-muted">Not filled in yet.</p>
+                )}
+              </div>
+            ) : null}
+
+            {canRelease ? (
+              <div className="space-y-3 rounded-md border border-line p-3">
+                <h3 className="text-sm font-semibold">The student&rsquo;s copy</h3>
+                {releaseError ? <Alert variant="error">{releaseError}</Alert> : null}
+                {detail.student_visible ? (
+                  <>
+                    <p className="text-sm text-ink-muted">
+                      {detail.student?.name ?? "The student"} can see the score and your
+                      feedback. Taking it back hides it again, but they may already have read it.
+                    </p>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={releasing}
+                        onClick={() => void submitRelease(false)}
+                      >
+                        {releasing ? "Working…" : "Take it back"}
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-ink-muted">
+                      Held back. {detail.student?.name ?? "The student"} sees that this
+                      happened and nothing of the result, until you release it.
+                    </p>
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={releasing}
+                        onClick={() => void submitRelease(true)}
+                      >
+                        {releasing ? "Working…" : "Release to the student"}
+                      </Button>
+                    </div>
+                  </>
                 )}
               </div>
             ) : null}

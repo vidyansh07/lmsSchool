@@ -114,3 +114,17 @@ parent meetings and follow-ups are never shown.
 Per trainer, per period: assigned, completed, pending, overdue, by type,
 median completion time, review outcomes. Each number links to the list it
 was counted from (the same "provenance" rule as performance).
+
+
+## Holding a result back (26 October 2026)
+
+`mock-interview`, `technical-interview` and `hr-interview` carry
+`release_required`. An interview of one of those types starts hidden from the
+student no matter what the creating caller asks for, and is published by
+`POST /activities/<id>/release/` — the person who ran it, or anybody with
+`activity.review` at that centre.
+
+The reason is the order of events in a room: a trainer types a score and a
+paragraph about how somebody came across while that somebody is still sitting
+there. Before this, the type's `visible_to_student = true` meant the first
+draft was what the student read.

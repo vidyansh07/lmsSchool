@@ -371,6 +371,7 @@ class AuditAction(models.TextChoices):
     ACTIVITY_TRANSITIONED = "activity.transitioned", _("Activity status changed")
     ACTIVITY_COMPLETED = "activity.completed", _("Activity completed")
     ACTIVITY_REVIEWED = "activity.reviewed", _("Activity reviewed")
+    ACTIVITY_RELEASED = "activity.released", _("Activity result released to the student")
     ACTIVITY_DELETED = "activity.deleted", _("Activity deleted")
 
     # --- Search and saved filters (ERP Phase 11)

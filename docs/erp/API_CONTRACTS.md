@@ -427,3 +427,27 @@ these is covered by its own suite; the reasons live beside the code.
   and receipt number, or instalment id and sequence) and the text's *length*
   — never the text, because the audit trail is read far more widely than the
   fee screen is.
+
+### A result held back until somebody releases it
+- `ActivityType.release_required` (new). On a type that has it, an activity is
+  created with `student_visible = false` **whatever the caller passes** — the
+  one flag a caller may not override, because overriding it is the single
+  thing it exists to prevent.
+- `POST /activities/<id>/release/` `{released: true|false}` — authority is the
+  person who performed or was assigned the activity, **or** `activity.review`
+  at that centre. Not the `can_review` rule, which refuses the performer:
+  reviewing your own work is what that guards against, releasing it is the
+  normal case. The second path exists because `performed_by` is `SET_NULL`, so
+  a trainer who leaves would otherwise strand the result as "pending" forever.
+- Audit `activity.released` records the decision, the type, the student and
+  whether a score exists — never the feedback text.
+- `release_required` without `visible_to_student` is refused on create and on
+  update: it would read as "the student sees this once released" and mean
+  nothing, because `student_visible_activities` filters on the type's flag
+  first.
+- Applied by `work.0011` to the three seeded interview types
+  (`mock-interview`, `technical-interview`, `hr-interview`), which were all
+  `visible_to_student = true` — so until now a trainer's score and written
+  feedback were published the instant they were saved. Activities created
+  before the migration are left published: one already read is worse to
+  retract than to leave.

@@ -2966,6 +2966,15 @@ export interface ActivityType {
   allowed_creator_roles: UserRole[];
   allowed_assignee_roles: UserRole[];
   visible_to_student: boolean;
+  /** Whether an activity of this type is written privately and published by
+   *  a deliberate act rather than by being saved.
+   *
+   *  A mock interview: the trainer types a score and a paragraph about how
+   *  somebody came across while that somebody is still in the room, so
+   *  creation forces `student_visible` to false whatever is asked for, and
+   *  only `releaseActivity` turns it on. Optional so older fixtures keep
+   *  typechecking; the API sends it. */
+  release_required?: boolean;
   default_duration_minutes: number | null;
   /** The pinned `FormDefinition`'s **slug**, or null for no form.
    *
@@ -3005,6 +3014,9 @@ export interface ActivityTypeBrief {
   name: string;
   category: ActivityCategory;
   subject?: ActivitySubject;
+  /** Whether this type's result is held back from the student until somebody
+   *  releases it. Optional so older fixtures keep typechecking. */
+  release_required?: boolean;
 }
 
 /** The enquiry an activity is about (`serializers._enquiry_summary`). */

@@ -323,6 +323,16 @@ def test_the_sect103_chain_from_a_weak_mock_interview_to_manager_approval(
         .filter(pk=note_activity.pk)
         .exists()
     )
+    # And the mock interview itself is not visible *yet*. Its type holds its
+    # result back (`release_required`, 26 October 2026): the trainer scored a
+    # 2/10 and wrote why, and the student reads that when somebody decides
+    # they should, not the moment it was typed.
+    assert (
+        not work_access.student_visible_activities(student_profile).filter(pk=activity.pk).exists()
+    )
+
+    work_services.release_activity(actor=trainer_user, activity=activity)
+    activity.refresh_from_db()
     assert work_access.student_visible_activities(student_profile).filter(pk=activity.pk).exists()
 
     # -----------------------------------------------------------------

@@ -116,9 +116,35 @@ def _forget_types() -> None:
 
 
 @transaction.atomic
+def _refuse_a_pointless_hold(*, visible_to_student: bool, release_required: bool) -> None:
+    """`release_required` narrows when a student sees a result; it cannot
+    create a visibility that the type does not grant.
+
+    Set on a type that is not visible to students at all, it would read on the
+    admin screen as "the student sees this once it is released" and mean
+    nothing — `student_visible_activities` filters on the type's own flag
+    first, so the release would publish a row the student can never fetch.
+    Refused rather than silently ignored, because the person setting it is
+    expecting an outcome.
+    """
+    if release_required and not visible_to_student:
+        raise ApplicationError(
+            {
+                "release_required": [
+                    "Hold a result back only on a type students can see. "
+                    "Turn on 'visible to student' first."
+                ]
+            }
+        )
+
+
 def create_activity_type(*, actor, **fields: Any) -> ActivityType:
     if not access.can_manage_activity_types(actor):
         raise AuthorityError("You do not have authority to manage the activity catalog.")
+    _refuse_a_pointless_hold(
+        visible_to_student=bool(fields.get("visible_to_student")),
+        release_required=bool(fields.get("release_required")),
+    )
     slug = fields.get("slug")
     if ActivityType.objects.filter(slug=slug).exists():
         raise ConflictError({"slug": ["An activity type with this slug already exists."]})
@@ -150,6 +176,12 @@ def update_activity_type(*, actor, activity_type: ActivityType, **fields: Any) -
     """Change any column except `slug` — the serializer never offers it."""
     if not access.can_manage_activity_types(actor):
         raise AuthorityError("You do not have authority to manage the activity catalog.")
+    # Checked against the record as it would be *after* this change, so
+    # turning visibility off on a type that holds results back is refused too.
+    _refuse_a_pointless_hold(
+        visible_to_student=bool(fields.get("visible_to_student", activity_type.visible_to_student)),
+        release_required=bool(fields.get("release_required", activity_type.release_required)),
+    )
     changed: list[str] = []
     for name, value in fields.items():
         if getattr(activity_type, name) != value:
@@ -355,6 +387,13 @@ def create_activity(
     resolved_visible = (
         activity_type.visible_to_student if student_visible is None else student_visible
     )
+    if activity_type.release_required:
+        # A type whose result is published by a deliberate act starts hidden,
+        # whatever the caller passed. This is not a default that a caller may
+        # override: the whole point is that nothing a trainer types is visible
+        # until they say it is, and a caller that passes `student_visible=True`
+        # here is asking for the one thing the flag exists to prevent.
+        resolved_visible = False
     if enquiry is not None:
         resolved_visible = False
 
@@ -710,6 +749,81 @@ def complete_activity(
 
 
 @transaction.atomic
+@transaction.atomic
+def release_activity(*, actor, activity: Activity, released: bool = True) -> Activity:
+    """Publish a held-back result to the student, or take it back.
+
+    Only for a type that asked to be held back (`release_required`). For
+    anything else `student_visible` is already settled at creation and there
+    is nothing to release, so this refuses rather than quietly doing nothing:
+    a caller reaching for this on the wrong type has misunderstood something,
+    and a silent success would hide that.
+
+    The thing being published is somebody's judgement of a person — a score
+    and a paragraph about how they came across in an interview — so it is one
+    deliberate act, by a named person, written to the audit log. No automation
+    rule may call this, which is why it lives behind an endpoint rather than
+    beside the completion that produces the score.
+
+    Taking it back (`released=False`) hides the row again. It cannot unring
+    the bell: the student may already have read it. The screen says so before
+    it asks; this function only records what was decided.
+    """
+    if not activity.activity_type.release_required:
+        raise ApplicationError(
+            {
+                "non_field_errors": [
+                    "This kind of activity is not held back from the student, "
+                    "so there is nothing to release."
+                ]
+            }
+        )
+    if not activity.activity_type.visible_to_student:
+        # Defence in depth: `release_required` without `visible_to_student` is
+        # a misconfigured type, and publishing here would hand the student a
+        # row that `student_visible_activities` will never return anyway.
+        raise ApplicationError(
+            {"non_field_errors": ["This activity type is not visible to students."]}
+        )
+    if activity.student_id is None:
+        raise ApplicationError({"non_field_errors": ["This activity is not about a student."]})
+    if not access.can_release(actor, activity):
+        raise AuthorityError("You do not have authority to release this result.")
+
+    if activity.student_visible == released:
+        return activity
+
+    activity.student_visible = released
+    activity.save(update_fields=["student_visible", "updated_at"])
+
+    record(
+        action=AuditAction.ACTIVITY_RELEASED,
+        actor=actor,
+        resource_type="activity",
+        resource_id=activity.pk,
+        context={
+            "released": released,
+            "activity_type": activity.activity_type.slug,
+            "student_id": str(activity.student_id),
+            # The decision and the row, never the text. A mock interview's
+            # feedback is a paragraph about a person, and the audit trail is
+            # read far more widely than the activity is.
+            "has_score": activity.score is not None,
+        },
+    )
+    if released:
+        notify(
+            recipient=activity.student.user,
+            kind=NotificationKind.ACTIVITY_COMPLETED,
+            title=f"{activity.title}: your result",
+            body=activity.summary,
+            link_path=f"/activities/{activity.pk}",
+            resource_type="activity",
+            resource_id=activity.pk,
+        )
+    return activity
+
+
 def review_activity(*, actor, activity: Activity, decision: str, note: str) -> Activity:
     """Only legal from `UNDER_REVIEW`. Does **not** send `activity_changed` —
     only completion recomputes risk (Phase 13); an approval or a send-back

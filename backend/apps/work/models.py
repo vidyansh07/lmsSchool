@@ -114,6 +114,29 @@ class ActivityType(SoftDeleteBaseModel):
     # administrator opts it in, rather than leaking a half-configured type's
     # notes to a student by default.
     visible_to_student = models.BooleanField(_("visible to student"), default=False)
+    #: Whether an instance of this type starts hidden from the student and is
+    #: published by a deliberate act rather than by being saved.
+    #:
+    #: A mock interview is the case this exists for. To let a student ever see
+    #: their result, the *type* has to be visible to students -- and the moment
+    #: it is, `create_activity` resolves an instance's `student_visible` to the
+    #: type's flag, so every interview would be published the instant the
+    #: trainer saved a score. The trainer's first draft, written while the
+    #: student is still in the room, would be the thing the student reads.
+    #:
+    #: So: when this is set, creation forces `student_visible` to False
+    #: whatever the caller passed, and only `release_activity` may turn it on.
+    #: The type still sets the ceiling -- this narrows the start, never widens
+    #: it -- which is why it is meaningless, and refused, without
+    #: `visible_to_student`.
+    release_required = models.BooleanField(
+        _("released before a student sees it"),
+        default=False,
+        help_text=_(
+            "The result is written privately and published by a deliberate act. "
+            "Only meaningful when the type is visible to students."
+        ),
+    )
     default_duration_minutes = models.PositiveIntegerField(
         _("default duration (minutes)"), null=True, blank=True
     )

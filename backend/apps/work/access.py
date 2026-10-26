@@ -174,6 +174,25 @@ def can_review(user, activity: Activity) -> bool:
     return _covers(user, Capability.ACTIVITY_REVIEW, branch_id=activity.branch_id)
 
 
+def can_release(user, activity: Activity) -> bool:
+    """Who may publish a held-back result to the student.
+
+    The person who did the work, first: they wrote it, they know whether it is
+    finished, and they are the one standing in front of the student. Anybody
+    with `activity.review` at that centre may also release, which is not a
+    convenience — `performed_by` is `SET_NULL`, so a trainer who leaves would
+    otherwise take the button with them and strand the student's result as
+    "pending" forever.
+
+    Deliberately *not* the same rule as `can_review`, which refuses the
+    performer precisely because reviewing your own work is the thing it
+    guards against. Releasing your own work is the normal case here.
+    """
+    if getattr(user, "pk", None) in ({activity.performed_by_id, activity.assigned_to_id} - {None}):
+        return True
+    return _covers(user, Capability.ACTIVITY_REVIEW, branch_id=activity.branch_id)
+
+
 def can_reopen(user, activity: Activity) -> bool:
     return activity.created_by_id == getattr(user, "pk", None) or _covers(
         user, Capability.ACTIVITY_REVIEW, branch_id=activity.branch_id
@@ -211,6 +230,7 @@ __all__ = [
     "can_delete",
     "can_manage_activity_types",
     "can_read_staff_activities",
+    "can_release",
     "can_reopen",
     "can_review",
     "student_visible_activities",
