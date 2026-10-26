@@ -7,14 +7,17 @@ caller staff" or an inline role comparison.
 from __future__ import annotations
 
 import django_filters
+from django.utils.dateparse import parse_date
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView, get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts import staff_record
 from apps.accounts.access import visible_accounts
 from apps.audit.models import AuditAction
 from apps.common import bulk
@@ -33,6 +36,7 @@ from .serializers import (
     CredentialActionSerializer,
     SessionSerializer,
     SetActiveSerializer,
+    StaffRecordSerializer,
     UserAuditEntrySerializer,
     UserBranchSerializer,
     UserBulkRequestSerializer,
@@ -467,6 +471,47 @@ class UserAuditView(APIView):
             .order_by("-created_at")[: self.LIMIT]
         )
         return Response(UserAuditEntrySerializer(entries, many=True).data)
+
+
+class StaffRecordView(APIView):
+    """What one staff member has been doing, between two dates.
+
+    Who they admitted, what they collected, the leads they worked, the
+    classes they reported on — counted from the system's own record of who
+    did the work, with the audit trail underneath it as the detail.
+
+    `IsActiveUser` rather than a declared capability, because there are two
+    ways in and only one of them is a grant: `staff.view_record` for anybody
+    else's record, or being the person asked about. `staff_record.build`
+    enforces both, so the rule lives beside the data rather than in a
+    permission class that cannot express "or themselves".
+
+    The user is still resolved out of the scoped queryset first, so a
+    guessed uuid is the 404 it should be rather than an authority error that
+    confirms the account exists.
+    """
+
+    permission_classes = (IsActiveUser,)
+    serializer_class = StaffRecordSerializer
+
+    @extend_schema(
+        summary="A staff member's record of work",
+        parameters=[
+            OpenApiParameter("start", OpenApiTypes.DATE, description="First day, inclusive."),
+            OpenApiParameter("end", OpenApiTypes.DATE, description="Last day, inclusive."),
+        ],
+        responses={200: StaffRecordSerializer},
+        tags=USERS_TAG,
+    )
+    def get(self, request, user_id):
+        user = get_object_or_404(_scoped_users(request.user), pk=user_id)
+        record = staff_record.build(
+            actor=request.user,
+            person=user,
+            start=parse_date(request.query_params.get("start") or ""),
+            end=parse_date(request.query_params.get("end") or ""),
+        )
+        return Response(StaffRecordSerializer(record).data)
 
 
 class UserSessionListView(APIView):

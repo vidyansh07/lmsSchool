@@ -34,6 +34,7 @@ Categories: **People**, **Academic**, **Operations**, **Configuration**,
 | trainer.update_any | People | all, branch | ✓ | ✓ | ✓ | | |
 | platform.configure | Configuration | all | ✓ | | | | ✓ |
 | audit.view | System | all, branch | ✓ | ✓ | | | ✓ |
+| staff.view_record | People | all, branch | ✓ | ✓ | | | ✓ |
 | organisation.view_any | Configuration | all, branch | ✓ | ✓ | ✓ | ✓ | |
 | organisation.manage | Configuration | all | ✓ | ✓ | | | ✓ |
 | organisation.assign_users | Configuration | all | ✓ | ✓ | | | ✓ |

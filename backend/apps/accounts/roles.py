@@ -94,6 +94,19 @@ class Capability(models.TextChoices):
     # --- Platform administration (superadmin only)
     PLATFORM_CONFIGURE = "platform.configure", _("Change platform-wide settings")
     AUDIT_VIEW = "audit.view", _("Read the audit trail")
+    #: One staff member's own record of work: who they admitted, what they
+    #: collected, what they did, over a span of dates.
+    #:
+    #: Its own capability rather than `audit.view`, which it sits next to and
+    #: is not. The audit trail answers "what happened to this record"; this
+    #: answers "what has this person been doing", which is a question about a
+    #: colleague and reads very differently in a performance conversation. An
+    #: administrator who should see one need not be handed the other.
+    #:
+    #: Nobody needs it to read their *own* record -- that path is ownership,
+    #: not a grant (owner's decision, 26 October 2026: administrators plus the
+    #: person themselves; a manager does not see it).
+    STAFF_VIEW_RECORD = "staff.view_record", _("See a staff member's record of work")
 
     # --- Organisation
     #
@@ -522,6 +535,7 @@ _ADMIN_ONLY_CAPABILITIES = frozenset(
         Capability.ACADEMIC_CONFIGURE,
         Capability.SETTINGS_MANAGE,
         Capability.AUDIT_VIEW,
+        Capability.STAFF_VIEW_RECORD,
         Capability.COMPLETION_APPROVE,
         Capability.CERTIFICATE_MANAGE,
         Capability.EXPORT_VIEW_ANY,

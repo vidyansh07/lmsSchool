@@ -8,6 +8,7 @@ import { ArrowLeft } from "lucide-react";
 import { CapabilitiesCard, GettingInCard } from "@/components/admin/getting-in-card";
 import { UserSessionsCard } from "@/components/admin/user-sessions-card";
 import { useAuth } from "@/components/auth-provider";
+import { StaffRecordCard } from "@/components/people/staff-record-card";
 import { Confirm } from "@/components/confirm";
 import { SearchPicker, type PickerOption } from "@/components/admissions/search-picker";
 import { RequireAuth } from "@/components/require-auth";
@@ -813,6 +814,10 @@ export function UserAdministration({ userId }: { userId: string }) {
       ) : null}
 
       <CapabilitiesCard user={user} />
+
+      {/* What this person has been doing, beside what has been done to their
+          account. Administrators see anybody's; everybody sees their own. */}
+      <StaffRecordCard userId={user.id} isSelf={currentUser?.id === user.id} />
 
       <History userId={user.id} />
       </div>

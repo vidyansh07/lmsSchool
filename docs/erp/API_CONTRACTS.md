@@ -451,3 +451,30 @@ these is covered by its own suite; the reasons live beside the code.
   feedback were published the instant they were saved. Activities created
   before the migration are left published: one already read is worse to
   retract than to leave.
+
+### A staff member's record of work
+- `GET /users/<id>/record/?start=&end=` → `{person, start, end, counters,
+  timeline, timeline_truncated}`.
+- **Two ways in, only one a grant:** `staff.view_record` (new, administrator
+  and superadmin only, lockable) for anybody else's record, or being the
+  person asked about. Ownership is not a capability — somebody who cannot see
+  their own admissions count asks a colleague to read it to them. A **manager
+  sees nobody's**, including a trainer's (owner's decision, 26 October 2026);
+  the trainer oversight a manager already has — reviews, requirements, class
+  reports — is unchanged and lives on its own screens.
+- `counters` are counted from the domain tables' own attribution
+  (`Admission.created_by`, `FeePayment.recorded_by`, `EnquiryNote.author`,
+  `Activity.performed_by`, `DSR.trainer`), through the **caller's** visible
+  querysets — a count is as much a disclosure as a row. Money uses the
+  ledger's `LIVE_PAYMENT`, so a voided or refunded receipt credits nobody;
+  otherwise voiding one would be a way to inflate a figure.
+- A counter that counts zero is **omitted**, so what a record contains says
+  what the job was rather than printing every role's form.
+- `timeline` is `AuditLog` by actor, newest first, capped at 200 with
+  `timeline_truncated` saying so. It rides the existing
+  `audit_actor_time_idx` on `(actor, -created_at)`.
+- The window is inclusive at both ends, defaults to the last 30 days, and is
+  bounded at 400 days — a longer span is a report, and the export machinery
+  answers that.
+- This is the engine behind the reports section's "who did what" mode, so
+  anything added here appears there without a second implementation.

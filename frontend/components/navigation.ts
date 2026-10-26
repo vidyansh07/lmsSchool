@@ -883,6 +883,15 @@ const ADMIN_NAV: NavGroup[] = [
         icon: FileText,
         capability: Capability.reportViewAny,
       },
+      // "For a counsellor, between these dates, what did he do." Its own
+      // entry rather than a tab on the report catalogue, because it answers
+      // a question about a person and that catalogue is about records.
+      {
+        href: "/admin/reports/who-did-what",
+        label: "Who did what",
+        icon: Activity,
+        capability: Capability.staffViewRecord,
+      },
       ADMISSION_REPORTS,
       // A destination for a question asked after something has gone wrong,
       // which is why it is no longer the first thing an administrator sees.

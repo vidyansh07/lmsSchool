@@ -3931,3 +3931,41 @@ export interface WebhookDelivery {
   created_at: string;
 }
 
+
+/** One line of a staff record: a label, a count, and the money where a total
+ *  means something. `amount` is null on the lines where it does not — a class
+ *  report has no rupee value — so a screen can tell that apart from zero. */
+export interface StaffRecordCounter {
+  key: string;
+  label: string;
+  count: number;
+  amount: string | null;
+}
+
+/** One thing the person did, off the audit trail. */
+export interface StaffRecordEvent {
+  id: string;
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  result: string;
+  at: string;
+}
+
+/**
+ * What one staff member has been doing, between two dates.
+ *
+ * `counters` carries only the lines that counted something: a counsellor's
+ * record listing "0 class reports" and a trainer's listing "0 receipts" is a
+ * form, not a record, so what a record *contains* says what the job was.
+ */
+export interface StaffRecord {
+  person: { id: string; name: string; email: string; role: UserRole; is_active: boolean };
+  start: string;
+  end: string;
+  counters: StaffRecordCounter[];
+  timeline: StaffRecordEvent[];
+  /** The timeline was cut at its limit, so the screen says "the most recent
+   *  200" rather than implying it is the whole span. */
+  timeline_truncated: boolean;
+}

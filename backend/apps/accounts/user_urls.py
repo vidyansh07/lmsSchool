@@ -5,6 +5,7 @@ from django.urls import include, path
 from apps.authorization.urls import user_scope_urlpatterns
 
 from .user_views import (
+    StaffRecordView,
     UserAuditView,
     UserBranchView,
     UserBulkView,
@@ -36,6 +37,7 @@ urlpatterns = [
         name="credential-link",
     ),
     path("<uuid:user_id>/audit/", UserAuditView.as_view(), name="audit"),
+    path("<uuid:user_id>/record/", StaffRecordView.as_view(), name="staff-record"),
     path("<uuid:user_id>/branch/", UserBranchView.as_view(), name="branch"),
     path("<uuid:user_id>/sessions/", UserSessionListView.as_view(), name="sessions"),
     path(

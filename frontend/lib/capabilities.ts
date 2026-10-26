@@ -38,6 +38,7 @@ export const Capability = {
   enrolmentUpdateAny: "enrolment.update_any",
   platformConfigure: "platform.configure",
   auditView: "audit.view",
+  staffViewRecord: "staff.view_record",
   organisationViewAny: "organisation.view_any",
   organisationManage: "organisation.manage",
   organisationAssignUsers: "organisation.assign_users",

@@ -640,3 +640,38 @@ class AdminUserRecordSerializer(AdminUserDetailSerializer):
             and not obj.has_usable_password()
             and may_send_invitation(actor, obj)
         )
+
+
+class StaffRecordCounterSerializer(serializers.Serializer):
+    """One line of "what they did". `amount` is null on the lines where a
+    total means nothing — a class report has no rupee value — so a screen can
+    tell that apart from a total of zero."""
+
+    key = serializers.CharField(read_only=True)
+    label = serializers.CharField(read_only=True)
+    count = serializers.IntegerField(read_only=True)
+    amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, read_only=True, allow_null=True
+    )
+
+
+class StaffRecordEventSerializer(serializers.Serializer):
+    id = serializers.CharField(read_only=True)
+    action = serializers.CharField(read_only=True)
+    resource_type = serializers.CharField(read_only=True)
+    resource_id = serializers.CharField(read_only=True)
+    result = serializers.CharField(read_only=True)
+    at = serializers.DateTimeField(read_only=True)
+
+
+class StaffRecordSerializer(serializers.Serializer):
+    """One staff member's record of work over a span of dates."""
+
+    person = serializers.DictField(read_only=True)
+    start = serializers.DateField(read_only=True)
+    end = serializers.DateField(read_only=True)
+    counters = StaffRecordCounterSerializer(many=True, read_only=True)
+    timeline = StaffRecordEventSerializer(many=True, read_only=True)
+    #: The timeline was cut at its limit, so a screen can say "the most recent
+    #: 200" rather than implying it is the whole span.
+    timeline_truncated = serializers.BooleanField(read_only=True)

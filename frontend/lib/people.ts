@@ -10,6 +10,7 @@ import type {
   CredentialLinkResult,
   FeeStatus,
   Paginated,
+  StaffRecord,
   StudentDuplicatesResponse,
   StudentListRow,
   StudentProfile,
@@ -316,4 +317,22 @@ export async function listColleges(
  */
 export async function addCollege(name: string, city = ''): Promise<College> {
   return apiMutate<College>('/api/v1/colleges/', { method: 'POST', body: { name, city } });
+}
+
+/**
+ * One staff member's record of work, between two dates.
+ *
+ * Who they admitted, what they collected, the leads they worked, the classes
+ * they reported on — counted from the system's own record of who did the
+ * work, with the audit trail underneath as the detail.
+ *
+ * Two ways in and only one of them is a grant: `staff.view_record` for
+ * anybody else's, or being the person asked about. A manager sees nobody's
+ * (owner's decision, 26 October 2026).
+ */
+export async function getStaffRecord(
+  userId: string,
+  range: { start?: string; end?: string } = {},
+): Promise<StaffRecord> {
+  return apiFetch<StaffRecord>(`/api/v1/users/${userId}/record/${queryString(range)}`);
 }
