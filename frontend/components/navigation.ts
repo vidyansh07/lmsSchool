@@ -892,6 +892,14 @@ const ADMIN_NAV: NavGroup[] = [
         icon: Activity,
         capability: Capability.staffViewRecord,
       },
+      // The questions nobody thought of in advance, which is what the twenty
+      // fixed reports beside it cannot answer.
+      {
+        href: "/admin/reports/build",
+        label: "Build a report",
+        icon: SlidersHorizontal,
+        capability: Capability.reportViewAny,
+      },
       ADMISSION_REPORTS,
       // A destination for a question asked after something has gone wrong,
       // which is why it is no longer the first thing an administrator sees.

@@ -478,3 +478,33 @@ these is covered by its own suite; the reasons live beside the code.
   answers that.
 - This is the engine behind the reports section's "who did what" mode, so
   anything added here appears there without a second implementation.
+
+### A report somebody builds themselves
+- `GET /reports/datasets/` → every dataset a report can be built from, with
+  its columns, the questions each field will answer (kind + the operators
+  that kind allows), and what it will total. **No ORM path appears in this
+  response**: a caller asks for `course`, and what the database is asked for
+  stays the server's business — which is what stops a field becoming
+  reachable by being spelled correctly.
+- `POST /reports/build/` `{dataset, columns?, filters?, group_by?, measures?}`
+  → `{columns, rows, truncated, grouped}`. A `POST` for a read because the
+  request is a structure — filter clauses with a field, an operator and a
+  value, some of them lists — and a query string carrying a dozen of those is
+  neither readable nor bounded.
+- Six datasets to begin with: students, enrolments, fee payments, batches,
+  trainers, class reports. Adding a seventh is a dataclass.
+- **Refused, by name rather than silently:** a column, filter field,
+  operator or measure the dataset does not declare; `in` without a list. A
+  filter that quietly matches nothing is indistinguishable from a question
+  with no answer, and somebody will read the empty report as fact.
+- Rows come from `_queryset_for_user`, the resolver the fixed reports and the
+  background exports already share, so every run starts from the caller's own
+  visible set and a filter can only subtract from it. **Totals too**: a count
+  is as much a disclosure as a row, so grouping runs inside the scoped
+  queryset and a group with no visible rows does not appear.
+- `truncated` says the answer was cut at 1,000 rows; `grouped` says the rows
+  are one per group with totals rather than a list of records. Both are said
+  plainly rather than left to be inferred.
+- A column may be an expression rather than a field — a person's name is
+  three columns in the database and one in a report — declared by the dataset
+  so no report has to split a name in two.

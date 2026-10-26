@@ -548,3 +548,52 @@ class SavedFilterWriteSerializer(StrictSerializer):
     screen = SafeCharField(max_length=60)
     name = SafeCharField(max_length=120)
     filters = serializers.JSONField()
+
+
+class DatasetDefinitionSerializer(serializers.Serializer):
+    """One dataset a report can be built from. No ORM path appears here."""
+
+    key = serializers.CharField(read_only=True)
+    label = serializers.CharField(read_only=True)
+    description = serializers.CharField(read_only=True)
+    columns = serializers.ListField(read_only=True)
+    filters = serializers.ListField(read_only=True)
+    measures = serializers.ListField(read_only=True)
+
+
+class ReportFilterClauseSerializer(StrictSerializer):
+    """One question asked of one field.
+
+    `value` is untyped here on purpose: a date filter takes a date, an `in`
+    takes a list, a boolean takes a boolean. What a field will accept is the
+    dataset's business, and `builder.apply_filters` refuses a field it does
+    not declare and an operator the field's kind does not offer -- so this
+    layer checks the shape and the next one checks the meaning.
+    """
+
+    field = serializers.CharField(max_length=60)
+    op = serializers.CharField(max_length=20, required=False, default="exact")
+    value = serializers.JSONField(required=False, allow_null=True)
+
+
+class ReportBuildSerializer(StrictSerializer):
+    dataset = serializers.CharField(max_length=60)
+    columns = serializers.ListField(
+        child=serializers.CharField(max_length=60), required=False, default=list
+    )
+    filters = ReportFilterClauseSerializer(many=True, required=False, default=list)
+    group_by = serializers.CharField(max_length=60, required=False, allow_blank=True, default="")
+    measures = serializers.ListField(
+        child=serializers.CharField(max_length=60), required=False, default=list
+    )
+
+
+class ReportBuildResultSerializer(serializers.Serializer):
+    columns = serializers.ListField(read_only=True)
+    rows = serializers.ListField(read_only=True)
+    #: The answer was cut at the row limit. A report that silently stops at a
+    #: thousand rows is a report somebody reads as the whole truth.
+    truncated = serializers.BooleanField(read_only=True)
+    #: Grouped rows are one per group with totals, which is a different shape
+    #: from a list of records -- said plainly rather than inferred.
+    grouped = serializers.BooleanField(read_only=True)

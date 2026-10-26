@@ -3969,3 +3969,52 @@ export interface StaffRecord {
    *  200" rather than implying it is the whole span. */
   timeline_truncated: boolean;
 }
+
+/** One question a dataset will answer about one field. */
+export interface ReportFilterOperator {
+  value: string;
+  label: string;
+}
+
+export interface ReportFilterSpec {
+  name: string;
+  label: string;
+  kind: 'text' | 'choice' | 'number' | 'date' | 'boolean' | 'uuid';
+  operators: ReportFilterOperator[];
+  choices: { value: string; label: string }[] | null;
+}
+
+/** One dataset a report can be built from. */
+export interface ReportDataset {
+  key: string;
+  label: string;
+  description: string;
+  columns: { name: string; label: string }[];
+  filters: ReportFilterSpec[];
+  measures: { name: string; label: string; kind: 'count' | 'sum' }[];
+}
+
+export interface ReportFilterClause {
+  field: string;
+  op: string;
+  value: unknown;
+}
+
+export interface ReportBuildRequest {
+  dataset: string;
+  columns?: string[];
+  filters?: ReportFilterClause[];
+  group_by?: string;
+  measures?: string[];
+}
+
+export interface ReportBuildResult {
+  columns: { name: string; label: string }[];
+  rows: Record<string, unknown>[];
+  /** The answer was cut at the row limit. A report that silently stops is a
+   *  report somebody reads as the whole truth. */
+  truncated: boolean;
+  /** Grouped rows are one per group with totals — a different shape from a
+   *  list of records, said plainly rather than inferred. */
+  grouped: boolean;
+}

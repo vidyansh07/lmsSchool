@@ -20,6 +20,8 @@ export_urlpatterns = [
 report_urlpatterns = [
     path("", views.ReportCatalogueView.as_view(), name="report-catalogue"),
     path("metrics/", views.MetricsView.as_view(), name="report-metrics"),
+    path("datasets/", views.DatasetCatalogueView.as_view(), name="report-datasets"),
+    path("build/", views.ReportBuildView.as_view(), name="report-build"),
     # Every `metrics/` route has to be declared above the `<slug:key>/` lines
     # below, or `ReportView` swallows it and answers for a report key that
     # does not exist -- a plausible-looking response rather than a 404.

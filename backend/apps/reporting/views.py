@@ -33,7 +33,18 @@ from apps.common.throttling import BurstThrottle
 from apps.courses import access as course_access
 from apps.organisation.scoping import scope_to_branch
 
-from . import access, dashboards, exports, importers, metrics, reports, tasks, writers
+from . import (
+    access,
+    builder,
+    dashboards,
+    datasets,
+    exports,
+    importers,
+    metrics,
+    reports,
+    tasks,
+    writers,
+)
 from .models import TERMINAL_EXPORT_STATUSES, BulkImport, ExportFormat, ExportJob, ExportStatus
 from .saved_filters import delete_saved_filter, save_filter, visible_saved_filters
 from .selection import recall_selection, remember_selection
@@ -43,6 +54,7 @@ from .serializers import (
     BatchRosterRowSerializer,
     BatchSummarySerializer,
     BulkImportSerializer,
+    DatasetDefinitionSerializer,
     DeliveryTrendPointSerializer,
     DsrTrendPointSerializer,
     EnrolmentTrendPointSerializer,
@@ -50,6 +62,8 @@ from .serializers import (
     ExportJobSerializer,
     ManagerDashboardSerializer,
     MetricSerializer,
+    ReportBuildResultSerializer,
+    ReportBuildSerializer,
     ReportCountSerializer,
     ReportDefinitionSerializer,
     ReportPageSerializer,
@@ -415,6 +429,74 @@ class ReportCatalogueView(APIView):
         if not access.can_read_reports(request.user):
             return _forbidden(request, "Reports are staff-facing.")
         return Response(ReportDefinitionSerializer(reports.catalogue(), many=True).data)
+
+
+class DatasetCatalogueView(APIView):
+    """What a report can be built from: datasets, their columns, the
+    questions each will answer, and what each will total.
+
+    No ORM path appears in this response. A caller asks for `course`; what
+    the database is asked for is the dataset's business, and keeping it that
+    way is what stops a field becoming reachable by being spelled correctly.
+    """
+
+    permission_classes = (IsActiveUser,)
+
+    @extend_schema(
+        summary="Datasets a report can be built from",
+        responses={200: DatasetDefinitionSerializer(many=True)},
+        tags=REPORTS_TAG,
+    )
+    def get(self, request):
+        if not access.can_read_reports(request.user):
+            return _forbidden(request, "Reports are staff-facing.")
+        return Response(DatasetDefinitionSerializer(datasets.catalogue(), many=True).data)
+
+
+class ReportBuildView(APIView):
+    """Run a report somebody built: a dataset, some columns, some questions.
+
+    The rows come from `_queryset_for_user`, the same resolver the fixed
+    reports and the background exports share, so a built report starts from
+    the caller's own visible set and a filter can only subtract from it.
+
+    A `POST` for a read, deliberately: a built report is a structure -- a
+    list of filter clauses, each with a field, an operator and a value, some
+    of them lists -- and encoding that into a query string produces something
+    neither readable nor bounded. gunicorn refuses a request line over 4 KB,
+    which a dozen clauses would reach.
+    """
+
+    permission_classes = (IsActiveUser,)
+    serializer_class = ReportBuildSerializer
+
+    @extend_schema(
+        summary="Run a built report",
+        request=ReportBuildSerializer,
+        responses={200: ReportBuildResultSerializer},
+        tags=REPORTS_TAG,
+    )
+    def post(self, request):
+        if not access.can_read_reports(request.user):
+            return _forbidden(request, "Reports are staff-facing.")
+        serializer = ReportBuildSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        dataset = datasets.DATASETS.get(data["dataset"])
+        if dataset is None:
+            raise ApplicationError({"dataset": ["There is no dataset by that name."]})
+
+        rows = _queryset_for_user(request.user, dataset.source, None, None)
+        result = builder.run(
+            dataset=dataset,
+            rows=rows,
+            columns=data.get("columns") or None,
+            filters=data.get("filters") or [],
+            group_by=data.get("group_by") or None,
+            measures=data.get("measures") or None,
+        )
+        return Response(ReportBuildResultSerializer(result).data)
 
 
 class ReportView(APIView):

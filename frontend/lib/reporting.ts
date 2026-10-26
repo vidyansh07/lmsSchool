@@ -4,6 +4,9 @@ import { apiBaseUrl } from './env';
 import { apiFetch, apiMutate, queryString } from './api';
 import type {
   AcademicEvent,
+  ReportBuildRequest,
+  ReportBuildResult,
+  ReportDataset,
   AdminDashboard,
   BatchSummary,
   BulkImport,
@@ -240,4 +243,31 @@ export async function addAcademicEvent(payload: {
 
 export async function removeAcademicEvent(id: string): Promise<void> {
   await apiMutate<void>(`/api/v1/academics/calendar/${id}/`, { method: 'DELETE' });
+}
+
+/**
+ * What a report can be built from: datasets, their columns, the questions
+ * each will answer, and what each will total.
+ *
+ * No ORM path appears in this response — a caller asks for `course`, and
+ * what the database is asked for stays the server's business. That is what
+ * stops a field becoming reachable by being spelled correctly.
+ */
+export async function listDatasets(): Promise<ReportDataset[]> {
+  return apiFetch<ReportDataset[]>('/api/v1/reports/datasets/');
+}
+
+/**
+ * Run a report somebody built.
+ *
+ * A POST for a read, deliberately: the request is a structure — filter
+ * clauses, each with a field, an operator and a value, some of them lists —
+ * and a query string carrying a dozen of those is neither readable nor
+ * bounded.
+ */
+export async function buildReport(request: ReportBuildRequest): Promise<ReportBuildResult> {
+  return apiMutate<ReportBuildResult>('/api/v1/reports/build/', {
+    method: 'POST',
+    body: request,
+  });
 }
