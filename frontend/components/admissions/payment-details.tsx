@@ -37,6 +37,7 @@ import { getAdmission, type Admission } from '@/lib/admissions-api';
 import { receiptUrl } from '@/components/fees/fee-ledger';
 import { emailReceipt, getEnrollmentFee } from '@/lib/fees';
 import { formatDate, formatDateTime, formatRupees } from '@/lib/format';
+import { PageHeader } from '@/components/ui/layout';
 import { PAYMENT_METHOD_LABEL } from '@/lib/labels';
 import type { FeeInstallment, FeePayment, FeePlan } from '@/types/api';
 
@@ -144,6 +145,17 @@ export function PaymentDetails({
 
   return (
     <div className="space-y-5">
+      {/* The way on to the last step. Registration used to stop here, leaving
+          a student who was billed but on no batch, because the step after
+          this one had a name in the step bar and no page behind it. */}
+      <PageHeader title="Payment Details" meta={`${admission.student_name} \u00b7 step 4 of 5`}>
+        <Button asChild>
+          <Link href={`/students/${studentId}/admissions/${admissionId}/batch`}>
+            Next: choose a batch
+          </Link>
+        </Button>
+      </PageHeader>
+
       <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {tiles.map((tile) => (
           <li key={tile.label} className={`rounded-card p-4 ${tile.tone}`}>

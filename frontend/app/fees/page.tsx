@@ -87,7 +87,7 @@ export function FeesWorkspace() {
         <div className="flex flex-wrap gap-2">
           {mayRegisterStudents ? (
             <Button asChild variant="ghost" size="sm">
-              <Link href="/admissions/new">
+              <Link href="/students/new">
                 <UserPlus className="size-4" aria-hidden="true" />
                 Register a student
               </Link>

@@ -253,7 +253,7 @@ export function AdmissionsList() {
             size="md"
           />
           <Button asChild>
-            <Link href="/admissions/new">Register a student</Link>
+            <Link href="/students/new">Register a student</Link>
           </Button>
         </div>
       </div>
@@ -372,7 +372,7 @@ export function AdmissionsList() {
           description="Try a different search term, or register the first student."
           action={
             <Button asChild variant="outline">
-              <Link href="/admissions/new">Register a student</Link>
+              <Link href="/students/new">Register a student</Link>
             </Button>
           }
         />

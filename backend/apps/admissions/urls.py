@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     AdmissionCancelView,
     AdmissionDetailView,
+    AdmissionLineEnrolView,
     AdmissionListView,
     AdmissionReportView,
 )
@@ -16,4 +17,9 @@ urlpatterns = [
     path("reports/<slug:tab>/", AdmissionReportView.as_view(), name="report"),
     path("<uuid:admission_id>/", AdmissionDetailView.as_view(), name="detail"),
     path("<uuid:admission_id>/cancel/", AdmissionCancelView.as_view(), name="cancel"),
+    path(
+        "<uuid:admission_id>/lines/<uuid:line_id>/enrol/",
+        AdmissionLineEnrolView.as_view(),
+        name="line-enrol",
+    ),
 ]

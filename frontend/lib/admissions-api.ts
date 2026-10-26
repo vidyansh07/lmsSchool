@@ -113,3 +113,25 @@ export function cancelAdmission(id: string, reason: string): Promise<Admission> 
     body: { reason },
   });
 }
+
+/**
+ * Put this course line's student on a batch, and record that the line became
+ * that enrolment.
+ *
+ * The last step of the registration flow. Until it runs the student is
+ * registered and billed and on no batch, which is a student the timetable
+ * does not know about. The server does both halves in one transaction, so a
+ * failure leaves neither.
+ *
+ * Needs `enrolment.create`. The batch must teach the line's own course.
+ */
+export function enrolAdmissionLine(
+  admissionId: string,
+  lineId: string,
+  batchId: string,
+): Promise<Admission> {
+  return apiMutate<Admission>(
+    `/api/v1/admissions/${admissionId}/lines/${lineId}/enrol/`,
+    { method: 'POST', body: { batch: batchId } },
+  );
+}

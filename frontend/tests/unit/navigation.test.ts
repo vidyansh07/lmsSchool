@@ -165,7 +165,7 @@ describe("a sidebar for each role", () => {
       "/requirements",
       "/enquiries",
       "/admissions",
-      "/admissions/new",
+      "/students/new",
       "/admissions/batches",
       "/admissions/transfer",
       "/admin/users",
@@ -183,7 +183,7 @@ describe("a sidebar for each role", () => {
       "/profile",
     ];
     for (const href of shared) expect(hrefs(MANAGER_NAV)).toContain(href);
-    for (const href of ["/enquiries", "/admissions", "/admissions/new", "/admissions/transfer", "/admin/students", "/forms"]) {
+    for (const href of ["/enquiries", "/admissions", "/students/new", "/admissions/transfer", "/admin/students", "/forms"]) {
       expect(hrefs(COUNSELLOR_NAV)).toContain(href);
     }
   });

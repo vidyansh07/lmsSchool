@@ -43,7 +43,7 @@ function ReadyToAdmit() {
         meta="Leads Meritto sent when they reached its admission stage. Register each one here."
       >
         <Button asChild variant="outline">
-          <Link href="/admissions/new">
+          <Link href="/students/new">
             <UserPlus className="size-4" aria-hidden="true" />
             Register a walk-in
           </Link>

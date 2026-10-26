@@ -433,7 +433,7 @@ export const MANAGER_NAV: NavGroup[] = [
       },
       { href: "/enquiries", label: "Enquiries", icon: UserPlus, capability: Capability.enquiryViewAny },
       {
-        href: "/admissions/new",
+        href: "/students/new",
         label: "Register a student",
         icon: UserPlus,
         capability: Capability.studentCreate,
@@ -515,7 +515,7 @@ export const COUNSELLOR_NAV: NavGroup[] = [
     items: [
       READY_TO_ADMIT,
       {
-        href: "/admissions/new",
+        href: "/students/new",
         label: "Register a student",
         icon: UserPlus,
         capability: Capability.studentCreate,
@@ -746,19 +746,9 @@ const ADMIN_NAV: NavGroup[] = [
         capability: Capability.studentCreate,
       },
       {
-        href: "/admissions/new",
+        href: "/students/new",
         label: "Register a student",
         icon: UserPlus,
-        capability: Capability.studentCreate,
-      },
-      // The desk's own form, which asks the same questions in the order the
-      // counsellor already asks them. It is not a duplicate of the wizard
-      // above -- its docstring makes the case -- it was simply reachable
-      // from nowhere, which is why nobody used the thing it was built for.
-      {
-        href: "/students/new",
-        label: "New student (desk form)",
-        icon: ClipboardList,
         capability: Capability.studentCreate,
       },
       {

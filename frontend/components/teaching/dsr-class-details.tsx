@@ -238,7 +238,7 @@ export function DsrClassDetails({
           </ul>
         ) : null}
         <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_10rem]">
-          <Field label="Student" htmlFor={`${uid}-note-student`}>
+          <Field label="Student this note is about" htmlFor={`${uid}-note-student`}>
             <Select value={noteStudent} onChange={(event) => setNoteStudent(event.target.value)}>
               <option value="">Choose a student…</option>
               {roster.map((entry) => (

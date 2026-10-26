@@ -13,7 +13,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.audit.services import AuditAction, record
-from apps.common.exceptions import ApplicationError, AuthorityError
+from apps.common.exceptions import ApplicationError, AuthorityError, ConflictError
 
 from .models import (
     ZERO,
@@ -236,6 +236,38 @@ def attach_enrollment(*, actor, line: AdmissionLine, enrollment) -> AdmissionLin
     line.enrollment = enrollment
     line.save(update_fields=["enrollment", "updated_at"])
     return line
+
+
+@transaction.atomic
+def enrol_line(*, actor, line: AdmissionLine, batch) -> AdmissionLine:
+    """Put the student on a batch for this course line, and record that the
+    line became that enrolment.
+
+    The desk's registration flow ends here. Its earlier steps create the
+    person, their guardians and the charges; until this runs the student is
+    registered and billed but on no batch at all, which is a student the
+    timetable does not know about. Doing both halves in one transaction is the
+    point: an enrolment that exists without its line pointing at it would make
+    the admission look unfulfilled and let somebody enrol the same course
+    twice.
+
+    `enrol_student` owns the real rules -- the batch row is locked, capacity
+    is checked under that lock, and a second live enrolment on the same batch
+    is refused -- so none of them are repeated here.
+    """
+    from apps.enrollments.services import enrol_student
+
+    if line.kind != LineKind.COURSE:
+        raise ApplicationError({"line": ["Only a course line is enrolled onto a batch."]})
+    if line.enrollment_id is not None:
+        raise ConflictError({"line": ["This course is already enrolled onto a batch."]})
+    if line.admission.is_cancelled:
+        raise ApplicationError({"admission": ["This admission has been cancelled."]})
+    if line.course_id and batch.course_id != line.course_id:
+        raise ApplicationError({"batch": ["That batch teaches a different course."]})
+
+    enrollment = enrol_student(student=line.admission.student, batch=batch, actor=actor)
+    return attach_enrollment(actor=actor, line=line, enrollment=enrollment)
 
 
 @transaction.atomic

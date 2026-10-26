@@ -484,7 +484,7 @@ export function AdmissionsDashboardContent() {
     {
       id: 'register',
       label: 'Register a student',
-      href: '/admissions/new',
+      href: '/students/new',
       icon: <UserPlus className="size-4" />,
     },
     {

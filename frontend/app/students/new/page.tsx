@@ -5,11 +5,20 @@
  * desk already knows it: Picture, Roll No., Name, Gender, Date of Birth,
  * Address, Nationality, Mobile, Landline, School/College, Email, Owner.
  *
- * Why this exists beside `/admissions/new`: that wizard asks the same
- * questions in the order an engineer would group them. This one asks them in
- * the order the counsellor already asks them, with the labels they already
- * say out loud, because the people using it have typed this form several
- * thousand times and the muscle memory is worth more than our grouping.
+ * The only way to register a student. There used to be two: a fast
+ * one-screen wizard at `/admissions/new` that did person → course → batch →
+ * enrol, and this five-step desk flow, which took guardians and money but
+ * had a fifth step named "Batch Details" with no page behind it. Each was
+ * missing something the other had.
+ *
+ * This one survived because it is the one that takes guardians and money,
+ * and because it asks its questions in the order the counsellor already asks
+ * them, with the labels they say out loud — the people using it have typed
+ * this form several thousand times and that muscle memory is worth more than
+ * our grouping. It has since gained everything the wizard did: the batch
+ * step, the duplicate check and its override reason, the referral, the fee
+ * decided (or deliberately not decided) here, and registering a lead opened
+ * with `?enquiry=<id>`.
  *
  * Three fields repeat — Mobile, Landline, Email. The *first* of each is the
  * student's account (`phone`, `email`); the rest are contacts
@@ -25,13 +34,15 @@
  */
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 
 import { AddAnother, FormRow } from '@/components/classpro/form-row';
 import { StepBar, type WizardStep } from '@/components/classpro/step-bar';
 import { Tips } from '@/components/classpro/tips';
 import { CollegePicker } from '@/components/admissions/college-picker';
+import { DuplicateMatch } from '@/components/admissions/duplicate-match';
+import { SearchPicker, type PickerOption } from '@/components/admissions/search-picker';
 import { RequireAuth } from '@/components/require-auth';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -39,8 +50,13 @@ import { Input, Select, Textarea } from '@/components/ui/input';
 import { useApi } from '@/hooks/use-api';
 import { fieldErrors, unshownError } from '@/lib/api';
 import { Capability } from '@/lib/capabilities';
-import { createStudent } from '@/lib/people';
+import { checkDuplicates, createStudent, listStudents } from '@/lib/people';
 import type { College } from '@/lib/people';
+import { getEnquiry, registerEnquiry } from '@/lib/enquiries';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { errorMessage } from '@/lib/api';
+import type { EnquiryDetail } from '@/types/api';
+import type { StudentDuplicateMatch, StudentListRow } from '@/types/api';
 import type { PublicSettings } from '@/lib/settings';
 import type { Paginated, User } from '@/types/api';
 
@@ -112,6 +128,41 @@ export function NewStudentForm() {
   const [emails, setEmails] = useState<Repeatable[]>([blankRow()]);
   const [primaryEmail, setPrimaryEmail] = useState(0);
   const [owner, setOwner] = useState('');
+
+  // --- The four things the fast wizard did and this form did not ----------
+  //
+  // Both screens registered a student; only that one took a referral, a fee
+  // decided at the desk, a duplicate override, and a Meritto lead. Two doors
+  // onto one job, each missing something the other had.
+
+  /** What was agreed, or blank for "not decided yet" — which the API stores
+   *  as null rather than as a fee of nothing. */
+  const [feeAmount, setFeeAmount] = useState('');
+
+  /** Who sent them. Only ever an existing student picked from a search: a
+   *  free-text name is a referral nobody can credit. */
+  const [referrerQuery, setReferrerQuery] = useState('');
+  const [referrerOptions, setReferrerOptions] = useState<StudentListRow[]>([]);
+  const [referrerLoading, setReferrerLoading] = useState(false);
+  const [referrer, setReferrer] = useState<StudentListRow | null>(null);
+
+  // The disclosure-safe duplicates endpoint, never a student search: a search
+  // would report a match outside this counsellor's own reach.
+  const [duplicates, setDuplicates] = useState<StudentDuplicateMatch[]>([]);
+  const [duplicateChecking, setDuplicateChecking] = useState(false);
+  /** The check could not run. Not the same as "no duplicates": the server
+   *  checks again on save, and the counsellor is told either way. */
+  const [duplicateCheckFailed, setDuplicateCheckFailed] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+
+  /** Opened from a lead ("Register this lead"): `?enquiry=<id>`. */
+  const [leadId] = useState(() =>
+    typeof window === 'undefined'
+      ? ''
+      : (new URLSearchParams(window.location.search).get('enquiry') ?? ''),
+  );
+  const [lead, setLead] = useState<EnquiryDetail | null>(null);
+  const [leadError, setLeadError] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -140,6 +191,109 @@ export function NewStudentForm() {
     if (setPrimary && primary >= next.length) setPrimary(0);
     else if (setPrimary && index < primary) setPrimary(primary - 1);
   }
+
+  // --- Pre-fill from the lead, when this was opened from one --------------
+  useEffect(() => {
+    if (!leadId) return undefined;
+    let cancelled = false;
+    getEnquiry(leadId)
+      .then((found) => {
+        if (cancelled) return;
+        setLead(found);
+        // `value || x`: never overwrite something already typed. Somebody who
+        // started filling the form and then realised it was a known lead
+        // should not lose what they wrote.
+        const [first = '', ...rest] = found.full_name.trim().split(/\s+/);
+        setFirstName((value) => value || first);
+        setLastName((value) => value || rest.join(' '));
+        setEmails((rows) =>
+          rows.map((row, index) =>
+            index === 0 && !row.value.trim() ? { ...row, value: found.email } : row,
+          ),
+        );
+        setMobiles((rows) =>
+          rows.map((row, index) =>
+            index === 0 && !row.value.trim() ? { ...row, value: found.mobile } : row,
+          ),
+        );
+        setCity((value) => value || found.city);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setLeadError(errorMessage(cause, 'Could not load the lead.'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [leadId]);
+
+  // --- Who sent them ------------------------------------------------------
+  useEffect(() => {
+    const query = referrerQuery.trim();
+    if (query.length < 2) return undefined;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setReferrerLoading(true);
+      listStudents({ search: query, page_size: 10 })
+        .then((page) => {
+          if (!cancelled) setReferrerOptions(page.results);
+        })
+        .catch(() => {
+          if (!cancelled) setReferrerOptions([]);
+        })
+        .finally(() => {
+          if (!cancelled) setReferrerLoading(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [referrerQuery]);
+
+  // --- Is this somebody we already have? ----------------------------------
+  //
+  // The disclosure-safe endpoint, debounced, once there is enough to search
+  // on. A zero-delay timer rather than a bare call because `setState` from an
+  // effect body is what this repo's lint rightly refuses — the same shape
+  // every other search effect in this codebase uses.
+  const primaryEmailValue = emails[primaryEmail]?.value ?? '';
+  const primaryMobileValue = mobiles[primaryMobile]?.value ?? '';
+  const debouncedEmail = useDebouncedValue(primaryEmailValue, 350);
+  const debouncedPhone = useDebouncedValue(primaryMobileValue, 350);
+  useEffect(() => {
+    const emailQuery = debouncedEmail.trim();
+    const phoneQuery = debouncedPhone.trim();
+    if (emailQuery.length < 3 && phoneQuery.length < 4) return undefined;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setDuplicateChecking(true);
+      checkDuplicates({
+        email: emailQuery.length >= 3 ? emailQuery : undefined,
+        phone: phoneQuery.length >= 4 ? phoneQuery : undefined,
+      })
+        .then((response) => {
+          if (!cancelled) {
+            setDuplicates(response.results);
+            setDuplicateCheckFailed(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setDuplicates([]);
+            setDuplicateCheckFailed(true);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setDuplicateChecking(false);
+        });
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [debouncedEmail, debouncedPhone]);
+
+  const visibleDuplicates = primaryEmailValue.trim() || primaryMobileValue.trim() ? duplicates : [];
 
   function dateOfBirth(): string | null {
     if (!day || !month || !year) return null;
@@ -207,8 +361,29 @@ export function NewStudentForm() {
           college: college?.id ?? null,
           institution: college?.name ?? '',
           ...(owner ? { owner } : {}),
+          referred_by: referrer?.id ?? null,
         },
+        // Sent only when a figure was typed. An empty field means "not
+        // decided", which the API stores as null rather than as a fee of
+        // nothing.
+        fee_amount: feeAmount.trim() === '' ? null : feeAmount.trim(),
+        // Only ever present when the form actually showed a match and
+        // somebody typed why this is a different person.
+        ...(overrideReason.trim() ? { override_reason: overrideReason.trim() } : {}),
       });
+
+      // Mark the lead registered, when this came from one. A failure here
+      // must not read as a failed registration: the student exists, and the
+      // lead is the thing left to tidy.
+      if (lead) {
+        try {
+          await registerEnquiry(lead.id, student.id);
+        } catch {
+          // Deliberately swallowed: the next screen is the student's own, and
+          // the lead's own screen shows it is still unregistered.
+        }
+      }
+
       router.push(`/students/${student.id}/guardians?new=1`);
     } catch (cause) {
       setErrors(fieldErrors(cause));
@@ -238,6 +413,30 @@ export function NewStudentForm() {
         <StepBar steps={WIZARD_STEPS} current="student" furthest="student" onSelect={() => {}} />
 
         <div className="grid gap-8 p-5 lg:grid-cols-[minmax(0,1fr)_16rem]">
+          {lead ? (
+            <Alert variant="info">
+              Registering the lead <strong>{lead.full_name}</strong>. What it already knows is
+              filled in below; anything you have typed is left alone. The lead is marked
+              registered once this saves.
+            </Alert>
+          ) : null}
+          {leadError ? <Alert variant="error">{leadError}</Alert> : null}
+          {duplicateCheckFailed ? (
+            <Alert variant="warning">
+              The duplicate check could not run. That is not the same as no duplicates — the
+              server checks again when this is saved.
+            </Alert>
+          ) : null}
+          {duplicateChecking ? (
+            <p className="text-xs text-ink-muted" role="status">
+              Checking for an existing student…
+            </p>
+          ) : null}
+          <DuplicateMatch
+            matches={visibleDuplicates}
+            onConfirmDifferentPerson={setOverrideReason}
+          />
+
           <form
             className="min-w-0 divide-y divide-line/60"
             onSubmit={(event) => {
@@ -247,7 +446,7 @@ export function NewStudentForm() {
           >
             {stray ? <Alert variant="error">{stray}</Alert> : null}
 
-            <FormRow label="Picture">
+            <FormRow label="Picture" optional>
               <Button type="button" variant="outline" size="sm" disabled>
                 Upload Image
               </Button>
@@ -256,7 +455,7 @@ export function NewStudentForm() {
               </p>
             </FormRow>
 
-            <FormRow label="Roll No." htmlFor="roll-no" error={errors.roll_number}>
+            <FormRow label="Roll No." htmlFor="roll-no" optional error={errors.roll_number}>
               <Input
                 id="roll-no"
                 value={rollNumber}
@@ -311,7 +510,7 @@ export function NewStudentForm() {
               </fieldset>
             </FormRow>
 
-            <FormRow label="Date of Birth" error={errors.date_of_birth}>
+            <FormRow label="Date of Birth" optional error={errors.date_of_birth}>
               <div className="grid gap-2 sm:grid-cols-3">
                 <Select aria-label="Day" value={day} onChange={(e) => setDay(e.target.value)}>
                   <option value="">Day</option>
@@ -340,7 +539,7 @@ export function NewStudentForm() {
               </div>
             </FormRow>
 
-            <FormRow label="Address">
+            <FormRow label="Address" optional>
               <div className="space-y-2">
                 <Textarea
                   aria-label="Address"
@@ -386,7 +585,7 @@ export function NewStudentForm() {
               </div>
             </FormRow>
 
-            <FormRow label="Nationality" htmlFor="nationality">
+            <FormRow label="Nationality" htmlFor="nationality" optional>
               <Select
                 id="nationality"
                 value={nationality}
@@ -401,7 +600,7 @@ export function NewStudentForm() {
               </Select>
             </FormRow>
 
-            <FormRow label="Mobile" error={errors.phone}>
+            <FormRow label="Mobile" required error={errors.phone}>
               <div className="space-y-2">
                 {mobiles.map((row, index) => (
                   <div key={row.key} className="flex items-center gap-2">
@@ -455,7 +654,7 @@ export function NewStudentForm() {
               </div>
             </FormRow>
 
-            <FormRow label="Landline">
+            <FormRow label="Landline" optional>
               <div className="space-y-2">
                 {landlines.map((row, index) => (
                   <div key={row.key} className="flex items-center gap-2">
@@ -491,13 +690,13 @@ export function NewStudentForm() {
               </div>
             </FormRow>
 
-            <FormRow label="School/College" htmlFor="school">
+            <FormRow label="School/College" htmlFor="school" optional>
               <div className="max-w-md">
                 <CollegePicker id="school" value={college} onChange={setCollege} defaultCity={city} />
               </div>
             </FormRow>
 
-            <FormRow label="Email" error={errors.email}>
+            <FormRow label="Email" required error={errors.email}>
               <div className="space-y-2">
                 {emails.map((row, index) => (
                   <div key={row.key} className="flex items-center gap-2">
@@ -539,7 +738,7 @@ export function NewStudentForm() {
               </div>
             </FormRow>
 
-            <FormRow label="Owner" htmlFor="owner">
+            <FormRow label="Owner" htmlFor="owner" optional>
               <Select
                 id="owner"
                 value={owner}
@@ -555,8 +754,75 @@ export function NewStudentForm() {
               </Select>
             </FormRow>
 
+            <FormRow label="Who sent them" htmlFor="referrer" optional>
+              <div className="max-w-sm space-y-2">
+                {referrer ? (
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-medium">
+                      {referrer.full_name || referrer.email}
+                    </span>
+                    <span className="text-ink-muted">{referrer.student_id}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setReferrer(null);
+                        setReferrerQuery('');
+                      }}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                ) : (
+                  <SearchPicker
+                    label="Who sent them"
+                    query={referrerQuery}
+                    onQueryChange={setReferrerQuery}
+                    selected=""
+                    options={referrerOptions.map(
+                      (row): PickerOption => ({
+                        value: row.id,
+                        label: row.full_name || row.email,
+                        hint: row.student_id,
+                      }),
+                    )}
+                    onSelect={(option) =>
+                      setReferrer(referrerOptions.find((row) => row.id === option.value) ?? null)
+                    }
+                    isLoading={referrerLoading}
+                    placeholder="Search an existing student"
+                  />
+                )}
+                <p className="text-xs text-ink-muted">
+                  Optional. Only an existing student, because a typed name is a referral nobody
+                  can credit.
+                </p>
+              </div>
+            </FormRow>
+
+            <FormRow label="Fee agreed" htmlFor="fee-amount" optional>
+              <div className="max-w-sm space-y-1">
+                <Input
+                  id="fee-amount"
+                  inputMode="decimal"
+                  value={feeAmount}
+                  onChange={(event) => setFeeAmount(event.target.value)}
+                  placeholder="Leave blank to decide later"
+                />
+                <p className="text-xs text-ink-muted">
+                  Optional. Blank means not decided yet, which is recorded as exactly that rather
+                  than as a fee of nothing.
+                </p>
+              </div>
+            </FormRow>
+
             <div className="flex gap-2 pt-4">
-              <Button type="submit" disabled={saving} className="bg-success hover:bg-success/90">
+              <Button
+                type="submit"
+                disabled={saving || (visibleDuplicates.length > 0 && !overrideReason.trim())}
+                className="bg-success hover:bg-success/90"
+              >
                 {saving ? 'Saving…' : 'Save'}
               </Button>
               <Button type="button" variant="outline" onClick={() => router.push('/admin/students')}>

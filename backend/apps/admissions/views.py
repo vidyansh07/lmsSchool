@@ -23,6 +23,7 @@ from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.batches import access as batch_access
 from apps.common.exceptions import ApplicationError, AuthorityError
 from apps.common.permissions import Capability, HasCapability, IsActiveUser
 from apps.courses.models import Course
@@ -33,6 +34,7 @@ from . import access, reports, services
 from .models import Admission, AdmissionStatus, LineKind
 from .serializers import (
     AdmissionCancelSerializer,
+    AdmissionLineEnrolSerializer,
     AdmissionReportSerializer,
     AdmissionSerializer,
     AdmissionWriteSerializer,
@@ -128,6 +130,45 @@ class AdmissionDetailView(APIView):
     @extend_schema(summary="One admission", responses={200: AdmissionSerializer}, tags=TAG)
     def get(self, request, admission_id):
         return Response(AdmissionSerializer(self._get(request, admission_id)).data)
+
+
+class AdmissionLineEnrolView(APIView):
+    """Put this course line's student on a batch, and record that the line
+    became that enrolment.
+
+    The last step of the desk's registration flow. Until it runs the student
+    is registered and billed but on no batch, which is a student the timetable
+    does not know about.
+
+    `enrolment.create`, not the admission's own right: this creates an
+    enrolment, and the capability that governs enrolments is the one that
+    should answer for it.
+    """
+
+    permission_classes = (HasCapability,)
+    required_capability = Capability.ENROLMENT_CREATE
+    serializer_class = AdmissionLineEnrolSerializer
+
+    @extend_schema(
+        summary="Enrol a course line onto a batch",
+        request=AdmissionLineEnrolSerializer,
+        responses={200: AdmissionSerializer},
+        tags=TAG,
+    )
+    def post(self, request, admission_id, line_id):
+        admission = get_object_or_404(access.visible_admissions(request.user), pk=admission_id)
+        line = get_object_or_404(admission.lines, pk=line_id)
+        serializer = AdmissionLineEnrolSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        batch = get_object_or_404(
+            batch_access.visible_batches(request.user), pk=serializer.validated_data["batch"]
+        )
+        services.enrol_line(actor=request.user, line=line, batch=batch)
+        return Response(
+            AdmissionSerializer(
+                get_object_or_404(access.visible_admissions(request.user), pk=admission_id)
+            ).data
+        )
 
 
 class AdmissionCancelView(APIView):

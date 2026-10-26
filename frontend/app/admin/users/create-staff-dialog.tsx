@@ -139,7 +139,7 @@ export function CreateStaffDialog({
                 Trainers → Add trainer
               </Link>
               . Registering a student? Use{' '}
-              <Link href="/admissions/new" className="font-medium underline">
+              <Link href="/students/new" className="font-medium underline">
                 Admissions
               </Link>
               . Both create the record that goes with the account.

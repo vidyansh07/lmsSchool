@@ -16,9 +16,18 @@ import { ApiError } from '@/lib/api';
 const createStudent = vi.hoisted(() => vi.fn());
 const listColleges = vi.hoisted(() => vi.fn());
 const addCollege = vi.hoisted(() => vi.fn());
+const checkDuplicates = vi.hoisted(() => vi.fn());
+const listStudents = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/people', async () => {
   const actual = await vi.importActual<typeof import('@/lib/people')>('@/lib/people');
-  return { ...actual, createStudent, listColleges, addCollege };
+  return { ...actual, createStudent, listColleges, addCollege, checkDuplicates, listStudents };
+});
+
+const getEnquiry = vi.hoisted(() => vi.fn());
+const registerEnquiry = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/enquiries', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/enquiries')>('@/lib/enquiries');
+  return { ...actual, getEnquiry, registerEnquiry };
 });
 
 const push = vi.hoisted(() => vi.fn());
@@ -36,6 +45,10 @@ describe('NewStudentForm', () => {
     createStudent.mockReset().mockResolvedValue({ id: 'student-1' });
     listColleges.mockReset().mockResolvedValue({ count: 0, results: [] });
     addCollege.mockReset();
+    checkDuplicates.mockReset().mockResolvedValue({ results: [] });
+    listStudents.mockReset().mockResolvedValue({ count: 0, results: [] });
+    getEnquiry.mockReset();
+    registerEnquiry.mockReset().mockResolvedValue({});
     push.mockReset();
     useApi.mockImplementation((path: string) => {
       if (path.startsWith('/api/v1/settings/public/')) {
@@ -209,5 +222,118 @@ describe('NewStudentForm', () => {
       await screen.findByText('An account with this email already exists.'),
     ).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  // -----------------------------------------------------------------------
+  // The four things the fast wizard did and this form did not.
+  //
+  // `/admissions/new` registered a student too, and only it took a referral,
+  // a fee decided at the desk, a duplicate override, and a Meritto lead. Two
+  // doors onto one job, each missing something the other had. These pin that
+  // nothing was lost when the second door closed.
+  // -----------------------------------------------------------------------
+
+  function identify() {
+    fireEvent.change(screen.getByPlaceholderText('Firstname'), { target: { value: 'Ravi' } });
+    fill('Email 1', 'ravi@example.test');
+  }
+
+  it('warns about an existing student, through the disclosure-safe endpoint', async () => {
+    checkDuplicates.mockResolvedValue({
+      results: [
+        {
+          id: 'existing-1',
+          full_name: 'Ravi Sharma',
+          student_id: 'GRS-S-00041',
+          matched_on: ['email'],
+        },
+      ],
+    });
+    render(<NewStudentForm />);
+    identify();
+
+    expect(await screen.findByTestId('duplicate-warning')).toBeInTheDocument();
+    // Never a plain student search, which would report a match outside this
+    // counsellor's own reach.
+    expect(listStudents).not.toHaveBeenCalledWith(
+      expect.objectContaining({ search: 'ravi@example.test' }),
+    );
+  });
+
+  it('will not save over a possible duplicate until a reason is typed', async () => {
+    checkDuplicates.mockResolvedValue({
+      results: [{ id: 'e1', full_name: 'Ravi Sharma', student_id: 'GRS-S-00041', matched_on: [] }],
+    });
+    render(<NewStudentForm />);
+    identify();
+
+    await screen.findByTestId('duplicate-warning');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(createStudent).not.toHaveBeenCalled();
+  });
+
+  it('says plainly when the duplicate check could not run', async () => {
+    checkDuplicates.mockRejectedValue(new Error('offline'));
+    render(<NewStudentForm />);
+    identify();
+
+    // Not the same as "no duplicates", and the difference matters.
+    expect(await screen.findByText(/could not run/)).toBeInTheDocument();
+    expect(screen.getByText(/checks again when this is saved/)).toBeInTheDocument();
+  });
+
+  it('sends no override reason for a registration that never saw a duplicate', async () => {
+    render(<NewStudentForm />);
+    identify();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(createStudent).toHaveBeenCalled());
+    expect(createStudent.mock.calls[0]![0]).not.toHaveProperty('override_reason');
+  });
+
+  it('records a fee decided at the desk, and records "not decided" as exactly that', async () => {
+    render(<NewStudentForm />);
+    identify();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(createStudent).toHaveBeenCalled());
+    // Blank is null, not zero: a fee of nothing is a different claim from no
+    // fee agreed yet.
+    expect(createStudent.mock.calls[0]![0].fee_amount).toBeNull();
+
+    createStudent.mockClear();
+    fill('Fee agreed', '24000');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(createStudent).toHaveBeenCalled());
+    expect(createStudent.mock.calls[0]![0].fee_amount).toBe('24000');
+  });
+
+  it('credits only an existing student for the referral', async () => {
+    listStudents.mockResolvedValue({
+      count: 1,
+      results: [{ id: 'ref-1', full_name: 'Neha Joshi', email: 'n@x.test', student_id: 'GRS-S-7' }],
+    });
+    render(<NewStudentForm />);
+    identify();
+
+    fireEvent.change(screen.getByLabelText('Who sent them'), { target: { value: 'Neha' } });
+    // The picker renders its results as a sized `<select>`, so choosing one
+    // is a change on that listbox rather than a click on an option.
+    fireEvent.change(await screen.findByLabelText('Who sent them results'), {
+      target: { value: 'ref-1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(createStudent).toHaveBeenCalled());
+    expect(createStudent.mock.calls[0]![0].profile.referred_by).toBe('ref-1');
+  });
+
+  it('sends no referral when nobody was picked', async () => {
+    render(<NewStudentForm />);
+    identify();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(createStudent).toHaveBeenCalled());
+    expect(createStudent.mock.calls[0]![0].profile.referred_by).toBeNull();
   });
 });

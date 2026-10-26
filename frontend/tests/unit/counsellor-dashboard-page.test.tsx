@@ -220,7 +220,7 @@ describe('AdmissionsDashboardContent', () => {
     render(<AdmissionsDashboardContent />);
 
     const registerLink = await screen.findByRole('link', { name: /register a student/i });
-    expect(registerLink).toHaveAttribute('href', '/admissions/new');
+    expect(registerLink).toHaveAttribute('href', '/students/new');
 
     const allLinks = screen.getAllByRole('link');
     expect(allLinks.indexOf(registerLink)).toBe(0);

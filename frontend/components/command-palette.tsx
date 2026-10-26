@@ -75,7 +75,7 @@ const QUICK_ACTIONS: {
   {
     id: 'action:register-student',
     title: 'Register a student',
-    href: '/admissions/new',
+    href: '/students/new',
     capability: Capability.enrolmentCreate,
     keywords: 'admission enrol enroll new student registration',
   },

@@ -160,6 +160,9 @@ describe('AppShell sidebar collapse', () => {
   it('names the role workspace and lets expanded sections be collapsed persistently', async () => {
     const user = userEvent.setup();
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, 'expanded');
+    // Groups start closed when nothing is stored; this test is about closing
+    // an open one, so it says explicitly that none are closed yet.
+    window.localStorage.setItem('grras.nav-groups-collapsed.admin', '[]');
     mockAuth.value = staffAuth();
     renderShell();
 
@@ -212,6 +215,9 @@ describe('AppShell sidebar collapse', () => {
     const user = userEvent.setup();
     // The sidebar itself is collapsed here; the drawer must not be.
     window.localStorage.setItem(SIDEBAR_STORAGE_KEY, 'collapsed');
+    // Nav groups start closed when nothing is stored; this test is about the
+    // drawer rendering the expanded tree, so it opens them explicitly.
+    window.localStorage.setItem('grras.nav-groups-collapsed.admin', '[]');
     mockAuth.value = staffAuth();
     renderShell();
 
@@ -295,7 +301,7 @@ describe('AppShell — a sidebar and module tabs for each role', () => {
     // The pipeline first, then leads — the counsellor's own order.
     expect(links[0]).toHaveAttribute('href', '/admissions/dashboard');
     expect(links.map((link) => link.getAttribute('href'))).toEqual(
-      expect.arrayContaining(['/enquiries', '/forms/fill/enquiry', '/admissions/new']),
+      expect.arrayContaining(['/enquiries', '/forms/fill/enquiry', '/students/new']),
     );
 
     const tabs = screen.getByRole('navigation', { name: 'Leads' });
@@ -343,5 +349,21 @@ describe('AppShell — a sidebar and module tabs for each role', () => {
     pathname.value = '/manage/trainers';
     renderShell();
     expect(screen.queryByRole('navigation', { name: 'Trainers' })).not.toBeInTheDocument();
+  });
+
+  it('starts with every group closed, and still shows where you are', () => {
+    // Fifty links on first sign-in is a wall. Nothing stored now means
+    // everything closed; the group holding the current page opens anyway, so
+    // a collapsed sidebar is never a sidebar with nothing in it.
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, 'expanded');
+    window.localStorage.removeItem('grras.nav-groups-collapsed.admin');
+    mockAuth.value = staffAuth();
+    renderShell();
+
+    const nav = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(nav).queryByRole('link', { name: 'User accounts' })).not.toBeInTheDocument();
+    // The untitled first block has no heading to collapse, so it is always
+    // there. "Needs attention" is ungated, so it survives any capability set.
+    expect(within(nav).getByRole('link', { name: 'Needs attention' })).toBeInTheDocument();
   });
 });

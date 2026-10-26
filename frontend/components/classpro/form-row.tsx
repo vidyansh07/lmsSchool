@@ -22,6 +22,7 @@ export function FormRow({
   label,
   htmlFor,
   required = false,
+  optional = false,
   hint,
   error,
   children,
@@ -32,6 +33,9 @@ export function FormRow({
    *  label themselves. */
   htmlFor?: string;
   required?: boolean;
+  /** See `components/ui/field.tsx`: required carries a `*`, and marking the
+   *  other end stops an unmarked field reading as a forgotten asterisk. */
+  optional?: boolean;
   hint?: ReactNode;
   error?: string;
   children: ReactNode;
@@ -40,18 +44,30 @@ export function FormRow({
   const Label = htmlFor ? 'label' : 'span';
   return (
     <div className={cn('grid gap-1.5 py-3 sm:grid-cols-[9rem_1fr] sm:gap-4 sm:py-2.5', className)}>
-      <Label
-        {...(htmlFor ? { htmlFor } : {})}
-        className="pt-2 text-sm font-semibold text-ink sm:text-right"
-      >
-        {label}
+      {/* The "Optional" marker sits *outside* the label element, not inside
+          it. Inside, it joins the label's own text — so the field's name
+          becomes "Fee agreed Optional" to anything matching on label text,
+          and every query for that field has to know about the decoration.
+          Beside it, the association and the name are untouched. */}
+      <div className="pt-2 sm:text-right">
+        <Label
+          {...(htmlFor ? { htmlFor } : {})}
+          className="text-sm font-semibold text-ink"
+        >
+          {label}
+        </Label>
         {required ? (
           <span className="text-danger" aria-hidden="true">
             {' '}
             *
           </span>
         ) : null}
-      </Label>
+        {optional && !required ? (
+          <span className="block text-2xs font-normal text-ink-faint" aria-hidden="true">
+            Optional
+          </span>
+        ) : null}
+      </div>
       <div className="min-w-0 space-y-1.5">
         {children}
         {hint ? <p className="text-xs text-ink-muted">{hint}</p> : null}

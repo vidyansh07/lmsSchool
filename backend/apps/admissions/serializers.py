@@ -169,3 +169,10 @@ class AdmissionReportSerializer(serializers.Serializer):
 
     tiles = serializers.DictField()
     rows = serializers.ListField(child=serializers.DictField())
+
+
+class AdmissionLineEnrolSerializer(StrictSerializer):
+    """Which batch this course line's student joins. The batch must teach the
+    line's own course; the service refuses anything else."""
+
+    batch = serializers.UUIDField()

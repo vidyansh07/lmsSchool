@@ -356,7 +356,7 @@ describe('DsrPanel — after-class details', () => {
       draftOverrides: { student_notes: [] },
       roster: [registerEntry()],
     });
-    await user.selectOptions(screen.getByLabelText('Student'), 'enrollment-1');
+    await user.selectOptions(screen.getByLabelText('Student this note is about'), 'enrollment-1');
     await user.selectOptions(screen.getByLabelText('Note'), 'doubt');
     await user.type(screen.getByLabelText('Details (optional)'), 'Pipes');
     await user.click(screen.getByRole('button', { name: 'Add' }));
@@ -488,8 +488,8 @@ describe('DsrPanel — follow-up (create activity, history)', () => {
     // "Student concerns" field would also match a plain `exact: false`
     // lookup for "Student" — the literal trailing `*` is the simplest
     // unambiguous match.
-    await user.selectOptions(screen.getByLabelText('Student*'), 'student-1');
-    await user.selectOptions(screen.getByLabelText('Activity type*'), 'mentoring');
+    await user.selectOptions(screen.getByLabelText('Student'), 'student-1');
+    await user.selectOptions(screen.getByLabelText('Activity type'), 'mentoring');
     await user.click(screen.getByRole('button', { name: 'Create activity' }));
 
     expect(createActivityFromDsr).toHaveBeenCalledWith('dsr-1', {
@@ -514,12 +514,12 @@ describe('DsrPanel — follow-up (create activity, history)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Create activity from this class' }));
     await waitFor(() => expect(screen.getByRole('option', { name: /Sam Student/ })).toBeInTheDocument());
-    await user.selectOptions(screen.getByLabelText('Student*'), 'student-1');
-    await user.selectOptions(screen.getByLabelText('Activity type*'), 'mentoring');
+    await user.selectOptions(screen.getByLabelText('Student'), 'student-1');
+    await user.selectOptions(screen.getByLabelText('Activity type'), 'mentoring');
     await user.click(screen.getByRole('button', { name: 'Create activity' }));
 
     await waitFor(() => expect(screen.getByText('Could not create the activity.')).toBeInTheDocument());
-    expect(screen.getByLabelText('Student*')).toHaveValue('student-1');
+    expect(screen.getByLabelText('Student')).toHaveValue('student-1');
   });
 
   it('renders a mixed history — an edit and a rejection with its comment visible', async () => {

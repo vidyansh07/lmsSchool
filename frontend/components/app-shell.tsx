@@ -102,13 +102,28 @@ function writeSidebarPreference(value: 'expanded' | 'collapsed'): void {
   }
 }
 
-function readCollapsedGroups(scope: string): Set<string> {
+/**
+ * Which groups start closed.
+ *
+ * The stored value is the set of *collapsed* titles, so an absent key used to
+ * mean "every group open" — a wall of fifty links on first sign-in. It now
+ * means the opposite: nothing stored, everything closed, and the person opens
+ * what they want. Their first toggle writes an explicit set and this default
+ * never applies again.
+ *
+ * The group holding the current page always opens regardless (`containsActive`
+ * at the call site), so a collapsed sidebar still shows where you are.
+ */
+function readCollapsedGroups(scope: string, titles: string[]): Set<string> {
   try {
     const value = window.localStorage.getItem(`${NAV_GROUPS_STORAGE_PREFIX}.${scope}`);
-    const parsed: unknown = value ? JSON.parse(value) : [];
+    if (value === null) return new Set(titles);
+    const parsed: unknown = JSON.parse(value);
     return new Set(Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : []);
   } catch {
-    return new Set();
+    // Storage unavailable (a private window, blocked site data): the same
+    // closed-by-default start, just not remembered.
+    return new Set(titles);
   }
 }
 
@@ -605,7 +620,10 @@ function NavGroups({
 }) {
   const onRail = tone === 'rail';
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() =>
-    readCollapsedGroups(storageScope),
+    readCollapsedGroups(
+      storageScope,
+      groups.map((group) => group.title).filter((title): title is string => Boolean(title)),
+    ),
   );
 
   function toggleGroup(title: string) {
