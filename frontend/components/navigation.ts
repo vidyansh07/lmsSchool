@@ -6,7 +6,6 @@ import {
   BarChart3,
   Bell,
   BookOpen,
-  Building2,
   BookOpenCheck,
   CalendarCheck,
   CalendarDays,
@@ -23,16 +22,11 @@ import {
   ListTodo,
   Megaphone,
   MessagesSquare,
-  Palette,
   PenLine,
   Repeat,
   ScrollText,
-  Send,
-  Settings2,
   SlidersHorizontal,
   Sparkles,
-  ToggleLeft,
-  Trash2,
   TrendingUp,
   UserCircle2,
   UserPlus,
@@ -40,10 +34,7 @@ import {
   Wallet,
   UsersRound,
   Workflow,
-  ShieldCheck,
   Inbox,
-  Plug,
-  Zap,
 } from "lucide-react";
 
 import { Capability } from "@/lib/capabilities";
@@ -688,101 +679,70 @@ export // Three entries used to sit here — Assignments, Weekly tests and Proje
 // Exams and the question bank stayed. They are not on that hub, so removing
 // them would have left no way to reach them at all — which is the failure this
 // kind of tidying usually causes.
+/**
+ * The administrator's sidebar, re-cut.
+ *
+ * It used to be eleven groups and fifty links, ordered by which table each
+ * screen edits: "Trainers" and "Calendar" were groups of one, "Institution"
+ * was the fourteen leftovers, and the first link in the tree -- which is also
+ * where `homeFor` lands somebody -- was the audit trail. An administrator
+ * opened the product and was shown a forensic log of what everybody else did
+ * yesterday.
+ *
+ * Six groups now, and each heading finishes the sentence "I am here because I
+ * need to...". A group of one link is a link. The fourteen configuration
+ * screens are a destination (`/admin/configure`) rather than a seventh of the
+ * menu, because nobody sets up automation and branding in the same minute.
+ *
+ * Nothing was removed and no capability moved: every link below carries the
+ * capability it carried before, and `isVisible` still trims the tree per
+ * person. The eight links other staff sidebars had and this one did not --
+ * `/manage`, the three coursework screens, the work queue, discussions and
+ * the enquiry form -- are back.
+ */
 const ADMIN_NAV: NavGroup[] = [
   {
     items: [
       {
-        href: "/admin/activity",
-        label: "Staff activity",
-        icon: Activity,
-        capability: Capability.auditView,
-      },
-      {
         href: "/admin/overview",
         label: "Institution overview",
-        icon: BarChart3,
+        icon: LayoutDashboard,
         capability: Capability.reportViewAny,
       },
+      // Everything waiting on anybody, in full. It was reachable only from
+      // the header's warnings button, which is absent when the count is
+      // zero -- so the one screen that answers "what needs doing" could not
+      // be found on a quiet morning.
+      { href: "/needs-attention", label: "Needs attention", icon: ListChecks },
       {
         href: "/analytics",
         label: "Analytics",
         icon: TrendingUp,
         capability: Capability.reportViewAny,
       },
+      CALENDAR,
     ],
   },
   {
-    title: "Academic operations",
+    title: "Admissions & money",
     items: [
-      {
-        href: "/activities",
-        label: "Activities",
-        icon: ListTodo,
-        capability: Capability.activityViewAny,
-      },
-      {
-        href: "/dsr",
-        label: "Class reports",
-        icon: FileText,
-        capability: Capability.dsrViewAny,
-      },
-      {
-        href: "/manage/batches",
-        label: "Batch review",
-        icon: Layers,
-        capability: Capability.performanceViewAny,
-      },
-      {
-        href: "/manage/reviews",
-        label: "Reviews due",
-        icon: ClipboardCheck,
-        capability: Capability.performanceViewAny,
-      },
-      {
-        href: "/requirements",
-        label: "Trainer requirements",
-        icon: Megaphone,
-        capability: Capability.requirementManage,
-      },
-    ],
-  },
-  {
-    title: "Trainers",
-    items: [
-      {
-        href: "/manage/trainers",
-        label: "Trainers",
-        icon: GraduationCap,
-        capability: Capability.trainerViewAny,
-      },
-    ],
-  },
-  {
-    title: "Admissions",
-    items: [
-      READY_TO_ADMIT,
       {
         href: "/admissions/dashboard",
         label: "Admissions pipeline",
-        icon: LayoutDashboard,
+        icon: Workflow,
         capability: Capability.enrolmentCreate,
-      },
-      {
-        href: "/fees",
-        label: "Fees & collections",
-        icon: Wallet,
-        capability: Capability.feeViewAny,
       },
       {
         href: "/enquiries",
         label: "Enquiries",
-        icon: UserPlus,
+        icon: MessagesSquare,
         capability: Capability.enquiryViewAny,
       },
+      READY_TO_ADMIT,
       {
         href: "/admissions",
         label: "Registrations",
-        icon: ListChecks,
+        icon: ClipboardList,
         capability: Capability.studentCreate,
       },
       {
@@ -791,11 +751,15 @@ const ADMIN_NAV: NavGroup[] = [
         icon: UserPlus,
         capability: Capability.studentCreate,
       },
+      // The desk's own form, which asks the same questions in the order the
+      // counsellor already asks them. It is not a duplicate of the wizard
+      // above -- its docstring makes the case -- it was simply reachable
+      // from nowhere, which is why nobody used the thing it was built for.
       {
-        href: "/admissions/batches",
-        label: "Batch planning",
-        icon: CalendarDays,
-        capability: Capability.batchCreate,
+        href: "/students/new",
+        label: "New student (desk form)",
+        icon: ClipboardList,
+        capability: Capability.studentCreate,
       },
       {
         href: "/admissions/transfer",
@@ -803,29 +767,14 @@ const ADMIN_NAV: NavGroup[] = [
         icon: Repeat,
         capability: Capability.enrolmentUpdateAny,
       },
-    ],
-  },
-  {
-    title: "Student records",
-    items: [
-      {
-        href: "/admin/students",
-        label: "Students",
-        icon: UsersRound,
-        capability: Capability.studentViewAny,
-      },
-      {
-        href: "/admin/imports",
-        label: "Data import",
-        icon: Workflow,
-        capability: Capability.dataImport,
-      },
+      FEES_HOME,
     ],
   },
   PLACEMENT_GROUP,
   {
-    title: "Batches and courses",
+    title: "Teaching",
     items: [
+      ...TEACHING_ITEMS,
       {
         href: "/admin/batches",
         label: "Batches",
@@ -833,64 +782,23 @@ const ADMIN_NAV: NavGroup[] = [
         capability: Capability.batchViewAny,
       },
       {
+        href: "/admissions/batches",
+        label: "Batch planning",
+        icon: CalendarCheck,
+        capability: Capability.batchCreate,
+      },
+      {
         href: "/admin/courses",
         label: "Courses",
-        icon: LibraryBig,
+        icon: BookOpen,
         capability: Capability.courseViewAny,
       },
-      { href: "/courses", label: "Course catalogue", icon: BookOpen },
-    ],
-  },
-  {
-    title: "Results and reports",
-    items: [
-      {
-        href: "/admin/reports",
-        label: "Reports",
-        icon: FileSpreadsheet,
-        capability: Capability.reportViewAny,
-      },
-      ADMISSION_REPORTS,
-      {
-        href: "/admin/completions",
-        label: "Completions",
-        icon: ClipboardCheck,
-        capability: Capability.completionApprove,
-      },
-      {
-        href: "/admin/certificates",
-        label: "Certificates",
-        icon: Award,
-        capability: Capability.certificateManage,
-      },
-    ],
-  },
-  {
-    title: "Calendar",
-    items: [
-      {
-        href: "/calendar",
-        label: "Calendar",
-        icon: CalendarDays,
-        scopedRoles: ["admin", "superadmin"],
-      },
-    ],
-  },
-  {
-    title: "Teaching",
-    items: [
-      {
-        href: "/teaching/today",
-        label: "Today's class",
-        icon: Sparkles,
-        capability: Capability.sessionManageAny,
-      },
-      {
-        href: "/teaching",
-        label: "Class schedule",
-        icon: CalendarCheck,
-        capability: Capability.sessionManageAny,
-      },
+      { href: "/courses", label: "Course catalogue", icon: LibraryBig },
+      // Assignments, weekly tests and projects are deliberately absent: the
+      // `/teaching` hub above already lists them in the same words, and a
+      // menu that repeats the page it leads to is paying for itself twice.
+      // `navigation-custom-role.test.ts` holds that line. Exams and the
+      // question bank are here because the hub does not carry them.
       {
         href: "/teaching/exams",
         label: "Exams",
@@ -903,94 +811,111 @@ const ADMIN_NAV: NavGroup[] = [
         icon: LibraryBig,
         capability: Capability.questionViewAny,
       },
+      {
+        href: "/dsr",
+        label: "Class reports",
+        icon: ClipboardCheck,
+        capability: Capability.dsrViewAny,
+      },
+      {
+        href: "/activities",
+        label: "Activities",
+        icon: ListTodo,
+        capability: Capability.activityViewAny,
+      },
+      {
+        href: "/manage/trainers",
+        label: "Trainers",
+        icon: Users,
+        capability: Capability.trainerViewAny,
+      },
+      {
+        href: "/manage/batches",
+        label: "Batch review",
+        icon: BookOpenCheck,
+        capability: Capability.performanceViewAny,
+      },
+      {
+        href: "/manage/reviews",
+        label: "Reviews due",
+        icon: ClipboardCheck,
+        capability: Capability.performanceViewAny,
+      },
+      {
+        href: "/requirements",
+        label: "Trainer requirements",
+        icon: ListChecks,
+        capability: Capability.requirementManage,
+      },
+      {
+        href: "/admin/completions",
+        label: "Completions",
+        icon: GraduationCap,
+        capability: Capability.completionApprove,
+      },
+      {
+        href: "/admin/certificates",
+        label: "Certificates",
+        icon: Award,
+        capability: Capability.certificateManage,
+      },
     ],
   },
   {
-    title: "Institution",
+    title: "People & records",
     items: [
+      {
+        href: "/admin/students",
+        label: "Students",
+        icon: GraduationCap,
+        capability: Capability.studentViewAny,
+      },
       {
         href: "/admin/users",
         label: "User accounts",
-        icon: Users,
+        icon: UsersRound,
         capability: Capability.userViewAny,
       },
       {
-        href: "/admin/roles",
-        label: "Roles",
-        icon: ShieldCheck,
-        capability: Capability.roleView,
+        href: "/admin/imports",
+        label: "Data import",
+        icon: FileSpreadsheet,
+        capability: Capability.dataImport,
       },
+    ],
+  },
+  {
+    title: "Insight",
+    items: [
       {
-        href: "/admin/policies",
-        label: "Rules and policies",
-        icon: ToggleLeft,
-        capability: Capability.policyView,
-      },
-      {
-        href: "/admin/forms",
-        label: "Form builder",
+        href: "/admin/reports",
+        label: "Reports & exports",
         icon: FileText,
-        capability: Capability.formManage,
+        capability: Capability.reportViewAny,
       },
+      ADMISSION_REPORTS,
+      // A destination for a question asked after something has gone wrong,
+      // which is why it is no longer the first thing an administrator sees.
       {
-        href: "/admin/activity-types",
-        label: "Activity types",
-        icon: ClipboardCheck,
-        capability: Capability.activityTypeManage,
+        href: "/admin/activity",
+        label: "Staff activity",
+        icon: Activity,
+        capability: Capability.auditView,
       },
+    ],
+  },
+  {
+    title: "Configure",
+    items: [
+      // One line, fourteen screens. The hub itself is visible to anybody
+      // holding any one of the capabilities its cards need, and each card is
+      // gated separately -- so a composed role sees a shorter hub rather
+      // than a dead link.
       {
-        href: "/admin/automation",
-        label: "Automation",
-        icon: Zap,
-        capability: Capability.automationManage,
-      },
-      {
-        href: "/admin/integrations",
-        label: "Integrations",
-        icon: Plug,
-        capability: Capability.integrationManage,
-      },
-      {
-        href: "/admin/communication",
-        label: "Message templates",
-        icon: Send,
-        capability: Capability.templateManage,
-      },
-      {
-        href: "/admin/branches",
-        label: "Centres",
-        icon: Building2,
-        capability: Capability.organisationViewAny,
-      },
-      {
-        href: "/admin/settings",
-        label: "Settings",
+        href: "/admin/configure",
+        label: "Configuration",
         icon: SlidersHorizontal,
-        capability: Capability.settingsManage,
-      },
-      {
-        href: "/admin/settings/messages",
-        label: "Message settings",
-        icon: Send,
-        capability: Capability.settingsManage,
-      },
-      {
-        href: "/admin/academics",
-        label: "Academic rules",
-        icon: Settings2,
-        capability: Capability.academicConfigure,
-      },
-      {
-        href: "/admin/branding",
-        label: "Branding",
-        icon: Palette,
-        capability: Capability.platformConfigure,
-      },
-      {
-        href: "/admin/recovery",
-        label: "Deleted records",
-        icon: Trash2,
-        capability: Capability.recordViewDeleted,
+        capability: Capability.organisationViewAny,
       },
     ],
   },
@@ -998,6 +923,7 @@ const ADMIN_NAV: NavGroup[] = [
     title: "My work",
     items: [
       { href: "/announcements", label: "Announcements", icon: Megaphone },
+      { href: "/discussions", label: "Discussions", icon: MessagesSquare },
       { href: "/forms", label: "Form inbox", icon: ClipboardCheck },
       { href: "/notifications", label: "Notifications", icon: Bell },
       { href: "/profile", label: "My profile", icon: UserCircle2 },

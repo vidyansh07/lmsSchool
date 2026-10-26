@@ -171,16 +171,16 @@ describe('AppShell sidebar collapse', () => {
       expect(link).toHaveAttribute('href', home);
     }
 
-    const institution = screen.getByRole('button', { name: 'Institution' });
-    expect(institution).toHaveAttribute('aria-expanded', 'true');
+    const people = screen.getByRole('button', { name: 'People & records' });
+    expect(people).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByRole('link', { name: 'User accounts' })).toBeInTheDocument();
 
-    await user.click(institution);
+    await user.click(people);
 
-    expect(institution).toHaveAttribute('aria-expanded', 'false');
+    expect(people).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('link', { name: 'User accounts' })).not.toBeInTheDocument();
     expect(window.localStorage.getItem('grras.nav-groups-collapsed.admin')).toContain(
-      'Institution',
+      'People & records',
     );
   });
 

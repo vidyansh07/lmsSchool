@@ -98,7 +98,6 @@ describe("navigation wording and structure", () => {
     );
 
     expect(labels).toContain("Form inbox");
-    expect(labels).toContain("Form builder");
     expect(labels).toContain("User accounts");
     expect(labels).toContain("Course catalogue");
     expect(labels).not.toContain("Examinations");
@@ -107,7 +106,13 @@ describe("navigation wording and structure", () => {
   });
 
   it("ranks each role's daily workspace first", () => {
-    expect(navFor("admin")[0]?.items[0]?.href).toBe("/admin/activity");
+    // Not the audit trail. It used to be: the administrator's first group
+    // opened with "Staff activity", and `homeFor` takes the first entry of
+    // the first group, so the person responsible for the whole institution
+    // signed in and was shown a forensic log of what everybody else did
+    // yesterday. An overview is the morning screen; the log is a destination
+    // for a question asked after something has gone wrong.
+    expect(navFor("admin")[0]?.items[0]?.href).toBe("/admin/overview");
     expect(navFor("manager")[0]?.items[0]?.href).toBe("/manage");
     expect(navFor("counsellor")[0]?.items[0]?.href).toBe("/admissions/dashboard");
     expect(navFor("trainer")[0]?.items[0]?.href).toBe("/dashboard");
@@ -214,7 +219,7 @@ describe("homeFor", () => {
         role: "admin",
         capabilities: [Capability.auditView, Capability.reportViewAny],
       }),
-    ).toBe("/admin/activity");
+    ).toBe("/admin/overview");
     expect(
       homeFor({
         role: "manager",

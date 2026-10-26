@@ -796,12 +796,15 @@ function Shell({
       {showNavigation ? (
         <aside
           className={cn(
-            // The one dark surface in the product, and the reason the rest of
-            // the interface can stay light without looking unframed. 68px
-            // collapsed, matching the reference: wide enough for an icon with a
-            // readable word under it, narrow enough that the table beside it
-            // keeps its columns.
-            'relative hidden shrink-0 border-r border-rail-line bg-rail transition-[width] duration-200 lg:block',
+            // The rail is glass: frosted over the page's own wash, so the
+            // chrome reads as a pane in front of the work rather than a slab
+            // beside it. `.glass` carries its own opaque fallback, so a
+            // browser without `backdrop-filter` -- or a person who asked for
+            // less transparency -- gets exactly the rail that was here
+            // before. 68px collapsed: wide enough for an icon with a readable
+            // word under it, narrow enough that the table beside it keeps its
+            // columns.
+            'glass relative hidden shrink-0 border-r border-rail-line transition-[width] duration-200 lg:block',
             collapsed ? 'lg:w-[4.25rem]' : 'lg:w-[17rem]',
           )}
         >
@@ -840,7 +843,11 @@ function Shell({
       ) : null}
 
       <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b border-line bg-surface">
+        {/* The top bar is the second piece of chrome, so it is the second
+            piece of glass -- a stronger tint than the rail because content
+            scrolls directly underneath it and the text on it has to stay
+            readable while that happens. */}
+        <header className="glass-strong sticky top-0 z-30 border-b border-line">
           <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
             {showNavigation ? (
               <Button

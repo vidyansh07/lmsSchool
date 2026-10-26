@@ -296,6 +296,31 @@
     inset 3px 3px 7px -2px oklch(20.8% 0.04 265.8 / 0.11),
     inset -2px -2px 6px -2px oklch(100% 0 0 / 0.75);
 
+  /* ---- Glass ------------------------------------------------------------
+
+     The chrome -- the rail, the top bar, the overlays -- is frosted; the
+     content is not. That split is the whole rule, and it is not a taste:
+     a fee ledger, an attendance grid and a grade book are what this product
+     is for, and a translucent card puts a moving gradient behind numbers
+     somebody is reading down a column. So the glass frames the work and
+     never sits under it.
+
+     Every tint here is *white* at an alpha, not a colour. The rail is still
+     a light surface, so `--color-rail-fg`'s 13.7:1 and every other rail
+     figure in `theme-contrast.test.ts` hold unchanged -- the tint only
+     lightens what is behind the text further.
+
+     `--glass-blur` is a single value on purpose. Six blurs is six glasses,
+     and the eye reads that as six materials rather than one product. */
+  --glass-tint: oklch(100% 0 0 / 0.62);
+  --glass-tint-strong: oklch(100% 0 0 / 0.80);
+  --glass-edge: oklch(100% 0 0 / 0.75);
+  --glass-blur: 18px;
+  --glass-saturate: 165%;
+  --shadow-glass:
+    inset 0 1px 0 oklch(100% 0 0 / 0.6),
+    0 8px 32px oklch(20.8% 0.04 265.8 / 0.10);
+
   /* ---- Motion -----------------------------------------------------------
      One curve. Durations are literals at the call site (`duration-150`),
      because `--duration-*` is not a Tailwind v4 theme namespace -- v4 reads
@@ -322,6 +347,36 @@
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+  }
+
+  /* The thing the glass has something to blur.
+
+     Three soft radial washes -- brand, academic, admissions -- fixed to the
+     viewport so they do not travel with a long table. They are deliberately
+     far paler than they look in a design tool: `e2e/interface.spec.ts`
+     paints the page background into a canvas and requires *every* channel
+     above 230, which is the test that says "this product is light". At 95%
+     lightness and 0.22 alpha over a 97.6% canvas the lowest channel lands
+     around 246, so the wash reads as warmth rather than colour and that
+     test keeps meaning what it means. Turn any of these up and it fails. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      radial-gradient(900px 480px at 8% -8%, oklch(95% 0.05 48 / 0.22), transparent 62%),
+      radial-gradient(760px 420px at 100% 0%, oklch(95% 0.04 255 / 0.20), transparent 64%),
+      radial-gradient(680px 520px at 60% 108%, oklch(96% 0.035 300 / 0.18), transparent 62%);
+  }
+
+  /* A person who has asked their system for less transparency gets a plain
+     page: no wash to blur, and the glass utilities below go solid. */
+  @media (prefers-reduced-transparency: reduce) {
+    body::before {
+      display: none;
+    }
   }
 
   /* Headings carry weight and family rather than size jumps: at this density
@@ -388,6 +443,75 @@
 }
 
 @layer utilities {
+  /* ---- Glass -------------------------------------------------------------
+
+     Two utilities, and the rule that keeps them safe: they go on the chrome
+     and never on content. `backdrop-filter` makes the browser re-sample and
+     re-blur whatever sits behind the element on every frame it moves, so it
+     belongs on the fixed-size rail and top bar and not on a list that
+     scrolls a thousand rows past it.
+
+     Both degrade to the opaque surface they replaced -- when the browser has
+     no `backdrop-filter`, when the person has asked for less transparency,
+     and when the page is printed, where a blur is either dropped or rendered
+     as a grey slab depending on the driver. The fallback is written first
+     and the glass is layered over it, so the readable version is the one
+     that survives anything going wrong. */
+  .glass {
+    background-color: var(--color-rail);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .glass-strong {
+    background-color: var(--color-surface);
+    box-shadow: var(--shadow-glass);
+  }
+
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    @media not (prefers-reduced-transparency: reduce) {
+      .glass {
+        background-color: var(--glass-tint);
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      }
+
+      .glass-strong {
+        background-color: var(--glass-tint-strong);
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+        backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      }
+    }
+  }
+
+  /* The page behind a modal. The tint alone already blocks the eye; the
+     blur is what makes the panel read as the only thing in focus. It is
+     short-lived and covers a fixed viewport rect, so the per-frame cost the
+     content rule exists to avoid does not apply. */
+  .glass-scrim {
+    background-color: oklch(20.8% 0.04 265.8 / 0.40);
+  }
+
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    @media not (prefers-reduced-transparency: reduce) {
+      .glass-scrim {
+        background-color: oklch(20.8% 0.04 265.8 / 0.28);
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+      }
+    }
+  }
+
+  @media print {
+    .glass,
+    .glass-strong {
+      background-color: var(--color-surface);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      box-shadow: none;
+    }
+  }
+
+
   /*
    * Motion, in full.
    *

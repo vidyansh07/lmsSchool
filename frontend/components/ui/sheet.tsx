@@ -96,7 +96,7 @@ export function SheetContent({ className, size, hideCloseButton, children, ...pr
     <>
       <div
         aria-hidden="true"
-        className={cn('fixed inset-0 z-50 bg-ink/40', open ? 'animate-fade-in' : undefined)}
+        className={cn('glass-scrim fixed inset-0 z-50', open ? 'animate-fade-in' : undefined)}
         style={
           !open ? { animation: 'fade-in 150ms var(--ease-out) reverse both' } : undefined
         }

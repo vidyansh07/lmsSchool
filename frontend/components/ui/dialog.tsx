@@ -118,7 +118,7 @@ export function DialogContent({ className, size, hideCloseButton, children, ...p
     >
       <div
         aria-hidden="true"
-        className={cn('absolute inset-0 bg-ink/40', open ? 'animate-fade-in' : undefined)}
+        className={cn('glass-scrim absolute inset-0', open ? 'animate-fade-in' : undefined)}
         style={!open ? { animation: 'fade-in 150ms var(--ease-out) reverse both' } : undefined}
       />
       <div
